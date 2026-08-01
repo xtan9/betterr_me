@@ -8,8 +8,6 @@ import type {
   AppearancePreferenceIntent,
   FitnessPreferenceOutcome,
   FitnessPreferenceIntent,
-  NotificationPreferenceIntent,
-  NotificationPreferenceOutcome,
   ProfileDetailsCommand,
   ProfileDetailsOutcome,
   UserTimeZoneCommand,
@@ -89,25 +87,6 @@ export class ProfilesDB {
     return isWeightUnitPreference(value) ? value : null;
   }
 
-  async getNotificationPreferenceProjection(userId: string): Promise<{
-    preferences: PreferenceStorage;
-    timezone: string | null;
-  } | null> {
-    const { data, error } = await this.supabase
-      .from('profiles')
-      .select('preferences, timezone')
-      .eq('id', userId)
-      .maybeSingle();
-    if (error) {
-      if (error.code === 'PGRST116') return null;
-      throw error;
-    }
-    return data as {
-      preferences: PreferenceStorage;
-      timezone: string | null;
-    } | null;
-  }
-
   async getUserTimeZone(userId: string): Promise<string | null> {
     const { data, error } = await this.supabase
       .from('profiles')
@@ -175,15 +154,6 @@ export class ProfilesDB {
     return this.callPreferenceCommand<FitnessPreferenceOutcome>(
       'set_fitness_preference',
       { weight_unit: weightUnit },
-    );
-  }
-
-  async setNotificationPreference(
-    intent: NotificationPreferenceIntent,
-  ): Promise<NotificationPreferenceOutcome> {
-    return this.callPreferenceCommand<NotificationPreferenceOutcome>(
-      'set_notification_preference',
-      { intent },
     );
   }
 

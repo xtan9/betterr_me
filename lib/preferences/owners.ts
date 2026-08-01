@@ -49,6 +49,7 @@ export function isWeightUnitPreference(
 }
 
 export type WeekStartDay = 0 | 1;
+export const DEFAULT_REMINDER_EMAIL_PREFERENCE = { enabled: false } as const;
 
 const unavailable = <Value>(
   reason: import("./types").PreferenceUnavailableReason,
@@ -145,6 +146,9 @@ function decodeReminderEmail(
   identityEmail: string | null,
 ): NotificationPreferences["reminderEmail"] {
   const enabled = stored?.email_notifications_enabled;
+  if (enabled === undefined) {
+    return { status: "ready", value: { enabled: false } };
+  }
   if (typeof enabled !== "boolean") {
     return unavailable("invalidStoredValue");
   }

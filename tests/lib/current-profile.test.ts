@@ -112,6 +112,49 @@ describe("Current Profile", () => {
     });
   });
 
+  it("treats a missing Reminder Email value as disabled and ready", () => {
+    const result = composeCurrentProfile({
+      identityEmail: null,
+      capabilities: { canAccessAdmin: false },
+      projection: {
+        ...projection,
+        preferences: {
+          ...projection.preferences,
+          email_notifications_enabled: undefined,
+        },
+      },
+    });
+
+    expect(result.preferences.notifications.reminderEmail).toEqual({
+      status: "ready",
+      value: { enabled: false },
+    });
+    expect(result.issues).toEqual([]);
+  });
+
+  it("marks enabled Reminder Email unavailable when Identity Email is unverified", () => {
+    const result = composeCurrentProfile({
+      identityEmail: null,
+      capabilities: { canAccessAdmin: false },
+      projection: {
+        ...projection,
+        preferences: {
+          ...projection.preferences,
+          email_notifications_enabled: true,
+        },
+      },
+    });
+
+    expect(result.preferences.notifications.reminderEmail).toEqual({
+      status: "unavailable",
+      reason: "identityEmailUnavailable",
+    });
+    expect(result.issues).toContainEqual({
+      scope: "notifications.reminderEmail",
+      code: "identityEmailUnavailable",
+    });
+  });
+
   it("accepts only the canonical currentProfile envelope", () => {
     const currentProfile = composeCurrentProfile({
       identityEmail: "taylor@example.com",

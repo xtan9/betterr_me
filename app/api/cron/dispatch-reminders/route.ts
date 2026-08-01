@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { RemindersDB } from "@/lib/db/reminders";
-import { ProfilesDB } from "@/lib/db/profiles";
+import { NotificationsDB } from "@/lib/db/notifications";
 import { sendPushNotification } from "@/lib/push/send";
 import { sendReminderEmail } from "@/lib/email/send";
 import { isInQuietHours } from "@/lib/push/quiet-hours";
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 
     const adminClient = createAdminClient();
     const remindersDB = new RemindersDB(adminClient);
-    const profilesDB = new ProfilesDB(adminClient);
+    const notificationsDB = new NotificationsDB(adminClient);
 
     const now = new Date().toISOString();
     const pending = await remindersDB.getPendingReminders(now);
@@ -89,12 +89,13 @@ export async function GET(request: NextRequest) {
         const fireAtAge = Date.now() - new Date(reminder.fire_at).getTime();
 
         // Read only the Notifications-owned projection for quiet-window evaluation.
-        const profile = await profilesDB.getNotificationPreferenceProjection(reminder.user_id);
-        const quietWindow = profile
+        const notificationProjection =
+          await notificationsDB.getNotificationPreferenceProjection(reminder.user_id);
+        const quietWindow = notificationProjection
           ? decodeNotificationPreferences(
-              profile.preferences,
+              notificationProjection.preferences,
               null,
-              profile.timezone,
+              notificationProjection.timezone,
             ).pushQuietWindow
           : { status: "disabled" as const };
         const inQuietHours = isInQuietHours(
@@ -104,7 +105,7 @@ export async function GET(request: NextRequest) {
           quietWindow.status === "ready" && quietWindow.value.status === "enabled"
             ? quietWindow.value.endLocal
             : null,
-          profile?.timezone ?? null,
+          notificationProjection?.timezone ?? null,
         );
 
         // Determine which channels to dispatch

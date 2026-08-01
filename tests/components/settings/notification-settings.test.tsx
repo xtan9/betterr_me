@@ -37,13 +37,9 @@ global.fetch = mockFetch;
 
 const mockSetReminderEmail = vi.fn();
 const mockSetPushQuietWindow = vi.fn();
-vi.mock("@/lib/hooks/use-profile-preferences", () => ({
-  useNotificationPreferences: () => ({
-    reminderEmail: { status: "ready", value: { enabled: false } },
-    pushQuietWindow: { status: "ready", value: { status: "disabled" } },
-    setReminderEmail: mockSetReminderEmail,
-    setPushQuietWindow: mockSetPushQuietWindow,
-  }),
+const mockUseNotifications = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/hooks/use-notifications", () => ({
+  useNotifications: mockUseNotifications,
 }));
 
 vi.mock("@/components/settings/quiet-hours-settings", () => ({
@@ -74,6 +70,16 @@ describe("NotificationSettings", () => {
     vi.clearAllMocks();
     mockSetReminderEmail.mockResolvedValue(undefined);
     mockSetPushQuietWindow.mockResolvedValue(undefined);
+    mockUseNotifications.mockReturnValue({
+      reminderEmail: { enabled: false },
+      reminderEmailPreference: {
+        status: "ready",
+        value: { enabled: false },
+      },
+      pushQuietWindow: { status: "ready", value: { status: "disabled" } },
+      setReminderEmail: mockSetReminderEmail,
+      setPushQuietWindow: mockSetPushQuietWindow,
+    });
     mockHookReturn = {
       permission: "default",
       isSubscribed: false,
@@ -281,6 +287,24 @@ describe("NotificationSettings", () => {
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith("emailToggleError");
     });
+  });
+
+  it("keeps Reminder Email unavailable when Identity Email is missing", () => {
+    mockUseNotifications.mockReturnValue({
+      reminderEmail: { enabled: false },
+      reminderEmailPreference: {
+        status: "unavailable",
+        reason: "identityEmailUnavailable",
+      },
+      pushQuietWindow: { status: "ready", value: { status: "disabled" } },
+      setReminderEmail: mockSetReminderEmail,
+      setPushQuietWindow: mockSetPushQuietWindow,
+    });
+
+    render(<NotificationSettings />);
+
+    expect(document.getElementById("email-notifications-toggle")).toBeDisabled();
+    expect(mockSetReminderEmail).not.toHaveBeenCalled();
   });
 
   it("delegates accepted-state revalidation to the domain hook", async () => {

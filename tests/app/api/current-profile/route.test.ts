@@ -167,6 +167,42 @@ describe("GET /api/current-profile", () => {
     ]);
   });
 
+  it("returns an unavailable Reminder Email when Identity Email is unverified", async () => {
+    mockAuthenticateRequest.mockResolvedValue({
+      ok: true,
+      principal: {
+        type: "user",
+        userId: "user-123",
+        credential: "cookie",
+        profile: { email: null, fullName: null, avatarUrl: null },
+      },
+      permissions: ["read"],
+      client: {},
+    });
+    mockGetCurrentProfileProjection.mockResolvedValue({
+      ...projection,
+      preferences: {
+        ...projection.preferences,
+        email_notifications_enabled: true,
+      },
+    });
+
+    const response = await GET(
+      new NextRequest("http://localhost/api/current-profile"),
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.currentProfile.preferences.notifications.reminderEmail).toEqual({
+      status: "unavailable",
+      reason: "identityEmailUnavailable",
+    });
+    expect(data.currentProfile.issues).toContainEqual({
+      scope: "notifications.reminderEmail",
+      code: "identityEmailUnavailable",
+    });
+  });
+
   it("returns 409 when Profile Details are not provisioned", async () => {
     mockGetCurrentProfileProjection.mockResolvedValue(null);
 

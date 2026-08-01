@@ -25,8 +25,8 @@ let mockQuietState: {
     | { status: "enabled"; startLocal: string; endLocal: string };
 } = { status: "ready", value: { status: "disabled" } };
 
-vi.mock("@/lib/hooks/use-profile-preferences", () => ({
-  useNotificationPreferences: () => ({
+vi.mock("@/lib/hooks/use-notifications", () => ({
+  useNotifications: () => ({
     pushQuietWindow: mockQuietState,
     setPushQuietWindow: mockSetPushQuietWindow,
   }),

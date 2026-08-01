@@ -16,7 +16,7 @@ import {
 import { Moon } from "lucide-react";
 import { toast } from "sonner";
 import type { CurrentProfileResponse } from "@/lib/current-profile";
-import { useNotificationPreferences } from "@/lib/hooks/use-profile-preferences";
+import { useNotifications } from "@/lib/hooks/use-notifications";
 
 export function QuietHoursSettings({
   initialData,
@@ -26,7 +26,7 @@ export function QuietHoursSettings({
   initialSubject?: string;
 }) {
   const t = useTranslations("settings.notifications");
-  const notifications = useNotificationPreferences({ initialData, initialSubject });
+  const notifications = useNotifications({ initialData, initialSubject });
   const quietState = notifications.pushQuietWindow;
   const acceptedQuiet = useMemo(
     () =>

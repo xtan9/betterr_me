@@ -35,12 +35,17 @@ vi.mock("@/lib/db", () => ({
   ProfilesDB: class {
     setAppearancePreference = mockSetAppearancePreference;
     setFitnessPreference = mockSetFitnessPreference;
-    setNotificationPreference = mockSetNotificationPreference;
     updateProfileDetails = mockUpdateProfileDetails;
     setUserTimeZone = mockSetUserTimeZone;
   },
   LocalizationDB: class {
     setWeekStartPreference = mockSetWeekStartPreference;
+  },
+}));
+
+vi.mock("@/lib/db/notifications", () => ({
+  NotificationsDB: class {
+    setNotificationPreference = mockSetNotificationPreference;
   },
 }));
 
@@ -262,6 +267,45 @@ describe("domain-owned Preference commands", () => {
       type: "setPushQuietWindow",
       value: { status: "enabled", startLocal: "22:00", endLocal: "07:00" },
     });
+  });
+
+  it("returns only the accepted Reminder Email owner outcome", async () => {
+    mockSetNotificationPreference.mockResolvedValue({
+      reminderEmail: { enabled: true },
+      preferenceRevision: 9,
+      changed: true,
+    });
+
+    const response = await postNotifications(
+      request("/api/preferences/notifications", {
+        type: "setReminderEmail",
+        enabled: true,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      reminderEmail: { enabled: true },
+      preferenceRevision: 9,
+      changed: true,
+    });
+    expect(mockSetNotificationPreference).toHaveBeenCalledWith({
+      type: "setReminderEmail",
+      enabled: true,
+    });
+  });
+
+  it("rejects a Reminder Email command with an invented delivery address", async () => {
+    const response = await postNotifications(
+      request("/api/preferences/notifications", {
+        type: "setReminderEmail",
+        enabled: true,
+        email: "invented@example.test",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockSetNotificationPreference).not.toHaveBeenCalled();
   });
 
   it("sends only dirty Profile Details fields", async () => {
