@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { ProfilesDB } from "@/lib/db";
 import { SettingsContent } from "@/components/settings/settings-content";
-import { composeCurrentProfile } from "@/lib/current-profile";
+import { composeCurrentProfileResponse } from "@/lib/current-profile";
 import { verifiedIdentityEmail } from "@/lib/auth/authenticated-request";
 
 export default async function SettingsPage() {
@@ -18,13 +18,11 @@ export default async function SettingsPage() {
   const profilesDB = new ProfilesDB(supabase);
   const projection = await profilesDB.getCurrentProfileProjection(user.id);
   const initialData = projection
-    ? {
-        currentProfile: composeCurrentProfile({
-          identityEmail: verifiedIdentityEmail(user),
-          capabilities: { canAccessAdmin: false },
-          projection,
-        }),
-      }
+    ? composeCurrentProfileResponse({
+        identityEmail: verifiedIdentityEmail(user),
+        capabilities: { canAccessAdmin: false },
+        projection,
+      })
     : undefined;
 
   return (

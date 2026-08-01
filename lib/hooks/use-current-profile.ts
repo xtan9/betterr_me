@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { type KeyedMutator } from "swr";
 import {
   decodeCurrentProfileResponse,
@@ -9,6 +9,19 @@ import {
 import { createClient } from "@/lib/supabase/client";
 
 export const CURRENT_PROFILE_CACHE_KEY = "current-profile";
+
+export type CurrentProfileStatus = "loading" | "available" | "unavailable";
+
+export const CURRENT_PROFILE_UNAVAILABLE_REASONS = [
+  "unauthenticated",
+  "profile_not_provisioned",
+  "current_profile_unavailable",
+  "invalid_response",
+  "request_failed",
+] as const;
+
+export type CurrentProfileUnavailableReason =
+  (typeof CURRENT_PROFILE_UNAVAILABLE_REASONS)[number];
 
 export class CurrentProfileRequestError extends Error {
   constructor(
@@ -32,12 +45,31 @@ export async function fetchCurrentProfile(): Promise<CurrentProfileResponse> {
       typeof body?.error === "string"
         ? body.error
         : `Current Profile request failed (${response.status})`,
-      response.status,
-      typeof body?.code === "string" ? body.code : undefined,
+      response.status || 200,
+      typeof body?.code === "string"
+        ? body.code
+        : typeof body?.error === "string"
+          ? body.error
+          : undefined,
     );
   }
 
-  return decodeCurrentProfileResponse(body);
+  try {
+    return decodeCurrentProfileResponse(body);
+  } catch {
+    throw new CurrentProfileRequestError(
+      "Current Profile response was invalid",
+      response.status || 200,
+      "invalid_response",
+    );
+  }
+}
+
+class StaleCurrentProfileRequestError extends Error {
+  constructor() {
+    super("Current Profile request belongs to an inactive session");
+    this.name = "StaleCurrentProfileRequestError";
+  }
 }
 
 /** Keep a newer accepted preference revision when a slower request resolves late. */
@@ -71,10 +103,34 @@ export interface UseCurrentProfileResult {
   data?: CurrentProfileResponse;
   currentProfile?: CurrentProfileResponse["currentProfile"];
   error?: Error;
+  status: CurrentProfileStatus;
+  unavailableReason?: CurrentProfileUnavailableReason;
+  /** Internal session generation used to isolate commands from auth transitions. */
+  sessionVersion: number;
   isAuthenticated: boolean;
   isLoading: boolean;
   mutate: KeyedMutator<CurrentProfileResponse>;
   revalidate: () => Promise<CurrentProfileResponse | undefined>;
+}
+
+function currentProfileUnavailableReason(
+  subject: string | null | undefined,
+  error: Error | undefined,
+): CurrentProfileUnavailableReason | undefined {
+  if (subject === null) return "unauthenticated";
+  if (subject === undefined || !error) return undefined;
+
+  if (error instanceof CurrentProfileRequestError) {
+    if (error.status === 401) return "unauthenticated";
+    if (
+      error.code === "profile_not_provisioned" ||
+      error.code === "current_profile_unavailable" ||
+      error.code === "invalid_response"
+    ) {
+      return error.code;
+    }
+  }
+  return "request_failed";
 }
 
 export function useCurrentProfile(
@@ -90,7 +146,9 @@ export function useCurrentProfile(
   const [acceptedSnapshot, setAcceptedSnapshot] = useState<
     CurrentProfileResponse | undefined
   >(hasBoundHydration ? options.initialData : undefined);
+  const [sessionVersion, setSessionVersion] = useState(0);
   const subjectRef = useRef<string | null | undefined>(options.initialSubject);
+  const sessionVersionRef = useRef(0);
   const acceptedSnapshotRef = useRef<CurrentProfileResponse | undefined>(
     acceptedSnapshot,
   );
@@ -115,9 +173,14 @@ export function useCurrentProfile(
         subjectRef.current !== undefined &&
         subjectRef.current !== nextSubject
       ) {
+        sessionVersionRef.current += 1;
+        setSessionVersion(sessionVersionRef.current);
         setHydrationData(undefined);
         setAcceptedSnapshot(undefined);
         acceptedSnapshotRef.current = undefined;
+      } else if (subjectRef.current === undefined) {
+        sessionVersionRef.current += 1;
+        setSessionVersion(sessionVersionRef.current);
       }
       subjectRef.current = nextSubject;
       setSubject(nextSubject);
@@ -139,6 +202,12 @@ export function useCurrentProfile(
   const key = currentProfileCacheKey(subject);
   const profileFetcher = useCallback(async () => {
     const next = await fetchCurrentProfile();
+    if (
+      sessionVersionRef.current !== sessionVersion ||
+      subjectRef.current !== subject
+    ) {
+      throw new StaleCurrentProfileRequestError();
+    }
     const accepted = acceptCurrentProfileSnapshot(
       acceptedSnapshotRef.current,
       next,
@@ -146,9 +215,10 @@ export function useCurrentProfile(
     acceptedSnapshotRef.current = accepted;
     setAcceptedSnapshot(accepted);
     return accepted;
-  }, []);
+  }, [sessionVersion, subject]);
   const query = useSWR<CurrentProfileResponse>(key, profileFetcher, {
     fallbackData: hydrationData,
+    keepPreviousData: false,
     revalidateOnFocus: true,
     revalidateOnReconnect: true,
     shouldRetryOnError: false,
@@ -168,31 +238,48 @@ export function useCurrentProfile(
   const revalidate = useCallback(async () => {
     return query.mutate(
       async (current) => {
-        const accepted = acceptCurrentProfileSnapshot(
-          acceptedSnapshotRef.current ?? current,
-          await fetchCurrentProfile(),
-        );
+        const next = await fetchCurrentProfile();
+        if (
+          sessionVersionRef.current !== sessionVersion ||
+          subjectRef.current !== subject
+        ) {
+          return undefined;
+        }
+        const accepted = acceptCurrentProfileSnapshot(acceptedSnapshotRef.current ?? current, next);
         acceptedSnapshotRef.current = accepted;
         setAcceptedSnapshot(accepted);
         return accepted;
       },
       { revalidate: false },
     );
-  }, [query]);
+  }, [query, sessionVersion, subject]);
 
   const acceptedData = query.data
     ? acceptCurrentProfileSnapshot(acceptedSnapshot, query.data)
     : acceptedSnapshot;
   const data =
     subject === undefined || subject === null ? undefined : acceptedData;
+  const isLoading =
+    subject === undefined ||
+    (subject !== null && !data && query.isLoading && !hydrationData);
+  const status: CurrentProfileStatus = isLoading
+    ? "loading"
+    : subject === null || query.error || !data
+      ? "unavailable"
+      : "available";
+  const unavailableReason =
+    status === "unavailable"
+      ? currentProfileUnavailableReason(subject, query.error)
+      : undefined;
   return {
     data,
     currentProfile: data?.currentProfile,
     error: subject === null ? undefined : query.error,
+    status,
+    unavailableReason,
+    sessionVersion,
     isAuthenticated: subject !== null && subject !== undefined,
-    isLoading:
-      subject === undefined ||
-      (subject !== null && query.isLoading && !hydrationData),
+    isLoading,
     mutate: query.mutate,
     revalidate,
   };
@@ -236,12 +323,30 @@ export function useCurrentProfileCommands(
   options: UseCurrentProfileOptions = {},
 ): UseCurrentProfileCommandsResult {
   const profile = useCurrentProfile(options);
-  const { revalidate } = profile;
-  const [pendingIntents, setPendingIntents] = useState<Record<string, unknown>>(
-    {},
+  const { revalidate, sessionVersion } = profile;
+  const [pendingState, setPendingState] = useState<{
+    sessionVersion: number;
+    values: Record<string, unknown>;
+  }>({ sessionVersion, values: {} });
+  const latestSequence = useRef<
+    Record<string, { sessionVersion: number; value: number }>
+  >({});
+  const queues = useRef<
+    Record<string, { sessionVersion: number; promise: Promise<unknown> }>
+  >({});
+  const sessionVersionRef = useRef(profile.sessionVersion);
+
+  useEffect(() => {
+    sessionVersionRef.current = profile.sessionVersion;
+  }, [profile.sessionVersion]);
+
+  const pendingIntents = useMemo(
+    () =>
+      pendingState.sessionVersion === sessionVersion
+        ? pendingState.values
+        : {},
+    [pendingState, sessionVersion],
   );
-  const latestSequence = useRef<Record<string, number>>({});
-  const queues = useRef<Record<string, Promise<unknown>>>({});
 
   const runCommand = useCallback(
     <Result,>(
@@ -250,11 +355,31 @@ export function useCurrentProfileCommands(
       intent: unknown,
       method: "POST" | "PATCH" | "PUT" = "POST",
     ) => {
-      const sequence = (latestSequence.current[concept] ?? 0) + 1;
-      latestSequence.current[concept] = sequence;
-      setPendingIntents((current) => ({ ...current, [concept]: intent }));
+      const requestSessionVersion = sessionVersion;
+      const previousSequence = latestSequence.current[concept];
+      const sequence =
+        previousSequence?.sessionVersion === requestSessionVersion
+          ? previousSequence.value + 1
+          : 1;
+      latestSequence.current[concept] = {
+        sessionVersion: requestSessionVersion,
+        value: sequence,
+      };
+      setPendingState((current) => ({
+        sessionVersion: requestSessionVersion,
+        values: {
+          ...(current.sessionVersion === requestSessionVersion
+            ? current.values
+            : {}),
+          [concept]: intent,
+        },
+      }));
 
-      const previous = queues.current[concept] ?? Promise.resolve();
+      const previousEntry = queues.current[concept];
+      const previous =
+        previousEntry?.sessionVersion === requestSessionVersion
+          ? previousEntry.promise
+          : Promise.resolve();
       const operation = previous
         .catch(() => undefined)
         .then(async () => {
@@ -264,34 +389,49 @@ export function useCurrentProfileCommands(
               intent,
               method,
             );
-            if (latestSequence.current[concept] === sequence) {
-              setPendingIntents((current) => {
-                const next = { ...current };
+            if (
+              sessionVersionRef.current === requestSessionVersion &&
+              latestSequence.current[concept]?.sessionVersion ===
+                requestSessionVersion &&
+              latestSequence.current[concept]?.value === sequence
+            ) {
+              setPendingState((current) => {
+                if (current.sessionVersion !== requestSessionVersion) return current;
+                const next = { ...current.values };
                 delete next[concept];
-                return next;
+                return { sessionVersion: requestSessionVersion, values: next };
               });
               await revalidate();
             }
             return result;
           } catch (error) {
-            if (latestSequence.current[concept] === sequence) {
-              setPendingIntents((current) => {
-                const next = { ...current };
+            if (
+              sessionVersionRef.current === requestSessionVersion &&
+              latestSequence.current[concept]?.sessionVersion ===
+                requestSessionVersion &&
+              latestSequence.current[concept]?.value === sequence
+            ) {
+              setPendingState((current) => {
+                if (current.sessionVersion !== requestSessionVersion) return current;
+                const next = { ...current.values };
                 delete next[concept];
-                return next;
+                return { sessionVersion: requestSessionVersion, values: next };
               });
             }
             throw error;
           }
         });
 
-      queues.current[concept] = operation.then(
-        () => undefined,
-        () => undefined,
-      );
+      queues.current[concept] = {
+        sessionVersion: requestSessionVersion,
+        promise: operation.then(
+          () => undefined,
+          () => undefined,
+        ),
+      };
       return operation;
     },
-    [revalidate],
+    [revalidate, sessionVersion],
   );
 
   const isPending = useCallback(
