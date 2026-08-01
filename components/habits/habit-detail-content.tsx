@@ -206,13 +206,10 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
     if (!habit) return;
     const isPausing = habit.status !== "paused";
     try {
-      const response = await fetch(`/api/habits/${habitId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: isPausing ? "paused" : "active",
-        }),
-      });
+      const response = await fetch(
+        `/api/habits/${habitId}/${isPausing ? "pause" : "resume"}`,
+        { method: "POST" },
+      );
       if (!response.ok) throw new Error("Failed to update");
       mutateHabit();
       revalidateSidebarCounts();
@@ -220,7 +217,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
         isPausing ? t("toast.pauseSuccess") : t("toast.resumeSuccess"),
       );
     } catch (err) {
-      console.error("Failed to update habit status:", err);
+      log.error("[habits] pause/resume", err, { habitId, isPausing });
       toast.error(isPausing ? t("toast.pauseError") : t("toast.resumeError"));
     }
   };

@@ -127,14 +127,23 @@ export function habitTools(): ToolDefinition[] {
         categoryId: z.string().optional().describe("New category ID"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new HabitsDB(ctx.supabase);
-        const { habitId, categoryId, ...rest } = params;
-        const updates: Record<string, unknown> = { ...rest };
-        if (categoryId !== undefined) updates.category_id = categoryId;
-        for (const key of Object.keys(updates)) {
-          if (updates[key] === undefined) delete updates[key];
+        const { habitId, ...values } = params;
+        const outcome = await createHabitWrites(ctx.supabase).update({
+          userId: ctx.userId,
+          habitId,
+          ...values,
+        });
+
+        if (outcome.type === "updated") {
+          return toHabitResponse(outcome.habit);
         }
-        return db.updateHabit(habitId, ctx.userId, updates);
+        if (outcome.type === "not-found") {
+          return { error: "Habit not found" };
+        }
+        if (outcome.type === "conflict") {
+          return { error: "Habit update conflict" };
+        }
+        return { error: outcome.message, field: outcome.field };
       },
     },
     {

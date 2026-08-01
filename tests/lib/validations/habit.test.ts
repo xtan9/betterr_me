@@ -334,9 +334,17 @@ describe("habitUpdateSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("accepts single field update (status)", () => {
+  it("rejects lifecycle status changes from the detail update", () => {
     const result = habitUpdateSchema.safeParse({ status: "paused" });
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects lifecycle status mixed with detail changes", () => {
+    const result = habitUpdateSchema.safeParse({
+      name: "Evening Run",
+      status: "paused",
+    });
+    expect(result.success).toBe(false);
   });
 
   it("accepts single field update (frequency)", () => {
@@ -357,7 +365,6 @@ describe("habitUpdateSchema", () => {
     const result = habitUpdateSchema.safeParse({
       name: "New",
       category_id: "550e8400-e29b-41d4-a716-446655440000",
-      status: "active",
     });
     expect(result.success).toBe(true);
   });
@@ -382,17 +389,17 @@ describe("habitUpdateSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("accepts all valid status values", () => {
+  it("rejects all lifecycle status values", () => {
     for (const status of ["active", "paused", "formed"] as const) {
       const result = habitUpdateSchema.safeParse({ status });
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
     }
   });
 
-  it("accepts formed status", () => {
+  it("rejects formed status", () => {
     expect(
       habitUpdateSchema.safeParse({ status: "formed" }).success
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("rejects archived status", () => {

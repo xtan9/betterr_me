@@ -136,4 +136,99 @@ describe("createHabitWrites persistence adapter", () => {
       }),
     ).rejects.toBe(persistenceError);
   });
+
+  it("updates only normalized detail fields with owner scoping", async () => {
+    const writes = createHabitWrites(
+      mockSupabaseClient as unknown as SupabaseClient,
+    );
+
+    const outcome = await writes.update({
+      userId: "trusted-user",
+      habitId: "habit-1",
+      name: "  Evening Run  ",
+      description: "  Run after work  ",
+      categoryId: " category-2 ",
+      frequency: { type: "custom", days: [4, 2, 4] },
+    });
+
+    expect(outcome).toMatchObject({ type: "updated" });
+    expect(outcome).toEqual({
+      type: "updated",
+      habit: {
+        id: "habit-1",
+        userId: "trusted-user",
+        name: "Morning Run",
+        description: "Run five kilometers",
+        categoryId: "category-1",
+        frequency: { type: "custom", days: [1, 5] },
+        status: "active",
+        currentStreak: 0,
+        bestStreak: 0,
+        pausedAt: null,
+        graduatedAt: null,
+        graduatedStreak: null,
+        nudgeDismissedAt: null,
+        createdAt: "2026-08-01T12:00:00.000Z",
+        updatedAt: "2026-08-01T12:00:00.000Z",
+      },
+    });
+    expect(mockSupabaseClient.queryLog).toEqual([
+      { table: "habits", method: "from", args: ["habits"] },
+      {
+        table: "habits",
+        method: "update",
+        args: [
+          {
+            name: "Evening Run",
+            description: "Run after work",
+            category_id: "category-2",
+            frequency: { type: "custom", days: [2, 4] },
+          },
+        ],
+      },
+      { table: "habits", method: "eq", args: ["id", "habit-1"] },
+      { table: "habits", method: "eq", args: ["user_id", "trusted-user"] },
+      { table: "habits", method: "select", args: [] },
+      { table: "habits", method: "single", args: [] },
+    ]);
+  });
+
+  it("maps a scoped missing row to not-found without disclosing ownership", async () => {
+    mockSupabaseClient.setMockResponse(null, {
+      code: "PGRST116",
+      message: "No rows found",
+    });
+    const writes = createHabitWrites(
+      mockSupabaseClient as unknown as SupabaseClient,
+    );
+
+    const outcome = await writes.update({
+      userId: "other-user",
+      habitId: "habit-1",
+      name: "Private name",
+    });
+
+    expect(outcome).toEqual({ type: "not-found" });
+    expect(mockSupabaseClient.queryLog).toContainEqual({
+      table: "habits",
+      method: "eq",
+      args: ["user_id", "other-user"],
+    });
+  });
+
+  it("propagates an unexpected update failure", async () => {
+    const persistenceError = new Error("update failed");
+    mockSupabaseClient.setMockResponse(null, persistenceError);
+    const writes = createHabitWrites(
+      mockSupabaseClient as unknown as SupabaseClient,
+    );
+
+    await expect(
+      writes.update({
+        userId: "trusted-user",
+        habitId: "habit-1",
+        name: "Evening Run",
+      }),
+    ).rejects.toBe(persistenceError);
+  });
 });

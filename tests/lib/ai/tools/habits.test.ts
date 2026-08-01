@@ -7,8 +7,13 @@ const mockGetHabitStats = vi.fn();
 const mockComplete = vi.fn();
 const mockUncomplete = vi.fn();
 const mockCreateHabit = vi.fn();
-const { mockCreateHabitWrite, mockToHabitResponse } = vi.hoisted(() => ({
+const {
+  mockCreateHabitWrite,
+  mockUpdateHabitWrite,
+  mockToHabitResponse,
+} = vi.hoisted(() => ({
   mockCreateHabitWrite: vi.fn(),
+  mockUpdateHabitWrite: vi.fn(),
   mockToHabitResponse: vi.fn(),
 }));
 const mockUpdateHabit = vi.fn();
@@ -46,7 +51,10 @@ vi.mock("@/lib/habits/completion", () => ({
 }));
 
 vi.mock("@/lib/habits/writes", () => ({
-  createHabitWrites: vi.fn(() => ({ create: mockCreateHabitWrite })),
+  createHabitWrites: vi.fn(() => ({
+    create: mockCreateHabitWrite,
+    update: mockUpdateHabitWrite,
+  })),
   toHabitResponse: mockToHabitResponse,
 }));
 
@@ -197,17 +205,57 @@ describe("habitTools", () => {
     expect(result).toEqual(presentedHabit);
   });
 
-  it("updateHabit transforms camelCase to snake_case and removes undefined", async () => {
+  it("updateHabit maps camelCase detail input through HabitWrites", async () => {
     const ctx = makeCtx();
-    mockUpdateHabit.mockResolvedValue({ id: "h1", name: "Meditate more" });
-    await findTool("updateHabit").execute(
+    const updatedHabit = {
+      id: "h1",
+      userId: "user-123",
+      name: "Meditate more",
+    };
+    const presentedHabit = { id: "h1", name: "Meditate more" };
+    mockUpdateHabitWrite.mockResolvedValue({
+      type: "updated",
+      habit: updatedHabit,
+    });
+    mockToHabitResponse.mockReturnValue(presentedHabit);
+    const result = await findTool("updateHabit").execute(
       { habitId: "h1", name: "Meditate more", categoryId: "cat-1" },
       ctx,
     );
-    expect(mockUpdateHabit).toHaveBeenCalledWith("h1", "user-123", {
+    expect(mockUpdateHabitWrite).toHaveBeenCalledWith({
+      habitId: "h1",
+      userId: "user-123",
       name: "Meditate more",
-      category_id: "cat-1",
+      categoryId: "cat-1",
     });
+    expect(mockToHabitResponse).toHaveBeenCalledWith(updatedHabit);
+    expect(mockUpdateHabit).not.toHaveBeenCalled();
+    expect(result).toEqual(presentedHabit);
+  });
+
+  it("updateHabit maps expected domain outcomes to conversational errors", async () => {
+    const ctx = makeCtx();
+    mockUpdateHabitWrite.mockResolvedValue({ type: "not-found" });
+    await expect(
+      findTool("updateHabit").execute({ habitId: "missing", name: "Name" }, ctx),
+    ).resolves.toEqual({ error: "Habit not found" });
+
+    mockUpdateHabitWrite.mockResolvedValue({ type: "conflict" });
+    await expect(
+      findTool("updateHabit").execute({ habitId: "h1", name: "Name" }, ctx),
+    ).resolves.toEqual({ error: "Habit update conflict" });
+
+    mockUpdateHabitWrite.mockResolvedValue({
+      type: "invalid",
+      field: "frequency",
+      message: "Frequency is invalid",
+    });
+    await expect(
+      findTool("updateHabit").execute(
+        { habitId: "h1", frequency: { type: "custom", days: [] } },
+        ctx,
+      ),
+    ).resolves.toEqual({ error: "Frequency is invalid", field: "frequency" });
   });
 
   it("pauseHabit calls HabitsDB.pauseHabit", async () => {
