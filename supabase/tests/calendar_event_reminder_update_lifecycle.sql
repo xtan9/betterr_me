@@ -185,11 +185,15 @@ begin
     when insufficient_privilege then null;
   end;
 
-  update public.reminders set fire_at = '2026-08-03 09:00:00+00'
-  where id = original_reminder_id;
-  if found then
-    raise exception 'direct calendar reminder update unexpectedly succeeded';
-  end if;
+  begin
+    update public.reminders set fire_at = '2026-08-03 09:00:00+00'
+    where id = original_reminder_id;
+    if found then
+      raise exception 'direct calendar reminder update unexpectedly succeeded';
+    end if;
+  exception
+    when insufficient_privilege then null;
+  end;
 
   begin
     delete from public.reminders where id = original_reminder_id;

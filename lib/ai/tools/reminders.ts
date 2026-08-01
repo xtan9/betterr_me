@@ -6,6 +6,13 @@ import {
   isCalendarEventReminder,
 } from "@/lib/reminders/lifecycle-policy";
 import {
+  userReminderDeliveryContext,
+} from "@/lib/reminders/delivery";
+import {
+  createReminderDelivery,
+} from "@/lib/reminders/delivery-service";
+import { reminderDeliveryOutcomeToAi } from "@/lib/reminders/delivery-adapter";
+import {
   createTaskWrites,
   toTaskReminderResponse,
   type TaskReminderConfigurationPersistenceOutcome,
@@ -91,31 +98,16 @@ export function reminderTools(): ToolDefinition[] {
           ),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new RemindersDB(ctx.supabase);
-        const reminder = await db.getReminder(ctx.userId, params.reminderId);
-        if (!reminder) return { error: "Reminder not found" };
-        if (isCalendarEventReminder(reminder.source_type)) {
-          return db.transitionCalendarEventReminder(
-            ctx.userId,
-            params.reminderId,
-            params.snoozeUntil
-              ? { status: "pending", fire_at: params.snoozeUntil }
-              : { status: "sent" },
-          );
-        }
-        if (params.snoozeUntil) {
-          return db.updateReminder(ctx.userId, params.reminderId, {
-            status: "pending",
-            fire_at: params.snoozeUntil,
-          });
-        }
+        const outcome = await createReminderDelivery(ctx.supabase).transition({
+          reminderId: params.reminderId,
+          context: userReminderDeliveryContext(ctx.userId),
+          transition: params.snoozeUntil
+            ? { type: "snooze", fireAt: params.snoozeUntil }
+            : { type: "sent" },
+        });
         // Schema has no "dismissed" status — "sent" is the terminal state
         // that marks a reminder as no longer pending.
-        return db.updateReminderStatus(
-          ctx.userId,
-          params.reminderId,
-          "sent",
-        );
+        return reminderDeliveryOutcomeToAi(outcome);
       },
     },
     {

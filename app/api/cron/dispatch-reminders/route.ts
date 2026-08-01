@@ -8,10 +8,11 @@ import { sendReminderEmail } from "@/lib/email/send";
 import { isPushQuietWindowActive } from "@/lib/preferences/push-quiet-window";
 import { getVapidDetails } from "@/lib/push/vapid";
 import { log } from "@/lib/logger";
-
-/** Max age (ms) before a pending reminder is considered stale and marked failed */
-const MAX_STALE_MS = 4 * 60 * 60 * 1000; // 4 hours
-const SUPPORTED_REMINDER_SOURCE_TYPES = new Set(["calendar_event", "task", "habit"]);
+import {
+  isSupportedSourceType,
+  trustedOperationalDispatchContext,
+} from "@/lib/reminders/delivery";
+import { createReminderDelivery } from "@/lib/reminders/delivery-service";
 
 /**
  * GET /api/cron/dispatch-reminders
@@ -38,6 +39,7 @@ export async function GET(request: NextRequest) {
 
     const adminClient = createAdminClient();
     const remindersDB = new RemindersDB(adminClient);
+    const reminderDelivery = createReminderDelivery(adminClient);
     const notificationsDB = new NotificationsDB(adminClient);
 
     const now = new Date().toISOString();
@@ -60,13 +62,21 @@ export async function GET(request: NextRequest) {
       try {
         // Retire legacy rows defensively if they are encountered before the
         // forward migration has run in a deployment environment.
-        if (!SUPPORTED_REMINDER_SOURCE_TYPES.has(reminder.source_type)) {
-          await remindersDB.updateReminderStatus(
-            reminder.user_id,
-            reminder.id,
-            "failed",
-          );
+        if (!isSupportedSourceType(reminder.source_type)) {
+          const retirement = await reminderDelivery.transition({
+            reminderId: reminder.id,
+            context: trustedOperationalDispatchContext(reminder.user_id),
+            transition: { type: "retire-unsupported-source" },
+          });
           failed++;
+          if (!isAppliedDeliveryOutcome(retirement)) {
+            log.warn("Unsupported reminder source could not be retired", {
+              reminderId: reminder.id,
+              userId: reminder.user_id,
+              sourceType: reminder.source_type,
+              outcome: retirement.type,
+            });
+          }
           log.warn("Unsupported reminder source retired", {
             reminderId: reminder.id,
             userId: reminder.user_id,
@@ -75,8 +85,28 @@ export async function GET(request: NextRequest) {
           continue;
         }
 
-        // Check staleness: skip reminders whose fire_at is too old
-        const fireAtAge = Date.now() - new Date(reminder.fire_at).getTime();
+        // Let the shared state machine decide whether the delivery is stale.
+        // An invalid transition here means the reminder is still within the
+        // retry horizon; every other non-success outcome is a real dispatch
+        // failure and must not be sent again in this batch.
+        const stale = await reminderDelivery.transition({
+          reminderId: reminder.id,
+          context: trustedOperationalDispatchContext(reminder.user_id),
+          transition: { type: "stale" },
+        });
+        if (isAppliedDeliveryOutcome(stale)) {
+          failed++;
+          continue;
+        }
+        if (stale.type !== "invalid-transition") {
+          failed++;
+          log.warn("Stale reminder could not be evaluated", {
+            reminderId: reminder.id,
+            userId: reminder.user_id,
+            outcome: stale.type,
+          });
+          continue;
+        }
 
         // Read only the Notifications-owned Push Quiet Window state. An
         // unavailable legacy window fails open for push while remaining
@@ -96,18 +126,7 @@ export async function GET(request: NextRequest) {
 
         // If no channels can be dispatched (push-only during quiet hours), skip
         if (channelsToSend.length === 0) {
-          // If stale beyond threshold, mark as failed instead of retrying forever
-          if (fireAtAge > MAX_STALE_MS) {
-            await remindersDB.updateReminderStatus(reminder.user_id, reminder.id, "failed");
-            failed++;
-            log.warn("Stale reminder expired during quiet hours", {
-              reminderId: reminder.id,
-              userId: reminder.user_id,
-              ageHours: Math.round(fireAtAge / 3600000),
-            });
-          } else {
-            skippedQuietHours++;
-          }
+          skippedQuietHours++;
           continue;
         }
 
@@ -143,32 +162,54 @@ export async function GET(request: NextRequest) {
 
         // Update reminder status based on dispatch results
         if (pushSuccess || emailSuccess) {
-          try {
-            await remindersDB.updateReminderStatus(
-              reminder.user_id,
-              reminder.id,
-              "sent",
-              new Date().toISOString()
-            );
-          } catch (statusError) {
+          const sent = await reminderDelivery.transition({
+            reminderId: reminder.id,
+            context: trustedOperationalDispatchContext(reminder.user_id),
+            transition: { type: "sent", sentAt: new Date().toISOString() },
+          });
+          if (!isAppliedDeliveryOutcome(sent)) {
             // Notification already sent — log but don't re-dispatch on next run risk
-            log.error("Failed to mark reminder as sent (may cause duplicate)", statusError, {
+            log.error("Failed to mark reminder as sent (may cause duplicate)", sent, {
               reminderId: reminder.id,
               userId: reminder.user_id,
             });
           }
           dispatched++;
         } else {
-          await remindersDB.updateReminderStatus(
-            reminder.user_id,
-            reminder.id,
-            "failed"
-          );
+          const failure = await reminderDelivery.transition({
+            reminderId: reminder.id,
+            context: trustedOperationalDispatchContext(reminder.user_id),
+            transition: { type: "failed" },
+          });
+          if (!isAppliedDeliveryOutcome(failure)) {
+            log.error("Failed to mark reminder delivery as failed", failure, {
+              reminderId: reminder.id,
+              userId: reminder.user_id,
+            });
+          }
           failed++;
         }
       } catch (error) {
         // Error isolation: one reminder failure doesn't stop the batch
         failed++;
+        try {
+          const failure = await reminderDelivery.transition({
+            reminderId: reminder.id,
+            context: trustedOperationalDispatchContext(reminder.user_id),
+            transition: { type: "failed" },
+          });
+          if (!isAppliedDeliveryOutcome(failure)) {
+            log.error("Failed to record reminder delivery failure", failure, {
+              reminderId: reminder.id,
+              userId: reminder.user_id,
+            });
+          }
+        } catch (failureError) {
+          log.error("Failed to record reminder delivery failure", failureError, {
+            reminderId: reminder.id,
+            userId: reminder.user_id,
+          });
+        }
         log.error("Failed to dispatch reminder", error, {
           reminderId: reminder.id,
           userId: reminder.user_id,
@@ -189,4 +230,10 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+function isAppliedDeliveryOutcome(
+  outcome: { type: string },
+): boolean {
+  return outcome.type === "transitioned" || outcome.type === "already-applied";
 }

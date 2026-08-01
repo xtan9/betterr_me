@@ -32,7 +32,6 @@ select set_config(
   true
 );
 
-set local role authenticated;
 do $$
 declare
   affected_rows bigint;
@@ -49,7 +48,6 @@ begin
   end if;
 end
 $$;
-reset role;
 
 insert into public.conversations (id, user_id, title, model)
 values
@@ -224,8 +222,9 @@ values
     array['email']
   );
 
--- Owner reads and writes the supported profile/settings surfaces.
-set local role authenticated;
+-- Owner reads and writes the supported profile/settings surfaces. The
+-- constrained runner role supplies the table grant while JWT claims still
+-- exercise the production RLS predicate.
 do $$
 declare
   affected_rows bigint;
@@ -377,6 +376,7 @@ do $$
 declare
   affected_rows bigint;
   configuration jsonb;
+  delivery_outcome jsonb;
 begin
   if (
     select count(*)
@@ -386,12 +386,20 @@ begin
     raise exception 'owner cannot read both owner reminders';
   end if;
 
-  update public.reminders
-  set status = 'sent'
-  where id = current_setting('ralph.identity_owner_push_reminder_id')::uuid;
-  get diagnostics affected_rows = row_count;
-  if affected_rows <> 1 then
-    raise exception 'owner reminder update changed % rows', affected_rows;
+  delivery_outcome := public.transition_reminder_delivery(
+    '57700000-0000-0000-0000-000000000001',
+    current_setting('ralph.identity_owner_push_reminder_id')::uuid,
+    'user',
+    'sent',
+    '2026-08-05T09:00:00Z',
+    '2026-08-05T09:00:01Z',
+    'pending',
+    '2026-08-05T09:00:00Z',
+    null
+  );
+  if delivery_outcome->>'type' <> 'transitioned'
+    or delivery_outcome->'reminder'->>'status' <> 'sent' then
+    raise exception 'owner Reminder Delivery transition was incorrect: %', delivery_outcome;
   end if;
 
   configuration := public.configure_habit_reminders(

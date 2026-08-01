@@ -8,21 +8,6 @@
   },
   "entries": [
     {
-      "id": "app/api/cron/dispatch-reminders/route.ts#RemindersDB.updateReminderStatus",
-      "domain": "Reminder Delivery",
-      "operation": "Dispatcher marks a reminder sent or failed",
-      "channels": ["Operational"],
-      "invariants": [
-        "Only pending reminders selected by the dispatcher may advance",
-        "The source user's reminder row remains isolated by user identity",
-        "A delivery failure is observable without changing source Reminder Configuration"
-      ],
-      "atomicity": "One reminder status update per delivery attempt; retry and stale-attempt policy remain in the operational adapter until #657.",
-      "migrationStatus": "remaining",
-      "owningTicket": "#657",
-      "evidence": "app/api/cron/dispatch-reminders/route.ts calls RemindersDB.updateReminderStatus at four delivery outcome sites."
-    },
-    {
       "id": "app/api/habits/[id]/dismiss-graduation-nudge/route.ts#HabitsDB.dismissGraduationNudge",
       "domain": "Habits",
       "operation": "Dismiss graduation nudge",
@@ -50,36 +35,6 @@
       "migrationStatus": "remaining",
       "owningTicket": "#632 (follow-up)",
       "evidence": "app/api/reminder-defaults/route.ts calls ReminderDefaultsDB.upsertDefault directly."
-    },
-    {
-      "id": "app/api/reminders/[id]/route.ts#RemindersDB.transitionCalendarEventReminder",
-      "domain": "Reminder Delivery",
-      "operation": "HTTP calendar-event Reminder Delivery transition",
-      "channels": ["HTTP"],
-      "invariants": [
-        "Calendar-event Reminder Configuration stays owned by Scheduling",
-        "Only valid sent, failed, snoozed, and pending transitions are accepted",
-        "Snoozing cannot retain a sent timestamp"
-      ],
-      "atomicity": "The transition_calendar_event_reminder RPC is the current single-row transaction boundary; its policy belongs in Reminder Delivery.",
-      "migrationStatus": "remaining",
-      "owningTicket": "#657",
-      "evidence": "app/api/reminders/[id]/route.ts calls RemindersDB.transitionCalendarEventReminder for calendar-event delivery transitions."
-    },
-    {
-      "id": "app/api/reminders/[id]/route.ts#RemindersDB.updateReminder",
-      "domain": "Reminder Delivery",
-      "operation": "HTTP generic Reminder Delivery update",
-      "channels": ["HTTP"],
-      "invariants": [
-        "The reminder belongs to the authenticated user",
-        "Delivery status, fire time, sent time, and channels cannot create an impossible state",
-        "Habit Reminder Configuration fields must move to the Habit authority under #656"
-      ],
-      "atomicity": "Single generic reminder-row update; no shared state machine or source lifecycle transaction currently owns the operation.",
-      "migrationStatus": "remaining",
-      "owningTicket": "#656 / #657",
-      "evidence": "app/api/reminders/[id]/route.ts calls RemindersDB.updateReminder for the generic non-task, non-calendar update branch."
     },
     {
       "id": "app/api/routines/[id]/exercises/[reId]/route.ts#RoutinesDB.removeRoutineExercise",
@@ -166,54 +121,26 @@
       "migrationStatus": "remaining",
       "owningTicket": "#632 (follow-up)",
       "evidence": "app/api/routines/route.ts calls RoutinesDB.createRoutine directly."
-    },
-    {
-      "id": "lib/ai/tools/reminders.ts#RemindersDB.transitionCalendarEventReminder",
-      "domain": "Reminder Delivery",
-      "operation": "AI calendar-event Reminder Delivery transition",
-      "channels": ["AI"],
-      "invariants": [
-        "Calendar-event Reminder Configuration remains owned by Scheduling",
-        "AI snooze and dismissal use the same valid delivery state transitions as HTTP",
-        "Repeated transitions have an explicit typed outcome"
-      ],
-      "atomicity": "The transition_calendar_event_reminder RPC is the current single-row transaction boundary; shared policy belongs in #657.",
-      "migrationStatus": "remaining",
-      "owningTicket": "#657",
-      "evidence": "lib/ai/tools/reminders.ts calls RemindersDB.transitionCalendarEventReminder for calendar-event dismissal or snooze."
-    },
-    {
-      "id": "lib/ai/tools/reminders.ts#RemindersDB.updateReminder",
-      "domain": "Reminder Delivery",
-      "operation": "AI Habit Reminder Delivery snooze",
-      "channels": ["AI"],
-      "invariants": [
-        "The reminder belongs to the trusted AI user",
-        "Snooze changes fire time without falsely marking the reminder sent",
-        "Habit source configuration and delivery state remain separate concepts"
-      ],
-      "atomicity": "Single reminder-row update; delivery state machine and retry behavior remain to be centralized in #657.",
-      "migrationStatus": "remaining",
-      "owningTicket": "#657",
-      "evidence": "lib/ai/tools/reminders.ts calls RemindersDB.updateReminder when an AI user snoozes a non-calendar reminder."
-    },
-    {
-      "id": "lib/ai/tools/reminders.ts#RemindersDB.updateReminderStatus",
-      "domain": "Reminder Delivery",
-      "operation": "AI dismisses a Reminder Delivery",
-      "channels": ["AI"],
-      "invariants": [
-        "The reminder belongs to the trusted AI user",
-        "Dismissal maps to the defined terminal delivery state",
-        "Retries and already-applied transitions remain explicit"
-      ],
-      "atomicity": "Single reminder-row status update; delivery transition policy remains in the generic persistence path until #657.",
-      "migrationStatus": "remaining",
-      "owningTicket": "#657",
-      "evidence": "lib/ai/tools/reminders.ts calls RemindersDB.updateReminderStatus when an AI user dismisses a non-calendar reminder."
     }
   ],
   "priorArt": [
+    {
+      "id": "reminders-reminder-delivery",
+      "domain": "Reminder Delivery",
+      "operation": "Reminder Delivery snooze, completion, retry retirement, and unsupported-source retirement",
+      "channels": ["HTTP", "AI", "Operational"],
+      "invariants": [
+        "User transitions are scoped to the explicit authenticated identity",
+        "Only trusted operational dispatch may record failure, stale, or unsupported-source outcomes",
+        "Expected delivery state makes retries idempotent and concurrent attempts conflicted",
+        "Reminder Configuration timing and channels remain owned by source lifecycle authorities"
+      ],
+      "atomicity": "ReminderDelivery makes the storage-independent decision and SupabaseReminderDeliveryPersistence commits one expected-state transition through transition_reminder_delivery.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#657",
+      "authority": "lib/reminders/delivery.ts, lib/reminders/delivery-persistence.ts, and transition_reminder_delivery",
+      "evidence": "HTTP reminders, AI dismissal/snooze, and cron completion all call createReminderDelivery; the delivery adapter rejects channels and configuration-shaped transition requests."
+    },
     {
       "id": "tasks-task-writes",
       "domain": "Tasks",

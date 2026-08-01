@@ -33,7 +33,7 @@ describe("Task Reminder Configuration architecture boundaries", () => {
     const taskPatch = section(
       route,
       'if (existing.source_type === "task" && validation.data.channels !== undefined)',
-      "    // Status, fire_at, and sent_at",
+      '    if (existing.source_type === "habit" && validation.data.channels !== undefined)',
     );
     const taskDelete = section(
       route,
