@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { RemindersDB } from "@/lib/db";
 import { reminderCreateSchema } from "@/lib/validations/reminders";
 import { validateRequestBody } from "@/lib/validations/api";
@@ -20,20 +21,30 @@ const createWithStartTimeSchema = reminderCreateSchema.and(
   })
 );
 
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "read",
+} as const satisfies AuthenticatedRequestPolicy;
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "write",
+} as const satisfies AuthenticatedRequestPolicy;
+
 /**
  * GET /api/reminders
  * List reminders for a given source (source_type + source_id required).
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const { searchParams } = new URL(request.url);
     const source_type = searchParams.get("source_type");
@@ -57,7 +68,7 @@ export async function GET(request: NextRequest) {
 
     const remindersDB = new RemindersDB(supabase);
     const reminders = await remindersDB.getRemindersBySource(
-      user.id,
+      userId,
       source_type as typeof validSourceTypes[number],
       source_id
     );
@@ -78,14 +89,14 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
     const validation = validateRequestBody(body, createWithStartTimeSchema);
@@ -110,7 +121,7 @@ export async function POST(request: NextRequest) {
     );
 
     const remindersDB = new RemindersDB(supabase);
-    const reminder = await remindersDB.createReminder(user.id, {
+    const reminder = await remindersDB.createReminder(userId, {
       ...reminderData,
       relative_minutes: reminderData.relative_minutes ?? null,
       absolute_time: reminderData.absolute_time ?? null,

@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateRequest, cookieRouteErrorMessage } from '@/lib/auth/authenticated-request';
+import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { RecurringTasksDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { recurringTaskUpdateSchema } from '@/lib/validations/recurring-task';
 import { getLocalDateString } from '@/lib/utils';
+
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'read',
+} as const satisfies AuthenticatedRequestPolicy;
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'write',
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * GET /api/recurring-tasks/[id]
@@ -16,15 +27,17 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const recurringTasksDB = new RecurringTasksDB(supabase);
-    const template = await recurringTasksDB.getRecurringTask(id, user.id);
+    const template = await recurringTasksDB.getRecurringTask(id, userId);
 
     if (!template) {
       return NextResponse.json({ error: 'Recurring task not found' }, { status: 404 });
@@ -53,12 +66,14 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const searchParams = request.nextUrl.searchParams;
     const action = searchParams.get('action');
@@ -66,14 +81,14 @@ export async function PATCH(
 
     // Handle quick actions
     if (action === 'pause') {
-      const template = await recurringTasksDB.pauseRecurringTask(id, user.id);
+      const template = await recurringTasksDB.pauseRecurringTask(id, userId);
       return NextResponse.json({ recurring_task: template });
     }
     if (action === 'resume') {
       const today = searchParams.get('date') || getLocalDateString();
       const [y, m, d] = today.split('-').map(Number);
       const throughDate = getLocalDateString(new Date(y, m - 1, d + 7));
-      const template = await recurringTasksDB.resumeRecurringTask(id, user.id, today, throughDate);
+      const template = await recurringTasksDB.resumeRecurringTask(id, userId, today, throughDate);
       return NextResponse.json({ recurring_task: template });
     }
     if (action) {
@@ -88,7 +103,7 @@ export async function PATCH(
     const validation = validateRequestBody(body, recurringTaskUpdateSchema);
     if (!validation.success) return validation.response;
 
-    const template = await recurringTasksDB.updateRecurringTask(id, user.id, validation.data);
+    const template = await recurringTasksDB.updateRecurringTask(id, userId, validation.data);
     return NextResponse.json({ recurring_task: template });
   } catch (error: unknown) {
     log.error('PATCH /api/recurring-tasks/[id] error', error);
@@ -115,15 +130,17 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const recurringTasksDB = new RecurringTasksDB(supabase);
-    await recurringTasksDB.deleteRecurringTask(id, user.id);
+    await recurringTasksDB.deleteRecurringTask(id, userId);
     return NextResponse.json({ success: true });
   } catch (error) {
     log.error('DELETE /api/recurring-tasks/[id] error', error);

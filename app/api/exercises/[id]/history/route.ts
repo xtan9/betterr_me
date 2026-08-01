@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { WorkoutsDB } from "@/lib/db/workouts";
 import { log } from "@/lib/logger";
+
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "read",
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * GET /api/exercises/[id]/history
@@ -14,14 +20,14 @@ export async function GET(
 ) {
   try {
     const { id: exerciseId } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const { searchParams } = new URL(request.url);
     const since = searchParams.get("since") ?? undefined;
@@ -29,7 +35,7 @@ export async function GET(
     const workoutsDB = new WorkoutsDB(supabase);
     const history = await workoutsDB.getExerciseHistory(
       exerciseId,
-      user.id,
+      userId,
       { since }
     );
 

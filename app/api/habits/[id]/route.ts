@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateRequest, cookieRouteErrorMessage } from '@/lib/auth/authenticated-request';
+import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { HabitsDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { habitUpdateSchema } from '@/lib/validations/habit';
 import type { HabitUpdate } from '@/lib/db/types';
+
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'read',
+} as const satisfies AuthenticatedRequestPolicy;
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'write',
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * GET /api/habits/[id]
@@ -16,17 +27,17 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const habitsDB = new HabitsDB(supabase);
-    const habit = await habitsDB.getHabit(id, user.id);
+    const habit = await habitsDB.getHabit(id, userId);
 
     if (!habit) {
       return NextResponse.json({ error: 'Habit not found' }, { status: 404 });
@@ -49,14 +60,14 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
 
@@ -97,7 +108,7 @@ export async function PATCH(
     }
 
     const habitsDB = new HabitsDB(supabase);
-    const habit = await habitsDB.updateHabit(id, user.id, updates);
+    const habit = await habitsDB.updateHabit(id, userId, updates);
 
     return NextResponse.json({ habit });
   } catch (error: unknown) {
@@ -117,19 +128,22 @@ export async function PATCH(
  * Delete a habit permanently
  */
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
+    }
+    const { principal: { userId }, client: supabase } = auth;
 
     const habitsDB = new HabitsDB(supabase);
-    await habitsDB.deleteHabit(id, user.id);
+    await habitsDB.deleteHabit(id, userId);
     return NextResponse.json({ success: true });
   } catch (error) {
     log.error('[habits] DELETE', error);

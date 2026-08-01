@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateRequest, cookieRouteErrorMessage } from '@/lib/auth/authenticated-request';
+import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { HabitsDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
@@ -7,6 +8,16 @@ import { habitFormSchema } from '@/lib/validations/habit';
 import { ensureProfile } from '@/lib/db/ensure-profile';
 import { MAX_HABITS_PER_USER } from '@/lib/constants';
 import type { HabitInsert, HabitFilters } from '@/lib/db/types';
+
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'read',
+} as const satisfies AuthenticatedRequestPolicy;
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'write',
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * GET /api/habits
@@ -19,14 +30,14 @@ import type { HabitInsert, HabitFilters } from '@/lib/db/types';
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const habitsDB = new HabitsDB(supabase);
     const searchParams = request.nextUrl.searchParams;
@@ -35,7 +46,7 @@ export async function GET(request: NextRequest) {
     // If with_today is requested, use the optimized query
     if (withToday) {
       const date = searchParams.get('date') || undefined;
-      const habits = await habitsDB.getHabitsWithTodayStatus(user.id, date);
+      const habits = await habitsDB.getHabitsWithTodayStatus(userId, date);
       return NextResponse.json({ habits });
     }
 
@@ -56,7 +67,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const habits = await habitsDB.getUserHabits(user.id, filters);
+    const habits = await habitsDB.getUserHabits(userId, filters);
     return NextResponse.json({ habits });
   } catch (error) {
     log.error('GET /api/habits error', error);
@@ -70,14 +81,14 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
 
@@ -86,11 +97,14 @@ export async function POST(request: NextRequest) {
     if (!validation.success) return validation.response;
 
     // Ensure user profile exists (required by FK constraint on habits.user_id)
-    await ensureProfile(supabase, user);
+    await ensureProfile(supabase, {
+      id: userId,
+      ...auth.principal.profile,
+    });
 
     // Check habit count limit
     const habitsDB = new HabitsDB(supabase);
-    const activeCount = await habitsDB.getActiveHabitCount(user.id);
+    const activeCount = await habitsDB.getActiveHabitCount(userId);
     if (activeCount >= MAX_HABITS_PER_USER) {
       return NextResponse.json(
         { error: `You have ${activeCount}/${MAX_HABITS_PER_USER} habits. Remove one before adding another.` },
@@ -99,7 +113,7 @@ export async function POST(request: NextRequest) {
     }
 
     const habitData: HabitInsert = {
-      user_id: user.id,
+      user_id: userId,
       name: validation.data.name.trim(),
       description: validation.data.description?.trim() || null,
       category_id: validation.data.category_id || null,

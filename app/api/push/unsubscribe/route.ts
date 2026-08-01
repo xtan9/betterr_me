@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { PushSubscriptionsDB } from "@/lib/db/push-subscriptions";
 import { validateRequestBody } from "@/lib/validations/api";
 import { pushUnsubscribeSchema } from "@/lib/validations/push";
 import { log } from "@/lib/logger";
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "write",
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * POST /api/push/unsubscribe
@@ -12,21 +18,21 @@ import { log } from "@/lib/logger";
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
     const validation = validateRequestBody(body, pushUnsubscribeSchema);
     if (!validation.success) return validation.response;
 
     const db = new PushSubscriptionsDB(supabase);
-    await db.deleteSubscription(user.id, validation.data.endpoint);
+    await db.deleteSubscription(userId, validation.data.endpoint);
 
     return NextResponse.json({ success: true });
   } catch (error) {

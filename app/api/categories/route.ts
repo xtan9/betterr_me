@@ -1,27 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateRequest, cookieRouteErrorMessage } from '@/lib/auth/authenticated-request';
+import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { CategoriesDB } from '@/lib/db/categories';
 import { validateRequestBody } from '@/lib/validations/api';
 import { categoryCreateSchema } from '@/lib/validations/category';
 import { log } from '@/lib/logger';
 
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'read',
+} as const satisfies AuthenticatedRequestPolicy;
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'write',
+} as const satisfies AuthenticatedRequestPolicy;
+
 /**
  * GET /api/categories
  * Get categories for the authenticated user (lazy-seeds defaults on first call)
  */
-export async function GET() {
+export async function GET(request: Request = new Request('http://localhost')) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const categoriesDB = new CategoriesDB(supabase);
-    const categories = await categoriesDB.seedCategories(user.id);
+    const categories = await categoriesDB.seedCategories(userId);
 
     return NextResponse.json({ categories });
   } catch (error) {
@@ -39,14 +50,14 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
     const validation = validateRequestBody(body, categoryCreateSchema);
@@ -55,10 +66,10 @@ export async function POST(request: NextRequest) {
     const { name, color, icon } = validation.data;
 
     const categoriesDB = new CategoriesDB(supabase);
-    const existing = await categoriesDB.getUserCategories(user.id);
+    const existing = await categoriesDB.getUserCategories(userId);
 
     const category = await categoriesDB.createCategory({
-      user_id: user.id,
+      user_id: userId,
       name,
       color,
       icon: icon ?? null,

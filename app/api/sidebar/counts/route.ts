@@ -1,19 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { HabitsDB, TasksDB } from "@/lib/db";
 import { getLocalDateString } from "@/lib/utils";
 import { log } from "@/lib/logger";
 
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "read",
+} as const satisfies AuthenticatedRequestPolicy;
+
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const habitsDB = new HabitsDB(supabase);
     const tasksDB = new TasksDB(supabase);
@@ -32,8 +38,8 @@ export async function GET(request: NextRequest) {
 
     // Run both queries in parallel
     const [habitsWithStatus, tasksDueToday] = await Promise.all([
-      habitsDB.getHabitsWithTodayStatus(user.id, date),
-      tasksDB.getTodayTasks(user.id, date),
+      habitsDB.getHabitsWithTodayStatus(userId, date),
+      tasksDB.getTodayTasks(userId, date),
     ]);
 
     // Count incomplete habits (active habits not completed today)

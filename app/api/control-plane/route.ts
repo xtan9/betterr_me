@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { authenticateRequest } from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
+
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "read",
+} as const satisfies AuthenticatedRequestPolicy;
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "write",
+} as const satisfies AuthenticatedRequestPolicy;
 
 const createWorkItemSchema = z.object({
   action: z.literal("create"),
@@ -28,10 +39,11 @@ const requestSchema = z.discriminatedUnion("action", [
   transitionWorkItemSchema,
 ]);
 
-export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+export async function GET(request: Request = new Request("http://localhost")) {
+  const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+  // Keep the control plane fail-closed: do not reveal whether auth or access checks failed.
+  if (!auth.ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const { client: supabase } = auth;
   try {
     const [members, workItems] = await Promise.all([
       supabase.rpc("control_plane_list_members"),
@@ -47,9 +59,10 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+  // Keep the control plane fail-closed: do not reveal whether auth or access checks failed.
+  if (!auth.ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const { client: supabase } = auth;
 
   let parsed: ReturnType<typeof requestSchema.safeParse>;
   try {

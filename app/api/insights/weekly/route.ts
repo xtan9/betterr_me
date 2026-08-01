@@ -1,38 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { ProfilesDB, InsightsDB } from "@/lib/db";
 import { log } from "@/lib/logger";
 
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "read",
+} as const satisfies AuthenticatedRequestPolicy;
+
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError) {
-      log.error("Auth error in weekly insights", authError);
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
       return NextResponse.json(
-        { error: "Authentication service error" },
-        { status: 500 },
+        {
+          error:
+            auth.status === 500
+              ? "Authentication service error"
+              : cookieRouteErrorMessage(auth),
+        },
+        { status: auth.status },
       );
     }
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { principal: { userId }, client: supabase } = auth;
 
     const searchParams = request.nextUrl.searchParams;
     const date = searchParams.get("date") || undefined;
 
     const profilesDB = new ProfilesDB(supabase);
-    const profile = await profilesDB.getProfile(user.id);
+    const profile = await profilesDB.getProfile(userId);
     const weekStartDay = profile?.preferences?.week_start_day ?? 1;
 
     const insightsDB = new InsightsDB(supabase);
     const insights = await insightsDB.getWeeklyInsights(
-      user.id,
+      userId,
       weekStartDay,
       date,
     );
