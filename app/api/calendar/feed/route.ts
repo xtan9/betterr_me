@@ -4,6 +4,7 @@ import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { CalendarEventsDB } from "@/lib/db";
 import { expandEventsForRange } from "@/lib/calendar/recurrence";
 import { log } from "@/lib/logger";
+import { ensureRecurringTaskCoverageThrough } from "@/lib/recurring-tasks/coverage";
 import {
   normalizeEvents,
   normalizeTasks,
@@ -97,6 +98,15 @@ export async function GET(request: NextRequest) {
       requestedLayers.push("tasks");
       promises.push(
         (async () => {
+          const recurringCoverage = await ensureRecurringTaskCoverageThrough(
+            supabase,
+            userId,
+            startDate,
+            endDate,
+          );
+          if (recurringCoverage.status === "partial") {
+            throw new Error("Recurring task coverage is temporarily unavailable");
+          }
           const { data, error } = await supabase
             .from("tasks")
             .select("*")

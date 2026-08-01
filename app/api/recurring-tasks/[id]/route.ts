@@ -5,7 +5,6 @@ import { RecurringTasksDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { recurringTaskUpdateSchema } from '@/lib/validations/recurring-task';
-import { getLocalDateString } from '@/lib/utils';
 import { addLocalDays } from '@/lib/recurring-tasks/recurrence';
 import { createSupabaseRecurringTaskLifecycle } from '@/lib/recurring-tasks';
 
@@ -91,9 +90,14 @@ export async function PATCH(
       return NextResponse.json({ recurring_task: template });
     }
     if (action === 'resume') {
-      const today = searchParams.get('date') || getLocalDateString();
-      const throughDate = addLocalDays(today, 7);
-      const template = await recurringTasksDB.resumeRecurringTask(id, userId, today, throughDate);
+      const explicitDate = searchParams.get('date') || undefined;
+      const throughDate = explicitDate ? addLocalDays(explicitDate, 7) : undefined;
+      const template = await recurringTasksDB.resumeRecurringTask(
+        id,
+        userId,
+        explicitDate,
+        throughDate,
+      );
       return NextResponse.json({ recurring_task: template });
     }
     if (action) {

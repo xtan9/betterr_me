@@ -9,6 +9,7 @@ const lifecycleBoundarySources = [
   "app/api/recurring-tasks/route.ts",
   "app/api/recurring-tasks/[id]/route.ts",
   "app/api/sidebar/counts/route.ts",
+  "app/api/calendar/feed/route.ts",
   "lib/ai/tools/tasks.ts",
   "lib/dashboard/dashboard-snapshot.ts",
   "lib/dashboard/supabase-dashboard-snapshot.ts",

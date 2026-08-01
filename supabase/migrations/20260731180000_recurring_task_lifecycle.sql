@@ -799,7 +799,7 @@ BEGIN
           ELSE completed_at END,
         is_exception = true,
         recurrence_occurrence_state = CASE
-          WHEN recurrence_occurrence_state = 'withdrawn' THEN 'extra'
+          WHEN recurrence_occurrence_state IN ('withdrawn', 'extra') THEN 'extra'
           ELSE 'open'
         END,
         occurrence_overrides = occurrence_overrides || v_updates,
@@ -1069,8 +1069,7 @@ BEGIN
       NEW.recurring_task_id IS NOT NULL
       OR NEW.recurring_series_id IS NOT NULL
       OR NEW.recurring_occurrence_id IS NOT NULL
-    ) AND current_setting('betterr.recurring_lifecycle', true)
-      IS DISTINCT FROM 'on' THEN
+    ) AND current_setting('betterr.recurring_lifecycle', true) IS DISTINCT FROM 'on' THEN
       RAISE EXCEPTION 'Recurring task mutations must use the lifecycle boundary';
     END IF;
     RETURN NEW;
@@ -1428,6 +1427,37 @@ BEGIN
 END;
 $function$;
 
+CREATE OR REPLACE FUNCTION public.recurring_task_safe_scheduled_date(
+  p_rule JSONB,
+  p_anchor DATE,
+  p_activation DATE,
+  p_date DATE
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+STABLE
+SET search_path = pg_catalog, public
+AS $function$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1
+    FROM public.recurring_task_scheduled_dates(
+      p_rule,
+      p_anchor,
+      p_activation,
+      p_date,
+      p_date
+    ) scheduled
+    WHERE scheduled.scheduled_date = p_date
+  );
+EXCEPTION WHEN OTHERS THEN
+  -- A legacy row with malformed recurrence metadata is not safe to attribute
+  -- to a lifecycle occurrence. The migration preserves it as a standalone
+  -- task instead of aborting the whole backfill or guessing its lineage.
+  RETURN FALSE;
+END;
+$function$;
+
 -- Link legacy task facts only after the deterministic schedule helper exists.
 -- A task with an ambiguous or invalid legacy Scheduled Date remains a
 -- standalone task rather than being guessed into the occurrence ledger.
@@ -1490,16 +1520,11 @@ BEGIN
     ON series.id = task.recurring_task_id
   WHERE task.recurring_task_id IS NOT NULL
     AND task.original_date IS NOT NULL
-    AND EXISTS (
-      SELECT 1
-      FROM public.recurring_task_scheduled_dates(
-        revision.recurrence_rule,
-        revision.recurrence_anchor,
-        revision.activation_date,
-        task.original_date,
-        task.original_date
-      ) scheduled
-      WHERE scheduled.scheduled_date = task.original_date
+    AND public.recurring_task_safe_scheduled_date(
+      revision.recurrence_rule,
+      revision.recurrence_anchor,
+      revision.activation_date,
+      task.original_date
     )
   ON CONFLICT (series_id, scheduled_date) DO NOTHING;
 

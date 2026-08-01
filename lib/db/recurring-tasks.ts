@@ -285,8 +285,8 @@ export class RecurringTasksDB {
   async resumeRecurringTask(
     id: string,
     userId: string,
-    todayDate: string,
-    throughDate: string
+    todayDate?: string,
+    throughDate?: string,
   ): Promise<RecurringTask> {
     if (this.options.lifecycle) {
       return recurringTaskFromLifecycleOutcome(
@@ -295,9 +295,15 @@ export class RecurringTasksDB {
           seriesId: id,
           effectiveDate: todayDate,
           timeZone: this.options.timeZone,
-          coverage: { from: todayDate, to: throughDate },
+          coverage: todayDate && throughDate
+            ? { from: todayDate, to: throughDate }
+            : undefined,
         }),
       );
+    }
+
+    if (!todayDate || !throughDate) {
+      throw new Error('A resume date and coverage horizon are required');
     }
 
     const template = await this.getRecurringTask(id, userId);

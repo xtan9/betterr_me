@@ -23,6 +23,7 @@ const mockSortOrderChain = {
 };
 
 const mockSupabaseFrom = vi.fn(() => mockSortOrderChain);
+const mockRpc = vi.fn();
 
 vi.mock("@/lib/db", () => ({
   RecurringTasksDB: class {
@@ -47,7 +48,10 @@ vi.mock("@/lib/db", () => ({
 function makeCtx(overrides?: Partial<ToolContext>): ToolContext {
   return {
     userId: "user-123",
-    supabase: { from: mockSupabaseFrom } as unknown as ToolContext["supabase"],
+    supabase: {
+      from: mockSupabaseFrom,
+      rpc: mockRpc,
+    } as unknown as ToolContext["supabase"],
     date: "2026-04-08",
     timezone: "America/Toronto",
     ...overrides,
@@ -69,6 +73,10 @@ function makeWritePersistence(): TaskWritePersistence {
 describe("taskTools", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRpc.mockResolvedValue({
+      data: { status: "complete" },
+      error: null,
+    });
     mockSortOrderChain.maybeSingle.mockResolvedValue({
       data: null,
       error: null,

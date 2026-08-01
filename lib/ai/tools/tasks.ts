@@ -5,7 +5,6 @@ import { createTaskWrites } from "@/lib/tasks/writes";
 import { createSupabaseRecurringTaskLifecycle } from "@/lib/recurring-tasks";
 import { ensureRecurringTaskCoverageThrough } from "@/lib/recurring-tasks/coverage";
 import { addLocalDays } from "@/lib/recurring-tasks/recurrence";
-import { log } from "@/lib/logger";
 import {
   hasTaskUpdateValues,
   taskFormSchema,
@@ -386,21 +385,13 @@ async function ensureAiRecurringCoverage(
   fromDate: string,
   throughDate: string,
 ): Promise<void> {
-  const rpc = (ctx.supabase as unknown as { rpc?: unknown }).rpc;
-  if (typeof rpc !== "function") return;
-  try {
-    await ensureRecurringTaskCoverageThrough(
-      ctx.supabase,
-      ctx.userId,
-      fromDate,
-      throughDate,
-    );
-  } catch (error) {
-    log.warn("[ai/tasks] recurring coverage unavailable", {
-      userId: ctx.userId,
-      fromDate,
-      throughDate,
-      error: String(error),
-    });
+  const coverage = await ensureRecurringTaskCoverageThrough(
+    ctx.supabase,
+    ctx.userId,
+    fromDate,
+    throughDate,
+  );
+  if (coverage.status === "partial") {
+    throw new Error("Recurring task coverage is temporarily unavailable");
   }
 }
