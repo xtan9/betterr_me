@@ -202,7 +202,11 @@ begin
       "end_date": "2026-08-10",
       "end_time": "11:00:00",
       "is_recurring": true,
-      "recurrence_rule": {"frequency": "weekly"}
+      "recurrence_rule": {
+        "frequency": "weekly",
+        "interval": 1,
+        "days_of_week": [1]
+      }
     }'::jsonb,
     '[{
       "reminder_type": "relative",
@@ -629,6 +633,7 @@ do $$
 declare
   other_event_id uuid;
   other_reminder_id uuid;
+  outcome jsonb;
 begin
   select ids.event_id, ids.reminder_id
   into other_event_id, other_reminder_id
@@ -648,30 +653,29 @@ begin
       end if;
   end;
 
-  begin
-    perform public.create_calendar_event_with_reminder(
-      '49900000-0000-0000-0000-000000000001',
-      jsonb_build_object(
-        'title', 'Cross-owner recurrence child',
-        'start_date', '2026-08-19',
-        'start_time', '09:00:00',
-        'end_date', '2026-08-19',
-        'end_time', '10:00:00',
-        'recurring_event_id', other_event_id,
-        'original_date', '2026-08-19',
-        'is_exception', true
-      ),
-      '[{
-        "reminder_type": "relative",
-        "relative_minutes": 10,
-        "absolute_time": null,
-        "channels": ["push"]
-      }]'::jsonb
-    );
-    raise exception 'cross-owner recurrence link unexpectedly succeeded';
-  exception
-    when foreign_key_violation then null;
-  end;
+  outcome := public.create_calendar_event_with_reminder(
+    '49900000-0000-0000-0000-000000000001',
+    jsonb_build_object(
+      'title', 'Cross-owner recurrence child',
+      'start_date', '2026-08-19',
+      'start_time', '09:00:00',
+      'end_date', '2026-08-19',
+      'end_time', '10:00:00',
+      'recurring_event_id', other_event_id,
+      'original_date', '2026-08-19',
+      'is_exception', true
+    ),
+    '[{
+      "reminder_type": "relative",
+      "relative_minutes": 10,
+      "absolute_time": null,
+      "channels": ["push"]
+    }]'::jsonb
+  );
+  if outcome->>'type' <> 'not-found'
+    or outcome->>'related' <> 'recurringEvent' then
+    raise exception 'cross-owner recurrence link was not typed: %', outcome;
+  end if;
 
   if exists (
     select 1

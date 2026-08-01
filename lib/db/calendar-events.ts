@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { CalendarEvent, CalendarEventInsert, CalendarEventUpdate } from './types';
+import type { CalendarEvent } from './types';
 
 export class CalendarEventsDB {
   constructor(private supabase: SupabaseClient) {}
@@ -32,37 +32,6 @@ export class CalendarEventsDB {
       throw error;
     }
     return data;
-  }
-
-  async createEvent(userId: string, event: Omit<CalendarEventInsert, 'user_id'>): Promise<CalendarEvent> {
-    const { data, error } = await this.supabase
-      .from('calendar_events')
-      .insert({ ...event, user_id: userId })
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  }
-
-  async updateEvent(eventId: string, userId: string, updates: CalendarEventUpdate): Promise<CalendarEvent> {
-    const { data, error } = await this.supabase
-      .from('calendar_events')
-      .update(updates)
-      .eq('id', eventId)
-      .eq('user_id', userId)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  }
-
-  async deleteEvent(eventId: string, userId: string): Promise<void> {
-    const { error } = await this.supabase
-      .from('calendar_events')
-      .delete()
-      .eq('id', eventId)
-      .eq('user_id', userId);
-    if (error) throw error;
   }
 
   async getRecurringEvents(userId: string): Promise<CalendarEvent[]> {

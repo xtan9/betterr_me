@@ -7,8 +7,13 @@ import { calendarEventCreateSchema } from '@/lib/validations/calendar-events';
 import { expandEventsForRange } from '@/lib/calendar/recurrence';
 import { log } from '@/lib/logger';
 import { ensureProfile } from '@/lib/db/ensure-profile';
-import type { CalendarEventInsert } from '@/lib/db/types';
-import { SchedulingLifecycle } from '@/lib/scheduling/lifecycle';
+import {
+  createSchedulingWrites,
+  toCalendarEventResponse,
+  toReminderResponse,
+  type ScheduleRecurrenceRule,
+  type ScheduleWeekPosition,
+} from '@/lib/scheduling/writes';
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ['cookie'],
@@ -19,6 +24,49 @@ const WRITE_REQUEST_POLICY = {
   allowedCredentials: ['cookie'],
   requiredPermission: 'write',
 } as const satisfies AuthenticatedRequestPolicy;
+
+function toDomainRecurrenceRule(value: unknown): ScheduleRecurrenceRule | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const rule = value as Record<string, unknown>;
+  const interval = Number(rule.interval);
+  if (rule.frequency === 'daily') {
+    return { frequency: 'daily', interval };
+  }
+  if (rule.frequency === 'weekly' && Array.isArray(rule.days_of_week)) {
+    return {
+      frequency: 'weekly',
+      interval,
+      daysOfWeek: rule.days_of_week.map(Number),
+    };
+  }
+  if (
+    rule.frequency === 'monthly' &&
+    typeof rule.week_position === 'string'
+  ) {
+    return {
+      frequency: 'monthly',
+      interval,
+      weekPosition: rule.week_position as ScheduleWeekPosition,
+      dayOfWeekMonthly: Number(rule.day_of_week_monthly),
+    };
+  }
+  if (rule.frequency === 'monthly') {
+    return {
+      frequency: 'monthly',
+      interval,
+      dayOfMonth: Number(rule.day_of_month),
+    };
+  }
+  if (rule.frequency === 'yearly') {
+    return {
+      frequency: 'yearly',
+      interval,
+      monthOfYear: Number(rule.month_of_year),
+      dayOfMonth: Number(rule.day_of_month),
+    };
+  }
+  return null;
+}
 
 /**
  * GET /api/calendar-events
@@ -91,44 +139,73 @@ export async function POST(request: NextRequest) {
       ...auth.principal.profile,
     });
 
-    // Build insert data from validated fields
-    const insertData: Omit<CalendarEventInsert, 'user_id'> = {
-      title: validation.data.title.trim(),
-      description: validation.data.description ?? null,
-      start_date: validation.data.start_date,
-      start_time: validation.data.start_time ?? null,
-      end_date: validation.data.end_date,
-      end_time: validation.data.end_time ?? null,
-      location: validation.data.location ?? null,
-      color: validation.data.color ?? null,
-      category_id: validation.data.category_id ?? null,
-      is_recurring: validation.data.is_recurring ?? false,
-      recurrence_rule: validation.data.recurrence_rule ?? null,
-      end_type: validation.data.end_type ?? null,
-      end_date_recurrence: validation.data.end_date_recurrence ?? null,
-      end_count: validation.data.end_count ?? null,
-      is_exception: false,
-      recurring_event_id: null,
-      original_date: null,
-    };
+    // Map validated transport fields into the storage-independent domain request.
+    const domainRecurrenceRule = toDomainRecurrenceRule(
+      validation.data.recurrence_rule,
+    );
 
     // Support exception creation (edit this occurrence) — fields validated by Zod
-    if (validation.data.recurring_event_id) {
-      insertData.is_exception = true;
-      insertData.recurring_event_id = validation.data.recurring_event_id;
-      insertData.original_date = validation.data.original_date ?? null;
-    }
-
-    const lifecycle = new SchedulingLifecycle(supabase);
-    const outcome = await lifecycle.create(userId, {
-      event: insertData,
-      reminders: (validation.data.reminders ?? []).map((reminder) => ({
-        ...reminder,
-        relative_minutes: reminder.relative_minutes ?? null,
-        absolute_time: reminder.absolute_time ?? null,
-      })),
+    const outcome = await createSchedulingWrites(supabase).create({
+      userId,
+      event: {
+        title: validation.data.title.trim(),
+        description: validation.data.description ?? null,
+        startDate: validation.data.start_date,
+        startTime: validation.data.start_time ?? null,
+        endDate: validation.data.end_date,
+        endTime: validation.data.end_time ?? null,
+        location: validation.data.location ?? null,
+        color: validation.data.color ?? null,
+        categoryId: validation.data.category_id ?? null,
+        isRecurring: validation.data.is_recurring ?? false,
+        recurrenceRule: domainRecurrenceRule,
+        endType: validation.data.end_type ?? null,
+        endDateRecurrence: validation.data.end_date_recurrence ?? null,
+        endCount: validation.data.end_count ?? null,
+        recurringEventId: validation.data.recurring_event_id ?? null,
+        originalDate: validation.data.original_date ?? null,
+        isException: Boolean(validation.data.recurring_event_id),
+      },
+      reminders: (validation.data.reminders ?? []).map((reminder) =>
+        reminder.reminder_type === 'relative'
+          ? {
+              reminderType: 'relative' as const,
+              relativeMinutes: reminder.relative_minutes ?? 0,
+              channels: reminder.channels,
+            }
+          : {
+              reminderType: 'absolute' as const,
+              absoluteTime: reminder.absolute_time ?? '',
+              channels: reminder.channels,
+            },
+      ),
     });
-    return NextResponse.json(outcome, { status: 201 });
+
+    if (outcome.type === 'not-found') {
+      return NextResponse.json(
+        { error: 'Calendar related entity not found' },
+        { status: 404 },
+      );
+    }
+    if (outcome.type === 'conflict') {
+      return NextResponse.json(
+        { error: 'Calendar event creation conflicted' },
+        { status: 409 },
+      );
+    }
+    if (outcome.type === 'invalid') {
+      return NextResponse.json(
+        { error: outcome.message, field: outcome.field },
+        { status: 400 },
+      );
+    }
+    return NextResponse.json(
+      {
+        event: toCalendarEventResponse(outcome.event),
+        reminders: outcome.reminders.map(toReminderResponse),
+      },
+      { status: 201 },
+    );
   } catch (error) {
     log.error('POST /api/calendar-events error', error);
     return NextResponse.json({ error: 'Failed to create calendar event' }, { status: 500 });

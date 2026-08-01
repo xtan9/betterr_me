@@ -797,12 +797,6 @@ export interface CalendarEvent {
   updated_at: string;
 }
 
-export type CalendarEventInsert = Omit<CalendarEvent, 'id' | 'created_at' | 'updated_at'> & {
-  id?: string;
-};
-
-export type CalendarEventUpdate = Partial<Omit<CalendarEvent, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
-
 // =============================================================================
 // REMINDERS
 // =============================================================================

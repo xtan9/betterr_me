@@ -6,7 +6,6 @@ import { validateRequestBody } from '@/lib/validations/api';
 import { calendarEventUpdateSchema } from '@/lib/validations/calendar-events';
 import { SchedulingLifecycle } from '@/lib/scheduling/lifecycle';
 import { log } from '@/lib/logger';
-import type { CalendarEventUpdate } from '@/lib/db/types';
 
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -81,7 +80,7 @@ export async function PATCH(
     if (!validation.success) return validation.response;
 
     // Build update object — only include fields that were provided
-    const updates: CalendarEventUpdate = {};
+    const updates: Record<string, unknown> = {};
     const data = validation.data;
 
     if (data.title !== undefined) {

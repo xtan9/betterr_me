@@ -56,6 +56,34 @@ values (
   now()
 );
 
+insert into public.categories (id, user_id, name, color)
+values
+  (
+    '48100000-0000-0000-0000-000000000101',
+    '48100000-0000-0000-0000-000000000001',
+    'Owner category',
+    '#4285f4'
+  ),
+  (
+    '48100000-0000-0000-0000-000000000102',
+    '48100000-0000-0000-0000-000000000002',
+    'Other owner category',
+    '#ef4444'
+  );
+
+insert into public.calendar_events (
+  id, user_id, title, start_date, end_date, is_recurring, is_exception
+)
+values (
+  '48100000-0000-0000-0000-000000000201',
+  '48100000-0000-0000-0000-000000000002',
+  'Other owner parent',
+  '2026-08-01',
+  '2026-08-01',
+  false,
+  false
+);
+
 set local role authenticated;
 select set_config(
   'request.jwt.claim.sub',
@@ -139,7 +167,8 @@ begin
     }'::jsonb
   );
 
-  if outcome->'event'->>'title' <> 'Event only'
+  if outcome->>'type' <> 'created'
+    or outcome->'event'->>'title' <> 'Event only'
     or outcome->'reminders' <> '[]'::jsonb then
     raise exception 'event-only outcome was incorrect: %', outcome;
   end if;
@@ -151,6 +180,110 @@ begin
       and source_id = (outcome->'event'->>'id')::uuid
   ) then
     raise exception 'event-only creation produced a reminder';
+  end if;
+end
+$$;
+
+-- Missing and cross-owner related records are intentionally indistinguishable
+-- to the adapter: both are typed not-found outcomes and neither writes.
+do $$
+declare
+  outcome jsonb;
+begin
+  outcome := public.create_calendar_event_with_reminder(
+    '48100000-0000-0000-0000-000000000001',
+    jsonb_build_object(
+      'title', 'Missing category',
+      'start_date', '2026-08-03',
+      'end_date', '2026-08-03',
+      'category_id', '48100000-0000-0000-0000-000000000199'
+    )
+  );
+  if outcome <> '{"type":"not-found","related":"category"}'::jsonb then
+    raise exception 'missing category was not typed: %', outcome;
+  end if;
+
+  outcome := public.create_calendar_event_with_reminder(
+    '48100000-0000-0000-0000-000000000001',
+    jsonb_build_object(
+      'title', 'Cross-owner category',
+      'start_date', '2026-08-03',
+      'end_date', '2026-08-03',
+      'category_id', '48100000-0000-0000-0000-000000000102'
+    )
+  );
+  if outcome <> '{"type":"not-found","related":"category"}'::jsonb then
+    raise exception 'cross-owner category was not typed: %', outcome;
+  end if;
+
+  outcome := public.create_calendar_event_with_reminder(
+    '48100000-0000-0000-0000-000000000001',
+    jsonb_build_object(
+      'title', 'Missing parent',
+      'start_date', '2026-08-03',
+      'end_date', '2026-08-03',
+      'recurring_event_id', '48100000-0000-0000-0000-000000000299',
+      'original_date', '2026-08-03'
+    )
+  );
+  if outcome <> '{"type":"not-found","related":"recurringEvent"}'::jsonb then
+    raise exception 'missing recurring parent was not typed: %', outcome;
+  end if;
+
+  outcome := public.create_calendar_event_with_reminder(
+    '48100000-0000-0000-0000-000000000001',
+    jsonb_build_object(
+      'title', 'Cross-owner parent',
+      'start_date', '2026-08-03',
+      'end_date', '2026-08-03',
+      'recurring_event_id', '48100000-0000-0000-0000-000000000201',
+      'original_date', '2026-08-03'
+    )
+  );
+  if outcome <> '{"type":"not-found","related":"recurringEvent"}'::jsonb then
+    raise exception 'cross-owner recurring parent was not typed: %', outcome;
+  end if;
+end
+$$;
+
+-- Invalid recurrence and duplicate Reminder Configuration are expected
+-- outcomes, not database exceptions.
+do $$
+declare
+  outcome jsonb;
+begin
+  outcome := public.create_calendar_event_with_reminder(
+    '48100000-0000-0000-0000-000000000001',
+    '{
+      "title": "Invalid recurrence",
+      "start_date": "2026-08-03",
+      "end_date": "2026-08-03",
+      "is_recurring": true,
+      "recurrence_rule": {
+        "frequency": "weekly",
+        "interval": 0,
+        "days_of_week": [1]
+      }
+    }'::jsonb
+  );
+  if outcome->>'type' <> 'invalid' or outcome->>'field' <> 'recurrenceRule' then
+    raise exception 'invalid recurrence was not typed: %', outcome;
+  end if;
+
+  outcome := public.create_calendar_event_with_reminder(
+    '48100000-0000-0000-0000-000000000001',
+    '{
+      "title": "Duplicate reminders",
+      "start_date": "2026-08-03",
+      "end_date": "2026-08-03"
+    }'::jsonb,
+    '[
+      {"reminder_type":"relative", "relative_minutes":15, "channels":["push"]},
+      {"reminder_type":"relative", "relative_minutes":15, "channels":["push"]}
+    ]'::jsonb
+  );
+  if outcome->>'type' <> 'conflict' or outcome->>'resource' <> 'reminder' then
+    raise exception 'duplicate reminder conflict was not typed: %', outcome;
   end if;
 end
 $$;
@@ -180,7 +313,8 @@ begin
     }]'::jsonb
   );
 
-  if jsonb_array_length(outcome->'reminders') <> 1
+  if outcome->>'type' <> 'created'
+    or jsonb_array_length(outcome->'reminders') <> 1
     or outcome->'reminders'->0->>'source_type' <> 'calendar_event'
     or outcome->'reminders'->0->>'source_id' <> outcome->'event'->>'id'
     or (outcome->'reminders'->0->>'fire_at')::timestamptz
