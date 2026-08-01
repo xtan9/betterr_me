@@ -157,39 +157,66 @@ begin
 end
 $$;
 
-reset role;
-insert into public.reminders (
-  id,
-  user_id,
-  source_type,
-  source_id,
-  reminder_type,
-  absolute_time,
-  channels,
-  fire_at
-)
-values
-  (
-    '64400000-0000-0000-0000-000000000901',
+set local role authenticated;
+do $habit_reminder_seed$
+declare
+  outcome jsonb;
+begin
+  outcome := public.configure_habit_reminders(
     '64400000-0000-0000-0000-000000000001',
-    'habit',
     '64400000-0000-0000-0000-000000000101',
-    'absolute',
-    '2026-08-03T08:00:00Z',
-    '{push}',
-    '2026-08-03T08:00:00Z'
-  ),
-  (
-    '64400000-0000-0000-0000-000000000903',
-    '64400000-0000-0000-0000-000000000001',
-    'habit',
-    '64400000-0000-0000-0000-000000000103',
-    'absolute',
-    '2026-08-03T10:00:00Z',
-    '{push}',
-    '2026-08-03T10:00:00Z'
+    '[{
+      "reminder_type": "absolute",
+      "relative_minutes": null,
+      "absolute_time": "2026-08-03T08:00:00Z",
+      "channels": ["push"]
+    }]'::jsonb,
+    null
+  );
+  if outcome->>'type' is distinct from 'configured'
+     or jsonb_array_length(outcome->'reminders') <> 1
+     or outcome->'reminders'->0->>'source_type' is distinct from 'habit'
+     or (outcome->'reminders'->0->>'source_id')::uuid
+       is distinct from '64400000-0000-0000-0000-000000000101'::uuid
+     or outcome->'reminders'->0->>'reminder_type' is distinct from 'absolute'
+     or (outcome->'reminders'->0->>'fire_at')::timestamptz
+       is distinct from timestamptz '2026-08-03 08:00:00+00' then
+    raise exception 'successful-deletion Habit reminder seed outcome was incorrect: %', outcome;
+  end if;
+  perform set_config(
+    'ralph.habit_deletion_success_reminder_id',
+    outcome->'reminders'->0->>'id',
+    false
   );
 
+  outcome := public.configure_habit_reminders(
+    '64400000-0000-0000-0000-000000000001',
+    '64400000-0000-0000-0000-000000000103',
+    '[{
+      "reminder_type": "absolute",
+      "relative_minutes": null,
+      "absolute_time": "2026-08-03T10:00:00Z",
+      "channels": ["push"]
+    }]'::jsonb,
+    null
+  );
+  if outcome->>'type' is distinct from 'configured'
+     or jsonb_array_length(outcome->'reminders') <> 1
+     or outcome->'reminders'->0->>'source_type' is distinct from 'habit'
+     or (outcome->'reminders'->0->>'source_id')::uuid
+       is distinct from '64400000-0000-0000-0000-000000000103'::uuid
+     or outcome->'reminders'->0->>'reminder_type' is distinct from 'absolute'
+     or (outcome->'reminders'->0->>'fire_at')::timestamptz
+       is distinct from timestamptz '2026-08-03 10:00:00+00' then
+    raise exception 'rollback-deletion Habit reminder seed outcome was incorrect: %', outcome;
+  end if;
+  perform set_config(
+    'ralph.habit_deletion_rollback_reminder_id',
+    outcome->'reminders'->0->>'id',
+    false
+  );
+end
+$habit_reminder_seed$;
 reset role;
 
 insert into public.reminder_defaults (
@@ -268,28 +295,39 @@ values (
   11
 );
 
-reset role;
-insert into public.reminders (
-  id,
-  user_id,
-  source_type,
-  source_id,
-  reminder_type,
-  absolute_time,
-  channels,
-  fire_at
-)
-values (
-  '64400000-0000-0000-0000-000000000904',
-  '64400000-0000-0000-0000-000000000002',
-  'habit',
-  '64400000-0000-0000-0000-000000000104',
-  'absolute',
-  '2026-08-03T11:00:00Z',
-  '{push}',
-  '2026-08-03T11:00:00Z'
-);
-
+set local role authenticated;
+do $habit_reminder_seed$
+declare
+  outcome jsonb;
+begin
+  outcome := public.configure_habit_reminders(
+    '64400000-0000-0000-0000-000000000002',
+    '64400000-0000-0000-0000-000000000104',
+    '[{
+      "reminder_type": "absolute",
+      "relative_minutes": null,
+      "absolute_time": "2026-08-03T11:00:00Z",
+      "channels": ["push"]
+    }]'::jsonb,
+    null
+  );
+  if outcome->>'type' is distinct from 'configured'
+     or jsonb_array_length(outcome->'reminders') <> 1
+     or outcome->'reminders'->0->>'source_type' is distinct from 'habit'
+     or (outcome->'reminders'->0->>'source_id')::uuid
+       is distinct from '64400000-0000-0000-0000-000000000104'::uuid
+     or outcome->'reminders'->0->>'reminder_type' is distinct from 'absolute'
+     or (outcome->'reminders'->0->>'fire_at')::timestamptz
+       is distinct from timestamptz '2026-08-03 11:00:00+00' then
+    raise exception 'other-owner Habit reminder seed outcome was incorrect: %', outcome;
+  end if;
+  perform set_config(
+    'ralph.habit_deletion_other_reminder_id',
+    outcome->'reminders'->0->>'id',
+    false
+  );
+end
+$habit_reminder_seed$;
 reset role;
 
 insert into public.reminder_defaults (
@@ -410,7 +448,7 @@ begin
     where id = '64400000-0000-0000-0000-000000000701'
   ) or exists (
     select 1 from public.reminders
-    where id = '64400000-0000-0000-0000-000000000901'
+    where id = current_setting('ralph.habit_deletion_success_reminder_id')::uuid
   ) then
     raise exception 'Habit deletion left dependent lifecycle data';
   end if;
@@ -485,7 +523,7 @@ begin
     where id = '64400000-0000-0000-0000-000000000704'
   ) or not exists (
     select 1 from public.reminders
-    where id = '64400000-0000-0000-0000-000000000904'
+    where id = current_setting('ralph.habit_deletion_other_reminder_id')::uuid
   ) then
     raise exception 'cross-owner deletion destructively changed the other owner data';
   end if;
@@ -536,7 +574,7 @@ begin
     where id = '64400000-0000-0000-0000-000000000703'
   ) or not exists (
     select 1 from public.reminders
-    where id = '64400000-0000-0000-0000-000000000903'
+    where id = current_setting('ralph.habit_deletion_rollback_reminder_id')::uuid
   ) then
     raise exception 'failed Habit deletion left a partial persisted outcome';
   end if;
