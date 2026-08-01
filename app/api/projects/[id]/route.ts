@@ -134,8 +134,14 @@ export async function DELETE(
     }
     const { principal: { userId }, client: supabase } = auth;
 
-    const projectsDB = new ProjectsDB(supabase);
-    await projectsDB.deleteProject(id, userId);
+    const outcome = await createProjectWrites(supabase).delete({
+      projectId: id,
+      userId,
+    });
+
+    if (outcome.type === 'not-found') {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -13,10 +13,10 @@ vi.mock('@/lib/supabase/server', () => ({
 
 const mockProjectsDB = {
   getProject: vi.fn(),
-  deleteProject: vi.fn(),
 };
 
 const mockProjectUpdate = vi.fn();
+const mockProjectDelete = vi.fn();
 
 vi.mock('@/lib/db', () => ({
   ProjectsDB: class {
@@ -32,7 +32,10 @@ vi.mock('@/lib/projects/writes', async () => {
   );
   return {
     ...actual,
-    createProjectWrites: vi.fn(() => ({ update: mockProjectUpdate })),
+    createProjectWrites: vi.fn(() => ({
+      update: mockProjectUpdate,
+      delete: mockProjectDelete,
+    })),
   };
 });
 
@@ -373,8 +376,8 @@ describe('DELETE /api/projects/[id]', () => {
     resetAuthMock();
   });
 
-  it('should delete project', async () => {
-    vi.mocked(mockProjectsDB.deleteProject).mockResolvedValue();
+  it('should delete project through the mutation command', async () => {
+    mockProjectDelete.mockResolvedValue({ type: 'deleted' });
 
     const request = new NextRequest('http://localhost:3000/api/projects/p1', {
       method: 'DELETE',
@@ -387,10 +390,39 @@ describe('DELETE /api/projects/[id]', () => {
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(mockProjectsDB.deleteProject).toHaveBeenCalledWith(
-      'p1',
-      'user-123'
-    );
+    expect(mockProjectDelete).toHaveBeenCalledWith({
+      projectId: 'p1',
+      userId: 'user-123',
+    });
+    expect(mockProjectsDB.getProject).not.toHaveBeenCalled();
+  });
+
+  it.each(['missing', 'repeated', 'cross-owner'])('returns 404 for the %s deletion outcome', async () => {
+    mockProjectDelete.mockResolvedValue({ type: 'not-found' });
+
+    const request = new NextRequest('http://localhost:3000/api/projects/p1', {
+      method: 'DELETE',
+    });
+    const response = await DELETE(request, {
+      params: Promise.resolve({ id: 'p1' }),
+    });
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'Project not found' });
+  });
+
+  it('maps an unexpected mutation failure to a server error', async () => {
+    mockProjectDelete.mockRejectedValue(new Error('database unavailable'));
+
+    const request = new NextRequest('http://localhost:3000/api/projects/p1', {
+      method: 'DELETE',
+    });
+    const response = await DELETE(request, {
+      params: Promise.resolve({ id: 'p1' }),
+    });
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: 'Failed to delete project' });
   });
 
   it('should return 401 if not authenticated', async () => {
