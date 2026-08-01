@@ -1,8 +1,30 @@
 import { z } from "zod";
 import { HabitsDB, HabitLogsDB } from "@/lib/db";
-import type { HabitFrequency } from "@/lib/db";
 import { createHabitCompletion } from "@/lib/habits/completion";
+import { createHabitWrites, toHabitResponse } from "@/lib/habits/writes";
+import type { HabitCreationFrequency } from "@/lib/habits/writes";
 import type { ToolDefinition, ToolContext } from "./types";
+
+const createHabitParameters = z.object({
+  name: z.string().describe("Habit name"),
+  description: z.string().optional().describe("Habit description"),
+  frequency: z
+    .object({
+      type: z
+        .enum(["daily", "weekdays", "weekly", "times_per_week", "custom"])
+        .describe("Frequency type"),
+      count: z
+        .number()
+        .optional()
+        .describe("Times per week (only for times_per_week)"),
+      days: z
+        .array(z.number())
+        .optional()
+        .describe("Custom days (0=Sun, 6=Sat, only for custom)"),
+    })
+    .describe("How often to track this habit"),
+  categoryId: z.string().optional().describe("Category ID"),
+});
 
 export function habitTools(): ToolDefinition[] {
   return [
@@ -56,36 +78,28 @@ export function habitTools(): ToolDefinition[] {
     {
       name: "createHabit",
       description: "Create a new habit with a tracking frequency",
-      parameters: z.object({
-        name: z.string().describe("Habit name"),
-        description: z.string().optional().describe("Habit description"),
-        frequency: z
-          .object({
-            type: z
-              .enum(["daily", "weekdays", "weekly", "times_per_week", "custom"])
-              .describe("Frequency type"),
-            count: z
-              .number()
-              .optional()
-              .describe("Times per week (only for times_per_week)"),
-            days: z
-              .array(z.number())
-              .optional()
-              .describe("Custom days (0=Sun, 6=Sat, only for custom)"),
-          })
-          .describe("How often to track this habit"),
-        categoryId: z.string().optional().describe("Category ID"),
-      }),
-      execute: async (params, ctx: ToolContext) => {
-        const db = new HabitsDB(ctx.supabase);
-        return db.createHabit({
-          user_id: ctx.userId,
+      parameters: createHabitParameters,
+      execute: async (
+        params: z.infer<typeof createHabitParameters>,
+        ctx: ToolContext,
+      ) => {
+        const outcome = await createHabitWrites(ctx.supabase).create({
+          userId: ctx.userId,
           name: params.name,
           description: params.description ?? null,
-          frequency: params.frequency as HabitFrequency,
-          category_id: params.categoryId ?? null,
-          status: "active",
+          frequency: params.frequency as HabitCreationFrequency,
+          categoryId: params.categoryId ?? null,
         });
+
+        if (outcome.type === "created") {
+          return toHabitResponse(outcome.habit);
+        }
+        if (outcome.type === "limit-reached") {
+          return {
+            error: `You have ${outcome.activeCount}/${outcome.limit} habits. Remove one before adding another.`,
+          };
+        }
+        return { error: outcome.message, field: outcome.field };
       },
     },
     {

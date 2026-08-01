@@ -2,11 +2,32 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET, POST } from '@/app/api/habits/route';
 import { NextRequest } from 'next/server';
 
-const { mockGetUserHabits, mockGetHabitsWithTodayStatus, mockCreateHabit, mockGetActiveHabitCount } = vi.hoisted(() => ({
+const {
+  mockGetUserHabits,
+  mockGetHabitsWithTodayStatus,
+  mockCreateHabitMutation,
+  mockToHabitResponse,
+} = vi.hoisted(() => ({
   mockGetUserHabits: vi.fn(),
   mockGetHabitsWithTodayStatus: vi.fn(),
-  mockCreateHabit: vi.fn(),
-  mockGetActiveHabitCount: vi.fn(),
+  mockCreateHabitMutation: vi.fn(),
+  mockToHabitResponse: vi.fn((habit) => ({
+    id: habit.id,
+    user_id: habit.userId,
+    name: habit.name,
+    description: habit.description,
+    category_id: habit.categoryId,
+    frequency: habit.frequency,
+    status: habit.status,
+    current_streak: habit.currentStreak,
+    best_streak: habit.bestStreak,
+    paused_at: habit.pausedAt,
+    graduated_at: habit.graduatedAt,
+    graduated_streak: habit.graduatedStreak,
+    nudge_dismissed_at: habit.nudgeDismissedAt,
+    created_at: habit.createdAt,
+    updated_at: habit.updatedAt,
+  })),
 }));
 
 const { mockEnsureProfile } = vi.hoisted(() => ({
@@ -25,9 +46,12 @@ vi.mock('@/lib/db', () => ({
   HabitsDB: class {
     getUserHabits = mockGetUserHabits;
     getHabitsWithTodayStatus = mockGetHabitsWithTodayStatus;
-    createHabit = mockCreateHabit;
-    getActiveHabitCount = mockGetActiveHabitCount;
   },
+}));
+
+vi.mock('@/lib/habits/writes', () => ({
+  createHabitWrites: vi.fn(() => ({ create: mockCreateHabitMutation })),
+  toHabitResponse: mockToHabitResponse,
 }));
 
 vi.mock('@/lib/db/ensure-profile', () => ({
@@ -44,11 +68,36 @@ const mockHabit = {
   id: 'habit-1',
   user_id: 'user-123',
   name: 'Morning Run',
+  description: null,
   category_id: null,
   frequency: { type: 'daily' },
   status: 'active',
   current_streak: 5,
   best_streak: 12,
+  paused_at: null,
+  graduated_at: null,
+  graduated_streak: null,
+  nudge_dismissed_at: null,
+  created_at: '2026-08-01T12:00:00.000Z',
+  updated_at: '2026-08-01T12:00:00.000Z',
+};
+
+const mockCreatedHabit = {
+  id: 'habit-1',
+  userId: 'user-123',
+  name: 'Morning Run',
+  description: null,
+  categoryId: null,
+  frequency: { type: 'daily' },
+  status: 'active',
+  currentStreak: 5,
+  bestStreak: 12,
+  pausedAt: null,
+  graduatedAt: null,
+  graduatedStreak: null,
+  nudgeDismissedAt: null,
+  createdAt: '2026-08-01T12:00:00.000Z',
+  updatedAt: '2026-08-01T12:00:00.000Z',
 };
 
 describe('GET /api/habits', () => {
@@ -116,12 +165,14 @@ describe('POST /api/habits', () => {
       auth: { getUser: vi.fn(() => ({ data: { user: { id: 'user-123', email: 'test@example.com' } } })) },
     } as any);
     mockEnsureProfile.mockResolvedValue(undefined);
-    mockGetActiveHabitCount.mockResolvedValue(0);
+    mockCreateHabitMutation.mockResolvedValue({
+      type: 'created',
+      habit: mockCreatedHabit,
+    });
+    mockToHabitResponse.mockReturnValue(mockHabit);
   });
 
   it('should create a new habit', async () => {
-    mockCreateHabit.mockResolvedValue(mockHabit as any);
-
     const request = new NextRequest('http://localhost:3000/api/habits', {
       method: 'POST',
       body: JSON.stringify({
@@ -135,6 +186,67 @@ describe('POST /api/habits', () => {
 
     expect(response.status).toBe(201);
     expect(data.habit).toEqual(mockHabit);
+  });
+
+  it('creates through HabitWrites and preserves the HTTP habit response contract', async () => {
+    const createdHabit = {
+      id: 'habit-1',
+      userId: 'user-123',
+      name: 'Morning Run',
+      description: null,
+      categoryId: null,
+      frequency: { type: 'daily' },
+      status: 'active',
+      currentStreak: 0,
+      bestStreak: 0,
+      pausedAt: null,
+      graduatedAt: null,
+      graduatedStreak: null,
+      nudgeDismissedAt: null,
+      createdAt: '2026-08-01T12:00:00.000Z',
+      updatedAt: '2026-08-01T12:00:00.000Z',
+    };
+    const presentedHabit = {
+      id: 'habit-1',
+      user_id: 'user-123',
+      name: 'Morning Run',
+      description: null,
+      category_id: null,
+      frequency: { type: 'daily' },
+      status: 'active',
+      current_streak: 0,
+      best_streak: 0,
+      paused_at: null,
+      graduated_at: null,
+      graduated_streak: null,
+      nudge_dismissed_at: null,
+      created_at: '2026-08-01T12:00:00.000Z',
+      updated_at: '2026-08-01T12:00:00.000Z',
+    };
+    mockCreateHabitMutation.mockResolvedValue({ type: 'created', habit: createdHabit });
+    mockToHabitResponse.mockReturnValue(presentedHabit);
+
+    const request = new NextRequest('http://localhost:3000/api/habits', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: '  Morning Run  ',
+        frequency: { type: 'daily' },
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({ habit: presentedHabit });
+    expect(mockCreateHabitMutation).toHaveBeenCalledWith({
+      userId: 'user-123',
+      name: 'Morning Run',
+      description: null,
+      categoryId: null,
+      frequency: { type: 'daily' },
+    });
+    expect(mockToHabitResponse).toHaveBeenCalledWith(createdHabit);
+    expect(mockCreateHabitMutation).toHaveBeenCalledTimes(1);
   });
 
   it('should return 400 if name is missing', async () => {
@@ -228,7 +340,7 @@ describe('POST /api/habits', () => {
   });
 
   it('should return 500 when database throws', async () => {
-    mockCreateHabit.mockRejectedValue(new Error('DB connection failed'));
+    mockCreateHabitMutation.mockRejectedValue(new Error('DB connection failed'));
 
     const request = new NextRequest('http://localhost:3000/api/habits', {
       method: 'POST',
@@ -246,8 +358,6 @@ describe('POST /api/habits', () => {
   });
 
   it('should create habit with description', async () => {
-    mockCreateHabit.mockResolvedValue({ ...mockHabit, description: 'My description' } as any);
-
     const request = new NextRequest('http://localhost:3000/api/habits', {
       method: 'POST',
       body: JSON.stringify({
@@ -259,14 +369,12 @@ describe('POST /api/habits', () => {
 
     const response = await POST(request);
     expect(response.status).toBe(201);
-    expect(mockCreateHabit).toHaveBeenCalledWith(
-      expect.objectContaining({ description: 'My description' })
+    expect(mockCreateHabitMutation).toHaveBeenCalledWith(
+      expect.objectContaining({ description: 'My description' }),
     );
   });
 
   it('should create habit without category_id (null)', async () => {
-    mockCreateHabit.mockResolvedValue({ ...mockHabit, category_id: null } as any);
-
     const request = new NextRequest('http://localhost:3000/api/habits', {
       method: 'POST',
       body: JSON.stringify({
@@ -277,17 +385,12 @@ describe('POST /api/habits', () => {
 
     const response = await POST(request);
     expect(response.status).toBe(201);
-    expect(mockCreateHabit).toHaveBeenCalledWith(
-      expect.objectContaining({ category_id: null })
+    expect(mockCreateHabitMutation).toHaveBeenCalledWith(
+      expect.objectContaining({ categoryId: null }),
     );
   });
 
   it('should create habit with valid custom frequency', async () => {
-    mockCreateHabit.mockResolvedValue({
-      ...mockHabit,
-      frequency: { type: 'custom', days: [1, 3, 5] },
-    } as any);
-
     const request = new NextRequest('http://localhost:3000/api/habits', {
       method: 'POST',
       body: JSON.stringify({
@@ -301,11 +404,6 @@ describe('POST /api/habits', () => {
   });
 
   it('should create habit with valid times_per_week frequency', async () => {
-    mockCreateHabit.mockResolvedValue({
-      ...mockHabit,
-      frequency: { type: 'times_per_week', count: 2 },
-    } as any);
-
     const request = new NextRequest('http://localhost:3000/api/habits', {
       method: 'POST',
       body: JSON.stringify({
@@ -319,8 +417,6 @@ describe('POST /api/habits', () => {
   });
 
   it('should trim whitespace from name', async () => {
-    mockCreateHabit.mockResolvedValue(mockHabit as any);
-
     const request = new NextRequest('http://localhost:3000/api/habits', {
       method: 'POST',
       body: JSON.stringify({
@@ -330,14 +426,12 @@ describe('POST /api/habits', () => {
     });
 
     await POST(request);
-    expect(mockCreateHabit).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'Morning Run' })
+    expect(mockCreateHabitMutation).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Morning Run' }),
     );
   });
 
   it('should call ensureProfile before creating habit', async () => {
-    mockCreateHabit.mockResolvedValue(mockHabit as any);
-
     const request = new NextRequest('http://localhost:3000/api/habits', {
       method: 'POST',
       body: JSON.stringify({
@@ -383,7 +477,11 @@ describe('POST /api/habits', () => {
   });
 
   it('should return 400 when habit limit reached', async () => {
-    mockGetActiveHabitCount.mockResolvedValue(20);
+    mockCreateHabitMutation.mockResolvedValue({
+      type: 'limit-reached',
+      activeCount: 20,
+      limit: 20,
+    });
 
     const request = new NextRequest('http://localhost:3000/api/habits', {
       method: 'POST',

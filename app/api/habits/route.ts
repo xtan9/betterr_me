@@ -6,8 +6,8 @@ import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { habitFormSchema } from '@/lib/validations/habit';
 import { ensureProfile } from '@/lib/db/ensure-profile';
-import { MAX_HABITS_PER_USER } from '@/lib/constants';
-import type { HabitInsert, HabitFilters } from '@/lib/db/types';
+import { createHabitWrites, toHabitResponse } from '@/lib/habits/writes';
+import type { HabitFilters } from '@/lib/db/types';
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ['cookie'],
@@ -102,27 +102,34 @@ export async function POST(request: NextRequest) {
       ...auth.principal.profile,
     });
 
-    // Check habit count limit
-    const habitsDB = new HabitsDB(supabase);
-    const activeCount = await habitsDB.getActiveHabitCount(userId);
-    if (activeCount >= MAX_HABITS_PER_USER) {
+    const outcome = await createHabitWrites(supabase).create({
+      userId,
+      name: validation.data.name,
+      description: validation.data.description ?? null,
+      categoryId: validation.data.category_id ?? null,
+      frequency: validation.data.frequency,
+    });
+
+    if (outcome.type === 'limit-reached') {
       return NextResponse.json(
-        { error: `You have ${activeCount}/${MAX_HABITS_PER_USER} habits. Remove one before adding another.` },
-        { status: 400 }
+        {
+          error: `You have ${outcome.activeCount}/${outcome.limit} habits. Remove one before adding another.`,
+        },
+        { status: 400 },
       );
     }
 
-    const habitData: HabitInsert = {
-      user_id: userId,
-      name: validation.data.name.trim(),
-      description: validation.data.description?.trim() || null,
-      category_id: validation.data.category_id || null,
-      frequency: validation.data.frequency,
-      status: 'active',
-    };
+    if (outcome.type === 'invalid') {
+      return NextResponse.json(
+        { error: outcome.message, field: outcome.field },
+        { status: 400 },
+      );
+    }
 
-    const habit = await habitsDB.createHabit(habitData);
-    return NextResponse.json({ habit }, { status: 201 });
+    return NextResponse.json(
+      { habit: toHabitResponse(outcome.habit) },
+      { status: 201 },
+    );
   } catch (error) {
     log.error('POST /api/habits error', error);
     return NextResponse.json({ error: 'Failed to create habit' }, { status: 500 });
