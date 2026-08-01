@@ -12,6 +12,7 @@ import type {
   LocalizationPreferenceIntent,
   NotificationPreferenceIntent,
   ProfileDetailsCommand,
+  ProfileDetailsOutcome,
   PushQuietWindowCommandValue,
   UserTimeZoneCommand,
 } from "@/lib/preferences/commands";
@@ -162,8 +163,13 @@ export function useProfileDetails(options?: UseCurrentProfileOptions) {
   const { runCommand } = commands;
   const details = commands.currentProfile?.profileDetails;
   const updateProfileDetails = useCallback(
-    (value: ProfileDetailsCommand) =>
-      runCommand<unknown>("profileDetails", "/api/profile-details", value, "PATCH"),
+    (value: ProfileDetailsCommand): Promise<ProfileDetailsOutcome> =>
+      runCommand<ProfileDetailsOutcome>(
+        "profileDetails",
+        "/api/profile-details",
+        value,
+        "PATCH",
+      ),
     [runCommand],
   );
 

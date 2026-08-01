@@ -85,10 +85,17 @@ export function ProfileForm({
       if (form.formState.dirtyFields.avatar_url) {
         patch.avatarUrl = data.avatar_url || null;
       }
-      await updateProfileDetails(patch);
-      form.reset(data);
+      const outcome = await updateProfileDetails(patch);
+      form.reset({
+        full_name: outcome.fullName,
+        avatar_url: outcome.avatarUrl,
+      });
       toast.success(t("success"));
     } catch (error) {
+      form.reset({
+        full_name: details?.fullName ?? "",
+        avatar_url: details?.avatarUrl ?? "",
+      });
       console.error("Update profile error:", error);
       toast.error(t("error"));
     } finally {
