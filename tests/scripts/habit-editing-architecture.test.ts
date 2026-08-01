@@ -62,4 +62,30 @@ describe("Habit detail mutation architecture boundaries", () => {
     expect(pauseHandler).not.toContain('status: "paused"');
     expect(pauseHandler).not.toContain('status: "active"');
   });
+
+  it("routes HTTP lifecycle changes through HabitWrites", () => {
+    const pauseRoute = source("app/api/habits/[id]/pause/route.ts");
+    const resumeRoute = source("app/api/habits/[id]/resume/route.ts");
+
+    expect(pauseRoute).toContain("createHabitWrites(supabase).pause");
+    expect(resumeRoute).toContain("createHabitWrites(supabase).resume");
+    expect(pauseRoute).not.toMatch(/new HabitsDB|\.pauseHabit\(/);
+    expect(resumeRoute).not.toMatch(/new HabitsDB|\.resumeHabit\(/);
+  });
+
+  it("routes AI lifecycle changes through HabitWrites", () => {
+    const tools = source("lib/ai/tools/habits.ts");
+    const lifecycle = section(tools, 'name: "pauseHabit"', 'name: "graduateHabit"');
+
+    expect(lifecycle).toContain("createHabitWrites(ctx.supabase).pause");
+    expect(lifecycle).toContain("createHabitWrites(ctx.supabase).resume");
+    expect(lifecycle).not.toMatch(/new HabitsDB|\.pauseHabit\(|\.resumeHabit\(/);
+  });
+
+  it("keeps pause and resume writes out of the generic database inventory", () => {
+    const habitsDb = source("lib/db/habits.ts");
+
+    expect(habitsDb).not.toMatch(/async pauseHabit\s*\(/);
+    expect(habitsDb).not.toMatch(/async resumeHabit\s*\(/);
+  });
 });

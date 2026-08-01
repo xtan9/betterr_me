@@ -31,8 +31,6 @@ vi.mock("@/lib/db", () => ({
     getHabit = mockGetHabit;
     createHabit = mockCreateHabit;
     updateHabit = mockUpdateHabit;
-    pauseHabit = mockPauseHabit;
-    resumeHabit = mockResumeHabit;
     graduateHabit = mockGraduateHabit;
     reactivateHabit = mockReactivateHabit;
     deleteHabit = mockDeleteHabit;
@@ -54,6 +52,8 @@ vi.mock("@/lib/habits/writes", () => ({
   createHabitWrites: vi.fn(() => ({
     create: mockCreateHabitWrite,
     update: mockUpdateHabitWrite,
+    pause: mockPauseHabit,
+    resume: mockResumeHabit,
   })),
   toHabitResponse: mockToHabitResponse,
 }));
@@ -258,18 +258,69 @@ describe("habitTools", () => {
     ).resolves.toEqual({ error: "Frequency is invalid", field: "frequency" });
   });
 
-  it("pauseHabit calls HabitsDB.pauseHabit", async () => {
+  it("pauseHabit maps a shared transitioned outcome through the AI presentation", async () => {
     const ctx = makeCtx();
-    mockPauseHabit.mockResolvedValue({ id: "h1", status: "paused" });
-    await findTool("pauseHabit").execute({ habitId: "h1" }, ctx);
-    expect(mockPauseHabit).toHaveBeenCalledWith("h1", "user-123");
+    const habit = { id: "h1", status: "paused" };
+    const presentedHabit = { id: "h1", status: "paused", paused_at: "now" };
+    mockPauseHabit.mockResolvedValue({ type: "transitioned", habit });
+    mockToHabitResponse.mockReturnValue(presentedHabit);
+
+    const result = await findTool("pauseHabit").execute({ habitId: "h1" }, ctx);
+
+    expect(mockPauseHabit).toHaveBeenCalledWith({
+      habitId: "h1",
+      userId: "user-123",
+    });
+    expect(mockToHabitResponse).toHaveBeenCalledWith(habit);
+    expect(result).toEqual(presentedHabit);
   });
 
-  it("resumeHabit calls HabitsDB.resumeHabit", async () => {
+  it("resumeHabit maps an already-applied outcome through the AI presentation", async () => {
     const ctx = makeCtx();
-    mockResumeHabit.mockResolvedValue({ id: "h1", status: "active" });
-    await findTool("resumeHabit").execute({ habitId: "h1" }, ctx);
-    expect(mockResumeHabit).toHaveBeenCalledWith("h1", "user-123");
+    const habit = { id: "h1", status: "active" };
+    const presentedHabit = { id: "h1", status: "active", paused_at: null };
+    mockResumeHabit.mockResolvedValue({ type: "already-applied", habit });
+    mockToHabitResponse.mockReturnValue(presentedHabit);
+
+    const result = await findTool("resumeHabit").execute({ habitId: "h1" }, ctx);
+
+    expect(mockResumeHabit).toHaveBeenCalledWith({
+      habitId: "h1",
+      userId: "user-123",
+    });
+    expect(mockToHabitResponse).toHaveBeenCalledWith(habit);
+    expect(result).toEqual(presentedHabit);
+  });
+
+  it.each([
+    ["pauseHabit", mockPauseHabit, { type: "not-found" }, { error: "Habit not found" }],
+    [
+      "resumeHabit",
+      mockResumeHabit,
+      {
+        type: "invalid-transition",
+        action: "resume",
+        currentStatus: "formed",
+        message: "Habit cannot be resumed from formed state",
+      },
+      { error: "Habit cannot be resumed from formed state" },
+    ],
+  ] as const)("maps %s lifecycle failures to conversational errors", async (name, mutation, outcome, expected) => {
+    const ctx = makeCtx();
+    mutation.mockResolvedValue(outcome);
+
+    await expect(
+      findTool(name).execute({ habitId: "h1" }, ctx),
+    ).resolves.toEqual(expected);
+  });
+
+  it("leaves an unexpected lifecycle failure exceptional for the AI caller", async () => {
+    const persistenceError = new Error("habit lifecycle unavailable");
+    mockPauseHabit.mockRejectedValue(persistenceError);
+
+    await expect(
+      findTool("pauseHabit").execute({ habitId: "h1" }, makeCtx()),
+    ).rejects.toBe(persistenceError);
   });
 
   it("graduateHabit calls HabitsDB.graduateHabit", async () => {

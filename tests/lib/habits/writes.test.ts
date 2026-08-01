@@ -21,6 +21,203 @@ function createPersistence(): HabitCreationPersistence {
 describe("HabitWrites", () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it("pauses an active habit with a clock-controlled timestamp", async () => {
+    const activeHabit = {
+      id: "habit-1",
+      userId: "trusted-user",
+      status: "active",
+      pausedAt: null,
+    };
+    const pausedHabit = {
+      ...activeHabit,
+      status: "paused",
+      pausedAt: "2026-08-01T12:00:00.000Z",
+    };
+    const getHabit = vi.fn().mockResolvedValue(activeHabit);
+    const updateHabitLifecycle = vi.fn().mockResolvedValue(pausedHabit);
+    const writes = new HabitWrites({
+      getHabit,
+      updateHabitLifecycle,
+    }, () => new Date("2026-08-01T12:00:00.000Z"));
+
+    const outcome = await writes.pause({
+      userId: "trusted-user",
+      habitId: "habit-1",
+    });
+
+    expect(outcome).toEqual({ type: "transitioned", habit: pausedHabit });
+    expect(getHabit).toHaveBeenCalledWith("habit-1", "trusted-user");
+    expect(updateHabitLifecycle).toHaveBeenCalledWith(
+      "habit-1",
+      "trusted-user",
+      {
+        status: "paused",
+        pausedAt: "2026-08-01T12:00:00.000Z",
+      },
+    );
+  });
+
+  it("returns already-applied for a repeated pause without rewriting its timestamp", async () => {
+    const pausedHabit = {
+      id: "habit-1",
+      userId: "trusted-user",
+      status: "paused",
+      pausedAt: "2026-07-31T12:00:00.000Z",
+    };
+    const updateHabitLifecycle = vi.fn();
+    const writes = new HabitWrites({
+      getHabit: vi.fn().mockResolvedValue(pausedHabit),
+      updateHabitLifecycle,
+    });
+
+    const outcome = await writes.pause({
+      userId: "trusted-user",
+      habitId: "habit-1",
+    });
+
+    expect(outcome).toEqual({ type: "already-applied", habit: pausedHabit });
+    expect(updateHabitLifecycle).not.toHaveBeenCalled();
+  });
+
+  it("resumes a paused habit and clears its pause timestamp", async () => {
+    const pausedHabit = {
+      id: "habit-1",
+      userId: "trusted-user",
+      status: "paused",
+      pausedAt: "2026-07-31T12:00:00.000Z",
+    };
+    const activeHabit = {
+      ...pausedHabit,
+      status: "active",
+      pausedAt: null,
+    };
+    const updateHabitLifecycle = vi.fn().mockResolvedValue(activeHabit);
+    const writes = new HabitWrites({
+      getHabit: vi.fn().mockResolvedValue(pausedHabit),
+      updateHabitLifecycle,
+    });
+
+    const outcome = await writes.resume({
+      userId: "trusted-user",
+      habitId: "habit-1",
+    });
+
+    expect(outcome).toEqual({ type: "transitioned", habit: activeHabit });
+    expect(updateHabitLifecycle).toHaveBeenCalledWith(
+      "habit-1",
+      "trusted-user",
+      { status: "active", pausedAt: null },
+    );
+  });
+
+  it("returns already-applied for a repeated resume without changing the habit", async () => {
+    const activeHabit = {
+      id: "habit-1",
+      userId: "trusted-user",
+      status: "active",
+      pausedAt: null,
+    };
+    const updateHabitLifecycle = vi.fn();
+    const writes = new HabitWrites({
+      getHabit: vi.fn().mockResolvedValue(activeHabit),
+      updateHabitLifecycle,
+    });
+
+    const outcome = await writes.resume({
+      userId: "trusted-user",
+      habitId: "habit-1",
+    });
+
+    expect(outcome).toEqual({ type: "already-applied", habit: activeHabit });
+    expect(updateHabitLifecycle).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["pause", "formed"],
+    ["resume", "formed"],
+  ] as const)(
+    "returns invalid-transition when %s is requested for a %s habit",
+    async (action, status) => {
+      const habit = {
+        id: "habit-1",
+        userId: "trusted-user",
+        status,
+        pausedAt: null,
+      };
+      const updateHabitLifecycle = vi.fn();
+      const writes = new HabitWrites({
+        getHabit: vi.fn().mockResolvedValue(habit),
+        updateHabitLifecycle,
+      });
+
+      const outcome = await writes[action]({
+        userId: "trusted-user",
+        habitId: "habit-1",
+      });
+
+      expect(outcome).toEqual({
+        type: "invalid-transition",
+        action,
+        currentStatus: status,
+        message: `Habit cannot be ${action === "pause" ? "paused" : "resumed"} from formed state`,
+      });
+      expect(updateHabitLifecycle).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["missing", "cross-owner"] as const)(
+    "returns not-found for %s habits without a lifecycle write",
+    async () => {
+      const updateHabitLifecycle = vi.fn();
+      const writes = new HabitWrites({
+        getHabit: vi.fn().mockResolvedValue(null),
+        updateHabitLifecycle,
+      });
+
+      await expect(
+        writes.pause({ userId: "trusted-user", habitId: "habit-1" }),
+      ).resolves.toEqual({ type: "not-found" });
+      expect(updateHabitLifecycle).not.toHaveBeenCalled();
+    },
+  );
+
+  it("propagates a lifecycle read failure instead of inventing an outcome", async () => {
+    const persistenceError = new Error("habit read unavailable");
+    const writes = new HabitWrites({
+      getHabit: vi.fn().mockRejectedValue(persistenceError),
+      updateHabitLifecycle: vi.fn(),
+    });
+
+    await expect(
+      writes.pause({ userId: "trusted-user", habitId: "habit-1" }),
+    ).rejects.toBe(persistenceError);
+  });
+
+  it("propagates a lifecycle update failure after validating the source state", async () => {
+    const persistenceError = new Error("habit update unavailable");
+    const writes = new HabitWrites({
+      getHabit: vi.fn().mockResolvedValue({
+        id: "habit-1",
+        userId: "trusted-user",
+        status: "active",
+        pausedAt: null,
+      }),
+      updateHabitLifecycle: vi.fn().mockRejectedValue(persistenceError),
+    });
+
+    await expect(
+      writes.pause({ userId: "trusted-user", habitId: "habit-1" }),
+    ).rejects.toBe(persistenceError);
+  });
+
+  it("rejects lifecycle operations when the persistence adapter has no lifecycle seam", async () => {
+    const writes = new HabitWrites({});
+
+    await expect(
+      writes.pause({ userId: "trusted-user", habitId: "habit-1" }),
+    ).rejects.toThrow("Habit lifecycle transitions are not supported by this persistence");
+  });
+
   it("normalizes a creation request into an owned active habit", async () => {
     const persistence = createPersistence();
     const writes = new HabitWrites(persistence);

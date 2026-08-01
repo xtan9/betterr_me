@@ -2,8 +2,17 @@ import { z } from "zod";
 import { HabitsDB, HabitLogsDB } from "@/lib/db";
 import { createHabitCompletion } from "@/lib/habits/completion";
 import { createHabitWrites, toHabitResponse } from "@/lib/habits/writes";
-import type { HabitCreationFrequency } from "@/lib/habits/writes";
+import type {
+  HabitCreationFrequency,
+  HabitLifecycleOutcome,
+} from "@/lib/habits/writes";
 import type { ToolDefinition, ToolContext } from "./types";
+
+function habitLifecycleToolResult(outcome: HabitLifecycleOutcome) {
+  if ("habit" in outcome) return toHabitResponse(outcome.habit);
+  if (outcome.type === "not-found") return { error: "Habit not found" };
+  return { error: outcome.message };
+}
 
 const createHabitParameters = z.object({
   name: z.string().describe("Habit name"),
@@ -153,8 +162,11 @@ export function habitTools(): ToolDefinition[] {
         habitId: z.string().describe("The habit ID"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new HabitsDB(ctx.supabase);
-        return db.pauseHabit(params.habitId, ctx.userId);
+        const outcome = await createHabitWrites(ctx.supabase).pause({
+          habitId: params.habitId,
+          userId: ctx.userId,
+        });
+        return habitLifecycleToolResult(outcome);
       },
     },
     {
@@ -164,8 +176,11 @@ export function habitTools(): ToolDefinition[] {
         habitId: z.string().describe("The habit ID"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new HabitsDB(ctx.supabase);
-        return db.resumeHabit(params.habitId, ctx.userId);
+        const outcome = await createHabitWrites(ctx.supabase).resume({
+          habitId: params.habitId,
+          userId: ctx.userId,
+        });
+        return habitLifecycleToolResult(outcome);
       },
     },
     {

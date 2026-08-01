@@ -4,22 +4,13 @@ import {
   cookieRouteErrorMessage,
 } from "@/lib/auth/authenticated-request";
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
-import { HabitsDB } from "@/lib/db";
+import { createHabitWrites, toHabitResponse } from "@/lib/habits/writes";
 import { log } from "@/lib/logger";
 
 const WRITE_REQUEST_POLICY = {
   allowedCredentials: ["cookie"],
   requiredPermission: "write",
 } as const satisfies AuthenticatedRequestPolicy;
-
-function isNotFoundError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    error.code === "PGRST116"
-  );
-}
 
 /**
  * POST /api/habits/[id]/resume
@@ -44,13 +35,22 @@ export async function POST(
 
     const { principal, client: supabase } = auth;
     userId = principal.userId;
-    const habit = await new HabitsDB(supabase).resumeHabit(id, userId);
-    return NextResponse.json({ habit });
-  } catch (error: unknown) {
-    if (isNotFoundError(error)) {
+    const outcome = await createHabitWrites(supabase).resume({
+      habitId: id,
+      userId,
+    });
+    if (outcome.type === "not-found") {
       log.info("[habits] resume: not found", { id, userId });
       return NextResponse.json({ error: "Habit not found" }, { status: 404 });
     }
+    if (outcome.type === "invalid-transition") {
+      return NextResponse.json(
+        { error: outcome.message },
+        { status: 409 },
+      );
+    }
+    return NextResponse.json({ habit: toHabitResponse(outcome.habit) });
+  } catch (error: unknown) {
     log.error("[habits] POST resume", error, { id, userId });
     return NextResponse.json(
       { error: "Failed to resume habit" },
