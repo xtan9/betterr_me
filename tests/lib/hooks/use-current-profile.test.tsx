@@ -511,6 +511,98 @@ describe("useCurrentProfile", () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
+  it("shows a pending Appearance intent, applies its revision, and revalidates Current Profile", async () => {
+    const { useAppearancePreference } = await import(
+      "@/lib/hooks/use-profile-preferences"
+    );
+    const acceptedProfile = structuredClone(baseProfile);
+    acceptedProfile.currentProfile.preferences.preferenceRevision = 4;
+    acceptedProfile.currentProfile.preferences.appearance.theme = {
+      status: "ready",
+      value: "dark",
+    };
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            theme: "dark",
+            preferenceRevision: 4,
+            changed: true,
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(acceptedProfile),
+      });
+    mockMutate.mockImplementation(async (updater) => {
+      if (typeof updater === "function") return updater(currentSWRData);
+      return currentSWRData;
+    });
+    currentSWRData = baseProfile;
+
+    const { result } = renderHook(() => useAppearancePreference());
+    await waitFor(() =>
+      expect(result.current.theme).toEqual({ status: "ready", value: "system" }),
+    );
+
+    let accepted: Promise<unknown> | undefined;
+    act(() => {
+      accepted = result.current.selectTheme("dark");
+    });
+    await waitFor(() =>
+      expect(result.current.theme).toEqual({ status: "pending", value: "dark" }),
+    );
+    expect(result.current.acceptedTheme).toEqual({
+      status: "ready",
+      value: "system",
+    });
+
+    await act(async () => {
+      await accepted;
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/preferences/appearance",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(mockMutate).toHaveBeenCalledWith(expect.any(Function), {
+      revalidate: false,
+    });
+    await waitFor(() =>
+      expect(result.current.theme).toEqual({ status: "ready", value: "dark" }),
+    );
+    expect(result.current.currentProfile?.preferences.preferenceRevision).toBe(4);
+  });
+
+  it("keeps an unavailable accepted Appearance value unavailable while exposing a usable state", async () => {
+    const { useAppearancePreference } = await import(
+      "@/lib/hooks/use-profile-preferences"
+    );
+    const unavailableProfile = structuredClone(baseProfile);
+    unavailableProfile.currentProfile.preferences.appearance.theme = {
+      status: "unavailable",
+      reason: "invalidStoredValue",
+    };
+    unavailableProfile.currentProfile.issues = [
+      { scope: "appearance.theme", code: "invalidStoredValue" },
+    ];
+    currentSWRData = unavailableProfile;
+
+    const { result } = renderHook(() => useAppearancePreference());
+
+    await waitFor(() =>
+      expect(result.current.theme).toEqual({
+        status: "unavailable",
+        reason: "invalidStoredValue",
+      }),
+    );
+    expect(result.current.acceptedTheme).toEqual({
+      status: "unavailable",
+      reason: "invalidStoredValue",
+    });
+  });
+
   it("serializes same-concept commands so the latest intent is sent second", async () => {
     const { useCurrentProfileCommands } = await import(
       "@/lib/hooks/use-current-profile"

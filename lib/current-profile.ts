@@ -5,6 +5,7 @@ import {
   decodeLocalizationPreferences,
   decodeNotificationPreferences,
   decodeUserTimeZone,
+  THEME_PREFERENCE_VALUES,
   type PreferenceState,
   type PreferenceStorage,
   type PushQuietWindow,
@@ -113,7 +114,7 @@ export const currentProfileSchema = z
       .object({
         preferenceRevision: z.number().int().nonnegative(),
         appearance: z.object({
-          theme: preferenceStateSchema(z.enum(["system", "light", "dark"])),
+          theme: preferenceStateSchema(z.enum(THEME_PREFERENCE_VALUES)),
         }).strict(),
         localization: z.object({
           weekStart: preferenceStateSchema(z.enum(["sunday", "monday"])),

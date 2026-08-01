@@ -10,11 +10,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Laptop, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useProfileTheme } from "@/lib/hooks/use-profile-theme";
+import { useAppearance } from "@/lib/hooks/use-appearance";
 
 const ThemeSwitcher = () => {
   const [mounted, setMounted] = useState(false);
-  const { theme, selectTheme, resolvedTheme } = useProfileTheme();
+  const { theme, selectTheme, resolvedTheme } = useAppearance();
 
   // useEffect only runs on the client, so now we can safely show the UI
   // eslint-disable-next-line react-hooks/set-state-in-effect -- standard hydration guard pattern

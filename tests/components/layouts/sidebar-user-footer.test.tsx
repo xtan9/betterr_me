@@ -4,7 +4,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { SidebarUserFooter } from "@/components/layouts/sidebar-user-footer";
 
 // Hoisted mocks
-const { mockSWRReturn, mockMutateProfile, mockSetTheme, mockPush, mockSignOut } = vi.hoisted(
+const { mockSWRReturn, mockSelectTheme, mockPush, mockSignOut } = vi.hoisted(
   () => ({
     mockSWRReturn: {
       data: {
@@ -22,16 +22,24 @@ const { mockSWRReturn, mockMutateProfile, mockSetTheme, mockPush, mockSignOut } 
       error: undefined,
       isLoading: false,
     },
-    mockMutateProfile: vi.fn(),
-    mockSetTheme: vi.fn(),
+    mockSelectTheme: vi.fn(),
     mockPush: vi.fn(),
     mockSignOut: vi.fn().mockResolvedValue({}),
   })
 );
 
-// Mock SWR
-vi.mock("swr", () => ({
-  default: () => ({ ...mockSWRReturn, mutate: mockMutateProfile }),
+vi.mock("@/lib/hooks/use-appearance", () => ({
+  useAppearance: () => ({
+    data: mockSWRReturn.data,
+    error: mockSWRReturn.error,
+    status: mockSWRReturn.isLoading
+      ? "loading"
+      : mockSWRReturn.data
+        ? "available"
+        : "unavailable",
+    theme: "system",
+    selectTheme: mockSelectTheme,
+  }),
 }));
 
 // Mock sonner toast
@@ -48,11 +56,6 @@ vi.mock("@/lib/fetcher", () => ({
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
   useLocale: () => "en",
-}));
-
-// Mock next-themes
-vi.mock("next-themes", () => ({
-  useTheme: () => ({ theme: "system", setTheme: mockSetTheme }),
 }));
 
 // Mock next/navigation
@@ -196,8 +199,7 @@ describe("SidebarUserFooter", () => {
     };
     mockSWRReturn.isLoading = false;
     mockSWRReturn.error = undefined;
-    mockSetTheme.mockReset();
-    mockMutateProfile.mockReset().mockResolvedValue(undefined);
+    mockSelectTheme.mockReset().mockResolvedValue(undefined);
     mockPush.mockReset();
     mockSignOut.mockReset().mockResolvedValue({});
     radioGroupOnValueChange = undefined;
@@ -301,13 +303,7 @@ describe("SidebarUserFooter", () => {
     expect(screen.getByText(/themeSystem/)).toBeInTheDocument();
   });
 
-  it("persists a theme preference when a theme option is clicked", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        profile: { preferences: { theme: "dark" } },
-      }),
-    }));
+  it("delegates a theme preference to the Appearance owner", async () => {
     render(<SidebarUserFooter />);
 
     const darkButton = screen
@@ -316,17 +312,7 @@ describe("SidebarUserFooter", () => {
     expect(darkButton).toBeDefined();
 
     fireEvent.click(darkButton!);
-    expect(mockSetTheme).toHaveBeenCalledWith("dark");
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith("/api/preferences/appearance", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({ type: "setTheme", theme: "dark" }),
-      });
-    });
+    await waitFor(() => expect(mockSelectTheme).toHaveBeenCalledWith("dark"));
   });
 
   it("renders language options", () => {

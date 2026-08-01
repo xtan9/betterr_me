@@ -5,11 +5,12 @@ import type {
   WeekStartPreference,
   WeightUnitPreference,
 } from "./types";
+import { THEME_PREFERENCE_VALUES } from "./owners";
 
 const localTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 
 export const appearancePreferenceIntentSchema = z
-  .object({ type: z.literal("setTheme"), theme: z.enum(["system", "light", "dark"]) })
+  .object({ type: z.literal("setTheme"), theme: z.enum(THEME_PREFERENCE_VALUES) })
   .strict();
 
 export const localizationPreferenceIntentSchema = z

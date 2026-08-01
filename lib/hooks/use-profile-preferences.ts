@@ -8,6 +8,7 @@ import {
 } from "@/lib/hooks/use-current-profile";
 import type {
   AppearancePreferenceIntent,
+  AppearancePreferenceOutcome,
   FitnessPreferenceIntent,
   LocalizationPreferenceIntent,
   NotificationPreferenceIntent,
@@ -53,7 +54,7 @@ export function useAppearancePreference(options?: UseCurrentProfileOptions) {
   const theme = present(accepted, pending?.theme);
   const selectTheme = useCallback(
     (value: ThemePreference) =>
-      runCommand<unknown>("appearance", "/api/preferences/appearance", {
+      runCommand<AppearancePreferenceOutcome>("appearance", "/api/preferences/appearance", {
         type: "setTheme",
         theme: value,
       }),

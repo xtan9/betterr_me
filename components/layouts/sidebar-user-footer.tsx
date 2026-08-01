@@ -31,7 +31,7 @@ import {
   SidebarMenuButton,
 } from "@/components/ui/sidebar";
 import { SIDEBAR_TRANSITION, SIDEBAR_HOVER } from "@/lib/sidebar-styles";
-import { useProfileTheme } from "@/lib/hooks/use-profile-theme";
+import { useAppearance } from "@/lib/hooks/use-appearance";
 
 const locales = [
   { code: "en", name: "English" },
@@ -55,7 +55,7 @@ interface SidebarUserFooterProps {
 }
 
 export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterProps) {
-  const { data, error, status, theme, selectTheme } = useProfileTheme();
+  const { data, error, status, theme, selectTheme } = useAppearance();
   const locale = useLocale();
   const t = useTranslations("common.nav");
   const tSidebar = useTranslations("common.sidebar");
