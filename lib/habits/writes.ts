@@ -1,7 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { MAX_HABITS_PER_USER } from "@/lib/constants";
 import { HabitsDB } from "@/lib/db/habits";
+import { HabitGraduationsDB } from "@/lib/db/habit-graduations";
 import type { Habit, HabitInsert, HabitUpdate } from "@/lib/db/types";
+import { log } from "@/lib/logger";
 
 export type HabitCreationFrequency =
   | { type: "daily" }
@@ -125,10 +127,34 @@ export interface HabitGraduationPersistence {
   ): Promise<HabitGraduationPersistenceOutcome>;
 }
 
+export interface HabitReactivationRequest {
+  userId: string;
+  habitId: string;
+}
+
+export type HabitReactivationPersistenceOutcome =
+  | { type: "reactivated"; habit: HabitMutationRecord }
+  | { type: "already-active"; habit: HabitMutationRecord }
+  | { type: "not-found" }
+  | { type: "invalid-transition"; currentStatus: HabitLifecycleState };
+
+export interface HabitReactivationPersistence {
+  reactivateHabit(
+    habitId: string,
+    userId: string,
+  ): Promise<HabitReactivationPersistenceOutcome>;
+  markReactivated?(
+    habitId: string,
+    userId: string,
+    reactivatedAt: string,
+  ): Promise<void>;
+}
+
 type HabitWritesPersistence = Partial<HabitCreationPersistence> &
   Partial<HabitUpdatePersistence> &
   Partial<HabitLifecyclePersistence> &
-  Partial<HabitGraduationPersistence>;
+  Partial<HabitGraduationPersistence> &
+  Partial<HabitReactivationPersistence>;
 
 export type HabitCreationOutcome =
   | { type: "created"; habit: CreatedHabit }
@@ -159,6 +185,17 @@ export type HabitGraduationOutcome =
   | {
       type: "invalid-transition";
       action: "graduate";
+      currentStatus: HabitLifecycleState;
+      message: string;
+    };
+
+export type HabitReactivationOutcome =
+  | { type: "reactivated"; habit: HabitMutationRecord }
+  | { type: "already-active"; habit: HabitMutationRecord }
+  | { type: "not-found" }
+  | {
+      type: "invalid-transition";
+      action: "reactivate";
       currentStatus: HabitLifecycleState;
       message: string;
     };
@@ -492,6 +529,48 @@ export class HabitWrites {
     };
   }
 
+  async reactivate(
+    request: HabitReactivationRequest,
+  ): Promise<HabitReactivationOutcome> {
+    if (!this.persistence.reactivateHabit) {
+      throw new Error("Habit reactivation is not supported by this persistence");
+    }
+
+    const outcome = await this.persistence.reactivateHabit(
+      request.habitId,
+      request.userId,
+    );
+    if (
+      outcome.type === "reactivated" ||
+      outcome.type === "already-active" ||
+      outcome.type === "not-found"
+    ) {
+      if (outcome.type === "reactivated" && this.persistence.markReactivated) {
+        try {
+          await this.persistence.markReactivated(
+            request.habitId,
+            request.userId,
+            this.now().toISOString(),
+          );
+        } catch (error: unknown) {
+          log.error(
+            "[habits] reactivation history reaction failed after core commit",
+            error,
+            { habitId: request.habitId, userId: request.userId },
+          );
+        }
+      }
+      return outcome;
+    }
+
+    return {
+      type: "invalid-transition",
+      action: "reactivate",
+      currentStatus: outcome.currentStatus,
+      message: `Habit cannot be reactivated from ${outcome.currentStatus} state`,
+    };
+  }
+
   private async transition(
     action: HabitLifecycleAction,
     request: HabitLifecycleRequest,
@@ -589,6 +668,38 @@ function mapStoredHabitGraduationOutcome(
   throw new Error("Invalid graduation outcome returned by the database");
 }
 
+function mapStoredHabitReactivationOutcome(
+  value: unknown,
+): HabitReactivationPersistenceOutcome {
+  if (!isRecord(value) || typeof value.type !== "string") {
+    throw new Error("Invalid reactivation outcome returned by the database");
+  }
+
+  if (value.type === "not-found") return { type: "not-found" };
+
+  if (
+    (value.type === "reactivated" || value.type === "already-active") &&
+    isRecord(value.habit)
+  ) {
+    return {
+      type: value.type,
+      habit: toHabitMutationRecord(value.habit as unknown as Habit),
+    };
+  }
+
+  if (
+    value.type === "invalid-transition" &&
+    isHabitLifecycleState(value.current_status)
+  ) {
+    return {
+      type: "invalid-transition",
+      currentStatus: value.current_status,
+    };
+  }
+
+  throw new Error("Invalid reactivation outcome returned by the database");
+}
+
 export function createHabitWrites(supabase: SupabaseClient): HabitWrites {
   const habitsDB = new HabitsDB(supabase);
 
@@ -654,6 +765,18 @@ export function createHabitWrites(supabase: SupabaseClient): HabitWrites {
       });
       if (error) throw error;
       return mapStoredHabitGraduationOutcome(data);
+    },
+    reactivateHabit: async (habitId, userId) => {
+      const { data, error } = await supabase.rpc("reactivate_habit_atomically", {
+        p_habit_id: habitId,
+        p_user_id: userId,
+      });
+      if (error) throw error;
+      return mapStoredHabitReactivationOutcome(data);
+    },
+    markReactivated: async (habitId, userId, reactivatedAt) => {
+      const graduations = new HabitGraduationsDB(supabase);
+      await graduations.markReactivated(habitId, userId, reactivatedAt);
     },
   });
 }

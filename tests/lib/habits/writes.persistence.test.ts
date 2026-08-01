@@ -337,6 +337,162 @@ describe("createHabitWrites persistence adapter", () => {
     });
   });
 
+  describe("reactivate", () => {
+    const reactivatedAt = "2026-08-01T12:00:00.000Z";
+
+    it("uses the core RPC, maps the reactivated habit, and reacts to history after it", async () => {
+      const reactivatedHabit: Habit = {
+        ...storedHabit,
+        status: "active",
+        current_streak: 0,
+        best_streak: 120,
+        graduated_at: null,
+        graduated_streak: null,
+        nudge_dismissed_at: null,
+      };
+      mockSupabaseClient.setMockResponse({
+        type: "reactivated",
+        habit: reactivatedHabit,
+      });
+      mockSupabaseClient.maybeSingle.mockResolvedValueOnce({
+        data: { id: "graduation-1" },
+        error: null,
+      });
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(reactivatedAt));
+      try {
+        const writes = createHabitWrites(
+          mockSupabaseClient as unknown as SupabaseClient,
+        );
+
+        await expect(
+          writes.reactivate({ userId: "trusted-user", habitId: "habit-1" }),
+        ).resolves.toEqual({
+          type: "reactivated",
+          habit: {
+            id: "habit-1",
+            userId: "trusted-user",
+            name: "Morning Run",
+            description: "Run five kilometers",
+            categoryId: "category-1",
+            frequency: { type: "custom", days: [1, 5] },
+            status: "active",
+            currentStreak: 0,
+            bestStreak: 120,
+            pausedAt: null,
+            graduatedAt: null,
+            graduatedStreak: null,
+            nudgeDismissedAt: null,
+            createdAt: storedHabit.created_at,
+            updatedAt: storedHabit.updated_at,
+          },
+        });
+        expect(mockSupabaseClient.queryLog[0]).toEqual({
+          table: null,
+          method: "rpc",
+          args: [
+            "reactivate_habit_atomically",
+            {
+              p_habit_id: "habit-1",
+              p_user_id: "trusted-user",
+            },
+          ],
+        });
+        expect(mockSupabaseClient.queryLog.findIndex((entry) => entry.method === "rpc"))
+          .toBeLessThan(
+            mockSupabaseClient.queryLog.findIndex(
+              (entry) => entry.table === "habit_graduations" && entry.method === "from",
+            ),
+          );
+        expect(mockSupabaseClient.queryLog).toContainEqual({
+          table: "habit_graduations",
+          method: "update",
+          args: [{ reactivated_at: reactivatedAt }],
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it.each([
+      [{ type: "already-active", habit: storedHabit }, { type: "already-active" }],
+      [{ type: "not-found" }, { type: "not-found" }],
+      [
+        { type: "invalid-transition", current_status: "paused" },
+        {
+          type: "invalid-transition",
+          action: "reactivate",
+          currentStatus: "paused",
+          message: "Habit cannot be reactivated from paused state",
+        },
+      ],
+    ] as const)("maps the %s database outcome without a history reaction", async (databaseOutcome, expected) => {
+      mockSupabaseClient.setMockResponse(databaseOutcome);
+      const writes = createHabitWrites(
+        mockSupabaseClient as unknown as SupabaseClient,
+      );
+
+      await expect(
+        writes.reactivate({ userId: "trusted-user", habitId: "habit-1" }),
+      ).resolves.toMatchObject(expected);
+      expect(mockSupabaseClient.maybeSingle).not.toHaveBeenCalled();
+    });
+
+    it("propagates a core RPC failure without attempting history", async () => {
+      const persistenceError = new Error("reactivation transaction failed");
+      mockSupabaseClient.setMockResponse(null, persistenceError);
+      const writes = createHabitWrites(
+        mockSupabaseClient as unknown as SupabaseClient,
+      );
+
+      await expect(
+        writes.reactivate({ userId: "trusted-user", habitId: "habit-1" }),
+      ).rejects.toBe(persistenceError);
+      expect(mockSupabaseClient.queryLog).toHaveLength(1);
+      expect(mockSupabaseClient.queryLog[0]?.method).toBe("rpc");
+      expect(mockSupabaseClient.maybeSingle).not.toHaveBeenCalled();
+    });
+
+    it("preserves reactivation when the post-commit history reaction fails", async () => {
+      const reactivatedHabit: Habit = {
+        ...storedHabit,
+        current_streak: 0,
+        best_streak: 120,
+        graduated_at: null,
+        graduated_streak: null,
+        nudge_dismissed_at: null,
+      };
+      mockSupabaseClient.setMockResponse({
+        type: "reactivated",
+        habit: reactivatedHabit,
+      });
+      mockSupabaseClient.maybeSingle.mockResolvedValueOnce({
+        data: null,
+        error: new Error("history lookup failed"),
+      });
+      const writes = createHabitWrites(
+        mockSupabaseClient as unknown as SupabaseClient,
+      );
+
+      await expect(
+        writes.reactivate({ userId: "trusted-user", habitId: "habit-1" }),
+      ).resolves.toMatchObject({ type: "reactivated" });
+      expect(mockSupabaseClient.queryLog[0]?.method).toBe("rpc");
+      expect(mockSupabaseClient.queryLog.some((entry) => entry.table === "habit_graduations")).toBe(true);
+    });
+
+    it("rejects malformed database outcomes", async () => {
+      mockSupabaseClient.setMockResponse({ type: "unexpected" });
+      const writes = createHabitWrites(
+        mockSupabaseClient as unknown as SupabaseClient,
+      );
+
+      await expect(
+        writes.reactivate({ userId: "trusted-user", habitId: "habit-1" }),
+      ).rejects.toThrow("Invalid reactivation outcome returned by the database");
+    });
+  });
+
   it("persists a pause through owner-scoped lifecycle reads and updates", async () => {
     const fixedNow = new Date("2026-08-01T12:00:00.000Z");
     vi.useFakeTimers();

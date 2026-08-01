@@ -52,7 +52,10 @@ vi.mock('@/lib/db', () => {
 });
 
 vi.mock('@/lib/habits/writes', () => ({
-  createHabitWrites: vi.fn(() => ({ graduate: graduateMock })),
+  createHabitWrites: vi.fn(() => ({
+    graduate: graduateMock,
+    reactivate: reactivateMock,
+  })),
   toHabitResponse: toHabitResponseMock,
 }));
 
@@ -60,7 +63,6 @@ import { POST as graduatePOST } from '@/app/api/habits/[id]/graduate/route';
 import { POST as reactivatePOST } from '@/app/api/habits/[id]/reactivate/route';
 import { POST as dismissPOST } from '@/app/api/habits/[id]/dismiss-graduation-nudge/route';
 import { createClient } from '@/lib/supabase/server';
-import { HabitNotFormedError } from '@/lib/db';
 
 const params = Promise.resolve({ id: 'h1' });
 
@@ -147,23 +149,64 @@ describe('POST /api/habits/[id]/reactivate', () => {
   });
 
   it('returns the reactivated habit', async () => {
-    reactivateMock.mockResolvedValue({ id: 'h1', status: 'active', current_streak: 0 });
+    const habit = { id: 'h1', status: 'active', current_streak: 0 };
+    const presentedHabit = { ...habit, best_streak: 87 };
+    reactivateMock.mockResolvedValue({ type: 'reactivated', habit });
+    toHabitResponseMock.mockReturnValue(presentedHabit);
     const res = await reactivatePOST(
       new NextRequest('http://localhost/api/habits/h1/reactivate', { method: 'POST' }),
       { params }
     );
     expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.habit.status).toBe('active');
+    expect(await res.json()).toEqual({ habit: presentedHabit });
+    expect(reactivateMock).toHaveBeenCalledWith({ habitId: 'h1', userId: 'user-1' });
+    expect(toHabitResponseMock).toHaveBeenCalledWith(habit);
   });
 
-  it('returns 400 when habit is not formed', async () => {
-    reactivateMock.mockRejectedValue(new HabitNotFormedError('h1'));
+  it('preserves the not-formed response for an already-active habit', async () => {
+    const habit = { id: 'h1', status: 'active', current_streak: 0 };
+    reactivateMock.mockResolvedValue({ type: 'already-active', habit });
     const res = await reactivatePOST(
       new NextRequest('http://localhost/api/habits/h1/reactivate', { method: 'POST' }),
       { params }
     );
     expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Habit is not formed' });
+  });
+
+  it('returns 404 for a missing or cross-owner habit', async () => {
+    reactivateMock.mockResolvedValue({ type: 'not-found' });
+    const res = await reactivatePOST(
+      new NextRequest('http://localhost/api/habits/h1/reactivate', { method: 'POST' }),
+      { params }
+    );
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'Habit not found' });
+  });
+
+  it('preserves the not-formed response for an invalid transition', async () => {
+    reactivateMock.mockResolvedValue({
+      type: 'invalid-transition',
+      action: 'reactivate',
+      currentStatus: 'paused',
+      message: 'Habit cannot be reactivated from paused state',
+    });
+    const res = await reactivatePOST(
+      new NextRequest('http://localhost/api/habits/h1/reactivate', { method: 'POST' }),
+      { params }
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Habit is not formed' });
+  });
+
+  it('returns 500 for an unexpected reactivation failure', async () => {
+    reactivateMock.mockRejectedValue(new Error('rpc unavailable'));
+    const res = await reactivatePOST(
+      new NextRequest('http://localhost/api/habits/h1/reactivate', { method: 'POST' }),
+      { params }
+    );
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: 'Failed to reactivate habit' });
   });
 });
 

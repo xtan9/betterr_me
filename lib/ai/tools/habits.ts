@@ -6,6 +6,7 @@ import type {
   HabitCreationFrequency,
   HabitGraduationOutcome,
   HabitLifecycleOutcome,
+  HabitReactivationOutcome,
 } from "@/lib/habits/writes";
 import type { ToolDefinition, ToolContext } from "./types";
 
@@ -22,6 +23,15 @@ function habitGraduationToolResult(outcome: HabitGraduationOutcome) {
   }
   if (outcome.type === "not-found") return { error: "Habit not found" };
   return { error: outcome.message };
+}
+
+function habitReactivationToolResult(outcome: HabitReactivationOutcome) {
+  if (outcome.type === "reactivated") return toHabitResponse(outcome.habit);
+  if (outcome.type === "already-active") {
+    return { error: "Habit is not formed" };
+  }
+  if (outcome.type === "not-found") return { error: "Habit not found" };
+  return { error: "Habit is not formed" };
 }
 
 const createHabitParameters = z.object({
@@ -216,8 +226,11 @@ export function habitTools(): ToolDefinition[] {
         habitId: z.string().describe("The habit ID to reactivate"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new HabitsDB(ctx.supabase);
-        return db.reactivateHabit(params.habitId, ctx.userId);
+        const outcome = await createHabitWrites(ctx.supabase).reactivate({
+          habitId: params.habitId,
+          userId: ctx.userId,
+        });
+        return habitReactivationToolResult(outcome);
       },
     },
     {
