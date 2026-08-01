@@ -58,6 +58,12 @@ export interface CurrentProfileResponse {
   currentProfile: CurrentProfile;
 }
 
+export interface CurrentProfileCompositionInput {
+  identityEmail: string | null;
+  capabilities: CurrentProfileCapabilities;
+  projection: CurrentProfileProjection;
+}
+
 const unavailableReasonSchema = z.enum(PREFERENCE_UNAVAILABLE_REASONS);
 
 const issueScopeSchema = z.enum([
@@ -156,11 +162,9 @@ function collectIssues(
   return issues;
 }
 
-export function composeCurrentProfile(input: {
-  identityEmail: string | null;
-  capabilities: CurrentProfileCapabilities;
-  projection: CurrentProfileProjection;
-}): CurrentProfile {
+export function composeCurrentProfile(
+  input: CurrentProfileCompositionInput,
+): CurrentProfile {
   const userTimeZone = decodeUserTimeZone(input.projection.timezone);
   const appearance = decodeAppearancePreferences(input.projection.preferences);
   const localization = decodeLocalizationPreferences(input.projection.preferences);
@@ -189,6 +193,12 @@ export function composeCurrentProfile(input: {
     preferences,
     issues: collectIssues(preferences),
   };
+}
+
+export function composeCurrentProfileResponse(
+  input: CurrentProfileCompositionInput,
+): CurrentProfileResponse {
+  return { currentProfile: composeCurrentProfile(input) };
 }
 
 export function decodeCurrentProfileResponse(

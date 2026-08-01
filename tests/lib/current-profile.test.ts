@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   composeCurrentProfile,
+  composeCurrentProfileResponse,
   decodeCurrentProfileResponse,
 } from "@/lib/current-profile";
 
@@ -106,6 +107,23 @@ describe("Current Profile", () => {
     expect(() =>
       decodeCurrentProfileResponse({ profile: currentProfile }),
     ).toThrow();
+  });
+
+  it("uses the same canonical response composer for server hydration and API reads", () => {
+    const response = composeCurrentProfileResponse({
+      identityEmail: "taylor@example.com",
+      capabilities: { canAccessAdmin: true },
+      projection,
+    });
+
+    expect(decodeCurrentProfileResponse(response)).toEqual(response);
+    expect(response).toEqual({
+      currentProfile: composeCurrentProfile({
+        identityEmail: "taylor@example.com",
+        capabilities: { canAccessAdmin: true },
+        projection,
+      }),
+    });
   });
 
   it("takes capabilities from authorization input rather than stored role", () => {

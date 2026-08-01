@@ -44,6 +44,10 @@ const baseProfile: CurrentProfileResponse = {
 
 let authCallback: ((event: string, session: unknown) => void) | undefined;
 let currentSWRData: CurrentProfileResponse | undefined;
+let swrFetchers: Array<{
+  key: unknown;
+  fetcher: () => Promise<CurrentProfileResponse>;
+}> = [];
 const mockMutate = vi.fn();
 
 describe("useCurrentProfile", () => {
@@ -51,6 +55,7 @@ describe("useCurrentProfile", () => {
     vi.clearAllMocks();
     authCallback = undefined;
     currentSWRData = undefined;
+    swrFetchers = [];
     mockGetSession.mockResolvedValue({
       data: { session: { user: { id: "user-a" } } },
     });
@@ -58,13 +63,32 @@ describe("useCurrentProfile", () => {
       authCallback = callback;
       return { data: { subscription: { unsubscribe: vi.fn() } } };
     });
-    mockSWR.mockImplementation((_key, _fetcher, options) => ({
+    mockSWR.mockImplementation((key, fetcher, options) => {
+      swrFetchers.push({ key, fetcher });
+      return {
       data: currentSWRData ?? options?.fallbackData,
       error: undefined,
       isLoading: false,
       mutate: mockMutate,
-    }));
+      };
+    });
     vi.stubGlobal("fetch", mockFetch);
+  });
+
+  it("exposes an explicit loading state before the authenticated snapshot is available", async () => {
+    const { useCurrentProfile } = await import("@/lib/hooks/use-current-profile");
+    mockSWR.mockImplementation((_key, _fetcher, options) => ({
+      data: options?.fallbackData,
+      error: undefined,
+      isLoading: true,
+      mutate: mockMutate,
+    }));
+
+    const { result } = renderHook(() => useCurrentProfile());
+
+    expect(result.current.status).toBe("loading");
+    expect(result.current.isLoading).toBe(true);
+    expect(result.current.currentProfile).toBeUndefined();
   });
 
   it("hydrates the canonical snapshot and scopes the cache key by subject", async () => {
@@ -88,6 +112,19 @@ describe("useCurrentProfile", () => {
       status: "ready",
       value: "kg",
     });
+  });
+
+  it("revalidates on window focus without polling", async () => {
+    const { useCurrentProfile } = await import("@/lib/hooks/use-current-profile");
+    renderHook(() =>
+      useCurrentProfile({ initialData: baseProfile, initialSubject: "user-a" }),
+    );
+
+    await waitFor(() => expect(mockSWR).toHaveBeenCalled());
+    const options = mockSWR.mock.calls.at(-1)?.[2] as Record<string, unknown>;
+    expect(options.revalidateOnFocus).toBe(true);
+    expect(options.revalidateOnReconnect).toBe(true);
+    expect(options.refreshInterval).toBeUndefined();
   });
 
   it("clears the accepted snapshot on logout before isolating the next subject", async () => {
@@ -116,6 +153,113 @@ describe("useCurrentProfile", () => {
         expect.any(Object),
       ),
     );
+  });
+
+  it("ignores a user-A request that resolves after the session changes to user B", async () => {
+    const { useCurrentProfile } = await import("@/lib/hooks/use-current-profile");
+    currentSWRData = baseProfile;
+    const { result } = renderHook(() => useCurrentProfile());
+
+    await waitFor(() =>
+      expect(mockSWR).toHaveBeenLastCalledWith(
+        ["current-profile", "user-a"],
+        expect.any(Function),
+        expect.any(Object),
+      ),
+    );
+    const userAFetcher = swrFetchers.find(
+      ({ key }) => Array.isArray(key) && key[1] === "user-a",
+    )?.fetcher;
+    expect(userAFetcher).toBeDefined();
+
+    currentSWRData = undefined;
+    act(() => authCallback?.("SIGNED_OUT", null));
+    act(() => authCallback?.("SIGNED_IN", { user: { id: "user-b" } }));
+    await waitFor(() =>
+      expect(mockSWR).toHaveBeenLastCalledWith(
+        ["current-profile", "user-b"],
+        expect.any(Function),
+        expect.any(Object),
+      ),
+    );
+
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(baseProfile),
+    });
+    await act(async () => {
+      await expect(userAFetcher?.()).rejects.toThrow(
+        "inactive session",
+      );
+    });
+
+    expect(result.current.currentProfile).toBeUndefined();
+    expect(result.current.status).toBe("unavailable");
+  });
+
+  it("clears pending commands when logout starts a new session generation", async () => {
+    const { useCurrentProfileCommands } = await import(
+      "@/lib/hooks/use-current-profile"
+    );
+    let resolveCommand!: (response: unknown) => void;
+    const commandResponse = new Promise((resolve) => {
+      resolveCommand = resolve;
+    });
+    mockFetch.mockImplementationOnce(() => commandResponse);
+    currentSWRData = baseProfile;
+
+    const { result } = renderHook(() => useCurrentProfileCommands());
+    await waitFor(() =>
+      expect(mockSWR).toHaveBeenLastCalledWith(
+        ["current-profile", "user-a"],
+        expect.any(Function),
+        expect.any(Object),
+      ),
+    );
+
+    let command: Promise<unknown> | undefined;
+    act(() => {
+      command = result.current.runCommand(
+        "fitness",
+        "/api/preferences/fitness",
+        { type: "setWeightUnit", weightUnit: "lbs" },
+      );
+    });
+    await waitFor(() =>
+      expect(result.current.pendingIntents).toEqual({
+        fitness: { type: "setWeightUnit", weightUnit: "lbs" },
+      }),
+    );
+
+    act(() => authCallback?.("SIGNED_OUT", null));
+    await waitFor(() => {
+      expect(result.current.pendingIntents).toEqual({});
+      expect(result.current.currentProfile).toBeUndefined();
+    });
+
+    act(() =>
+      authCallback?.("SIGNED_IN", { user: { id: "user-b" } }),
+    );
+    await waitFor(() =>
+      expect(mockSWR).toHaveBeenLastCalledWith(
+        ["current-profile", "user-b"],
+        expect.any(Function),
+        expect.any(Object),
+      ),
+    );
+
+    resolveCommand({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ changed: true }),
+    });
+    await act(async () => {
+      await command;
+    });
+
+    expect(result.current.pendingIntents).toEqual({});
+    expect(mockMutate).not.toHaveBeenCalled();
   });
 
   it("does not expose or reuse unbound SSR data before the session subject is known", async () => {
@@ -155,6 +299,54 @@ describe("useCurrentProfile", () => {
     });
 
     await expect(fetchCurrentProfile()).resolves.toEqual(baseProfile);
+  });
+
+  it("rejects a malformed successful response at the runtime boundary", async () => {
+    const { fetchCurrentProfile } = await import(
+      "@/lib/hooks/use-current-profile"
+    );
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          currentProfile: {
+            ...baseProfile.currentProfile,
+            profileDetails: { fullName: 42, avatarUrl: null },
+          },
+        }),
+    });
+
+    await expect(fetchCurrentProfile()).rejects.toMatchObject({
+      code: "invalid_response",
+      status: 200,
+    });
+  });
+
+  it("exposes an unavailable state when the Current Profile source cannot be read", async () => {
+    const {
+      CurrentProfileRequestError,
+      useCurrentProfile,
+    } = await import("@/lib/hooks/use-current-profile");
+    const unavailable = new CurrentProfileRequestError(
+      "current_profile_unavailable",
+      503,
+      "current_profile_unavailable",
+    );
+    mockSWR.mockImplementation(() => ({
+      data: undefined,
+      error: unavailable,
+      isLoading: false,
+      mutate: mockMutate,
+    }));
+
+    const { result } = renderHook(() =>
+      useCurrentProfile({ initialSubject: "user-a" }),
+    );
+
+    expect(result.current.status).toBe("unavailable");
+    expect(result.current.unavailableReason).toBe("current_profile_unavailable");
+    expect(result.current.currentProfile).toBeUndefined();
   });
 
   it("shows a pending Fitness intent, revalidates after acceptance, and rolls back on rejection", async () => {

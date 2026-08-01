@@ -5,7 +5,7 @@ import {
 } from "@/lib/auth/authenticated-request";
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { ProfilesDB } from "@/lib/db";
-import { composeCurrentProfile } from "@/lib/current-profile";
+import { composeCurrentProfileResponse } from "@/lib/current-profile";
 import { log } from "@/lib/logger";
 
 const READ_REQUEST_POLICY = {
@@ -41,15 +41,13 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json(
-      {
-        currentProfile: composeCurrentProfile({
-          identityEmail: auth.principal.profile?.email ?? null,
-          capabilities: {
-            canAccessAdmin: auth.permissions.includes("admin"),
-          },
-          projection,
-        }),
-      },
+      composeCurrentProfileResponse({
+        identityEmail: auth.principal.profile?.email ?? null,
+        capabilities: {
+          canAccessAdmin: auth.permissions.includes("admin"),
+        },
+        projection,
+      }),
       { headers: PRIVATE_HEADERS },
     );
   } catch (error) {

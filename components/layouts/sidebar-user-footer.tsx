@@ -55,7 +55,7 @@ interface SidebarUserFooterProps {
 }
 
 export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterProps) {
-  const { data, error, theme, selectTheme } = useProfileTheme();
+  const { data, error, status, theme, selectTheme } = useProfileTheme();
   const locale = useLocale();
   const t = useTranslations("common.nav");
   const tSidebar = useTranslations("common.sidebar");
@@ -92,7 +92,7 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
     }
   };
 
-  if (error) {
+  if (status === "unavailable" || error) {
     return (
       <SidebarMenu>
         <SidebarMenuItem>
