@@ -164,12 +164,16 @@ describe("RecurringTaskLifecycle revision behavior", () => {
       range: { from: "2026-08-01", to: "2026-08-02" },
       idempotencyKey: "coverage-replay",
     });
-    await expect(lifecycle.ensureCoverage({
+    expect(await lifecycle.ensureCoverage({
       userId: "user-errors",
       seriesId: created.series.id,
       range: { from: "2026-08-01", to: "2026-08-03" },
       idempotencyKey: "coverage-replay",
-    })).rejects.toThrow("Idempotency key was reused for a different request");
+    })).toEqual({
+      status: "conflict",
+      type: "conflict",
+      reason: "Idempotency key was reused for a different request",
+    });
   });
 
   it("keeps occurrence commands idempotent and freezes details through completion", async () => {
@@ -406,6 +410,37 @@ describe("RecurringTaskLifecycle revision behavior", () => {
     });
   });
 
+  it("returns a typed conflict when an idempotency key is reused for different intent", async () => {
+    const lifecycle = new RecurringTaskLifecycle(
+      new InMemoryRecurringTaskLifecyclePersistence(),
+      { clock: () => new Date("2026-08-01T12:00:00.000Z") },
+    );
+    const first = await lifecycle.createSeries({
+      userId: "user-idempotency-conflict",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("First intent"),
+      idempotencyKey: "same-key",
+    });
+    expect(first.status).toBe("complete");
+
+    const reused = await lifecycle.createSeries({
+      userId: "user-idempotency-conflict",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("Different intent"),
+      idempotencyKey: "same-key",
+    });
+
+    expect(reused).toEqual({
+      status: "conflict",
+      type: "conflict",
+      reason: "Idempotency key was reused for a different request",
+    });
+  });
+
   it("serializes concurrent coverage requests and keeps one occurrence per date", async () => {
     const lifecycle = new RecurringTaskLifecycle(
       new InMemoryRecurringTaskLifecyclePersistence(),
@@ -437,6 +472,64 @@ describe("RecurringTaskLifecycle revision behavior", () => {
       "2026-08-02",
       "2026-08-03",
       "2026-08-04",
+      "2026-08-05",
+      "2026-08-06",
+      "2026-08-07",
+    ]);
+  });
+
+  it("lets independent Series converge without overwriting each other", async () => {
+    const lifecycle = new RecurringTaskLifecycle(
+      new InMemoryRecurringTaskLifecyclePersistence(),
+      { clock: () => new Date("2026-08-01T12:00:00.000Z") },
+    );
+    const [first, second] = await Promise.all([
+      lifecycle.createSeries({
+        userId: "user-independent-series",
+        recurrenceRule: { frequency: "daily", interval: 1 },
+        recurrenceAnchor: "2026-08-01",
+        activationDate: "2026-08-01",
+        defaults: defaults("First"),
+      }),
+      lifecycle.createSeries({
+        userId: "user-independent-series",
+        recurrenceRule: { frequency: "daily", interval: 1 },
+        recurrenceAnchor: "2026-08-01",
+        activationDate: "2026-08-01",
+        defaults: defaults("Second"),
+      }),
+    ]);
+    expect(first.status).toBe("complete");
+    expect(second.status).toBe("complete");
+    if (first.status !== "complete" || second.status !== "complete") return;
+
+    const results = await Promise.all([
+      lifecycle.ensureCoverage({
+        userId: "user-independent-series",
+        seriesId: first.series.id,
+        range: { from: "2026-08-01", to: "2026-08-03" },
+      }),
+      lifecycle.ensureCoverage({
+        userId: "user-independent-series",
+        seriesId: second.series.id,
+        range: { from: "2026-08-05", to: "2026-08-07" },
+      }),
+    ]);
+    expect(results.every((result) => result.status === "complete")).toBe(true);
+
+    const [firstFinal, secondFinal] = await Promise.all([
+      lifecycle.getSeries("user-independent-series", first.series.id),
+      lifecycle.getSeries("user-independent-series", second.series.id),
+    ]);
+    expect(firstFinal.status).toBe("complete");
+    expect(secondFinal.status).toBe("complete");
+    if (firstFinal.status !== "complete" || secondFinal.status !== "complete") return;
+    expect(firstFinal.series.occurrences.map((occurrence) => occurrence.scheduledDate)).toEqual([
+      "2026-08-01",
+      "2026-08-02",
+      "2026-08-03",
+    ]);
+    expect(secondFinal.series.occurrences.map((occurrence) => occurrence.scheduledDate)).toEqual([
       "2026-08-05",
       "2026-08-06",
       "2026-08-07",

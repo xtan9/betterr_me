@@ -124,35 +124,82 @@ export class InMemoryRecurringTaskLifecyclePersistence
     serializationKey: string,
     operation: (state: RecurringTaskLifecycleState) => Promise<T>,
   ): Promise<T> {
-    // The draft is a clone of the complete in-memory state, so independent
-    // keys still need one commit lock or a transaction for one user could
-    // overwrite a concurrent transaction for another user.
-    void serializationKey;
-    const lockKey = "global";
-    const previous = this.locks.get(lockKey) ?? Promise.resolve();
+    const previous = this.locks.get(serializationKey) ?? Promise.resolve();
     let release!: () => void;
     const current = new Promise<void>((resolve) => {
       release = resolve;
     });
     const queued = previous.then(() => current);
-    this.locks.set(lockKey, queued);
+    this.locks.set(serializationKey, queued);
 
     await previous;
     try {
-      const draft = cloneState(this.state);
+      const base = cloneState(this.state);
+      const draft = cloneState(base);
       const result = await operation(draft);
-      this.state = draft;
+      this.commit(serializationKey, base, draft);
       return result;
     } finally {
       release();
-      if (this.locks.get(lockKey) === queued) {
-        this.locks.delete(lockKey);
+      if (this.locks.get(serializationKey) === queued) {
+        this.locks.delete(serializationKey);
       }
     }
   }
 
   snapshot(): RecurringTaskLifecycleState {
     return cloneState(this.state);
+  }
+
+  private commit(
+    serializationKey: string,
+    base: RecurringTaskLifecycleState,
+    draft: RecurringTaskLifecycleState,
+  ): void {
+    const [scope, identifier] = serializationKey.split(":", 2);
+    if (scope === "series" && identifier) {
+      const series = draft.series.get(identifier);
+      if (series && changed(base.series.get(identifier), series)) {
+        this.state.series.set(identifier, series);
+      }
+      this.mergeIdempotencyForSeries(identifier, base, draft);
+      return;
+    }
+    if (scope === "user" && identifier) {
+      for (const [seriesId, series] of draft.series) {
+        if (
+          series.userId === identifier
+          && changed(base.series.get(seriesId), series)
+        ) {
+          this.state.series.set(seriesId, series);
+        }
+      }
+      for (const [key, record] of draft.idempotency) {
+        if (
+          record.result.series.userId === identifier
+          && changed(base.idempotency.get(key), record)
+        ) {
+          this.state.idempotency.set(key, record);
+        }
+      }
+      return;
+    }
+    this.state = draft;
+  }
+
+  private mergeIdempotencyForSeries(
+    seriesId: string,
+    base: RecurringTaskLifecycleState,
+    draft: RecurringTaskLifecycleState,
+  ): void {
+    for (const [key, record] of draft.idempotency) {
+      if (
+        record.result.series.id === seriesId
+        && changed(base.idempotency.get(key), record)
+      ) {
+        this.state.idempotency.set(key, record);
+      }
+    }
   }
 }
 
@@ -248,8 +295,9 @@ export interface InvalidTransitionOutcome {
 export interface ConflictOutcome {
   status: "conflict";
   type: "conflict";
-  expectedRevisionToken: number;
-  actualRevisionToken: number;
+  reason?: string;
+  expectedRevisionToken?: number;
+  actualRevisionToken?: number;
 }
 
 export interface CoverageUnavailableOutcome {
@@ -942,6 +990,10 @@ function cloneState(state: RecurringTaskLifecycleState): RecurringTaskLifecycleS
   };
 }
 
+function changed<T>(before: T | undefined, after: T | undefined): boolean {
+  return JSON.stringify(before) !== JSON.stringify(after);
+}
+
 function cloneSeries(series: RecurringTaskSeries): RecurringTaskSeries {
   return structuredClone(series);
 }
@@ -1389,12 +1441,16 @@ function replayIdempotent(
   userId: string,
   idempotencyKey: string | undefined,
   fingerprint: string,
-): LifecycleSuccess<RecurringTaskSeries> | undefined {
+): LifecycleSuccess<RecurringTaskSeries> | ConflictOutcome | undefined {
   if (!idempotencyKey) return undefined;
   const record = state.idempotency.get(idempotencyMapKey(userId, idempotencyKey));
   if (!record) return undefined;
   if (record.fingerprint !== fingerprint) {
-    throw new Error("Idempotency key was reused for a different request");
+    return {
+      status: "conflict",
+      type: "conflict",
+      reason: "Idempotency key was reused for a different request",
+    };
   }
   return {
     ...structuredClone(record.result),
