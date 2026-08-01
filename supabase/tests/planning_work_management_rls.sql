@@ -1926,6 +1926,12 @@ begin
     '42501',
     'non-owner reminder insert'
   );
+  perform set_config(
+    'request.jwt.claim.sub',
+    '57800000-0000-0000-0000-000000000002',
+    true
+  );
+  perform set_config('request.jwt.claims', '', true);
   begin
     perform public.transition_calendar_event_reminder(
       '57800000-0000-0000-0000-000000000002',
@@ -1935,12 +1941,20 @@ begin
       null
     );
   exception
+    when no_data_found then
+      transition_denied := true;
     when sqlstate 'P0001' then
       transition_denied := true;
   end;
   if not transition_denied then
     raise exception 'calendar reminder owner spoof unexpectedly succeeded';
   end if;
+  perform set_config(
+    'request.jwt.claim.sub',
+    '57800000-0000-0000-0000-000000000001',
+    true
+  );
+  perform set_config('request.jwt.claims', '', true);
   if not exists (
     select 1
     from public.reminders
@@ -2542,6 +2556,7 @@ declare
   cleanup_status text;
   original_error text;
   emergency_error text;
+  advisory_lock_held boolean := false;
 begin
   begin
     perform public.ralph_ci_open_connection('planning-concurrency-setup');
@@ -2580,15 +2595,21 @@ begin
 
     perform public.ralph_ci_open_connection('planning-concurrency-a');
     perform public.ralph_ci_open_connection('planning-concurrency-b');
+    perform pg_advisory_lock(578000578);
+    advisory_lock_held := true;
     perform extensions.dblink_send_query(
       'planning-concurrency-a',
       $query$
-        with request_context as materialized (
+        with gate as materialized (
+          select pg_advisory_xact_lock(578000578)
+        ),
+        request_context as materialized (
           select set_config(
             'request.jwt.claims',
             '{"sub":"57800000-0000-0000-0000-000000009001"}',
             false
           )
+          from gate
         ),
         completed as materialized (
           select public.set_habit_completion_atomically(
@@ -2596,27 +2617,27 @@ begin
             '57800000-0000-0000-0000-000000009001',
             date '2026-08-10',
             true,
-            date '2026-08-10'
+            date '2026-08-11'
           ) outcome
           from request_context
-        ),
-        paused as materialized (
-          select pg_sleep(0.4) from completed
         )
         select completed.outcome
-        from completed cross join paused
+        from completed
       $query$
     );
-    perform pg_sleep(0.1);
     perform extensions.dblink_send_query(
       'planning-concurrency-b',
       $query$
-        with request_context as materialized (
+        with gate as materialized (
+          select pg_advisory_xact_lock(578000578)
+        ),
+        request_context as materialized (
           select set_config(
             'request.jwt.claims',
             '{"sub":"57800000-0000-0000-0000-000000009001"}',
             false
           )
+          from gate
         )
         select public.set_habit_completion_atomically(
           '57800000-0000-0000-0000-000000009001',
@@ -2628,6 +2649,10 @@ begin
         from request_context
       $query$
     );
+    if not pg_advisory_unlock(578000578) then
+      raise exception 'concurrency advisory lock was not held';
+    end if;
+    advisory_lock_held := false;
     select outcome
     into outcome_a
     from extensions.dblink_get_result('planning-concurrency-a')
@@ -2653,7 +2678,10 @@ begin
            and current_streak = 2
            and best_streak = 2
        )
-       or (outcome_b->>'current_streak')::integer <> 2 then
+       or not (
+         ((outcome_a->>'current_streak')::integer = 1 and (outcome_b->>'current_streak')::integer = 2)
+         or ((outcome_a->>'current_streak')::integer = 2 and (outcome_b->>'current_streak')::integer = 1)
+       ) then
       raise exception 'concurrent habit completion writes were not serialized: a=%, b=%',
         outcome_a,
         outcome_b;
@@ -2689,6 +2717,10 @@ begin
   exception
     when others then
       get stacked diagnostics original_error = message_text;
+      if advisory_lock_held then
+        perform pg_advisory_unlock(578000578);
+        advisory_lock_held := false;
+      end if;
       begin
         if extensions.dblink_is_busy('planning-concurrency-setup') then
           perform extensions.dblink_cancel_query('planning-concurrency-setup');
