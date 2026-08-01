@@ -17,9 +17,7 @@ export type HabitFormValues = z.infer<typeof habitFormSchema>;
 
 export const habitUpdateSchema = habitFormSchema
   .partial()
-  .extend({
-    status: z.enum(["active", "paused", "formed"]).optional(),
-  })
+  .strict()
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided",
   });

@@ -2,9 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET, PATCH, DELETE } from '@/app/api/habits/[id]/route';
 import { NextRequest } from 'next/server';
 
-const { mockGetHabit, mockUpdateHabit, mockDeleteHabit } = vi.hoisted(() => ({
+const {
+  mockGetHabit,
+  mockUpdateHabit,
+  mockUpdateHabitMutation,
+  mockToHabitResponse,
+  mockDeleteHabit,
+} = vi.hoisted(() => ({
   mockGetHabit: vi.fn(),
   mockUpdateHabit: vi.fn(),
+  mockUpdateHabitMutation: vi.fn(),
+  mockToHabitResponse: vi.fn(),
   mockDeleteHabit: vi.fn(),
 }));
 
@@ -22,6 +30,11 @@ vi.mock('@/lib/db', () => ({
     updateHabit = mockUpdateHabit;
     deleteHabit = mockDeleteHabit;
   },
+}));
+
+vi.mock('@/lib/habits/writes', () => ({
+  createHabitWrites: vi.fn(() => ({ update: mockUpdateHabitMutation })),
+  toHabitResponse: mockToHabitResponse,
 }));
 
 import { createClient } from '@/lib/supabase/server';
@@ -90,7 +103,16 @@ describe('PATCH /api/habits/[id]', () => {
 
   it('should update habit name', async () => {
     const updated = { ...mockHabit, name: 'Evening Run' };
-    mockUpdateHabit.mockResolvedValue(updated as any);
+    const updatedDomainHabit = {
+      id: 'habit-1',
+      userId: 'user-123',
+      name: 'Evening Run',
+    };
+    mockUpdateHabitMutation.mockResolvedValue({
+      type: 'updated',
+      habit: updatedDomainHabit,
+    });
+    mockToHabitResponse.mockReturnValue(updated);
 
     const request = new NextRequest('http://localhost:3000/api/habits/habit-1', {
       method: 'PATCH',
@@ -101,6 +123,12 @@ describe('PATCH /api/habits/[id]', () => {
 
     expect(response.status).toBe(200);
     expect(data.habit.name).toBe('Evening Run');
+    expect(mockUpdateHabitMutation).toHaveBeenCalledWith({
+      userId: 'user-123',
+      habitId: 'habit-1',
+      name: 'Evening Run',
+    });
+    expect(mockUpdateHabit).not.toHaveBeenCalled();
   });
 
   it('should return 400 for empty name', async () => {
@@ -143,21 +171,54 @@ describe('PATCH /api/habits/[id]', () => {
     expect(response.status).toBe(400);
   });
 
-  it('should set paused_at when status changes to paused', async () => {
-    const paused = { ...mockHabit, status: 'paused' };
-    mockUpdateHabit.mockResolvedValue(paused as any);
-
+  it('does not route lifecycle status changes through the detail update', async () => {
     const request = new NextRequest('http://localhost:3000/api/habits/habit-1', {
       method: 'PATCH',
       body: JSON.stringify({ status: 'paused' }),
     });
-    await PATCH(request, { params });
+    const response = await PATCH(request, { params });
 
-    expect(mockUpdateHabit).toHaveBeenCalledWith(
-      'habit-1',
-      'user-123',
-      expect.objectContaining({ status: 'paused', paused_at: expect.any(String) })
-    );
+    expect(response.status).toBe(400);
+    expect(mockUpdateHabitMutation).not.toHaveBeenCalled();
+  });
+
+  it('maps a domain not-found outcome without exposing ownership', async () => {
+    mockUpdateHabitMutation.mockResolvedValue({ type: 'not-found' });
+
+    const request = new NextRequest('http://localhost:3000/api/habits/habit-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'Private name' }),
+    });
+    const response = await PATCH(request, { params });
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'Habit not found' });
+  });
+
+  it('maps a domain conflict outcome to the HTTP conflict presentation', async () => {
+    mockUpdateHabitMutation.mockResolvedValue({ type: 'conflict' });
+
+    const request = new NextRequest('http://localhost:3000/api/habits/habit-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'Evening Run' }),
+    });
+    const response = await PATCH(request, { params });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Habit update conflict' });
+  });
+
+  it('does not infer a typed outcome from an unexpected error message', async () => {
+    mockUpdateHabitMutation.mockRejectedValue(new Error('not found while updating'));
+
+    const request = new NextRequest('http://localhost:3000/api/habits/habit-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'Evening Run' }),
+    });
+    const response = await PATCH(request, { params });
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: 'Failed to update habit' });
   });
 });
 

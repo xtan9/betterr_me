@@ -532,7 +532,7 @@ describe("HabitDetailContent", () => {
   });
 
   // ── 11. handlePause success ──────────────────────────────────────────────────
-  it("handlePause (active → paused) calls PATCH, shows success toast, mutates", async () => {
+  it("handlePause (active → paused) calls the dedicated pause route, shows success toast, mutates", async () => {
     const { mutateHabit } = setupSWR({ habit: makeHabit({ status: "active" }) });
     vi.stubGlobal(
       "fetch",
@@ -546,10 +546,8 @@ describe("HabitDetailContent", () => {
     );
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(`/api/habits/${HABIT_ID}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "paused" }),
+      expect(global.fetch).toHaveBeenCalledWith(`/api/habits/${HABIT_ID}/pause`, {
+        method: "POST",
       });
     });
 
@@ -558,7 +556,7 @@ describe("HabitDetailContent", () => {
     expect(mockRevalidateSidebarCounts).toHaveBeenCalled();
   });
 
-  it("handlePause (paused → active) sends active status and shows resume toast", async () => {
+  it("handlePause (paused → active) calls the dedicated resume route and shows resume toast", async () => {
     const { mutateHabit } = setupSWR({ habit: makeHabit({ status: "paused" }) });
     vi.stubGlobal(
       "fetch",
@@ -572,10 +570,8 @@ describe("HabitDetailContent", () => {
     );
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(`/api/habits/${HABIT_ID}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "active" }),
+      expect(global.fetch).toHaveBeenCalledWith(`/api/habits/${HABIT_ID}/resume`, {
+        method: "POST",
       });
     });
 

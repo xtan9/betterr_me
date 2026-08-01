@@ -5,7 +5,7 @@ import { HabitsDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { habitUpdateSchema } from '@/lib/validations/habit';
-import type { HabitUpdate } from '@/lib/db/types';
+import { createHabitWrites, toHabitResponse } from '@/lib/habits/writes';
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ['cookie'],
@@ -75,50 +75,43 @@ export async function PATCH(
     const validation = validateRequestBody(body, habitUpdateSchema);
     if (!validation.success) return validation.response;
 
-    // Build update object from validated data
-    const updates: HabitUpdate = {};
+    const updateRequest = {
+      userId,
+      habitId: id,
+      ...(validation.data.name !== undefined
+        ? { name: validation.data.name }
+        : {}),
+      ...(validation.data.description !== undefined
+        ? { description: validation.data.description }
+        : {}),
+      ...(validation.data.category_id !== undefined
+        ? { categoryId: validation.data.category_id }
+        : {}),
+      ...(validation.data.frequency !== undefined
+        ? { frequency: validation.data.frequency }
+        : {}),
+    };
+    const outcome = await createHabitWrites(supabase).update(updateRequest);
 
-    if (validation.data.name !== undefined) {
-      updates.name = validation.data.name.trim();
-    }
-
-    if (validation.data.description !== undefined) {
-      updates.description = validation.data.description?.trim() || null;
-    }
-
-    if (validation.data.category_id !== undefined) {
-      updates.category_id = validation.data.category_id;
-    }
-
-    if (validation.data.frequency !== undefined) {
-      updates.frequency = validation.data.frequency;
-    }
-
-    if (validation.data.status !== undefined) {
-      updates.status = validation.data.status;
-
-      // Set paused_at timestamp when pausing, clear when returning to active.
-      // status === 'formed' intentionally does not touch paused_at — graduation
-      // should go through POST /graduate, which handles state transitions.
-      if (validation.data.status === 'paused') {
-        updates.paused_at = new Date().toISOString();
-      } else if (validation.data.status === 'active') {
-        updates.paused_at = null;
-      }
-    }
-
-    const habitsDB = new HabitsDB(supabase);
-    const habit = await habitsDB.updateHabit(id, userId, updates);
-
-    return NextResponse.json({ habit });
-  } catch (error: unknown) {
-    log.error('PATCH /api/habits/[id] error', error);
-
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes('not found')) {
+    if (outcome.type === 'not-found') {
       return NextResponse.json({ error: 'Habit not found' }, { status: 404 });
     }
+    if (outcome.type === 'conflict') {
+      return NextResponse.json(
+        { error: 'Habit update conflict' },
+        { status: 409 },
+      );
+    }
+    if (outcome.type === 'invalid') {
+      return NextResponse.json(
+        { error: outcome.message, field: outcome.field },
+        { status: 400 },
+      );
+    }
 
+    return NextResponse.json({ habit: toHabitResponse(outcome.habit) });
+  } catch (error: unknown) {
+    log.error('PATCH /api/habits/[id] error', error);
     return NextResponse.json({ error: 'Failed to update habit' }, { status: 500 });
   }
 }
