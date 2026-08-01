@@ -373,19 +373,46 @@ export class RecurringTasksDB {
         throw new Error('Task occurrence not found');
       }
       const completed = updates.is_completed
-        ?? (updates.status === 'done' ? true : undefined);
+        ?? (updates.status === 'done'
+          ? true
+          : updates.status === 'todo'
+            ? false
+            : undefined);
       const occurrenceUpdates = legacyOccurrenceOverrides(updates);
       if (scope === 'this') {
-        requireLifecycleSeries(
-          await this.options.lifecycle.editOccurrence({
-            userId,
-            seriesId,
-            occurrenceId: occurrence.id,
-            timeZone: this.options.timeZone,
-            updates: occurrenceUpdates,
-            completed,
-          }),
-        );
+        const completionOnly = completed !== undefined
+          && Object.keys(updates).every((key) =>
+            key === 'is_completed' || key === 'status' || key === 'completed_at'
+          )
+          && (updates.status === undefined
+            || updates.status === (completed ? 'done' : 'todo'));
+        if (completionOnly) {
+          const result = completed
+            ? await this.options.lifecycle.completeOccurrence({
+              userId,
+              seriesId,
+              occurrenceId: occurrence.id,
+              timeZone: this.options.timeZone,
+            })
+            : await this.options.lifecycle.reopenOccurrence({
+              userId,
+              seriesId,
+              occurrenceId: occurrence.id,
+              timeZone: this.options.timeZone,
+            });
+          requireLifecycleSeries(result);
+        } else {
+          requireLifecycleSeries(
+            await this.options.lifecycle.editOccurrence({
+              userId,
+              seriesId,
+              occurrenceId: occurrence.id,
+              timeZone: this.options.timeZone,
+              updates: occurrenceUpdates,
+              completed,
+            }),
+          );
+        }
         return;
       }
       requireLifecycleSeries(

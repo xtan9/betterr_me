@@ -365,6 +365,46 @@ describe('TaskWrites', () => {
     });
   });
 
+  it('completes a recurring occurrence through the explicit lifecycle command', async () => {
+    const persistence = createPersistence();
+    vi.mocked(persistence.getTask)
+      .mockResolvedValueOnce({
+        id: 'task-1',
+        is_completed: false,
+        recurring_series_id: 'series-1',
+        recurring_occurrence_id: 'occurrence-1',
+      } as never)
+      .mockResolvedValueOnce({
+        id: 'task-1',
+        is_completed: true,
+        status: 'done',
+      } as never);
+    const completeOccurrence = vi.fn().mockResolvedValue({
+      status: 'complete',
+      type: 'complete',
+    });
+    const reopenOccurrence = vi.fn();
+    persistence.lifecycle = { completeOccurrence, reopenOccurrence } as never;
+    const writes = new TaskWrites(persistence);
+
+    const outcome = await writes.execute({
+      type: 'toggle-completion',
+      userId: 'user-1',
+      taskId: 'task-1',
+    });
+
+    expect(completeOccurrence).toHaveBeenCalledWith({
+      userId: 'user-1',
+      seriesId: 'series-1',
+      occurrenceId: 'occurrence-1',
+    });
+    expect(reopenOccurrence).not.toHaveBeenCalled();
+    expect(outcome).toEqual({
+      type: 'toggled',
+      task: { id: 'task-1', is_completed: true, status: 'done' },
+    });
+  });
+
   it('reopens a recurring occurrence through a completion-only task update', async () => {
     const persistence = createPersistence();
     vi.mocked(persistence.getTask)
@@ -379,11 +419,12 @@ describe('TaskWrites', () => {
         is_completed: false,
         status: 'todo',
       } as never);
-    const editOccurrence = vi.fn().mockResolvedValue({
+    const editOccurrence = vi.fn();
+    const reopenOccurrence = vi.fn().mockResolvedValue({
       status: 'complete',
       type: 'complete',
     });
-    persistence.lifecycle = { editOccurrence } as never;
+    persistence.lifecycle = { editOccurrence, reopenOccurrence } as never;
     const writes = new TaskWrites(persistence);
 
     await writes.execute({
@@ -393,12 +434,11 @@ describe('TaskWrites', () => {
       values: { is_completed: false },
     });
 
-    expect(editOccurrence).toHaveBeenCalledWith({
+    expect(reopenOccurrence).toHaveBeenCalledWith({
       userId: 'user-1',
       seriesId: 'series-1',
       occurrenceId: 'occurrence-1',
-      updates: {},
-      completed: false,
     });
+    expect(editOccurrence).not.toHaveBeenCalled();
   });
 });

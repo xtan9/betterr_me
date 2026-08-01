@@ -699,6 +699,50 @@ describe("RecurringTasksDB", () => {
       ]);
     });
 
+    it("scope='this': routes completion-only updates through the complete command", async () => {
+      const { adapter, lifecycle } = makeLifecycleAdapter();
+      const completeSpy = vi.spyOn(adapter, "completeOccurrence");
+      const editSpy = vi.spyOn(adapter, "editOccurrence");
+      const lifecycleDB = new RecurringTasksDB(
+        mockSupabaseClient as unknown as SupabaseClient,
+        { lifecycle: adapter, timeZone: "America/Los_Angeles" },
+      );
+      const created = await lifecycleDB.createRecurringTask({
+        user_id: USER_ID,
+        title: "Scoped task",
+        description: null,
+        priority: 0,
+        category_id: null,
+        due_time: null,
+        recurrence_rule: { frequency: "daily", interval: 1 },
+        start_date: "2026-08-01",
+        end_type: "never",
+        end_date: null,
+        end_count: null,
+        status: "active",
+      }, "2026-08-01");
+      const series = await lifecycle.getSeries(USER_ID, created.id);
+      expect(series.status).toBe("complete");
+      if (series.status !== "complete") return;
+      const occurrence = series.occurrences[0];
+
+      mockSupabaseClient.setMockResponse({
+        recurring_series_id: created.id,
+        recurring_occurrence_id: occurrence.id,
+        scheduled_date: occurrence.scheduledDate,
+      });
+      await lifecycleDB.updateInstanceWithScope(TASK_ID, USER_ID, "this", {
+        is_completed: true,
+      });
+
+      expect(completeSpy).toHaveBeenCalledWith(expect.objectContaining({
+        userId: USER_ID,
+        seriesId: created.id,
+        occurrenceId: occurrence.id,
+      }));
+      expect(editSpy).not.toHaveBeenCalled();
+    });
+
     it("scope='this': throws when the UPDATE errors", async () => {
       mockSupabaseClient.setMockResponse(taskRow);
       queueThenResponses([

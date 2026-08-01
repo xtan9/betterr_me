@@ -303,7 +303,7 @@ describe("RecurringTaskLifecycle revision behavior", () => {
       userId: "user-occurrences",
       seriesId: created.series.id,
       occurrenceId: created.occurrences[0].id,
-    })).status).toBe("invalid-transition");
+    })).status).toBe("already-applied");
 
     const skipped = await lifecycle.skipOccurrence({
       userId: "user-occurrences",
