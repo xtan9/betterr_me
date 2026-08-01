@@ -141,6 +141,7 @@ function broadSelection(reason, changedPaths = []) {
       e2eVisual: true,
       e2eSupabase: true,
       performance: true,
+      architecture: true,
       mutationScopes: MUTATION_SCOPES.map(({ name }) => name),
     },
   });
@@ -259,6 +260,9 @@ function finalize({ changedPaths, ownershipMatches, reasons, fallback, suiteSeed
     e2eVisual: Boolean(suiteSeed.e2eVisual),
     e2eSupabase: Boolean(suiteSeed.e2eSupabase || suiteSeed.e2eFull || e2eSpecs.length),
     performance: Boolean(suiteSeed.performance),
+    // The delivery-write baseline is cheap, deterministic, and protects the
+    // architecture even for documentation-only or migration-only diffs.
+    architecture: suiteSeed.architecture !== false,
     mutation: mutationScopes.length > 0,
     mutationScopes,
   };
@@ -282,6 +286,7 @@ function finalize({ changedPaths, ownershipMatches, reasons, fallback, suiteSeed
   if (!suites.e2eVisual) skipReasons.e2eVisual = "No visual-regression surface changed.";
   if (!suites.e2eSupabase) skipReasons.e2eSupabase = "Selected browser checks do not require Supabase.";
   if (!suites.performance) skipReasons.performance = "No product or performance-sensitive path changed.";
+  if (!suites.architecture) skipReasons.architecture = "This push was already validated by its pull request.";
   if (!suites.mutation) skipReasons.mutation = "No changed path is owned by a mutation-testing scope.";
   const labels = { quality: qualityLabel(suites), e2e: e2eLabel(suites) };
   return { changedPaths, ownershipMatches, suites, labels, reasons, skipReasons, fallback };
@@ -309,7 +314,7 @@ function alreadyValidatedSelection() {
     ownershipMatches: [],
     reasons: ["Push commit was already validated by its pull request."],
     fallback: false,
-    suiteSeed: {},
+    suiteSeed: { architecture: false },
   });
   result.labels.quality = "already validated";
   return result;
@@ -346,6 +351,7 @@ export function formatGitHubOutputs(result, baseSha = "") {
     `e2e_supabase=${suites.e2eSupabase}`,
     `e2e_label=${e2eLabel(suites)}`,
     `performance=${suites.performance}`,
+    `architecture=${suites.architecture}`,
     `mutation=${suites.mutation}`,
     `mutation_scopes=${suites.mutationScopes.join(",")}`,
     `base_sha=${baseSha}`,

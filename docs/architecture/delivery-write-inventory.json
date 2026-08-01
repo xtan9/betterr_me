@@ -1,0 +1,452 @@
+{
+  "schemaVersion": 1,
+  "baseline": {
+    "sourceCommit": "c572bc50f1c6950a08c6589d7ba92c048dfb5545",
+    "reviewedAt": "2026-08-01",
+    "owningTicket": "#635",
+    "policy": "Every write-capable database call from a named HTTP, AI, or operational delivery source is an entry. Query-only persistence access remains allowed. A baseline edit is documented only when this file and its SHA-256 lock change together and the entry names its owning migration ticket."
+  },
+  "entries": [
+    {
+      "id": "app/api/cron/dispatch-reminders/route.ts#RemindersDB.updateReminderStatus",
+      "domain": "Reminder Delivery",
+      "operation": "Dispatcher marks a reminder sent or failed",
+      "channels": ["Operational"],
+      "invariants": [
+        "Only pending reminders selected by the dispatcher may advance",
+        "The source user's reminder row remains isolated by user identity",
+        "A delivery failure is observable without changing source Reminder Configuration"
+      ],
+      "atomicity": "One reminder status update per delivery attempt; retry and stale-attempt policy remain in the operational adapter until #657.",
+      "migrationStatus": "remaining",
+      "owningTicket": "#657",
+      "evidence": "app/api/cron/dispatch-reminders/route.ts calls RemindersDB.updateReminderStatus at four delivery outcome sites."
+    },
+    {
+      "id": "app/api/habits/[id]/dismiss-graduation-nudge/route.ts#HabitsDB.dismissGraduationNudge",
+      "domain": "Habits",
+      "operation": "Dismiss graduation nudge",
+      "channels": ["HTTP"],
+      "invariants": [
+        "The nudge timestamp belongs to the authenticated Habit owner",
+        "Dismissing a nudge must not change Habit lifecycle state or streak facts"
+      ],
+      "atomicity": "Single Habit-row update; no cross-record transaction is required by the current operation.",
+      "migrationStatus": "remaining",
+      "owningTicket": "#632 (follow-up)",
+      "evidence": "app/api/habits/[id]/dismiss-graduation-nudge/route.ts calls HabitsDB.dismissGraduationNudge directly."
+    },
+    {
+      "id": "app/api/reminder-defaults/route.ts#ReminderDefaultsDB.upsertDefault",
+      "domain": "Reminder Configuration",
+      "operation": "Upsert source Reminder Configuration defaults",
+      "channels": ["HTTP"],
+      "invariants": [
+        "Defaults are scoped to the authenticated user and source type",
+        "The user/source uniqueness rule prevents duplicate default intent",
+        "Default channels and relative timing remain valid Reminder Configuration"
+      ],
+      "atomicity": "One database upsert protected by the user/source uniqueness constraint; no source lifecycle transaction currently owns it.",
+      "migrationStatus": "remaining",
+      "owningTicket": "#632 (follow-up)",
+      "evidence": "app/api/reminder-defaults/route.ts calls ReminderDefaultsDB.upsertDefault directly."
+    },
+    {
+      "id": "app/api/reminders/[id]/route.ts#RemindersDB.deleteReminder",
+      "domain": "Reminder Configuration",
+      "operation": "Remove non-task Reminder Configuration",
+      "channels": ["HTTP"],
+      "invariants": [
+        "The reminder belongs to the authenticated user",
+        "Removing source notification intent must not be confused with delivery completion",
+        "Task and calendar-event source ownership must remain with their source authorities"
+      ],
+      "atomicity": "Single reminder-row delete; source lifecycle cleanup is not coordinated by this generic path.",
+      "migrationStatus": "remaining",
+      "owningTicket": "#656",
+      "evidence": "app/api/reminders/[id]/route.ts calls RemindersDB.deleteReminder for the remaining non-task, non-calendar branch."
+    },
+    {
+      "id": "app/api/reminders/[id]/route.ts#RemindersDB.transitionCalendarEventReminder",
+      "domain": "Reminder Delivery",
+      "operation": "HTTP calendar-event Reminder Delivery transition",
+      "channels": ["HTTP"],
+      "invariants": [
+        "Calendar-event Reminder Configuration stays owned by Scheduling",
+        "Only valid sent, failed, snoozed, and pending transitions are accepted",
+        "Snoozing cannot retain a sent timestamp"
+      ],
+      "atomicity": "The transition_calendar_event_reminder RPC is the current single-row transaction boundary; its policy belongs in Reminder Delivery.",
+      "migrationStatus": "remaining",
+      "owningTicket": "#657",
+      "evidence": "app/api/reminders/[id]/route.ts calls RemindersDB.transitionCalendarEventReminder for calendar-event delivery transitions."
+    },
+    {
+      "id": "app/api/reminders/[id]/route.ts#RemindersDB.updateReminder",
+      "domain": "Reminder Delivery",
+      "operation": "HTTP generic Reminder Delivery update",
+      "channels": ["HTTP"],
+      "invariants": [
+        "The reminder belongs to the authenticated user",
+        "Delivery status, fire time, sent time, and channels cannot create an impossible state",
+        "Habit Reminder Configuration fields must move to the Habit authority under #656"
+      ],
+      "atomicity": "Single generic reminder-row update; no shared state machine or source lifecycle transaction currently owns the operation.",
+      "migrationStatus": "remaining",
+      "owningTicket": "#656 / #657",
+      "evidence": "app/api/reminders/[id]/route.ts calls RemindersDB.updateReminder for the generic non-task, non-calendar update branch."
+    },
+    {
+      "id": "app/api/reminders/route.ts#RemindersDB.createReminder",
+      "domain": "Reminder Configuration",
+      "operation": "HTTP Habit Reminder Configuration creation",
+      "channels": ["HTTP"],
+      "invariants": [
+        "The source Habit must be owned by the authenticated user",
+        "Reminder timing and channels must be normalized as one complete intent",
+        "Task and calendar-event configuration must not enter the Habit boundary"
+      ],
+      "atomicity": "Single reminder insert with no Habit-plus-reminder transaction at the generic delivery boundary; migrate through #656.",
+      "migrationStatus": "remaining",
+      "owningTicket": "#656",
+      "evidence": "app/api/reminders/route.ts calls RemindersDB.createReminder after the task branch and stores source_type=habit."
+    },
+    {
+      "id": "app/api/routines/[id]/exercises/[reId]/route.ts#RoutinesDB.removeRoutineExercise",
+      "domain": "Workouts",
+      "operation": "Remove an exercise from a routine",
+      "channels": ["HTTP"],
+      "invariants": [
+        "The routine exercise must belong to a user-owned routine",
+        "Removing an exercise must preserve the remaining routine order and targets"
+      ],
+      "atomicity": "Single routine_exercises delete; ownership and routine-level policy remain in the generic persistence adapter.",
+      "migrationStatus": "remaining",
+      "owningTicket": "#632 (follow-up)",
+      "evidence": "app/api/routines/[id]/exercises/[reId]/route.ts calls RoutinesDB.removeRoutineExercise directly."
+    },
+    {
+      "id": "app/api/routines/[id]/exercises/[reId]/route.ts#RoutinesDB.updateRoutineExercise",
+      "domain": "Workouts",
+      "operation": "Edit routine exercise targets",
+      "channels": ["HTTP"],
+      "invariants": [
+        "Target values must match the exercise's supported fields",
+        "The routine exercise remains attached to its user-owned routine",
+        "Sort order and target defaults remain stable"
+      ],
+      "atomicity": "Single routine_exercises update; no routine/workout mutation authority currently owns the aggregate.",
+      "migrationStatus": "remaining",
+      "owningTicket": "#632 (follow-up)",
+      "evidence": "app/api/routines/[id]/exercises/[reId]/route.ts calls RoutinesDB.updateRoutineExercise directly."
+    },
+    {
+      "id": "app/api/routines/[id]/exercises/route.ts#RoutinesDB.addExerciseToRoutine",
+      "domain": "Workouts",
+      "operation": "Add an exercise to a routine",
+      "channels": ["HTTP"],
+      "invariants": [
+        "The exercise must be valid and the routine must be user-owned",
+        "The next sort order must preserve deterministic routine ordering",
+        "Target and rest defaults must be applied consistently"
+      ],
+      "atomicity": "A max-sort-order read followed by an insert is not atomic at the delivery boundary and can race under concurrent edits.",
+      "migrationStatus": "remaining",
+      "owningTicket": "#632 (follow-up)",
+      "evidence": "app/api/routines/[id]/exercises/route.ts calls RoutinesDB.addExerciseToRoutine directly."
+    },
+    {
+      "id": "app/api/routines/[id]/route.ts#RoutinesDB.deleteRoutine",
+      "domain": "Workouts",
+      "operation": "Delete a routine",
+      "channels": ["HTTP"],
+      "invariants": [
+        "The routine must be user-owned",
+        "Dependent routine exercises must not survive the routine deletion"
+      ],
+      "atomicity": "One routine-row delete relies on database cascade cleanup; the routine authoring behavior is not a shared domain authority.",
+      "migrationStatus": "remaining",
+      "owningTicket": "#632 (follow-up)",
+      "evidence": "app/api/routines/[id]/route.ts calls RoutinesDB.deleteRoutine directly."
+    },
+    {
+      "id": "app/api/routines/[id]/route.ts#RoutinesDB.updateRoutine",
+      "domain": "Workouts",
+      "operation": "Edit routine details",
+      "channels": ["HTTP"],
+      "invariants": [
+        "The routine must be user-owned",
+        "Name and notes normalization must be consistent with routine-to-workout conversion"
+      ],
+      "atomicity": "Single routine-row update; no shared routine aggregate or conversion authority currently owns the operation.",
+      "migrationStatus": "remaining",
+      "owningTicket": "#632 (follow-up)",
+      "evidence": "app/api/routines/[id]/route.ts calls RoutinesDB.updateRoutine directly."
+    },
+    {
+      "id": "app/api/routines/route.ts#RoutinesDB.createRoutine",
+      "domain": "Workouts",
+      "operation": "Create a routine",
+      "channels": ["HTTP"],
+      "invariants": [
+        "The routine is owned by the authenticated user",
+        "Routine identity and defaults remain compatible with routine-to-workout conversion"
+      ],
+      "atomicity": "Single routine-row insert; subsequent routine-exercise writes are separate and not part of this delivery transaction.",
+      "migrationStatus": "remaining",
+      "owningTicket": "#632 (follow-up)",
+      "evidence": "app/api/routines/route.ts calls RoutinesDB.createRoutine directly."
+    },
+    {
+      "id": "lib/ai/tools/reminders.ts#RemindersDB.createReminder",
+      "domain": "Reminder Configuration",
+      "operation": "AI Habit Reminder Configuration creation",
+      "channels": ["AI"],
+      "invariants": [
+        "The trusted AI user owns the source Habit",
+        "AI timing intent maps to the same normalized Habit Reminder Configuration as HTTP",
+        "Task and calendar-event configuration stays out of the Habit branch"
+      ],
+      "atomicity": "Single reminder insert with no Habit-plus-reminder transaction at the generic delivery boundary; migrate through #656.",
+      "migrationStatus": "remaining",
+      "owningTicket": "#656",
+      "evidence": "lib/ai/tools/reminders.ts calls RemindersDB.createReminder in the sourceType=habit branch."
+    },
+    {
+      "id": "lib/ai/tools/reminders.ts#RemindersDB.deleteReminder",
+      "domain": "Reminder Configuration",
+      "operation": "AI remove non-task Reminder Configuration",
+      "channels": ["AI"],
+      "invariants": [
+        "The reminder belongs to the trusted AI user",
+        "Removing Habit notification intent is distinct from marking a delivery sent",
+        "Task and calendar-event source authorities remain responsible for their own configuration"
+      ],
+      "atomicity": "Single reminder-row delete; Habit lifecycle cleanup is not coordinated by this generic path.",
+      "migrationStatus": "remaining",
+      "owningTicket": "#656",
+      "evidence": "lib/ai/tools/reminders.ts calls RemindersDB.deleteReminder for the non-task, non-calendar branch."
+    },
+    {
+      "id": "lib/ai/tools/reminders.ts#RemindersDB.transitionCalendarEventReminder",
+      "domain": "Reminder Delivery",
+      "operation": "AI calendar-event Reminder Delivery transition",
+      "channels": ["AI"],
+      "invariants": [
+        "Calendar-event Reminder Configuration remains owned by Scheduling",
+        "AI snooze and dismissal use the same valid delivery state transitions as HTTP",
+        "Repeated transitions have an explicit typed outcome"
+      ],
+      "atomicity": "The transition_calendar_event_reminder RPC is the current single-row transaction boundary; shared policy belongs in #657.",
+      "migrationStatus": "remaining",
+      "owningTicket": "#657",
+      "evidence": "lib/ai/tools/reminders.ts calls RemindersDB.transitionCalendarEventReminder for calendar-event dismissal or snooze."
+    },
+    {
+      "id": "lib/ai/tools/reminders.ts#RemindersDB.updateReminder",
+      "domain": "Reminder Delivery",
+      "operation": "AI Habit Reminder Delivery snooze",
+      "channels": ["AI"],
+      "invariants": [
+        "The reminder belongs to the trusted AI user",
+        "Snooze changes fire time without falsely marking the reminder sent",
+        "Habit source configuration and delivery state remain separate concepts"
+      ],
+      "atomicity": "Single reminder-row update; delivery state machine and retry behavior remain to be centralized in #657.",
+      "migrationStatus": "remaining",
+      "owningTicket": "#657",
+      "evidence": "lib/ai/tools/reminders.ts calls RemindersDB.updateReminder when an AI user snoozes a non-calendar reminder."
+    },
+    {
+      "id": "lib/ai/tools/reminders.ts#RemindersDB.updateReminderStatus",
+      "domain": "Reminder Delivery",
+      "operation": "AI dismisses a Reminder Delivery",
+      "channels": ["AI"],
+      "invariants": [
+        "The reminder belongs to the trusted AI user",
+        "Dismissal maps to the defined terminal delivery state",
+        "Retries and already-applied transitions remain explicit"
+      ],
+      "atomicity": "Single reminder-row status update; delivery transition policy remains in the generic persistence path until #657.",
+      "migrationStatus": "remaining",
+      "owningTicket": "#657",
+      "evidence": "lib/ai/tools/reminders.ts calls RemindersDB.updateReminderStatus when an AI user dismisses a non-calendar reminder."
+    }
+  ],
+  "priorArt": [
+    {
+      "id": "tasks-task-writes",
+      "domain": "Tasks",
+      "operation": "Task creation, editing, ordering, completion, and status intent",
+      "channels": ["HTTP", "AI"],
+      "invariants": ["Task defaults, ownership, status synchronization, ordering, and recurring delegation"],
+      "atomicity": "Task Writes uses narrow persistence capabilities and transactional recurring lifecycle boundaries where required.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#483 / #493 / #681",
+      "authority": "lib/tasks/writes.ts",
+      "evidence": "HTTP task routes and lib/ai/tools/tasks.ts call createTaskWrites; no qualifying TasksDB write call remains in delivery sources."
+    },
+    {
+      "id": "tasks-task-deletion",
+      "domain": "Tasks",
+      "operation": "Standalone and recurring task deletion",
+      "channels": ["HTTP", "AI"],
+      "invariants": ["Ownership-safe not-found outcomes, recurring scopes, completed-history preservation, and regeneration prevention"],
+      "atomicity": "Recurring deletion scopes commit task, occurrence, and series effects through one database transaction boundary.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#633",
+      "authority": "Task Writes.delete and Task Writes.deleteSeries",
+      "evidence": "app/api/tasks/[id]/route.ts, app/api/recurring-tasks/[id]/route.ts, and lib/ai/tools/tasks.ts route deletion through Task Writes."
+    },
+    {
+      "id": "tasks-recurring-lifecycle",
+      "domain": "Tasks",
+      "operation": "Recurring Task Series creation, revision, coverage, pause/resume, ending, and occurrence actions",
+      "channels": ["HTTP", "AI", "Operational"],
+      "invariants": ["Series identity, Series Revision effective dates, Coverage Horizon, occurrence lineage, and lifecycle state"],
+      "atomicity": "Series mutations use lifecycle transaction boundaries; reads may use focused query adapters after coverage is ensured.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#659 / #681 / #682 / #686 / #687 / #688",
+      "authority": "lib/recurring-tasks/lifecycle.ts and its Supabase adapters",
+      "evidence": "Recurring-task routes, the calendar feed, the recurring-task prewarm job, and AI tools call lifecycle and series/occurrence adapters; direct recurring persistence writes are absent from delivery sources."
+    },
+    {
+      "id": "habits-completion",
+      "domain": "Habits",
+      "operation": "Complete or reverse Habit completion",
+      "channels": ["HTTP", "AI"],
+      "invariants": ["Habit log, streak, schedule, milestone deduplication, and non-critical reaction policy"],
+      "atomicity": "Habit Completion coordinates the core log and streak state through its persistence boundary; milestone reactions are post-commit policy.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#484 / #494",
+      "authority": "lib/habits/completion.ts",
+      "evidence": "app/api/habits/[id]/toggle/route.ts and lib/ai/tools/habits.ts call createHabitCompletion."
+    },
+    {
+      "id": "habits-lifecycle-writes",
+      "domain": "Habits",
+      "operation": "Habit creation, editing, pause/resume, graduation, reactivation, and deletion",
+      "channels": ["HTTP", "AI"],
+      "invariants": ["Habit ownership, lifecycle state transitions, frequency normalization, limits, history, and dependent cleanup"],
+      "atomicity": "Habit Writes uses narrow persistence ports and atomic database functions for lifecycle transitions that coordinate history.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#639 / #640 / #641 / #642 / #643 / #644",
+      "authority": "lib/habits/writes.ts",
+      "evidence": "Habit HTTP routes and lib/ai/tools/habits.ts call createHabitWrites; the remaining nudge endpoint is separately inventoried."
+    },
+    {
+      "id": "workouts-workout-writes",
+      "domain": "Workouts",
+      "operation": "Workout start, active editing, completion, and discard",
+      "channels": ["HTTP", "AI"],
+      "invariants": ["One active session, ownership, exercise/set ordering, supported fields, terminal status, and derived duration"],
+      "atomicity": "Workout Writes delegates coordinated workout, exercise, and set changes to atomic RPC boundaries where required.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#645 / #646 / #647",
+      "authority": "lib/fitness/writes.ts",
+      "evidence": "Workout HTTP routes and lib/ai/tools/workouts.ts call createWorkoutWrites; no qualifying WorkoutsDB write call remains in delivery sources."
+    },
+    {
+      "id": "workouts-routine-conversion",
+      "domain": "Workouts",
+      "operation": "Routine-to-workout start and workout-to-routine save",
+      "channels": ["HTTP", "AI"],
+      "invariants": ["Exercise order, target mapping, supported set types, ownership, and no partial conversion"],
+      "atomicity": "The conversion store owns the multi-row routine/workout transaction boundary.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#485 / #495",
+      "authority": "lib/fitness/routine-workout-conversion.ts and lib/fitness/routine-workout-requests.ts",
+      "evidence": "app/api/routines/[id]/start/route.ts and app/api/workouts/[id]/save-as-routine/route.ts use shared conversion authorities."
+    },
+    {
+      "id": "journals-journal-writes",
+      "domain": "Journals",
+      "operation": "Journal save, link/unlink, and deletion",
+      "channels": ["HTTP", "AI"],
+      "invariants": ["Entry ownership, date uniqueness, link target ownership, and dependent-link cleanup"],
+      "atomicity": "Journal Writes owns the required entry/link transaction boundaries.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#648 / #649 / #650",
+      "authority": "lib/journal/writes.ts",
+      "evidence": "Journal HTTP routes and lib/ai/tools/journal.ts call createJournalWrites; JournalEntriesDB use in delivery remains query-only."
+    },
+    {
+      "id": "projects-project-writes",
+      "domain": "Projects",
+      "operation": "Project creation, changes/archival, and deletion",
+      "channels": ["HTTP", "AI"],
+      "invariants": ["Project ownership, normalization, status transitions, sort order, and dependent Task unassignment"],
+      "atomicity": "Project Writes owns project and dependent-task changes through the persistence boundary.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#651 / #652 / #653",
+      "authority": "lib/projects/writes.ts",
+      "evidence": "Project HTTP routes and lib/ai/tools/projects.ts call createProjectWrites; ProjectsDB writes are absent from delivery sources."
+    },
+    {
+      "id": "scheduling-scheduling-lifecycle",
+      "domain": "Scheduling",
+      "operation": "Calendar event create, update, delete, and linked calendar Reminder Configuration",
+      "channels": ["HTTP", "AI"],
+      "invariants": ["Event ownership, recurrence, linked reminder reconciliation, and no orphaned Reminder Configuration"],
+      "atomicity": "Scheduling Lifecycle commits event and linked reminder changes as one lifecycle operation.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#481 / #491 / #499",
+      "authority": "lib/scheduling/lifecycle.ts",
+      "evidence": "Calendar HTTP and AI adapters call SchedulingLifecycle for update/delete and use its write boundary for linked reminders."
+    },
+    {
+      "id": "scheduling-scheduling-writes",
+      "domain": "Scheduling",
+      "operation": "Calendar event creation parity",
+      "channels": ["HTTP", "AI"],
+      "invariants": ["Event normalization, recurrence, category ownership, and linked Reminder Configuration creation"],
+      "atomicity": "Scheduling Writes delegates event-plus-reminder creation to the Scheduling persistence transaction boundary.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#654",
+      "authority": "lib/scheduling/writes.ts",
+      "evidence": "app/api/calendar-events/route.ts and lib/ai/tools/calendar.ts call createSchedulingWrites for creation."
+    },
+    {
+      "id": "reminders-task-configuration",
+      "domain": "Reminder Configuration",
+      "operation": "Task Reminder Configuration create, replace, and removal",
+      "channels": ["HTTP", "AI"],
+      "invariants": ["Task ownership, relative/absolute timing, channel normalization, and source-lifecycle consistency"],
+      "atomicity": "Task Writes commits the task-owned Reminder Configuration through its database function boundary.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#655",
+      "authority": "Task Writes.configureReminders",
+      "evidence": "Task reminder HTTP and AI adapters call createTaskWrites(...).configureReminders; generic task reminder writes are absent."
+    }
+  ],
+  "excluded": [
+    {
+      "id": "documented-query-only-persistence-access",
+      "paths": [
+        "app/api/calendar-events/[id]/route.ts",
+        "app/api/calendar/feed/route.ts",
+        "app/api/journal/[id]/links/route.ts",
+        "lib/ai/tools/calendar.ts",
+        "lib/ai/tools/habits.ts",
+        "lib/ai/tools/journal.ts",
+        "lib/ai/tools/tasks.ts"
+      ],
+      "reason": "These delivery sources have only direct query access for ownership checks or projections; any lifecycle side effects use an already-migrated authority, and the scanner does not classify get/list/select access as a write bypass."
+    },
+    {
+      "id": "non-domain-delivery-writes",
+      "paths": [
+        "app/api/categories/route.ts",
+        "app/api/categories/[id]/route.ts",
+        "app/api/email/unsubscribe/route.ts",
+        "app/api/exercises/route.ts",
+        "app/api/exercises/[id]/route.ts",
+        "app/api/preferences/notifications/route.ts",
+        "app/api/push/subscribe/route.ts",
+        "app/api/push/unsubscribe/route.ts",
+        "lib/push/send.ts"
+      ],
+      "reason": "These writes belong to categories, exercise catalog, push-subscription, or profile-preference ownership and are outside the eight-domain migration inventory."
+    }
+  ]
+}
