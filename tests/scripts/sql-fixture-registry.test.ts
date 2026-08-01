@@ -76,6 +76,12 @@ describe("SQL fixture registry", () => {
         role: "constrained",
         cleanup: "self-cleaning",
       },
+      {
+        path: "project_deletion_lifecycle.sql",
+        domain: "projects",
+        role: "constrained",
+        cleanup: "self-cleaning",
+      },
     ]);
     expect(validateSqlFixtureRegistry(process.cwd(), registry)).toEqual([]);
   });

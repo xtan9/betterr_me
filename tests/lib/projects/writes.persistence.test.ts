@@ -287,3 +287,67 @@ describe("SupabaseProjectMutationPersistence project updates", () => {
     ).rejects.toThrow("Invalid project update outcome returned by the database");
   });
 });
+
+describe("SupabaseProjectMutationPersistence project deletion", () => {
+  const rpc = vi.fn();
+  let persistence: SupabaseProjectMutationPersistence;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    persistence = new SupabaseProjectMutationPersistence({ rpc } as never);
+  });
+
+  it("uses one atomic owner-scoped RPC and maps a deleted outcome", async () => {
+    rpc.mockResolvedValue({ data: { type: "deleted" }, error: null });
+
+    await expect(
+      persistence.deleteProject({
+        userId: "trusted-user",
+        projectId: "project-1",
+      }),
+    ).resolves.toEqual({ type: "deleted" });
+    expect(rpc).toHaveBeenCalledWith("delete_project_atomically", {
+      p_project_id: "project-1",
+      p_user_id: "trusted-user",
+    });
+  });
+
+  it.each(["missing", "repeated", "cross-owner"] as const)(
+    "maps the same not-found database outcome for %s requests",
+    async () => {
+      rpc.mockResolvedValue({ data: { type: "not-found" }, error: null });
+
+      await expect(
+        persistence.deleteProject({
+          userId: "trusted-user",
+          projectId: "project-1",
+        }),
+      ).resolves.toEqual({ type: "not-found" });
+      expect(rpc).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("propagates an atomic RPC failure without compensating writes", async () => {
+    const persistenceError = new Error("deletion transaction failed");
+    rpc.mockResolvedValue({ data: null, error: persistenceError });
+
+    await expect(
+      persistence.deleteProject({
+        userId: "trusted-user",
+        projectId: "project-1",
+      }),
+    ).rejects.toBe(persistenceError);
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects malformed database outcomes", async () => {
+    rpc.mockResolvedValue({ data: { type: "unexpected" }, error: null });
+
+    await expect(
+      persistence.deleteProject({
+        userId: "trusted-user",
+        projectId: "project-1",
+      }),
+    ).rejects.toThrow("Invalid project deletion outcome returned by the database");
+  });
+});

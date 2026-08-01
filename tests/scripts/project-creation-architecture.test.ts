@@ -47,6 +47,23 @@ describe("Project mutation architecture boundaries", () => {
     expect(update).not.toMatch(/new ProjectsDB|\.updateProject\(/);
   });
 
+  it("routes HTTP project deletion through ProjectWrites without a persistence bypass", () => {
+    const route = source("app/api/projects/[id]/route.ts");
+    const deletion = section(route, "export async function DELETE", "\n}");
+
+    expect(deletion).toContain("createProjectWrites(supabase).delete");
+    expect(deletion).not.toMatch(/new ProjectsDB|\.deleteProject\(/);
+  });
+
+  it("routes AI project deletion through the same ProjectWrites boundary", () => {
+    const tools = source("lib/ai/tools/projects.ts");
+    const deletion = section(tools, 'name: "deleteProject"', "    },\n  ];");
+
+    expect(deletion).toContain("createProjectWrites(ctx.supabase).delete");
+    expect(deletion).toContain("Always confirm with the user first");
+    expect(deletion).not.toMatch(/new ProjectsDB|\.deleteProject\(/);
+  });
+
   it("removes project creation from the generic database write inventory", () => {
     const projectsDb = source("lib/db/projects.ts");
 
@@ -60,6 +77,12 @@ describe("Project mutation architecture boundaries", () => {
     expect(projectsDb).not.toMatch(/async updateProject\s*\(/);
     expect(projectsDb).not.toMatch(/async archiveProject\s*\(/);
     expect(source("lib/db/types.ts")).not.toContain("ProjectUpdate");
+  });
+
+  it("removes project deletion from the generic database write inventory", () => {
+    const projectsDb = source("lib/db/projects.ts");
+
+    expect(projectsDb).not.toMatch(/async deleteProject\s*\(/);
   });
 
   it("keeps the creation request storage-independent", () => {
@@ -87,5 +110,18 @@ describe("Project mutation architecture boundaries", () => {
     expect(request).toContain("userId");
     expect(request).toContain("projectId");
     expect(request).toContain("sortOrder");
+  });
+
+  it("keeps the deletion request storage-independent", () => {
+    const writes = source("lib/projects/writes.ts");
+    const requestStart = writes.indexOf("export interface ProjectDeletionRequest");
+    const requestEnd = writes.indexOf("}\n", requestStart) + 2;
+    const request = writes.slice(requestStart, requestEnd);
+
+    expect(request).not.toContain("Supabase");
+    expect(request).not.toContain("user_id");
+    expect(request).not.toContain("project_id");
+    expect(request).toContain("userId");
+    expect(request).toContain("projectId");
   });
 });

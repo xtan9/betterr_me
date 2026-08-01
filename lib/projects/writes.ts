@@ -96,11 +96,29 @@ export interface ProjectUpdatePersistence {
   ): Promise<ProjectUpdatePersistenceOutcome>;
 }
 
+export interface ProjectDeletionRequest {
+  userId: string;
+  projectId: string;
+}
+
+export type ProjectDeletionPersistenceOutcome =
+  | { type: "deleted" }
+  | { type: "not-found" };
+
+export interface ProjectDeletionPersistence {
+  deleteProject(
+    request: ProjectDeletionRequest,
+  ): Promise<ProjectDeletionPersistenceOutcome>;
+}
+
 export type ProjectMutationPersistence = Partial<
-  ProjectCreationPersistence & ProjectUpdatePersistence
+  ProjectCreationPersistence &
+    ProjectUpdatePersistence &
+    ProjectDeletionPersistence
 >;
 
 export type ProjectUpdateOutcome = ProjectUpdatePersistenceOutcome;
+export type ProjectDeletionOutcome = ProjectDeletionPersistenceOutcome;
 
 type NormalizedRequest =
   | { ok: true; record: ProjectCreationRecord }
@@ -392,6 +410,16 @@ export class ProjectWrites {
       normalized.changes,
     );
   }
+
+  async delete(
+    request: ProjectDeletionRequest,
+  ): Promise<ProjectDeletionOutcome> {
+    if (!this.persistence.deleteProject) {
+      throw new Error("Project deletion persistence is not configured");
+    }
+
+    return this.persistence.deleteProject(request);
+  }
 }
 
 export class SupabaseProjectMutationPersistence
@@ -440,6 +468,21 @@ export class SupabaseProjectMutationPersistence
       throw error;
     }
     return mapStoredProjectUpdateOutcome(data);
+  }
+
+  async deleteProject(
+    request: ProjectDeletionRequest,
+  ): Promise<ProjectDeletionPersistenceOutcome> {
+    const { data, error } = await this.supabase.rpc(
+      "delete_project_atomically",
+      {
+        p_project_id: request.projectId,
+        p_user_id: request.userId,
+      },
+    );
+
+    if (error) throw error;
+    return mapStoredProjectDeletionOutcome(data);
   }
 }
 
@@ -569,6 +612,20 @@ function mapStoredProjectUpdateOutcome(
   }
 
   throw new Error("Invalid project update outcome returned by the database");
+}
+
+function mapStoredProjectDeletionOutcome(
+  value: unknown,
+): ProjectDeletionPersistenceOutcome {
+  if (!isRecord(value) || typeof value.type !== "string") {
+    throw new Error("Invalid project deletion outcome returned by the database");
+  }
+
+  if (value.type === "deleted" || value.type === "not-found") {
+    return { type: value.type };
+  }
+
+  throw new Error("Invalid project deletion outcome returned by the database");
 }
 
 export function createProjectWrites(supabase: SupabaseClient): ProjectWrites {

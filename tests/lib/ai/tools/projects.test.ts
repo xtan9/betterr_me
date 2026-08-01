@@ -7,14 +7,13 @@ const mockGetProject = vi.fn();
 const mockCreateProject = vi.fn();
 const mockProjectCreate = vi.fn();
 const mockProjectUpdate = vi.fn();
-const mockDeleteProject = vi.fn();
+const mockProjectDelete = vi.fn();
 
 vi.mock("@/lib/db", () => ({
   ProjectsDB: class {
     getUserProjects = mockGetUserProjects;
     getProject = mockGetProject;
     createProject = mockCreateProject;
-    deleteProject = mockDeleteProject;
   },
 }));
 
@@ -22,6 +21,7 @@ vi.mock("@/lib/projects/writes", () => ({
   createProjectWrites: vi.fn(() => ({
     create: mockProjectCreate,
     update: mockProjectUpdate,
+    delete: mockProjectDelete,
   })),
   toProjectResponse: vi.fn((project) => project),
 }));
@@ -159,27 +159,53 @@ describe("projectTools", () => {
     ).resolves.toEqual(project);
   });
 
-  it("deleteProject verifies existence then deletes", async () => {
+  it("deleteProject delegates to the mutation command and preserves confirmation", async () => {
     const ctx = makeCtx();
-    mockGetProject.mockResolvedValue({ id: "p1" });
-    mockDeleteProject.mockResolvedValue(undefined);
+    mockProjectDelete.mockResolvedValue({ type: "deleted" });
+    const tool = findTool("deleteProject");
     const result = await findTool("deleteProject").execute(
       { projectId: "p1" },
       ctx,
     );
-    expect(mockGetProject).toHaveBeenCalledWith("p1", "user-123");
-    expect(mockDeleteProject).toHaveBeenCalledWith("p1", "user-123");
+    expect(tool.description).toContain("Always confirm with the user first");
+    expect(mockProjectDelete).toHaveBeenCalledWith({
+      projectId: "p1",
+      userId: "user-123",
+    });
+    expect(mockGetProject).not.toHaveBeenCalled();
     expect(result).toEqual({ success: true });
   });
 
-  it("deleteProject returns error when not found", async () => {
-    const ctx = makeCtx();
-    mockGetProject.mockResolvedValue(null);
+  it.each(["missing", "repeated", "cross-owner"] as const)(
+    "deleteProject maps the mutation not-found outcome for %s requests",
+    async () => {
+      mockProjectDelete.mockResolvedValue({ type: "not-found" });
+      const result = await findTool("deleteProject").execute(
+        { projectId: "p999" },
+        makeCtx(),
+      );
+      expect(result).toEqual({ error: "Project not found" });
+    },
+  );
+
+  it("deleteProject propagates unexpected mutation failures", async () => {
+    const persistenceError = new Error("database unavailable");
+    mockProjectDelete.mockRejectedValue(persistenceError);
+
+    await expect(
+      findTool("deleteProject").execute({ projectId: "p1" }, makeCtx()),
+    ).rejects.toBe(persistenceError);
+  });
+
+  it("does not query the generic Projects DB for deletion", async () => {
+    mockProjectDelete.mockResolvedValue({ type: "not-found" });
+
     const result = await findTool("deleteProject").execute(
       { projectId: "p999" },
-      ctx,
+      makeCtx(),
     );
+
     expect(result).toEqual({ error: "Project not found" });
-    expect(mockDeleteProject).not.toHaveBeenCalled();
+    expect(mockGetProject).not.toHaveBeenCalled();
   });
 });

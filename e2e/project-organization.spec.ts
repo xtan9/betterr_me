@@ -37,6 +37,16 @@ async function readTask(request: APIRequestContext, taskId: string): Promise<Tas
   return body.task;
 }
 
+async function expectProjectCleanup(response: APIResponse): Promise<void> {
+  const body = await response.text();
+  if (response.status() === 404) {
+    expect(JSON.parse(body)).toEqual({ error: 'Project not found' });
+    return;
+  }
+
+  expect(response.ok(), body).toBe(true);
+}
+
 function kanbanColumn(page: Page, name: 'To Do' | 'In Progress') {
   return page.getByRole('heading', { name }).locator('../..');
 }
@@ -138,12 +148,13 @@ test('moves a run-owned task, persists its placement, and preserves it after pro
       status: 'in_progress',
     });
   } finally {
-    const cleanupResponses = await Promise.all([
+    const [taskCleanupResponse, projectCleanupResponse] = await Promise.all([
       task ? page.request.delete(`/api/tasks/${task.id}`) : undefined,
       project ? page.request.delete(`/api/projects/${project.id}`) : undefined,
     ]);
-    for (const response of cleanupResponses) {
-      if (response) expect(response.ok(), await response.text()).toBe(true);
+    if (taskCleanupResponse) {
+      expect(taskCleanupResponse.ok(), await taskCleanupResponse.text()).toBe(true);
     }
+    if (projectCleanupResponse) await expectProjectCleanup(projectCleanupResponse);
   }
 });

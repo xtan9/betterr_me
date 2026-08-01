@@ -49,17 +49,4 @@ export class ProjectsDB {
 
     return data;
   }
-
-  /**
-   * Delete a project. Tasks with this project_id get SET NULL via FK constraint.
-   */
-  async deleteProject(projectId: string, userId: string): Promise<void> {
-    const { error } = await this.supabase
-      .from('projects')
-      .delete()
-      .eq('id', projectId)
-      .eq('user_id', userId);
-
-    if (error) throw error;
-  }
 }

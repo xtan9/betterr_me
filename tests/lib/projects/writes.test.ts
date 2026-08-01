@@ -4,6 +4,8 @@ import {
   toProjectResponse,
   type ProjectCreationPersistence,
   type ProjectCreationPersistenceOutcome,
+  type ProjectDeletionPersistence,
+  type ProjectDeletionPersistenceOutcome,
   type ProjectUpdatePersistence,
   type ProjectUpdatePersistenceOutcome,
   type ProjectMutationRecord,
@@ -40,6 +42,14 @@ function updatePersistence(
 ): ProjectUpdatePersistence {
   return {
     updateProject: vi.fn().mockResolvedValue(outcome),
+  };
+}
+
+function deletionPersistence(
+  outcome: ProjectDeletionPersistenceOutcome = { type: "deleted" },
+): ProjectDeletionPersistence {
+  return {
+    deleteProject: vi.fn().mockResolvedValue(outcome),
   };
 }
 
@@ -287,6 +297,55 @@ describe("ProjectWrites.update", () => {
         name: "Renamed",
       }),
     ).rejects.toThrow("Project updates are not supported by this persistence");
+  });
+});
+
+describe("ProjectWrites.delete", () => {
+  it("returns deleted through the typed owner-scoped persistence seam", async () => {
+    const persistence = deletionPersistence();
+    const writes = new ProjectWrites(persistence);
+
+    await expect(
+      writes.delete({ userId: "trusted-user", projectId: "project-1" }),
+    ).resolves.toEqual({ type: "deleted" });
+    expect(persistence.deleteProject).toHaveBeenCalledWith({
+      userId: "trusted-user",
+      projectId: "project-1",
+    });
+  });
+
+  it.each(["missing", "repeated", "cross-owner"] as const)(
+    "returns the same not-found outcome for %s requests",
+    async () => {
+      const persistence = deletionPersistence({ type: "not-found" });
+      const writes = new ProjectWrites(persistence);
+
+      await expect(
+        writes.delete({ userId: "trusted-user", projectId: "project-1" }),
+      ).resolves.toEqual({ type: "not-found" });
+    },
+  );
+
+  it("propagates an unexpected deletion persistence failure", async () => {
+    const persistenceError = new Error("deletion transaction unavailable");
+    const persistence: ProjectDeletionPersistence = {
+      deleteProject: vi.fn().mockRejectedValue(persistenceError),
+    };
+
+    await expect(
+      new ProjectWrites(persistence).delete({
+        userId: "trusted-user",
+        projectId: "project-1",
+      }),
+    ).rejects.toBe(persistenceError);
+  });
+
+  it("rejects deletion when the persistence adapter has no deletion seam", async () => {
+    const writes = new ProjectWrites({});
+
+    await expect(
+      writes.delete({ userId: "trusted-user", projectId: "project-1" }),
+    ).rejects.toThrow("Project deletion persistence is not configured");
   });
 });
 

@@ -122,10 +122,13 @@ export function projectTools(): ToolDefinition[] {
         projectId: z.string().describe("The project ID"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new ProjectsDB(ctx.supabase);
-        const project = await db.getProject(params.projectId, ctx.userId);
-        if (!project) return { error: "Project not found" };
-        await db.deleteProject(params.projectId, ctx.userId);
+        const outcome = await createProjectWrites(ctx.supabase).delete({
+          projectId: params.projectId,
+          userId: ctx.userId,
+        });
+        if (outcome.type === "not-found") {
+          return { error: "Project not found" };
+        }
         return { success: true };
       },
     },

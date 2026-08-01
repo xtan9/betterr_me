@@ -212,34 +212,4 @@ describe("ProjectsDB", () => {
     });
   });
 
-  // ─── deleteProject ────────────────────────────────────────────────────────
-  describe("deleteProject", () => {
-    it("deletes by (id, user_id) with full query chain", async () => {
-      queueThenResponses([{ data: null, error: null }]);
-
-      await db.deleteProject(PROJECT_ID, USER_ID);
-
-      expect(mockSupabaseClient.queryLog).toEqual([
-        { table: "projects", method: "from", args: ["projects"] },
-        { table: "projects", method: "delete", args: [] },
-        {
-          table: "projects",
-          method: "eq",
-          args: ["id", PROJECT_ID],
-        },
-        {
-          table: "projects",
-          method: "eq",
-          args: ["user_id", USER_ID],
-        },
-      ]);
-    });
-
-    it("throws when the delete errors", async () => {
-      const err = { message: "FK constraint" };
-      queueThenResponses([{ data: null, error: err }]);
-
-      await expect(db.deleteProject(PROJECT_ID, USER_ID)).rejects.toEqual(err);
-    });
-  });
 });
