@@ -47,4 +47,31 @@ describe("SupabaseRecurringTaskLifecycle", () => {
       }),
     ).rejects.toThrow("transaction unavailable");
   });
+
+  it("routes one-occurrence field edits through the lifecycle RPC without rewriting lineage", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: { status: "complete", type: "complete" },
+      error: null,
+    });
+    const lifecycle = new SupabaseRecurringTaskLifecycle({ rpc } as never);
+    const request = {
+      userId: "user-1",
+      seriesId: "series-1",
+      occurrenceId: "occurrence-1",
+      expectedRevisionToken: 7,
+      updates: {
+        dueDate: null,
+        dueTime: "10:30",
+        description: null,
+      },
+      idempotencyKey: "edit-occurrence-1",
+    };
+
+    await lifecycle.editOccurrence(request);
+
+    expect(rpc).toHaveBeenCalledWith("recurring_task_lifecycle", {
+      p_operation: "edit-occurrence",
+      p_request: request,
+    });
+  });
 });
