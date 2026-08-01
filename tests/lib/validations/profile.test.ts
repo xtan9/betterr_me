@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { profileFormSchema } from '@/lib/validations/profile';
+import {
+  profileDetailsFormSchema,
+  profileFormSchema,
+} from '@/lib/validations/profile';
 
 describe('profileFormSchema', () => {
   it('accepts valid full_name and avatar_url', () => {
@@ -61,5 +64,22 @@ describe('profileFormSchema', () => {
   it('accepts both fields missing', () => {
     const result = profileFormSchema.safeParse({});
     expect(result.success).toBe(true);
+  });
+});
+
+describe('profileDetailsFormSchema', () => {
+  it('keeps the browser Profile Details contract in domain casing', () => {
+    expect(
+      profileDetailsFormSchema.safeParse({
+        fullName: 'John Doe',
+        avatarUrl: 'https://example.com/avatar.jpg',
+      }).success,
+    ).toBe(true);
+    expect(
+      profileDetailsFormSchema.safeParse({
+        full_name: 'John Doe',
+        avatar_url: 'https://example.com/avatar.jpg',
+      }).success,
+    ).toBe(false);
   });
 });

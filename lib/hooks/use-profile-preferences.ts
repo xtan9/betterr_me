@@ -33,6 +33,29 @@ export type DomainPreferenceState<Value> =
   | { status: "pending"; value: Value }
   | PreferenceState<Value>;
 
+type DomainProfileState = Pick<
+  UseCurrentProfileCommandsResult,
+  | "currentProfile"
+  | "error"
+  | "status"
+  | "unavailableReason"
+  | "isAuthenticated"
+  | "isLoading"
+>;
+
+function domainProfileState(
+  commands: UseCurrentProfileCommandsResult,
+): DomainProfileState {
+  return {
+    currentProfile: commands.currentProfile,
+    error: commands.error,
+    status: commands.status,
+    unavailableReason: commands.unavailableReason,
+    isAuthenticated: commands.isAuthenticated,
+    isLoading: commands.isLoading,
+  };
+}
+
 function pendingIntent<T>(
   commands: UseCurrentProfileCommandsResult,
   concept: string,
@@ -64,7 +87,7 @@ export function useAppearancePreference(options?: UseCurrentProfileOptions) {
   );
 
   return {
-    ...commands,
+    ...domainProfileState(commands),
     theme,
     acceptedTheme: accepted,
     selectTheme,
@@ -88,7 +111,7 @@ export function useLocalizationPreference(options?: UseCurrentProfileOptions) {
   );
 
   return {
-    ...commands,
+    ...domainProfileState(commands),
     weekStart,
     acceptedWeekStart: accepted,
     setWeekStart,
@@ -112,7 +135,7 @@ export function useFitnessPreference(options?: UseCurrentProfileOptions) {
   );
 
   return {
-    ...commands,
+    ...domainProfileState(commands),
     weightUnit,
     acceptedWeightUnit: accepted,
     setWeightUnit,
@@ -160,7 +183,7 @@ export function useNotificationPreferences(options?: UseCurrentProfileOptions) {
   );
 
   return {
-    ...commands,
+    ...domainProfileState(commands),
     reminderEmail,
     pushQuietWindow,
     setReminderEmail,
@@ -184,7 +207,7 @@ export function useProfileDetails(options?: UseCurrentProfileOptions) {
     [runCommand],
   );
 
-  return { ...commands, details, updateProfileDetails };
+  return { ...domainProfileState(commands), details, updateProfileDetails };
 }
 
 export function useUserTimeZone(options?: UseCurrentProfileOptions) {
@@ -204,7 +227,7 @@ export function useUserTimeZone(options?: UseCurrentProfileOptions) {
     [runCommand],
   );
 
-  return { ...commands, timeZone, setUserTimeZone };
+  return { ...domainProfileState(commands), timeZone, setUserTimeZone };
 }
 
 export type {

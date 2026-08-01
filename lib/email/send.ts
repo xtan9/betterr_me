@@ -5,7 +5,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { NotificationsDB } from '@/lib/db/notifications';
 import type { ReminderSourceType } from '@/lib/db/types';
 import { log } from '@/lib/logger';
-import { decodeNotificationPreferences } from '@/lib/preferences/owners';
 
 // Action URL map per source type
 const ACTION_URLS: Record<ReminderSourceType, (date?: string) => string> = {
@@ -33,25 +32,23 @@ export async function sendReminderEmail(
   payload: ReminderEmailPayload,
 ): Promise<SendReminderEmailResult> {
   try {
-    // Look up user profile (use admin client to bypass RLS since this runs from cron)
+    // Read Notifications-owned state through the admin client because this runs from cron.
     const supabase = createAdminClient();
     const notificationsDB = new NotificationsDB(supabase);
-    const projection = await notificationsDB.getNotificationPreferenceProjection(userId);
-
-    if (!projection) {
-      return { success: false, error: 'Profile not found' };
-    }
 
     const {
       data: { user },
     } = await supabase.auth.admin.getUserById(userId);
     const identityEmail =
       user?.email && user.email_confirmed_at ? user.email : null;
-    const emailPreference = decodeNotificationPreferences(
-      projection.preferences,
+    const emailPreference = await notificationsDB.getReminderEmailPreference(
+      userId,
       identityEmail,
-      projection.timezone,
-    ).reminderEmail;
+    );
+
+    if (!emailPreference) {
+      return { success: false, error: 'Profile not found' };
+    }
 
     if (emailPreference.status !== 'ready' || !emailPreference.value.enabled) {
       return { success: true, skipped: true };

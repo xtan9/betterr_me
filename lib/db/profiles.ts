@@ -15,9 +15,7 @@ import type {
 } from '@/lib/preferences/commands';
 import type {
   PreferenceStorage,
-  WeightUnitPreference,
 } from '@/lib/preferences/types';
-import { isWeightUnitPreference } from '@/lib/preferences/owners';
 
 export class ProfilesDB {
   constructor(private supabase: SupabaseClient) {}
@@ -69,22 +67,6 @@ export class ProfilesDB {
       preferences: data.preferences as PreferenceStorage,
       preference_revision: data.preference_revision,
     };
-  }
-
-  async getFitnessWeightUnitPreference(
-    userId: string,
-  ): Promise<WeightUnitPreference | null> {
-    const { data, error } = await this.supabase
-      .from('profiles')
-      .select('weight_unit:preferences->>weight_unit')
-      .eq('id', userId)
-      .maybeSingle();
-    if (error) {
-      if (error.code === 'PGRST116') return null;
-      throw error;
-    }
-    const value = (data as { weight_unit?: unknown } | null)?.weight_unit;
-    return isWeightUnitPreference(value) ? value : null;
   }
 
   async getUserTimeZone(userId: string): Promise<string | null> {

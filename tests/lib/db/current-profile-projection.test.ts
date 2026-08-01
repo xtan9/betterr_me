@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ProfilesDB } from "@/lib/db/profiles";
+import { FitnessDB } from "@/lib/db/fitness";
 import { LocalizationDB } from "@/lib/db/localization";
 import { mockSupabaseClient } from "../../setup";
 import { restoreMockSupabaseThen } from "../../helpers/mock-supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-describe("ProfilesDB Current Profile projection", () => {
+describe("Profile owner readers and Current Profile projection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSupabaseClient.setMockResponse({
@@ -46,10 +47,10 @@ describe("ProfilesDB Current Profile projection", () => {
   });
 
   it("exposes a narrow Fitness owner reader without selecting a profile row", async () => {
-    const db = new ProfilesDB(mockSupabaseClient as unknown as SupabaseClient);
+    const db = new FitnessDB(mockSupabaseClient as unknown as SupabaseClient);
     mockSupabaseClient.setMockResponse({ weight_unit: "lbs" });
     await expect(
-      db.getFitnessWeightUnitPreference("user-123"),
+      db.getWeightUnitPreference("user-123"),
     ).resolves.toBe("lbs");
     expect(mockSupabaseClient.queryLog.findLast((entry) => entry.method === "select")?.args[0]).toBe(
       "weight_unit:preferences->>weight_unit",
@@ -57,7 +58,7 @@ describe("ProfilesDB Current Profile projection", () => {
 
     mockSupabaseClient.setMockResponse({ weight_unit: "stones" });
     await expect(
-      db.getFitnessWeightUnitPreference("user-123"),
+      db.getWeightUnitPreference("user-123"),
     ).resolves.toBeNull();
 
     mockSupabaseClient.setMockResponse({ week_start: "0" });
@@ -74,17 +75,17 @@ describe("ProfilesDB Current Profile projection", () => {
   });
 
   it("treats a missing Fitness owner row as unavailable and propagates other read errors", async () => {
-    const db = new ProfilesDB(mockSupabaseClient as unknown as SupabaseClient);
+    const db = new FitnessDB(mockSupabaseClient as unknown as SupabaseClient);
 
     mockSupabaseClient.setMockResponse(null, { code: "PGRST116" });
     await expect(
-      db.getFitnessWeightUnitPreference("user-123"),
+      db.getWeightUnitPreference("user-123"),
     ).resolves.toBeNull();
 
     const databaseError = new Error("database unavailable");
     mockSupabaseClient.setMockResponse(null, databaseError);
     await expect(
-      db.getFitnessWeightUnitPreference("user-123"),
+      db.getWeightUnitPreference("user-123"),
     ).rejects.toThrow("database unavailable");
   });
 });

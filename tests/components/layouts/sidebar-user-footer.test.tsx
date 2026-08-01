@@ -37,7 +37,7 @@ vi.mock("@/lib/hooks/use-appearance", () => ({
 
 vi.mock("@/lib/hooks/use-current-profile", () => ({
   useCurrentProfile: () => ({
-    data: mockSWRReturn.data,
+    currentProfile: mockSWRReturn.data?.currentProfile,
     error: mockSWRReturn.error,
     status: mockSWRReturn.isLoading
       ? "loading"

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGetNotificationProjection, mockGetUserById, mockSend } = vi.hoisted(() => ({
-  mockGetNotificationProjection: vi.fn(),
+const { mockGetReminderEmailPreference, mockGetUserById, mockSend } = vi.hoisted(() => ({
+  mockGetReminderEmailPreference: vi.fn(),
   mockGetUserById: vi.fn(),
   mockSend: vi.fn(),
 }));
@@ -14,7 +14,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/db/notifications", () => ({
   NotificationsDB: class {
-    getNotificationPreferenceProjection = mockGetNotificationProjection;
+    getReminderEmailPreference = mockGetReminderEmailPreference;
   },
 }));
 
@@ -41,18 +41,14 @@ vi.mock("@/lib/logger", () => ({
 
 import { sendReminderEmail } from "@/lib/email/send";
 
-const projection = {
-  preferences: {
-    email_notifications_enabled: false,
-  },
-  timezone: "America/Los_Angeles",
-};
-
 describe("sendReminderEmail preference intent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSend.mockResolvedValue({ data: { id: "email-1" }, error: null });
-    mockGetNotificationProjection.mockResolvedValue(projection);
+    mockGetReminderEmailPreference.mockResolvedValue({
+      status: "ready",
+      value: { enabled: false },
+    });
     mockGetUserById.mockResolvedValue({
       data: {
         user: {
@@ -75,9 +71,9 @@ describe("sendReminderEmail preference intent", () => {
   });
 
   it("sends when the accepted preference enables email", async () => {
-    mockGetNotificationProjection.mockResolvedValue({
-      ...projection,
-      preferences: { email_notifications_enabled: true },
+    mockGetReminderEmailPreference.mockResolvedValue({
+      status: "ready",
+      value: { enabled: true },
     });
 
     const result = await sendReminderEmail("user-1", {
@@ -90,9 +86,9 @@ describe("sendReminderEmail preference intent", () => {
   });
 
   it("does not deliver an enabled preference without a verified Identity Email", async () => {
-    mockGetNotificationProjection.mockResolvedValue({
-      ...projection,
-      preferences: { email_notifications_enabled: true },
+    mockGetReminderEmailPreference.mockResolvedValue({
+      status: "unavailable",
+      reason: "identityEmailUnavailable",
     });
     mockGetUserById.mockResolvedValue({
       data: {
@@ -114,9 +110,9 @@ describe("sendReminderEmail preference intent", () => {
   });
 
   it("does not invent a delivery address when Identity Email is absent", async () => {
-    mockGetNotificationProjection.mockResolvedValue({
-      ...projection,
-      preferences: { email_notifications_enabled: true },
+    mockGetReminderEmailPreference.mockResolvedValue({
+      status: "unavailable",
+      reason: "identityEmailUnavailable",
     });
     mockGetUserById.mockResolvedValue({
       data: { user: null },
