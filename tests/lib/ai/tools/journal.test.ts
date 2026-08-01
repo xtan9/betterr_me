@@ -2,9 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { journalTools } from "@/lib/ai/tools/journal";
 import type { ToolContext } from "@/lib/ai/tools/types";
 
+const { mockSaveJournalEntry } = vi.hoisted(() => ({
+  mockSaveJournalEntry: vi.fn(),
+}));
+
 const mockGetEntryByDate = vi.fn();
 const mockGetTimeline = vi.fn();
-const mockUpsertEntry = vi.fn();
 const mockDeleteEntry = vi.fn();
 
 const mockGetEntry = vi.fn();
@@ -13,10 +16,14 @@ vi.mock("@/lib/db", () => ({
   JournalEntriesDB: class {
     getEntryByDate = mockGetEntryByDate;
     getTimeline = mockGetTimeline;
-    upsertEntry = mockUpsertEntry;
     getEntry = mockGetEntry;
     deleteEntry = mockDeleteEntry;
   },
+}));
+
+vi.mock("@/lib/journal/writes", () => ({
+  createJournalWrites: vi.fn(() => ({ save: mockSaveJournalEntry })),
+  toJournalEntryResponse: (entry: unknown) => entry,
 }));
 
 function makeCtx(overrides?: Partial<ToolContext>): ToolContext {
@@ -69,5 +76,46 @@ describe("journalTools", () => {
     );
     expect(result).toEqual({ error: "Journal entry not found" });
     expect(mockDeleteEntry).not.toHaveBeenCalled();
+  });
+
+  it("createJournalEntry translates plain text into the shared journal save request", async () => {
+    const entry = { id: "j1", entry_date: "2026-04-10" };
+    mockSaveJournalEntry.mockResolvedValue({ type: "created", entry });
+
+    const result = await findTool("createJournalEntry").execute(
+      { date: "2026-04-10", content: "  Today was good\nReally good.  ", mood: 4 },
+      makeCtx(),
+    );
+
+    expect(mockSaveJournalEntry).toHaveBeenCalledWith({
+      userId: "user-123",
+      entryDate: "2026-04-10",
+      title: "",
+      content: {
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "  Today was good\nReally good.  " }],
+          },
+        ],
+      },
+      mood: 4,
+      wordCount: 5,
+      tags: [],
+      promptKey: null,
+    });
+    expect(result).toEqual(entry);
+  });
+
+  it("createJournalEntry renders expected save outcomes without changing the domain meaning", async () => {
+    mockSaveJournalEntry.mockResolvedValue({ type: "conflict" });
+
+    await expect(
+      findTool("createJournalEntry").execute(
+        { date: "2026-04-10", content: "Entry" },
+        makeCtx(),
+      ),
+    ).resolves.toEqual({ error: "Journal entry conflict" });
   });
 });

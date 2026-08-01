@@ -2,12 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET, POST } from '@/app/api/journal/route';
 import { NextRequest } from 'next/server';
 
-const { mockEnsureProfile } = vi.hoisted(() => ({
+const { mockEnsureProfile, mockSaveJournalEntry } = vi.hoisted(() => ({
   mockEnsureProfile: vi.fn(),
+  mockSaveJournalEntry: vi.fn(),
 }));
 
 const mockJournalDB = {
-  upsertEntry: vi.fn(),
   getEntryByDate: vi.fn(),
   getTimeline: vi.fn(),
 };
@@ -28,6 +28,11 @@ vi.mock('@/lib/db', () => ({
       return mockJournalDB;
     }
   },
+}));
+
+vi.mock('@/lib/journal/writes', () => ({
+  createJournalWrites: vi.fn(() => ({ save: mockSaveJournalEntry })),
+  toJournalEntryResponse: (entry: unknown) => entry,
 }));
 
 vi.mock('@/lib/db/ensure-profile', () => ({
@@ -81,7 +86,7 @@ describe('POST /api/journal', () => {
   });
 
   it('should succeed with default empty title when title omitted', async () => {
-    mockJournalDB.upsertEntry.mockResolvedValue(mockEntry);
+    mockSaveJournalEntry.mockResolvedValue({ type: 'created', entry: mockEntry });
 
     const request = new NextRequest('http://localhost:3000/api/journal', {
       method: 'POST',
@@ -93,7 +98,7 @@ describe('POST /api/journal', () => {
     const response = await POST(request);
 
     expect(response.status).toBe(201);
-    expect(mockJournalDB.upsertEntry).toHaveBeenCalledWith(
+    expect(mockSaveJournalEntry).toHaveBeenCalledWith(
       expect.objectContaining({ title: '' })
     );
   });
@@ -111,8 +116,8 @@ describe('POST /api/journal', () => {
     expect(response.status).toBe(400);
   });
 
-  it('should call upsertEntry with correct data and return 201', async () => {
-    mockJournalDB.upsertEntry.mockResolvedValue(mockEntry);
+  it('should call the journal save adapter with correct data and return 201', async () => {
+    mockSaveJournalEntry.mockResolvedValue({ type: 'created', entry: mockEntry });
 
     const request = new NextRequest('http://localhost:3000/api/journal', {
       method: 'POST',
@@ -131,20 +136,20 @@ describe('POST /api/journal', () => {
 
     expect(response.status).toBe(201);
     expect(data.entry).toEqual(mockEntry);
-    expect(mockJournalDB.upsertEntry).toHaveBeenCalledWith({
-      user_id: 'user-123',
-      entry_date: '2026-02-22',
+    expect(mockSaveJournalEntry).toHaveBeenCalledWith({
+      userId: 'user-123',
+      entryDate: '2026-02-22',
       title: 'Test Entry',
       content: { type: 'doc', content: [] },
       mood: 4,
-      word_count: 5,
+      wordCount: 5,
       tags: ['journal'],
-      prompt_key: null,
+      promptKey: null,
     });
   });
 
   it('should set default mood=null, word_count=0, tags=[]', async () => {
-    mockJournalDB.upsertEntry.mockResolvedValue(mockEntry);
+    mockSaveJournalEntry.mockResolvedValue({ type: 'created', entry: mockEntry });
 
     const request = new NextRequest('http://localhost:3000/api/journal', {
       method: 'POST',
@@ -157,18 +162,21 @@ describe('POST /api/journal', () => {
     const response = await POST(request);
     expect(response.status).toBe(201);
 
-    expect(mockJournalDB.upsertEntry).toHaveBeenCalledWith(
+    expect(mockSaveJournalEntry).toHaveBeenCalledWith(
       expect.objectContaining({
         mood: null,
-        word_count: 0,
+        wordCount: 0,
         tags: [],
-        prompt_key: null,
+        promptKey: null,
       })
     );
   });
 
   it('should accept mood: null in POST body', async () => {
-    mockJournalDB.upsertEntry.mockResolvedValue({ ...mockEntry, mood: null });
+    mockSaveJournalEntry.mockResolvedValue({
+      type: 'created',
+      entry: { ...mockEntry, mood: null },
+    });
 
     const request = new NextRequest('http://localhost:3000/api/journal', {
       method: 'POST',
@@ -182,13 +190,13 @@ describe('POST /api/journal', () => {
     const response = await POST(request);
     expect(response.status).toBe(201);
 
-    expect(mockJournalDB.upsertEntry).toHaveBeenCalledWith(
+    expect(mockSaveJournalEntry).toHaveBeenCalledWith(
       expect.objectContaining({ mood: null })
     );
   });
 
-  it('should call ensureProfile before upserting', async () => {
-    mockJournalDB.upsertEntry.mockResolvedValue(mockEntry);
+  it('should call ensureProfile before saving', async () => {
+    mockSaveJournalEntry.mockResolvedValue({ type: 'created', entry: mockEntry });
 
     const request = new NextRequest('http://localhost:3000/api/journal', {
       method: 'POST',
@@ -342,8 +350,8 @@ describe('POST /api/journal - 500 error paths', () => {
     mockEnsureProfile.mockResolvedValue(undefined);
   });
 
-  it('should return 500 when upsertEntry throws', async () => {
-    mockJournalDB.upsertEntry.mockRejectedValue(new Error('DB error'));
+  it('should return 500 when the save adapter throws', async () => {
+    mockSaveJournalEntry.mockRejectedValue(new Error('DB error'));
 
     const request = new NextRequest('http://localhost:3000/api/journal', {
       method: 'POST',

@@ -2,9 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET, PATCH, DELETE } from '@/app/api/journal/[id]/route';
 import { NextRequest } from 'next/server';
 
+const { mockSaveJournalEntry } = vi.hoisted(() => ({
+  mockSaveJournalEntry: vi.fn(),
+}));
+
 const mockJournalDB = {
   getEntry: vi.fn(),
-  updateEntry: vi.fn(),
   deleteEntry: vi.fn(),
 };
 
@@ -24,6 +27,11 @@ vi.mock('@/lib/db', () => ({
       return mockJournalDB;
     }
   },
+}));
+
+vi.mock('@/lib/journal/writes', () => ({
+  createJournalWrites: vi.fn(() => ({ save: mockSaveJournalEntry })),
+  toJournalEntryResponse: (entry: unknown) => entry,
 }));
 
 import { createClient } from '@/lib/supabase/server';
@@ -131,7 +139,7 @@ describe('PATCH /api/journal/[id]', () => {
 
   it('should update entry and return 200', async () => {
     const updatedEntry = { ...mockEntry, title: 'Updated Title' };
-    mockJournalDB.updateEntry.mockResolvedValue(updatedEntry);
+    mockSaveJournalEntry.mockResolvedValue({ type: 'updated', entry: updatedEntry });
 
     const request = new NextRequest('http://localhost:3000/api/journal/entry-123', {
       method: 'PATCH',
@@ -142,16 +150,16 @@ describe('PATCH /api/journal/[id]', () => {
 
     expect(response.status).toBe(200);
     expect(data.entry).toEqual(updatedEntry);
-    expect(mockJournalDB.updateEntry).toHaveBeenCalledWith(
-      'entry-123',
-      'user-123',
-      { title: 'Updated Title' }
-    );
+    expect(mockSaveJournalEntry).toHaveBeenCalledWith({
+      userId: 'user-123',
+      entryId: 'entry-123',
+      title: 'Updated Title',
+    });
   });
 
   it('should accept mood: null in PATCH body', async () => {
     const updatedEntry = { ...mockEntry, mood: null };
-    mockJournalDB.updateEntry.mockResolvedValue(updatedEntry);
+    mockSaveJournalEntry.mockResolvedValue({ type: 'updated', entry: updatedEntry });
 
     const request = new NextRequest('http://localhost:3000/api/journal/entry-123', {
       method: 'PATCH',
@@ -162,15 +170,15 @@ describe('PATCH /api/journal/[id]', () => {
 
     expect(response.status).toBe(200);
     expect(data.entry.mood).toBeNull();
-    expect(mockJournalDB.updateEntry).toHaveBeenCalledWith(
-      'entry-123',
-      'user-123',
-      { mood: null }
-    );
+    expect(mockSaveJournalEntry).toHaveBeenCalledWith({
+      userId: 'user-123',
+      entryId: 'entry-123',
+      mood: null,
+    });
   });
 
-  it('should return 404 for PGRST116 error', async () => {
-    mockJournalDB.updateEntry.mockRejectedValue({ code: 'PGRST116' });
+  it('should return 404 for the not-found save outcome', async () => {
+    mockSaveJournalEntry.mockResolvedValue({ type: 'not-found' });
 
     const request = new NextRequest('http://localhost:3000/api/journal/entry-123', {
       method: 'PATCH',

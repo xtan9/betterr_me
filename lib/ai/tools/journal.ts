@@ -1,6 +1,24 @@
 import { z } from "zod";
 import { JournalEntriesDB } from "@/lib/db";
+import {
+  createJournalWrites,
+  toJournalEntryResponse,
+  type JournalSaveOutcome,
+} from "@/lib/journal/writes";
 import type { ToolDefinition, ToolContext } from "./types";
+
+function journalSaveToolResult(outcome: JournalSaveOutcome) {
+  if (outcome.type === "created" || outcome.type === "updated") {
+    return toJournalEntryResponse(outcome.entry);
+  }
+  if (outcome.type === "conflict") {
+    return { error: "Journal entry conflict" };
+  }
+  if (outcome.type === "not-found") {
+    return { error: "Journal entry not found" };
+  }
+  return { error: outcome.message };
+}
 
 export function journalTools(): ToolDefinition[] {
   return [
@@ -35,22 +53,22 @@ export function journalTools(): ToolDefinition[] {
         mood: z.number().optional().describe("Mood rating 1-5"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new JournalEntriesDB(ctx.supabase);
         // Convert plain text to minimal Tiptap JSON structure
         const tiptapContent = {
           type: "doc",
           content: [{ type: "paragraph", content: [{ type: "text", text: params.content }] }],
         };
-        return db.upsertEntry({
-          user_id: ctx.userId,
-          entry_date: params.date,
+        const outcome = await createJournalWrites(ctx.supabase).save({
+          userId: ctx.userId,
+          entryDate: params.date,
           content: tiptapContent,
           mood: params.mood,
           title: "",
-          word_count: params.content.split(/\s+/).filter(Boolean).length,
+          wordCount: params.content.split(/\s+/).filter(Boolean).length,
           tags: [],
-          prompt_key: null,
+          promptKey: null,
         });
+        return journalSaveToolResult(outcome);
       },
     },
     {

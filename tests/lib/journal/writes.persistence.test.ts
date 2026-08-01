@@ -1,0 +1,159 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  JournalWrites,
+  SupabaseJournalSavePersistence,
+  type JournalEntryMutationRecord,
+} from "@/lib/journal/writes";
+
+const entryRow = {
+  id: "entry-1",
+  user_id: "user-1",
+  entry_date: "2026-08-01",
+  title: "Saved entry",
+  content: { type: "doc", content: [] },
+  mood: 4,
+  word_count: 2,
+  tags: ["reflection"],
+  prompt_key: null,
+  created_at: "2026-08-01T12:00:00.000Z",
+  updated_at: "2026-08-01T12:01:00.000Z",
+};
+
+describe("SupabaseJournalSavePersistence", () => {
+  const rpc = vi.fn();
+  let persistence: SupabaseJournalSavePersistence;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    persistence = new SupabaseJournalSavePersistence({ rpc } as never);
+  });
+
+  it("maps the atomic save RPC into a domain record without exposing row names", async () => {
+    rpc.mockResolvedValue({
+      data: { type: "created", entry: entryRow },
+      error: null,
+    });
+
+    await expect(
+      persistence.saveEntry({
+        userId: "user-1",
+        entryId: null,
+        entryDate: "2026-08-01",
+        changes: {
+          title: "Saved entry",
+          content: entryRow.content,
+          mood: 4,
+          wordCount: 2,
+          tags: ["reflection"],
+          promptKey: null,
+        },
+      }),
+    ).resolves.toEqual({
+      type: "created",
+      entry: {
+        id: "entry-1",
+        userId: "user-1",
+        entryDate: "2026-08-01",
+        title: "Saved entry",
+        content: entryRow.content,
+        mood: 4,
+        wordCount: 2,
+        tags: ["reflection"],
+        promptKey: null,
+        createdAt: "2026-08-01T12:00:00.000Z",
+        updatedAt: "2026-08-01T12:01:00.000Z",
+      } satisfies JournalEntryMutationRecord,
+    });
+
+    expect(rpc).toHaveBeenCalledWith("save_journal_entry", {
+      p_user_id: "user-1",
+      p_entry_id: null,
+      p_entry_date: "2026-08-01",
+      p_changes: {
+        title: "Saved entry",
+        content: entryRow.content,
+        mood: 4,
+        word_count: 2,
+        tags: ["reflection"],
+        prompt_key: null,
+      },
+    });
+  });
+
+  it.each([
+    ["updated", { type: "updated" as const, entry: entryRow }],
+    ["conflict", { type: "conflict" as const }],
+    ["not-found", { type: "not-found" as const }],
+  ])("preserves the %s database outcome", async (_label, outcome) => {
+    rpc.mockResolvedValue({ data: outcome, error: null });
+
+    await expect(
+      persistence.saveEntry({
+        userId: "user-1",
+        entryId: "entry-1",
+        entryDate: null,
+        changes: { title: "Updated" },
+      }),
+    ).resolves.toMatchObject({ type: outcome.type });
+  });
+
+  it("throws infrastructure failures and malformed database outcomes", async () => {
+    const failure = { code: "42P01", message: "function missing" };
+    rpc.mockResolvedValue({ data: null, error: failure });
+
+    await expect(
+      persistence.saveEntry({
+        userId: "user-1",
+        entryId: null,
+        entryDate: "2026-08-01",
+        changes: { title: "Entry" },
+      }),
+    ).rejects.toBe(failure);
+
+    rpc.mockResolvedValue({
+      data: { type: "updated", entry: { id: "entry-1" } },
+      error: null,
+    });
+    await expect(
+      persistence.saveEntry({
+        userId: "user-1",
+        entryId: "entry-1",
+        entryDate: null,
+        changes: { title: "Entry" },
+      }),
+    ).rejects.toThrow("Invalid journal entry");
+  });
+
+  it("preserves one entry identity when concurrent date saves resolve as create then update", async () => {
+    rpc
+      .mockResolvedValueOnce({
+        data: { type: "created", entry: entryRow },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: {
+          type: "updated",
+          entry: { ...entryRow, title: "Latest save" },
+        },
+        error: null,
+      });
+    const writes = new JournalWrites(persistence);
+
+    const [first, second] = await Promise.all([
+      writes.save({
+        userId: "user-1",
+        entryDate: "2026-08-01",
+        title: "First save",
+      }),
+      writes.save({
+        userId: "user-1",
+        entryDate: "2026-08-01",
+        title: "Latest save",
+      }),
+    ]);
+
+    expect(first).toMatchObject({ type: "created", entry: { id: "entry-1" } });
+    expect(second).toMatchObject({ type: "updated", entry: { id: "entry-1" } });
+    expect(rpc).toHaveBeenCalledTimes(2);
+  });
+});

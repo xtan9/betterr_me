@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, cookieRouteErrorMessage } from '@/lib/auth/authenticated-request';
 import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { JournalEntriesDB } from '@/lib/db';
+import { createJournalWrites, toJournalEntryResponse } from '@/lib/journal/writes';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { journalEntryUpdateSchema } from '@/lib/validations/journal';
@@ -80,23 +81,44 @@ export async function PATCH(
     const validation = validateRequestBody(body, journalEntryUpdateSchema);
     if (!validation.success) return validation.response;
 
-    const journalDB = new JournalEntriesDB(supabase);
-    const entry = await journalDB.updateEntry(id, userId, validation.data);
+    const changes = validation.data;
+    const outcome = await createJournalWrites(supabase).save({
+      userId,
+      entryId: id,
+      ...(changes.title !== undefined ? { title: changes.title } : {}),
+      ...(changes.content !== undefined ? { content: changes.content } : {}),
+      ...(changes.mood !== undefined ? { mood: changes.mood } : {}),
+      ...(changes.word_count !== undefined
+        ? { wordCount: changes.word_count }
+        : {}),
+      ...(changes.tags !== undefined ? { tags: changes.tags } : {}),
+      ...(changes.prompt_key !== undefined
+        ? { promptKey: changes.prompt_key }
+        : {}),
+    });
 
-    return NextResponse.json({ entry });
-  } catch (error: unknown) {
-    if (
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      error.code === 'PGRST116'
-    ) {
+    if (outcome.type === 'invalid') {
+      return NextResponse.json(
+        { error: outcome.message, field: outcome.field },
+        { status: 400 },
+      );
+    }
+    if (outcome.type === 'conflict') {
+      return NextResponse.json(
+        { error: 'Journal entry conflict' },
+        { status: 409 },
+      );
+    }
+    if (outcome.type === 'not-found') {
       log.warn("PATCH /api/journal/[id]: entry not found", { entryId: id });
       return NextResponse.json(
         { error: 'Journal entry not found' },
-        { status: 404 }
+        { status: 404 },
       );
     }
+
+    return NextResponse.json({ entry: toJournalEntryResponse(outcome.entry) });
+  } catch (error) {
     log.error('PATCH /api/journal/[id] error', error);
     return NextResponse.json(
       { error: 'Failed to update journal entry' },
