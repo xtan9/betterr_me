@@ -121,6 +121,42 @@ values
 
 set local role authenticated;
 
+reset role;
+insert into public.tasks (
+  id,
+  user_id,
+  title,
+  due_date,
+  due_time
+)
+values (
+  '64400000-0000-0000-0000-000000000802',
+  '64400000-0000-0000-0000-000000000001',
+  'Unrelated Task reminder source',
+  '2026-08-03',
+  '09:00:00'
+);
+set local role authenticated;
+
+do $$
+declare
+  configured jsonb;
+begin
+  configured := public.configure_task_reminders(
+    '64400000-0000-0000-0000-000000000001',
+    '64400000-0000-0000-0000-000000000802',
+    '[{
+      "reminder_type": "absolute",
+      "absolute_time": "2026-08-03T09:00:00Z",
+      "channels": ["push"]
+    }]'::jsonb
+  );
+  if configured->>'type' <> 'configured' then
+    raise exception 'Task Reminder Configuration seed was incorrect: %', configured;
+  end if;
+end
+$$;
+
 insert into public.reminders (
   id,
   user_id,
@@ -141,16 +177,6 @@ values
     '2026-08-03T08:00:00Z',
     '{push}',
     '2026-08-03T08:00:00Z'
-  ),
-  (
-    '64400000-0000-0000-0000-000000000902',
-    '64400000-0000-0000-0000-000000000001',
-    'task',
-    '64400000-0000-0000-0000-000000000802',
-    'absolute',
-    '2026-08-03T09:00:00Z',
-    '{push}',
-    '2026-08-03T09:00:00Z'
   ),
   (
     '64400000-0000-0000-0000-000000000903',
@@ -391,7 +417,8 @@ begin
 
   if not exists (
     select 1 from public.reminders
-    where id = '64400000-0000-0000-0000-000000000902'
+    where source_type = 'task'
+      and source_id = '64400000-0000-0000-0000-000000000802'
   ) then
     raise exception 'Habit deletion removed reusable or unrelated reminder data';
   end if;

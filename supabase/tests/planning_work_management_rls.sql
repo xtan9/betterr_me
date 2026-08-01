@@ -390,9 +390,8 @@ select set_config(
   false
 );
 
--- Calendar data has both lifecycle-owned event reminders and ordinary
--- application reminders/defaults. Seed both classes through the same
--- authenticated surface used by the application.
+-- Calendar data has lifecycle-owned event reminders, while ordinary
+-- application reminders/defaults use the Habit-owned configuration surface.
 set local role authenticated;
 insert into public.reminders (
   id,
@@ -408,8 +407,8 @@ values
   (
     '57800000-0000-0000-0000-000000000901',
     '57800000-0000-0000-0000-000000000001',
-    'task',
-    '57800000-0000-0000-0000-000000000201',
+    'habit',
+    '57800000-0000-0000-0000-000000000401',
     'relative',
     15,
     array['push'],
@@ -450,8 +449,8 @@ insert into public.reminders (
 values (
   '57800000-0000-0000-0000-000000000902',
   '57800000-0000-0000-0000-000000000002',
-  'task',
-  '57800000-0000-0000-0000-000000000202',
+  'habit',
+  '57800000-0000-0000-0000-000000000402',
   'relative',
   20,
   array['push'],
@@ -1857,8 +1856,8 @@ begin
   ) values (
     '57800000-0000-0000-0000-000000000903',
     '57800000-0000-0000-0000-000000000001',
-    'task',
-    '57800000-0000-0000-0000-000000000201',
+    'habit',
+    '57800000-0000-0000-0000-000000000401',
     'relative',
     10,
     array['push'],
@@ -1882,7 +1881,7 @@ begin
   delete from public.reminders where id = '57800000-0000-0000-0000-000000000903';
 
   perform pg_temp.ralph_578_expect_sqlstate(
-    $$insert into public.reminders (id, user_id, source_type, source_id, reminder_type, channels, fire_at) values ('57800000-0000-0000-0000-000000000907', '57800000-0000-0000-0000-000000000001', 'task', '57800000-0000-0000-0000-000000000201', 'absolute', array['push'], '2026-08-04 08:55:00+00')$$,
+    $$insert into public.reminders (id, user_id, source_type, source_id, reminder_type, channels, fire_at) values ('57800000-0000-0000-0000-000000000907', '57800000-0000-0000-0000-000000000001', 'habit', '57800000-0000-0000-0000-000000000401', 'absolute', array['push'], '2026-08-04 08:55:00+00')$$,
     '23514',
     'absolute reminder time constraint'
   );
@@ -1927,7 +1926,7 @@ begin
     'non-owner reminder delete'
   );
   perform pg_temp.ralph_578_expect_sqlstate(
-    $$insert into public.reminders (id, user_id, source_type, source_id, reminder_type, relative_minutes, channels, fire_at) values ('57800000-0000-0000-0000-000000000904', '57800000-0000-0000-0000-000000000002', 'task', '57800000-0000-0000-0000-000000000202', 'relative', 5, '{push}', '2026-08-04 10:35:00+00')$$,
+    $$insert into public.reminders (id, user_id, source_type, source_id, reminder_type, relative_minutes, channels, fire_at) values ('57800000-0000-0000-0000-000000000904', '57800000-0000-0000-0000-000000000002', 'habit', '57800000-0000-0000-0000-000000000402', 'relative', 5, '{push}', '2026-08-04 10:35:00+00')$$,
     '42501',
     'non-owner reminder insert'
   );
@@ -2138,8 +2137,8 @@ begin
   ) values (
     '57800000-0000-0000-0000-000000000905',
     '57800000-0000-0000-0000-000000000002',
-    'task',
-    '57800000-0000-0000-0000-000000000202',
+    'habit',
+    '57800000-0000-0000-0000-000000000402',
     'relative',
     10,
     array['push'],
@@ -2362,7 +2361,7 @@ begin
     'anonymous calendar delete'
   );
   perform pg_temp.ralph_578_expect_sqlstate(
-    $$insert into public.reminders (id, user_id, source_type, source_id, reminder_type, relative_minutes, channels, fire_at) values ('57800000-0000-0000-0000-000000000906', '57800000-0000-0000-0000-000000000001', 'task', '57800000-0000-0000-0000-000000000201', 'relative', 5, '{push}', '2026-08-04 08:55:00+00')$$,
+    $$insert into public.reminders (id, user_id, source_type, source_id, reminder_type, relative_minutes, channels, fire_at) values ('57800000-0000-0000-0000-000000000906', '57800000-0000-0000-0000-000000000001', 'habit', '57800000-0000-0000-0000-000000000401', 'relative', 5, '{push}', '2026-08-04 08:55:00+00')$$,
     '42501',
     'anonymous reminder insert'
   );

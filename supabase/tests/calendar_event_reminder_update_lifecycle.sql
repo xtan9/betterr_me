@@ -50,6 +50,19 @@ select set_config(
   true
 );
 
+-- The generic Task reminder assertions below use a real Task now that Task
+-- reminders are tenant-scoped by the composite foreign key.
+reset role;
+insert into public.tasks (id, user_id, title, due_date, due_time)
+values (
+  '49100000-0000-0000-0000-000000000301',
+  '49100000-0000-0000-0000-000000000001',
+  'Task reminder lifecycle probe',
+  '2026-08-03',
+  '10:00:00'
+);
+set local role authenticated;
+
 do $$
 begin
   if not has_function_privilege(
@@ -131,6 +144,7 @@ declare
   event_id uuid;
   original_reminder_id uuid;
   snoozed_reminder_id uuid;
+  task_reminder_id uuid;
 begin
   created := public.create_calendar_event_with_reminder(
     '49100000-0000-0000-0000-000000000001',
@@ -182,26 +196,41 @@ begin
     raise exception 'direct calendar reminder delete unexpectedly succeeded';
   end if;
 
-  insert into public.reminders (
-    user_id, source_type, source_id, reminder_type,
-    absolute_time, channels, fire_at
-  ) values (
-    '49100000-0000-0000-0000-000000000001', 'task',
-    '49100000-0000-0000-0000-000000000301', 'absolute',
-    '2026-08-03 09:00:00+00', array['push'], '2026-08-03 09:00:00+00'
+  outcome := public.configure_task_reminders(
+    '49100000-0000-0000-0000-000000000001',
+    '49100000-0000-0000-0000-000000000301',
+    '[{
+      "reminder_type": "absolute",
+      "absolute_time": "2026-08-03T09:00:00Z",
+      "channels": ["push"]
+    }]'::jsonb
   );
-  update public.reminders set fire_at = '2026-08-03 09:05:00+00'
-  where user_id = '49100000-0000-0000-0000-000000000001'
-    and source_type = 'task';
-  if not found then
-    raise exception 'non-calendar reminder update was blocked';
-  end if;
-  delete from public.reminders
-  where user_id = '49100000-0000-0000-0000-000000000001'
-    and source_type = 'task';
-  if not found then
-    raise exception 'non-calendar reminder delete was blocked';
-  end if;
+  task_reminder_id := (outcome->'reminders'->0->>'id')::uuid;
+
+  begin
+    insert into public.reminders (
+      user_id, source_type, source_id, reminder_type,
+      absolute_time, channels, fire_at
+    ) values (
+      '49100000-0000-0000-0000-000000000001', 'task',
+      '49100000-0000-0000-0000-000000000301', 'absolute',
+      '2026-08-03 09:00:00+00', array['push'], '2026-08-03 09:00:00+00'
+    );
+    raise exception 'direct Task reminder configuration insert unexpectedly succeeded';
+  exception
+    when insufficient_privilege then null;
+  end;
+
+  begin
+    delete from public.reminders
+    where user_id = '49100000-0000-0000-0000-000000000001'
+      and source_type = 'task';
+    if not exists (
+      select 1 from public.reminders where id = task_reminder_id
+    ) then
+      raise exception 'direct Task reminder configuration delete unexpectedly succeeded';
+    end if;
+  end;
 
   -- Moving the event with omitted reminder intent preserves its relationship
   -- and recalculates its derived schedule.

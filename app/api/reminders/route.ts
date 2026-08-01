@@ -11,13 +11,22 @@ import {
 } from "@/lib/reminders/lifecycle-policy";
 import { log } from "@/lib/logger";
 import { z } from "zod";
+import {
+  createTaskWrites,
+} from "@/lib/tasks/writes";
+import { taskReminderConfigurationResponse } from "@/lib/reminders/task-configuration-response";
 
 /**
- * Extended schema that includes event_start_time for fire_at computation.
+ * Extended schema that accepts the legacy event_start_time used by generic
+ * Habit reminder creation. Task Reminder Configuration derives relative
+ * fire_at values from the source Task and does not need this transport field.
  */
 const createWithStartTimeSchema = reminderCreateSchema.and(
   z.object({
-    event_start_time: z.string().datetime("event_start_time must be a valid ISO datetime"),
+    event_start_time: z
+      .string()
+      .datetime("event_start_time must be a valid ISO datetime")
+      .optional(),
   })
 );
 
@@ -85,7 +94,8 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/reminders
- * Create a new reminder. Requires event_start_time for fire_at computation.
+ * Create a new reminder. Generic Habit reminders require event_start_time;
+ * Task Reminder Configuration derives relative fire_at from the Task.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -108,6 +118,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: CALENDAR_EVENT_REMINDER_LIFECYCLE_ERROR },
         { status: 409 },
+      );
+    }
+
+    if (reminderData.source_type === "task") {
+      const outcome = await createTaskWrites(supabase).configureReminders({
+        userId,
+        taskId: reminderData.source_id,
+        reminders: [
+          reminderData.reminder_type === "relative"
+            ? {
+                reminderType: "relative",
+                relativeMinutes: reminderData.relative_minutes ?? 0,
+                channels: reminderData.channels,
+              }
+            : {
+                reminderType: "absolute",
+                absoluteTime: reminderData.absolute_time ?? "",
+                channels: reminderData.channels,
+              },
+        ],
+      });
+      return taskReminderConfigurationResponse(outcome, 201);
+    }
+
+    if (!event_start_time) {
+      return NextResponse.json(
+        { error: "event_start_time is required for this reminder source" },
+        { status: 400 },
       );
     }
 

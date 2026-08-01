@@ -5,6 +5,13 @@ import { NextRequest } from "next/server";
 const { mockComputeFireAt } = vi.hoisted(() => ({
   mockComputeFireAt: vi.fn(),
 }));
+const {
+  mockConfigureTaskReminders,
+  mockTaskReminderResponse,
+} = vi.hoisted(() => ({
+  mockConfigureTaskReminders: vi.fn(),
+  mockTaskReminderResponse: vi.fn((reminder: unknown) => reminder),
+}));
 
 const mockRemindersDB = {
   createReminder: vi.fn(),
@@ -34,6 +41,13 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
+vi.mock("@/lib/tasks/writes", () => ({
+  createTaskWrites: vi.fn(() => ({
+    configureReminders: mockConfigureTaskReminders,
+  })),
+  toTaskReminderResponse: mockTaskReminderResponse,
+}));
+
 vi.mock("@/lib/reminders/fire-at", () => ({
   computeFireAt: mockComputeFireAt,
 }));
@@ -43,6 +57,10 @@ import { createClient } from "@/lib/supabase/server";
 describe("GET /api/reminders", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockConfigureTaskReminders.mockResolvedValue({
+      type: "configured",
+      reminders: [{ id: "r1", source_type: "task" }],
+    });
   });
 
   it("returns reminders for source", async () => {
@@ -110,25 +128,8 @@ describe("POST /api/reminders", () => {
     vi.clearAllMocks();
   });
 
-  it("creates a reminder with computed fire_at and returns 201", async () => {
+  it("routes Task reminder configuration through TaskWrites", async () => {
     const { POST } = await import("@/app/api/reminders/route");
-    const mockReminder = {
-      id: "r1",
-      user_id: "user-123",
-      source_type: "task",
-      source_id: "11111111-1111-1111-1111-111111111111",
-      reminder_type: "relative",
-      relative_minutes: 15,
-      absolute_time: null,
-      channels: ["push"],
-      status: "pending",
-      fire_at: "2026-04-10T13:45:00.000Z",
-      sent_at: null,
-      created_at: "2026-04-01T00:00:00Z",
-    };
-
-    mockComputeFireAt.mockReturnValue("2026-04-10T13:45:00.000Z");
-    mockRemindersDB.createReminder.mockResolvedValue(mockReminder);
 
     const request = new NextRequest("http://localhost:3000/api/reminders", {
       method: "POST",
@@ -145,15 +146,36 @@ describe("POST /api/reminders", () => {
     const data = await response.json();
 
     expect(response.status).toBe(201);
-    expect(data.reminder).toEqual(mockReminder);
-    expect(mockComputeFireAt).toHaveBeenCalledWith(
-      {
-        reminder_type: "relative",
-        relative_minutes: 15,
-        absolute_time: null,
-      },
-      "2026-04-10T14:00:00Z"
-    );
+    expect(data.reminder).toEqual({ id: "r1", source_type: "task" });
+    expect(mockConfigureTaskReminders).toHaveBeenCalledWith({
+      userId: "user-123",
+      taskId: "11111111-1111-1111-1111-111111111111",
+      reminders: [{
+        reminderType: "relative",
+        relativeMinutes: 15,
+        channels: ["push"],
+      }],
+    });
+    expect(mockComputeFireAt).not.toHaveBeenCalled();
+    expect(mockRemindersDB.createReminder).not.toHaveBeenCalled();
+  });
+
+  it("does not require event_start_time for Task configuration", async () => {
+    const { POST } = await import("@/app/api/reminders/route");
+
+    const response = await POST(new NextRequest("http://localhost:3000/api/reminders", {
+      method: "POST",
+      body: JSON.stringify({
+        source_type: "task",
+        source_id: "11111111-1111-1111-1111-111111111111",
+        reminder_type: "absolute",
+        absolute_time: "2026-04-10T09:00:00Z",
+        channels: ["push"],
+      }),
+    }));
+
+    expect(response.status).toBe(201);
+    expect(mockConfigureTaskReminders).toHaveBeenCalled();
   });
 
   it("creates an absolute reminder", async () => {
@@ -284,9 +306,18 @@ describe("POST /api/reminders", () => {
 describe("PATCH /api/reminders/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockConfigureTaskReminders.mockResolvedValue({
+      type: "configured",
+      reminders: [{ id: "r1", source_type: "task" }],
+    });
     mockRemindersDB.getReminder.mockResolvedValue({
       id: "r1",
       source_type: "task",
+      source_id: "11111111-1111-1111-1111-111111111111",
+      reminder_type: "absolute",
+      relative_minutes: null,
+      absolute_time: "2026-04-10T09:00:00Z",
+      channels: ["push"],
     });
   });
 
@@ -427,6 +458,29 @@ describe("PATCH /api/reminders/[id]", () => {
     expect(data.reminder).toEqual(updatedReminder);
   });
 
+  it("routes Task channel replacement through TaskWrites", async () => {
+    const { PATCH } = await import("@/app/api/reminders/[id]/route");
+    const response = await PATCH(
+      new NextRequest("http://localhost:3000/api/reminders/r1", {
+        method: "PATCH",
+        body: JSON.stringify({ channels: ["email"] }),
+      }),
+      { params: Promise.resolve({ id: "r1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockConfigureTaskReminders).toHaveBeenCalledWith({
+      userId: "user-123",
+      taskId: "11111111-1111-1111-1111-111111111111",
+      reminders: [{
+        reminderType: "absolute",
+        absoluteTime: "2026-04-10T09:00:00Z",
+        channels: ["email"],
+      }],
+    });
+    expect(mockRemindersDB.updateReminder).not.toHaveBeenCalled();
+  });
+
   it("returns 401 for unauthenticated request", async () => {
     const { PATCH } = await import("@/app/api/reminders/[id]/route");
     vi.mocked(createClient).mockResolvedValueOnce({
@@ -488,9 +542,14 @@ describe("PATCH /api/reminders/[id]", () => {
 describe("DELETE /api/reminders/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockConfigureTaskReminders.mockResolvedValue({
+      type: "removed",
+      reminders: [],
+    });
     mockRemindersDB.getReminder.mockResolvedValue({
       id: "r1",
       source_type: "task",
+      source_id: "11111111-1111-1111-1111-111111111111",
     });
   });
 
@@ -515,8 +574,6 @@ describe("DELETE /api/reminders/[id]", () => {
 
   it("deletes reminder and returns 200", async () => {
     const { DELETE } = await import("@/app/api/reminders/[id]/route");
-    mockRemindersDB.deleteReminder.mockResolvedValue(undefined);
-
     const request = new NextRequest(
       "http://localhost:3000/api/reminders/r1",
       {
@@ -530,6 +587,12 @@ describe("DELETE /api/reminders/[id]", () => {
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
+    expect(mockConfigureTaskReminders).toHaveBeenCalledWith({
+      userId: "user-123",
+      taskId: "11111111-1111-1111-1111-111111111111",
+      reminders: [],
+    });
+    expect(mockRemindersDB.deleteReminder).not.toHaveBeenCalled();
   });
 
   it("returns 401 for unauthenticated request", async () => {
@@ -555,6 +618,11 @@ describe("DELETE /api/reminders/[id]", () => {
 
   it("returns 500 when DB throws", async () => {
     const { DELETE } = await import("@/app/api/reminders/[id]/route");
+    mockRemindersDB.getReminder.mockResolvedValue({
+      id: "r1",
+      source_type: "habit",
+      source_id: "h1",
+    });
     mockRemindersDB.deleteReminder.mockRejectedValue(new Error("DB error"));
 
     const request = new NextRequest(
