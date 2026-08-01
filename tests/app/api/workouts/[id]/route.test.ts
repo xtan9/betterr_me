@@ -2,11 +2,24 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
 // --- Hoisted mocks ---
-const { mockGetUser, mockUpdateWorkout, mockGetWorkoutWithExercises } =
+const {
+  mockGetUser,
+  mockUpdateWorkout,
+  mockGetWorkoutWithExercises,
+  mockToWorkoutResponse,
+} =
   vi.hoisted(() => ({
     mockGetUser: vi.fn(),
     mockUpdateWorkout: vi.fn(),
     mockGetWorkoutWithExercises: vi.fn(),
+    mockToWorkoutResponse: vi.fn((workout: Record<string, unknown>) => ({
+      id: workout.id,
+      status: workout.status,
+      title: workout.title,
+      notes: workout.notes,
+      completed_at: workout.completedAt,
+      duration_seconds: workout.durationSeconds,
+    })),
   }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -17,9 +30,13 @@ vi.mock("@/lib/supabase/server", () => ({
 
 vi.mock("@/lib/db/workouts", () => ({
   WorkoutsDB: class {
-    updateWorkout = mockUpdateWorkout;
     getWorkoutWithExercises = mockGetWorkoutWithExercises;
   },
+}));
+
+vi.mock("@/lib/fitness/writes", () => ({
+  createWorkoutWrites: vi.fn(() => ({ update: mockUpdateWorkout })),
+  toWorkoutResponse: mockToWorkoutResponse,
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -27,6 +44,23 @@ vi.mock("@/lib/logger", () => ({
 }));
 
 import { GET, PATCH } from "@/app/api/workouts/[id]/route";
+
+function mutationWorkout(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "w-1",
+    userId: "user-123",
+    title: "Workout",
+    notes: null,
+    startedAt: "2026-08-01T12:00:00.000Z",
+    completedAt: null,
+    durationSeconds: null,
+    status: "in_progress",
+    routineId: null,
+    createdAt: "2026-08-01T12:00:00.000Z",
+    updatedAt: "2026-08-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
 
 // --- Helpers ---
 
@@ -61,13 +95,15 @@ describe("PATCH /api/workouts/[id]", () => {
   });
 
   it("completes a workout", async () => {
-    const completedWorkout = {
-      id: "w-1",
+    const completedWorkout = mutationWorkout({
       status: "completed",
-      completed_at: "2026-02-28T12:00:00Z",
-      duration_seconds: 3600,
-    };
-    mockUpdateWorkout.mockResolvedValue(completedWorkout);
+      completedAt: "2026-02-28T12:00:00Z",
+      durationSeconds: 3600,
+    });
+    mockUpdateWorkout.mockResolvedValue({
+      type: "updated",
+      workout: completedWorkout,
+    });
 
     const response = await callPATCH(
       makePatchRequest("w-1", { status: "completed" }),
@@ -77,15 +113,17 @@ describe("PATCH /api/workouts/[id]", () => {
 
     expect(response.status).toBe(200);
     expect(data.workout.status).toBe("completed");
-    expect(mockUpdateWorkout).toHaveBeenCalledWith("w-1", {
+    expect(mockUpdateWorkout).toHaveBeenCalledWith({
+      userId: "user-123",
+      workoutId: "w-1",
       status: "completed",
     });
   });
 
   it("discards a workout", async () => {
     mockUpdateWorkout.mockResolvedValue({
-      id: "w-1",
-      status: "discarded",
+      type: "updated",
+      workout: mutationWorkout({ status: "discarded" }),
     });
 
     const response = await callPATCH(
@@ -96,6 +134,35 @@ describe("PATCH /api/workouts/[id]", () => {
 
     expect(response.status).toBe(200);
     expect(data.workout.status).toBe("discarded");
+  });
+
+  it("maps a missing or cross-owner workout outcome to 404", async () => {
+    mockUpdateWorkout.mockResolvedValue({ type: "not-found" });
+
+    const response = await callPATCH(
+      makePatchRequest("w-1", { title: "Renamed" }),
+      "w-1",
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(data.error).toBe("Workout not found");
+  });
+
+  it("maps a terminal-workout invalid transition to a conflict", async () => {
+    mockUpdateWorkout.mockResolvedValue({
+      type: "invalid-transition",
+      currentStatus: "completed",
+    });
+
+    const response = await callPATCH(
+      makePatchRequest("w-1", { title: "Renamed" }),
+      "w-1",
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(data.error).toBe("Workout is no longer editable");
   });
 
   it("returns 401 for unauthenticated user", async () => {

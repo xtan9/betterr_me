@@ -2,6 +2,7 @@ import { z } from "zod";
 import { WorkoutsDB, ExercisesDB, RoutinesDB } from "@/lib/db";
 import {
   createWorkoutWrites,
+  toWorkoutResponse,
   type WorkoutStartOutcome,
   type WorkoutStartSource,
 } from "@/lib/fitness/writes";
@@ -76,14 +77,18 @@ export function workoutTools(): ToolDefinition[] {
         notes: z.string().optional().describe("Notes about the workout"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new WorkoutsDB(ctx.supabase);
-        // Verify ownership — getWorkoutWithExercises is scoped by RLS
-        const workout = await db.getWorkoutWithExercises(params.workoutId);
-        if (!workout) return { error: "Workout not found" };
-        return db.updateWorkout(params.workoutId, {
+        const outcome = await createWorkoutWrites(ctx.supabase).update({
+          userId: ctx.userId,
+          workoutId: params.workoutId,
           status: "completed",
           notes: params.notes ?? null,
         });
+        if (outcome.type === "not-found") return { error: "Workout not found" };
+        if (outcome.type === "invalid-transition") {
+          return { error: "Workout is no longer editable" };
+        }
+        if (outcome.type === "invalid") return { error: outcome.message };
+        return toWorkoutResponse(outcome.workout);
       },
     },
     {

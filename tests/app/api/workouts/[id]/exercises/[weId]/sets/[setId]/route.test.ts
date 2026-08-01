@@ -2,10 +2,24 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
 // --- Hoisted mocks ---
-const { mockGetUser, mockUpdateSet, mockDeleteSet } = vi.hoisted(() => ({
+const { mockGetUser, mockUpdateSet, mockDeleteSet, mockToWorkoutSetResponse } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockUpdateSet: vi.fn(),
   mockDeleteSet: vi.fn(),
+  mockToWorkoutSetResponse: vi.fn((set: Record<string, unknown>) => ({
+    id: set.id,
+    workout_exercise_id: set.workoutExerciseId,
+    set_number: set.setNumber,
+    set_type: set.setType,
+    weight_kg: set.weightKg,
+    reps: set.reps,
+    duration_seconds: set.durationSeconds,
+    distance_meters: set.distanceMeters,
+    is_completed: set.isCompleted,
+    rpe: set.rpe,
+    created_at: set.createdAt,
+    updated_at: set.updatedAt,
+  })),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -14,11 +28,12 @@ vi.mock("@/lib/supabase/server", () => ({
   })),
 }));
 
-vi.mock("@/lib/db/workout-exercises", () => ({
-  WorkoutExercisesDB: class {
-    updateSet = mockUpdateSet;
-    deleteSet = mockDeleteSet;
-  },
+vi.mock("@/lib/fitness/writes", () => ({
+  createWorkoutWrites: vi.fn(() => ({
+    updateSet: mockUpdateSet,
+    removeSet: mockDeleteSet,
+  })),
+  toWorkoutSetResponse: mockToWorkoutSetResponse,
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -50,8 +65,21 @@ describe("PATCH /api/workouts/[id]/exercises/[weId]/sets/[setId]", () => {
   });
 
   it("updates a set successfully", async () => {
-    const updated = { id: "set-1", weight_kg: 85, reps: 8 };
-    mockUpdateSet.mockResolvedValue(updated);
+    const updated = {
+      id: "set-1",
+      workoutExerciseId: "we-1",
+      setNumber: 1,
+      setType: "normal",
+      weightKg: 85,
+      reps: 8,
+      durationSeconds: null,
+      distanceMeters: null,
+      isCompleted: false,
+      rpe: null,
+      createdAt: "2026-08-01T12:00:00.000Z",
+      updatedAt: "2026-08-01T12:00:00.000Z",
+    };
+    mockUpdateSet.mockResolvedValue({ type: "updated", set: updated });
 
     const response = await PATCH(
       makeRequest("PATCH", { weight_kg: 85, reps: 8 }),
@@ -60,12 +88,45 @@ describe("PATCH /api/workouts/[id]/exercises/[weId]/sets/[setId]", () => {
     const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(data.set).toEqual(updated);
+    expect(data.set).toEqual({
+      id: "set-1",
+      workout_exercise_id: "we-1",
+      set_number: 1,
+      set_type: "normal",
+      weight_kg: 85,
+      reps: 8,
+      duration_seconds: null,
+      distance_meters: null,
+      is_completed: false,
+      rpe: null,
+      created_at: "2026-08-01T12:00:00.000Z",
+      updated_at: "2026-08-01T12:00:00.000Z",
+    });
+    expect(mockUpdateSet).toHaveBeenCalledWith({
+      userId: "user-123",
+      workoutId: "w-1",
+      workoutExerciseId: "we-1",
+      setId: "set-1",
+      changes: { weightKg: 85, reps: 8 },
+    });
   });
 
   it("updates is_completed flag", async () => {
-    const updated = { id: "set-1", is_completed: true };
-    mockUpdateSet.mockResolvedValue(updated);
+    const updated = {
+      id: "set-1",
+      workoutExerciseId: "we-1",
+      setNumber: 1,
+      setType: "normal",
+      weightKg: null,
+      reps: null,
+      durationSeconds: null,
+      distanceMeters: null,
+      isCompleted: true,
+      rpe: null,
+      createdAt: "2026-08-01T12:00:00.000Z",
+      updatedAt: "2026-08-01T12:00:00.000Z",
+    };
+    mockUpdateSet.mockResolvedValue({ type: "updated", set: updated });
 
     const response = await PATCH(
       makeRequest("PATCH", { is_completed: true }),
@@ -75,6 +136,13 @@ describe("PATCH /api/workouts/[id]/exercises/[weId]/sets/[setId]", () => {
 
     expect(response.status).toBe(200);
     expect(data.set.is_completed).toBe(true);
+    expect(mockUpdateSet).toHaveBeenCalledWith({
+      userId: "user-123",
+      workoutId: "w-1",
+      workoutExerciseId: "we-1",
+      setId: "set-1",
+      changes: { isCompleted: true },
+    });
   });
 
   it("returns 400 for empty body", async () => {
@@ -104,6 +172,25 @@ describe("PATCH /api/workouts/[id]/exercises/[weId]/sets/[setId]", () => {
     expect(response.status).toBe(500);
     expect(data.error).toBe("Failed to update set");
   });
+
+  it("maps missing and terminal outcomes", async () => {
+    mockUpdateSet.mockResolvedValueOnce({ type: "not-found" });
+    const missing = await PATCH(
+      makeRequest("PATCH", { weight_kg: 85 }),
+      { params },
+    );
+    expect(missing.status).toBe(404);
+
+    mockUpdateSet.mockResolvedValueOnce({
+      type: "invalid-transition",
+      currentStatus: "completed",
+    });
+    const terminal = await PATCH(
+      makeRequest("PATCH", { weight_kg: 85 }),
+      { params },
+    );
+    expect(terminal.status).toBe(409);
+  });
 });
 
 describe("DELETE /api/workouts/[id]/exercises/[weId]/sets/[setId]", () => {
@@ -113,10 +200,16 @@ describe("DELETE /api/workouts/[id]/exercises/[weId]/sets/[setId]", () => {
   });
 
   it("deletes a set (204)", async () => {
-    mockDeleteSet.mockResolvedValue(undefined);
+    mockDeleteSet.mockResolvedValue({ type: "removed" });
 
     const response = await DELETE(makeRequest("DELETE"), { params });
     expect(response.status).toBe(204);
+    expect(mockDeleteSet).toHaveBeenCalledWith({
+      userId: "user-123",
+      workoutId: "w-1",
+      workoutExerciseId: "we-1",
+      setId: "set-1",
+    });
   });
 
   it("returns 401 for unauthenticated user", async () => {
@@ -134,5 +227,18 @@ describe("DELETE /api/workouts/[id]/exercises/[weId]/sets/[setId]", () => {
 
     expect(response.status).toBe(500);
     expect(data.error).toBe("Failed to delete set");
+  });
+
+  it("maps missing and terminal outcomes", async () => {
+    mockDeleteSet.mockResolvedValueOnce({ type: "not-found" });
+    const missing = await DELETE(makeRequest("DELETE"), { params });
+    expect(missing.status).toBe(404);
+
+    mockDeleteSet.mockResolvedValueOnce({
+      type: "invalid-transition",
+      currentStatus: "discarded",
+    });
+    const terminal = await DELETE(makeRequest("DELETE"), { params });
+    expect(terminal.status).toBe(409);
   });
 });

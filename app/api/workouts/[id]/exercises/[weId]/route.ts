@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
-import { WorkoutExercisesDB } from "@/lib/db/workout-exercises";
+import {
+  createWorkoutWrites,
+  toWorkoutExerciseResponse,
+} from "@/lib/fitness/writes";
 import { validateRequestBody } from "@/lib/validations/api";
 import { workoutExerciseUpdateSchema } from "@/lib/validations/workout";
 import { log } from "@/lib/logger";
@@ -20,7 +23,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; weId: string }> }
 ) {
   try {
-    const { weId } = await params;
+    const { id, weId } = await params;
     const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
     if (!auth.ok) {
       return NextResponse.json(
@@ -28,19 +31,48 @@ export async function PATCH(
         { status: auth.status },
       );
     }
-    const { client: supabase } = auth;
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
     const validation = validateRequestBody(body, workoutExerciseUpdateSchema);
     if (!validation.success) return validation.response;
 
-    const workoutExercisesDB = new WorkoutExercisesDB(supabase);
-    const exercise = await workoutExercisesDB.updateExercise(
-      weId,
-      validation.data
-    );
+    const outcome = await createWorkoutWrites(supabase).updateExercise({
+      userId,
+      workoutId: id,
+      workoutExerciseId: weId,
+      changes: {
+        ...(validation.data.notes !== undefined
+          ? { notes: validation.data.notes }
+          : {}),
+        ...(validation.data.rest_timer_seconds !== undefined
+          ? { restTimerSeconds: validation.data.rest_timer_seconds }
+          : {}),
+      },
+    });
 
-    return NextResponse.json({ exercise });
+    if (outcome.type === "not-found") {
+      return NextResponse.json(
+        { error: "Workout exercise not found" },
+        { status: 404 },
+      );
+    }
+    if (outcome.type === "invalid-transition") {
+      return NextResponse.json(
+        { error: "Workout is no longer editable" },
+        { status: 409 },
+      );
+    }
+    if (outcome.type === "invalid") {
+      return NextResponse.json(
+        { error: outcome.message, field: outcome.field },
+        { status: 400 },
+      );
+    }
+
+    return NextResponse.json({
+      exercise: toWorkoutExerciseResponse(outcome.exercise),
+    });
   } catch (error) {
     log.error("PATCH /api/workouts/[id]/exercises/[weId] error", error);
     return NextResponse.json(
@@ -59,7 +91,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; weId: string }> }
 ) {
   try {
-    const { weId } = await params;
+    const { id, weId } = await params;
     const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
     if (!auth.ok) {
       return NextResponse.json(
@@ -67,10 +99,32 @@ export async function DELETE(
         { status: auth.status },
       );
     }
-    const { client: supabase } = auth;
+    const { principal: { userId }, client: supabase } = auth;
 
-    const workoutExercisesDB = new WorkoutExercisesDB(supabase);
-    await workoutExercisesDB.removeExercise(weId);
+    const outcome = await createWorkoutWrites(supabase).removeExercise({
+      userId,
+      workoutId: id,
+      workoutExerciseId: weId,
+    });
+
+    if (outcome.type === "not-found") {
+      return NextResponse.json(
+        { error: "Workout exercise not found" },
+        { status: 404 },
+      );
+    }
+    if (outcome.type === "invalid-transition") {
+      return NextResponse.json(
+        { error: "Workout is no longer editable" },
+        { status: 409 },
+      );
+    }
+    if (outcome.type === "invalid") {
+      return NextResponse.json(
+        { error: outcome.message, field: outcome.field },
+        { status: 400 },
+      );
+    }
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {

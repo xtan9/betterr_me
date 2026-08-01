@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
-import { WorkoutExercisesDB } from "@/lib/db/workout-exercises";
+import { createWorkoutWrites, toWorkoutSetResponse } from "@/lib/fitness/writes";
 import { validateRequestBody } from "@/lib/validations/api";
 import { workoutSetUpdateSchema } from "@/lib/validations/workout";
 import { log } from "@/lib/logger";
@@ -20,7 +20,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; weId: string; setId: string }> }
 ) {
   try {
-    const { setId } = await params;
+    const { id, weId, setId } = await params;
     const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
     if (!auth.ok) {
       return NextResponse.json(
@@ -28,16 +28,59 @@ export async function PATCH(
         { status: auth.status },
       );
     }
-    const { client: supabase } = auth;
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
     const validation = validateRequestBody(body, workoutSetUpdateSchema);
     if (!validation.success) return validation.response;
 
-    const workoutExercisesDB = new WorkoutExercisesDB(supabase);
-    const set = await workoutExercisesDB.updateSet(setId, validation.data);
+    const outcome = await createWorkoutWrites(supabase).updateSet({
+      userId,
+      workoutId: id,
+      workoutExerciseId: weId,
+      setId,
+      changes: {
+        ...(validation.data.set_type !== undefined
+          ? { setType: validation.data.set_type }
+          : {}),
+        ...(validation.data.weight_kg !== undefined
+          ? { weightKg: validation.data.weight_kg }
+          : {}),
+        ...(validation.data.reps !== undefined
+          ? { reps: validation.data.reps }
+          : {}),
+        ...(validation.data.duration_seconds !== undefined
+          ? { durationSeconds: validation.data.duration_seconds }
+          : {}),
+        ...(validation.data.distance_meters !== undefined
+          ? { distanceMeters: validation.data.distance_meters }
+          : {}),
+        ...(validation.data.rpe !== undefined
+          ? { rpe: validation.data.rpe }
+          : {}),
+        ...(validation.data.is_completed !== undefined
+          ? { isCompleted: validation.data.is_completed }
+          : {}),
+      },
+    });
 
-    return NextResponse.json({ set });
+    if (outcome.type === "not-found") {
+      return NextResponse.json({ error: "Workout set not found" }, { status: 404 });
+    }
+    if (outcome.type === "invalid-transition") {
+      return NextResponse.json(
+        { error: "Workout is no longer editable" },
+        { status: 409 },
+      );
+    }
+    if (outcome.type === "invalid") {
+      return NextResponse.json(
+        { error: outcome.message, field: outcome.field },
+        { status: 400 },
+      );
+    }
+
+    return NextResponse.json({ set: toWorkoutSetResponse(outcome.set) });
   } catch (error) {
     log.error(
       "PATCH /api/workouts/[id]/exercises/[weId]/sets/[setId] error",
@@ -59,7 +102,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; weId: string; setId: string }> }
 ) {
   try {
-    const { setId } = await params;
+    const { id, weId, setId } = await params;
     const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
     if (!auth.ok) {
       return NextResponse.json(
@@ -67,10 +110,30 @@ export async function DELETE(
         { status: auth.status },
       );
     }
-    const { client: supabase } = auth;
+    const { principal: { userId }, client: supabase } = auth;
 
-    const workoutExercisesDB = new WorkoutExercisesDB(supabase);
-    await workoutExercisesDB.deleteSet(setId);
+    const outcome = await createWorkoutWrites(supabase).removeSet({
+      userId,
+      workoutId: id,
+      workoutExerciseId: weId,
+      setId,
+    });
+
+    if (outcome.type === "not-found") {
+      return NextResponse.json({ error: "Workout set not found" }, { status: 404 });
+    }
+    if (outcome.type === "invalid-transition") {
+      return NextResponse.json(
+        { error: "Workout is no longer editable" },
+        { status: 409 },
+      );
+    }
+    if (outcome.type === "invalid") {
+      return NextResponse.json(
+        { error: outcome.message, field: outcome.field },
+        { status: 400 },
+      );
+    }
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {

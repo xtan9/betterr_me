@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { WorkoutsDB } from "@/lib/db/workouts";
+import { createWorkoutWrites, toWorkoutResponse } from "@/lib/fitness/writes";
 import { validateRequestBody } from "@/lib/validations/api";
 import { workoutUpdateSchema } from "@/lib/validations/workout";
 import { log } from "@/lib/logger";
@@ -72,16 +73,43 @@ export async function PATCH(
         { status: auth.status },
       );
     }
-    const { client: supabase } = auth;
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
     const validation = validateRequestBody(body, workoutUpdateSchema);
     if (!validation.success) return validation.response;
 
-    const workoutsDB = new WorkoutsDB(supabase);
-    const workout = await workoutsDB.updateWorkout(id, validation.data);
+    const outcome = await createWorkoutWrites(supabase).update({
+      userId,
+      workoutId: id,
+      ...(validation.data.title !== undefined
+        ? { title: validation.data.title }
+        : {}),
+      ...(validation.data.notes !== undefined
+        ? { notes: validation.data.notes }
+        : {}),
+      ...(validation.data.status !== undefined
+        ? { status: validation.data.status }
+        : {}),
+    });
 
-    return NextResponse.json({ workout });
+    if (outcome.type === "not-found") {
+      return NextResponse.json({ error: "Workout not found" }, { status: 404 });
+    }
+    if (outcome.type === "invalid-transition") {
+      return NextResponse.json(
+        { error: "Workout is no longer editable" },
+        { status: 409 },
+      );
+    }
+    if (outcome.type === "invalid") {
+      return NextResponse.json(
+        { error: outcome.message, field: outcome.field },
+        { status: 400 },
+      );
+    }
+
+    return NextResponse.json({ workout: toWorkoutResponse(outcome.workout) });
   } catch (error) {
     log.error("PATCH /api/workouts/[id] error", error);
     return NextResponse.json(

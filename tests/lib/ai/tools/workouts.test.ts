@@ -6,6 +6,9 @@ const mockGetWorkoutsWithSummary = vi.fn();
 const mockGetActiveWorkout = vi.fn();
 const mockStartWorkout = vi.fn();
 const mockUpdateWorkout = vi.fn();
+const { mockToWorkoutResponse } = vi.hoisted(() => ({
+  mockToWorkoutResponse: vi.fn((workout: unknown) => workout),
+}));
 const mockGetWorkoutWithExercises = vi.fn();
 const mockGetAllExercises = vi.fn();
 const mockGetUserRoutines = vi.fn();
@@ -15,7 +18,6 @@ vi.mock("@/lib/db", () => ({
   WorkoutsDB: class {
     getWorkoutsWithSummary = mockGetWorkoutsWithSummary;
     getActiveWorkout = mockGetActiveWorkout;
-    updateWorkout = mockUpdateWorkout;
     getWorkoutWithExercises = mockGetWorkoutWithExercises;
     getExerciseHistory = mockGetExerciseHistory;
   },
@@ -28,7 +30,11 @@ vi.mock("@/lib/db", () => ({
 }));
 
 vi.mock("@/lib/fitness/writes", () => ({
-  createWorkoutWrites: vi.fn(() => ({ start: mockStartWorkout })),
+  createWorkoutWrites: vi.fn(() => ({
+    start: mockStartWorkout,
+    update: mockUpdateWorkout,
+  })),
+  toWorkoutResponse: mockToWorkoutResponse,
 }));
 
 function makeCtx(overrides?: Partial<ToolContext>): ToolContext {
@@ -121,28 +127,37 @@ describe("workoutTools", () => {
 
   it("completeWorkout verifies ownership then completes", async () => {
     const ctx = makeCtx();
-    mockGetWorkoutWithExercises.mockResolvedValue({ id: "w1", exercises: [] });
-    mockUpdateWorkout.mockResolvedValue({ id: "w1", status: "completed" });
-    await findTool("completeWorkout").execute(
+    const completed = { id: "w1", status: "completed" };
+    mockUpdateWorkout.mockResolvedValue({ type: "updated", workout: completed });
+    const result = await findTool("completeWorkout").execute(
       { workoutId: "w1", notes: "Great session" },
       ctx,
     );
-    expect(mockGetWorkoutWithExercises).toHaveBeenCalledWith("w1");
-    expect(mockUpdateWorkout).toHaveBeenCalledWith("w1", {
+    expect(mockGetWorkoutWithExercises).not.toHaveBeenCalled();
+    expect(mockUpdateWorkout).toHaveBeenCalledWith({
+      userId: "user-123",
+      workoutId: "w1",
       status: "completed",
       notes: "Great session",
     });
+    expect(mockToWorkoutResponse).toHaveBeenCalledWith(completed);
+    expect(result).toEqual(completed);
   });
 
   it("completeWorkout returns error when not found", async () => {
     const ctx = makeCtx();
-    mockGetWorkoutWithExercises.mockResolvedValue(null);
+    mockUpdateWorkout.mockResolvedValue({ type: "not-found" });
     const result = await findTool("completeWorkout").execute(
       { workoutId: "w999" },
       ctx,
     );
     expect(result).toEqual({ error: "Workout not found" });
-    expect(mockUpdateWorkout).not.toHaveBeenCalled();
+    expect(mockUpdateWorkout).toHaveBeenCalledWith({
+      userId: "user-123",
+      workoutId: "w999",
+      status: "completed",
+      notes: null,
+    });
   });
 
   it("getWorkoutDetails calls getWorkoutWithExercises", async () => {

@@ -26,20 +26,6 @@ export interface WorkoutSummary {
   totalSets: number;
 }
 
-/** Valid workout status transitions. Terminal states have no outgoing edges. */
-// Stryker disable all: module-scope const — vitest caches the module on first
-// import, so Stryker's per-test activeMutant switch doesn't re-evaluate this
-// literal. Test coverage for these transitions lives in updateWorkout's
-// it.each() rejection matrix and its two happy-path cases (in_progress →
-// completed, in_progress → discarded), which would all fail if the table were
-// changed. Verified manually by patching the source.
-const VALID_TRANSITIONS: Record<string, string[]> = {
-  in_progress: ["completed", "discarded"],
-  completed: [],
-  discarded: [],
-};
-// Stryker restore all
-
 /** CRUD for workouts. RLS handles user scoping. */
 export class WorkoutsDB {
   constructor(private supabase: SupabaseClient) {}
@@ -146,68 +132,6 @@ export class WorkoutsDB {
    * - To 'discarded': just updates status.
    * Validates state transitions — terminal states cannot be changed.
    */
-  async updateWorkout(
-    workoutId: string,
-    updates: {
-      title?: string;
-      notes?: string | null;
-      status?: "in_progress" | "completed" | "discarded";
-    }
-  ): Promise<Workout> {
-    let finalUpdates: Record<string, unknown> = { ...updates };
-
-    // If status change is requested, validate the transition
-    if (updates.status) {
-      const { data: current, error: fetchError } = await this.supabase
-        .from("workouts")
-        .select("status, started_at")
-        .eq("id", workoutId)
-        .single();
-
-      if (fetchError) {
-        log.error("Failed to fetch workout for update", fetchError);
-        throw fetchError;
-      }
-
-      const allowed = VALID_TRANSITIONS[current.status as string] ?? [];
-      if (!allowed.includes(updates.status)) {
-        throw new Error(
-          `Invalid status transition: ${current.status} → ${updates.status}`
-        );
-      }
-
-      // If completing, compute completed_at and duration_seconds
-      if (updates.status === "completed") {
-        const completedAt = new Date().toISOString();
-        const durationSeconds = Math.floor(
-          (new Date(completedAt).getTime() -
-            new Date(current.started_at).getTime()) /
-            1000
-        );
-
-        finalUpdates = {
-          ...finalUpdates,
-          completed_at: completedAt,
-          duration_seconds: durationSeconds,
-        };
-      }
-    }
-
-    const { data, error } = await this.supabase
-      .from("workouts")
-      .update(finalUpdates)
-      .eq("id", workoutId)
-      .select()
-      .single();
-
-    if (error) {
-      log.error("Failed to update workout", error);
-      throw error;
-    }
-
-    return data;
-  }
-
   /**
    * List completed/discarded workouts for a user (workout history).
    * Does NOT include exercises/sets — use getWorkoutWithExercises for detail.

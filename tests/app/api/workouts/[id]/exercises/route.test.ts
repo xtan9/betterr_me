@@ -2,9 +2,18 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
 // --- Hoisted mocks ---
-const { mockGetUser, mockAddExercise } = vi.hoisted(() => ({
+const { mockGetUser, mockAddExercise, mockToWorkoutExerciseResponse } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockAddExercise: vi.fn(),
+  mockToWorkoutExerciseResponse: vi.fn((exercise: Record<string, unknown>) => ({
+    id: exercise.id,
+    workout_id: exercise.workoutId,
+    exercise_id: exercise.exerciseId,
+    sort_order: exercise.sortOrder,
+    notes: exercise.notes,
+    rest_timer_seconds: exercise.restTimerSeconds,
+    created_at: exercise.createdAt,
+  })),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -13,10 +22,9 @@ vi.mock("@/lib/supabase/server", () => ({
   })),
 }));
 
-vi.mock("@/lib/db/workout-exercises", () => ({
-  WorkoutExercisesDB: class {
-    addExercise = mockAddExercise;
-  },
+vi.mock("@/lib/fitness/writes", () => ({
+  createWorkoutWrites: vi.fn(() => ({ addExercise: mockAddExercise })),
+  toWorkoutExerciseResponse: mockToWorkoutExerciseResponse,
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -46,8 +54,16 @@ describe("POST /api/workouts/[id]/exercises", () => {
   });
 
   it("adds exercise to workout (201)", async () => {
-    const created = { id: "we-new", exercise_id: validExerciseUUID };
-    mockAddExercise.mockResolvedValue(created);
+    const created = {
+      id: "we-new",
+      workoutId: "w-1",
+      exerciseId: validExerciseUUID,
+      sortOrder: 65536,
+      notes: null,
+      restTimerSeconds: 90,
+      createdAt: "2026-08-01T12:00:00.000Z",
+    };
+    mockAddExercise.mockResolvedValue({ type: "added", exercise: created });
 
     const response = await POST(
       makePostRequest({ exercise_id: validExerciseUUID }),
@@ -56,16 +72,36 @@ describe("POST /api/workouts/[id]/exercises", () => {
     const data = await response.json();
 
     expect(response.status).toBe(201);
-    expect(data.exercise).toEqual(created);
-    expect(mockAddExercise).toHaveBeenCalledWith(
-      "w-1",
-      validExerciseUUID,
-      undefined
-    );
+    expect(data.exercise).toEqual({
+      id: "we-new",
+      workout_id: "w-1",
+      exercise_id: validExerciseUUID,
+      sort_order: 65536,
+      notes: null,
+      rest_timer_seconds: 90,
+      created_at: "2026-08-01T12:00:00.000Z",
+    });
+    expect(mockAddExercise).toHaveBeenCalledWith({
+      userId: "user-123",
+      workoutId: "w-1",
+      exerciseId: validExerciseUUID,
+      restTimerSeconds: undefined,
+    });
   });
 
   it("passes rest_timer_seconds when provided", async () => {
-    mockAddExercise.mockResolvedValue({ id: "we-new" });
+    mockAddExercise.mockResolvedValue({
+      type: "added",
+      exercise: {
+        id: "we-new",
+        workoutId: "w-1",
+        exerciseId: validExerciseUUID,
+        sortOrder: 65536,
+        notes: null,
+        restTimerSeconds: 120,
+        createdAt: "2026-08-01T12:00:00.000Z",
+      },
+    });
 
     const response = await POST(
       makePostRequest({
@@ -76,11 +112,12 @@ describe("POST /api/workouts/[id]/exercises", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mockAddExercise).toHaveBeenCalledWith(
-      "w-1",
-      validExerciseUUID,
-      120
-    );
+    expect(mockAddExercise).toHaveBeenCalledWith({
+      userId: "user-123",
+      workoutId: "w-1",
+      exerciseId: validExerciseUUID,
+      restTimerSeconds: 120,
+    });
   });
 
   it("rejects invalid body — missing exercise_id (400)", async () => {
@@ -120,5 +157,24 @@ describe("POST /api/workouts/[id]/exercises", () => {
 
     expect(response.status).toBe(500);
     expect(data.error).toBe("Failed to add exercise to workout");
+  });
+
+  it("maps missing and terminal outcomes", async () => {
+    mockAddExercise.mockResolvedValueOnce({ type: "not-found" });
+    const missing = await POST(
+      makePostRequest({ exercise_id: validExerciseUUID }),
+      { params },
+    );
+    expect(missing.status).toBe(404);
+
+    mockAddExercise.mockResolvedValueOnce({
+      type: "invalid-transition",
+      currentStatus: "completed",
+    });
+    const terminal = await POST(
+      makePostRequest({ exercise_id: validExerciseUUID }),
+      { params },
+    );
+    expect(terminal.status).toBe(409);
   });
 });
