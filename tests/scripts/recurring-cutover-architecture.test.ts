@@ -49,8 +49,13 @@ describe("Recurring Task lifecycle cutover boundary", () => {
     const fixture = source("supabase/tests/recurring_task_lifecycle_cutover.sql");
 
     expect(registry).toContain('"recurring_task_lifecycle_cutover.sql"');
+    expect(registry).toContain(
+      '"path": "recurring_task_lifecycle_cutover.sql",\n    "domain": "recurring-tasks",\n    "role": "admin"',
+    );
     expect(fixture).toContain("recurring_task_lifecycle_cutover");
     expect(fixture).toContain("application role can operate the lifecycle cutover marker");
+    expect(fixture).toContain("set local role authenticated;");
+    expect(fixture).toContain("reset role;");
     expect(fixture).toContain("rollback;");
   });
 });

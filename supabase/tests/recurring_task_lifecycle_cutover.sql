@@ -30,6 +30,11 @@ begin
 end
 $assert_cutover_marker$;
 
+-- The marker and retained outcome are service-role-only data. This fixture is
+-- intentionally run by the privileged SQL runner so these reads exercise the
+-- actual release boundary rather than an application-visible projection.
+set local role authenticated;
+
 do $assert_cutover_privileges$
 begin
   if has_function_privilege(
@@ -46,6 +51,8 @@ begin
   end if;
 end
 $assert_cutover_privileges$;
+
+reset role;
 
 -- A release retry is represented by the immutable marker rather than a
 -- second writer. The stored outcome must retain the backfill diagnostics and
