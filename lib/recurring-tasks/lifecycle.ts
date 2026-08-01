@@ -615,7 +615,7 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
       }
       series.updatedAt = this.clock().toISOString();
 
-      reconcileOpenOccurrences(series, effectiveDate);
+      reconcileEligibleOccurrences(series, effectiveDate);
       if (request.scope === "all") {
         for (const occurrence of series.occurrences) {
           if (occurrence.state !== "open" && occurrence.state !== "extra") {
@@ -796,7 +796,7 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
       series.status = "paused";
       series.revisionToken += 1;
       series.updatedAt = this.clock().toISOString();
-      reconcileOpenOccurrences(series, effectiveDate);
+      reconcileEligibleOccurrences(series, effectiveDate);
       const coverage = request.coverage
         ?? coverageFrom(series.coverageHorizon, effectiveDate);
       return coverage
@@ -905,7 +905,7 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
       series.status = "ended";
       series.revisionToken += 1;
       series.updatedAt = this.clock().toISOString();
-      reconcileOpenOccurrences(series, effectiveDate);
+      reconcileEligibleOccurrences(series, effectiveDate);
       const coverage = request.coverage
         ?? coverageFrom(series.coverageHorizon, effectiveDate);
       return coverage
@@ -1222,13 +1222,13 @@ function ownedOccurrence(
   return series.occurrences.find((occurrence) => occurrence.id === occurrenceId);
 }
 
-function reconcileOpenOccurrences(
+function reconcileEligibleOccurrences(
   series: RecurringTaskSeries,
   fromDate: string,
 ): void {
   for (const occurrence of series.occurrences) {
     if (
-      occurrence.state !== "open"
+      (occurrence.state !== "open" && occurrence.state !== "extra")
       || compareLocalDates(occurrence.scheduledDate, fromDate) < 0
     ) {
       continue;
@@ -1236,6 +1236,7 @@ function reconcileOpenOccurrences(
     if (isDateProducedBySeries(series, occurrence.scheduledDate)) {
       const revision = resolveRevision(series, occurrence.scheduledDate);
       if (revision) {
+        occurrence.revisionId = revision.id;
         occurrence.details = mergeDetails(
           revision.defaults,
           occurrence.overrides,
@@ -1243,7 +1244,9 @@ function reconcileOpenOccurrences(
       }
       continue;
     }
-    occurrence.state = occurrenceHasIntent(occurrence) ? "extra" : "withdrawn";
+    if (occurrence.state === "open") {
+      occurrence.state = occurrenceHasIntent(occurrence) ? "extra" : "withdrawn";
+    }
   }
 }
 
