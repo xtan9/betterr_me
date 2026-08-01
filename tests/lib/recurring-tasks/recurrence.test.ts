@@ -1,10 +1,24 @@
 import { describe, it, expect } from "vitest";
 import {
+  calculateScheduledDates,
   getOccurrencesInRange,
   getNextOccurrence,
   describeRecurrence,
 } from "@/lib/recurring-tasks/recurrence";
 import type { RecurrenceRule } from "@/lib/db/types";
+
+describe("calculateScheduledDates", () => {
+  it("uses local calendar arithmetic across daylight-saving boundaries", () => {
+    const result = calculateScheduledDates({
+      rule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-03-07",
+      activationDate: "2026-03-08",
+      range: { from: "2026-03-08", to: "2026-03-10" },
+    });
+
+    expect(result).toEqual(["2026-03-08", "2026-03-09", "2026-03-10"]);
+  });
+});
 
 // =============================================================================
 // getOccurrencesInRange — daily

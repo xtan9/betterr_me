@@ -7,7 +7,9 @@ import { log } from '@/lib/logger';
 import { recurringTaskCreateSchema } from '@/lib/validations/recurring-task';
 import { ensureProfile } from '@/lib/db/ensure-profile';
 import { getLocalDateString } from '@/lib/utils';
+import { addLocalDays } from '@/lib/recurring-tasks/recurrence';
 import type { RecurringTaskInsert } from '@/lib/db/types';
+import { createSupabaseRecurringTaskLifecycle } from '@/lib/recurring-tasks';
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ['cookie'],
@@ -41,7 +43,9 @@ export async function GET(request: NextRequest) {
       ? (statusParam as 'active' | 'paused' | 'archived')
       : null;
 
-    const recurringTasksDB = new RecurringTasksDB(supabase);
+    const recurringTasksDB = new RecurringTasksDB(supabase, {
+      lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
+    });
     const templates = await recurringTasksDB.getUserRecurringTasks(
       userId,
       status ? { status } : undefined
@@ -83,11 +87,11 @@ export async function POST(request: NextRequest) {
 
     // Calculate throughDate (7 days from today)
     const today = body.date || getLocalDateString();
-    const [y, m, d] = today.split('-').map(Number);
-    const throughDate = new Date(y, m - 1, d + 7);
-    const throughDateStr = getLocalDateString(throughDate);
+    const throughDateStr = addLocalDays(today, 7);
 
-    const recurringTasksDB = new RecurringTasksDB(supabase);
+    const recurringTasksDB = new RecurringTasksDB(supabase, {
+      lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
+    });
     const data: RecurringTaskInsert = {
       user_id: userId,
       title: validation.data.title.trim(),

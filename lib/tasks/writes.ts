@@ -10,7 +10,13 @@ import type {
 import type { EditScope } from '@/lib/validations/recurring-task';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { RecurringTasksDB, TasksDB } from '@/lib/db';
+import type { RecurringTaskLifecycleAdapter } from '@/lib/db/recurring-tasks';
 import { getBottomSortOrder } from './sort-order';
+import type {
+  LifecycleOutcome,
+  OccurrenceOverrides,
+  RecurringTaskLifecyclePort,
+} from '@/lib/recurring-tasks/lifecycle';
 
 export interface TaskWritePersistence {
   getMaxSortOrder(userId: string): Promise<number | null>;
@@ -23,6 +29,7 @@ export interface TaskWritePersistence {
     scope: EditScope,
     updates: TaskUpdate,
   ): Promise<void>;
+  lifecycle?: Pick<RecurringTaskLifecyclePort, 'editOccurrence'>;
 }
 
 export type TaskWriteIntent =
@@ -39,11 +46,16 @@ type Clock = () => Date;
 
 export function createTaskWrites(
   supabase: SupabaseClient,
-  options: { scopedUpdates?: boolean } = {},
+  options: {
+    scopedUpdates?: boolean;
+    lifecycle?: RecurringTaskLifecycleAdapter;
+  } = {},
 ): TaskWrites {
   const tasksDB = new TasksDB(supabase);
   const recurringTasksDB = options.scopedUpdates
-    ? new RecurringTasksDB(supabase)
+    ? new RecurringTasksDB(supabase, {
+      lifecycle: options.lifecycle,
+    })
     : null;
 
   return new TaskWrites({
@@ -65,6 +77,7 @@ export function createTaskWrites(
     updateInstanceWithScope: recurringTasksDB
       ? recurringTasksDB.updateInstanceWithScope.bind(recurringTasksDB)
       : undefined,
+    lifecycle: options.lifecycle,
   });
 }
 
@@ -98,6 +111,26 @@ export class TaskWrites {
   ): Promise<{ type: 'ordered'; task: Task }>;
   async execute(intent: TaskWriteIntent): Promise<TaskWriteOutcome> {
     if (intent.type === 'order') {
+      if (this.persistence.lifecycle) {
+        const current = await this.persistence.getTask(intent.taskId, intent.userId);
+        if (!current) {
+          const task = await this.persistence.updateTask(intent.taskId, intent.userId, {
+            sort_order: intent.sortOrder,
+          });
+          return { type: 'ordered', task };
+        }
+        if (current.recurring_series_id && current.recurring_occurrence_id) {
+          assertLifecycleSuccess(await this.persistence.lifecycle.editOccurrence({
+            userId: intent.userId,
+            seriesId: current.recurring_series_id,
+            occurrenceId: current.recurring_occurrence_id,
+            updates: { sortOrder: intent.sortOrder },
+          }));
+          const task = await this.persistence.getTask(intent.taskId, intent.userId);
+          if (!task) throw new TaskNotFoundError();
+          return { type: 'ordered', task };
+        }
+      }
       const task = await this.persistence.updateTask(intent.taskId, intent.userId, {
         sort_order: intent.sortOrder,
       });
@@ -107,6 +140,22 @@ export class TaskWrites {
     if (intent.type === 'toggle-completion') {
       const current = await this.persistence.getTask(intent.taskId, intent.userId);
       if (!current) throw new TaskNotFoundError();
+      if (
+        current.recurring_series_id
+        && current.recurring_occurrence_id
+        && this.persistence.lifecycle
+      ) {
+        assertLifecycleSuccess(await this.persistence.lifecycle.editOccurrence({
+          userId: intent.userId,
+          seriesId: current.recurring_series_id,
+          occurrenceId: current.recurring_occurrence_id,
+          updates: {},
+          completed: !current.is_completed,
+        }));
+        const task = await this.persistence.getTask(intent.taskId, intent.userId);
+        if (!task) throw new TaskNotFoundError();
+        return { type: 'toggled', task };
+      }
       const task = await this.persistence.updateTask(
         intent.taskId,
         intent.userId,
@@ -128,6 +177,31 @@ export class TaskWrites {
           updates,
         );
         return { type: 'scoped-updated' };
+      }
+      if (this.persistence.lifecycle) {
+        const current = await this.persistence.getTask(intent.taskId, intent.userId);
+        if (!current) {
+          const task = await this.persistence.updateTask(
+            intent.taskId,
+            intent.userId,
+            updates,
+          );
+          return { type: 'updated', task };
+        }
+        if (current.recurring_series_id && current.recurring_occurrence_id) {
+          assertLifecycleSuccess(await this.persistence.lifecycle.editOccurrence({
+            userId: intent.userId,
+            seriesId: current.recurring_series_id,
+            occurrenceId: current.recurring_occurrence_id,
+            updates: isCompletionSynchronizationOnly(updates)
+              ? {}
+              : taskUpdatesToOccurrenceOverrides(updates),
+            completed: updates.is_completed,
+          }));
+          const task = await this.persistence.getTask(intent.taskId, intent.userId);
+          if (!task) throw new TaskNotFoundError();
+          return { type: 'updated', task };
+        }
       }
       const task = await this.persistence.updateTask(
         intent.taskId,
@@ -196,4 +270,54 @@ export class TaskWrites {
 
     return updates;
   }
+}
+
+function taskUpdatesToOccurrenceOverrides(
+  updates: TaskUpdate,
+): OccurrenceOverrides {
+  return {
+    ...(updates.title === undefined ? {} : { title: updates.title }),
+    ...(updates.description === undefined
+      ? {}
+      : { description: updates.description }),
+    ...(updates.priority === undefined ? {} : { priority: updates.priority }),
+    ...(updates.category_id === undefined
+      ? {}
+      : { categoryId: updates.category_id }),
+    ...(updates.due_date === undefined ? {} : { dueDate: updates.due_date }),
+    ...(updates.due_time === undefined ? {} : { dueTime: updates.due_time }),
+    ...(updates.status === undefined ? {} : { status: updates.status }),
+    ...(updates.section === undefined ? {} : { section: updates.section }),
+    ...(updates.project_id === undefined
+      ? {}
+      : { projectId: updates.project_id }),
+    ...(updates.sort_order === undefined
+      ? {}
+      : { sortOrder: updates.sort_order }),
+  };
+}
+
+function isCompletionSynchronizationOnly(updates: TaskUpdate): boolean {
+  return updates.is_completed === false
+    && updates.status === 'todo'
+    && Object.keys(updates).every((key) =>
+      key === 'is_completed' || key === 'status' || key === 'completed_at'
+    );
+}
+
+function assertLifecycleSuccess<T>(
+  outcome: LifecycleOutcome<T>,
+): Extract<LifecycleOutcome<T>, { status: 'complete' | 'already-applied' }> {
+  if (outcome.status === 'complete' || outcome.status === 'already-applied') {
+    return outcome as Extract<LifecycleOutcome<T>, {
+      status: 'complete' | 'already-applied';
+    }>;
+  }
+  if (outcome.status === 'conflict') {
+    throw new Error(
+      `Recurring task lifecycle conflict: expected revision ${outcome.expectedRevisionToken}, actual ${outcome.actualRevisionToken}`,
+    );
+  }
+  if ('reason' in outcome) throw new Error(String(outcome.reason));
+  throw new Error('Recurring task lifecycle mutation failed');
 }

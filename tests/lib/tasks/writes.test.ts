@@ -324,4 +324,81 @@ describe('TaskWrites', () => {
       task: { id: 'task-1', sort_order: 32768 },
     });
   });
+
+  it('routes recurring ordering through the lifecycle boundary', async () => {
+    const persistence = createPersistence();
+    vi.mocked(persistence.getTask)
+      .mockResolvedValueOnce({
+        id: 'task-1',
+        is_completed: false,
+        recurring_series_id: 'series-1',
+        recurring_occurrence_id: 'occurrence-1',
+      } as never)
+      .mockResolvedValueOnce({
+        id: 'task-1',
+        sort_order: 32768,
+      } as never);
+    const editOccurrence = vi.fn().mockResolvedValue({
+      status: 'complete',
+      type: 'complete',
+    });
+    persistence.lifecycle = { editOccurrence } as never;
+    const writes = new TaskWrites(persistence);
+
+    const outcome = await writes.execute({
+      type: 'order',
+      userId: 'user-1',
+      taskId: 'task-1',
+      sortOrder: 32768,
+    });
+
+    expect(editOccurrence).toHaveBeenCalledWith({
+      userId: 'user-1',
+      seriesId: 'series-1',
+      occurrenceId: 'occurrence-1',
+      updates: { sortOrder: 32768 },
+    });
+    expect(persistence.updateTask).not.toHaveBeenCalled();
+    expect(outcome).toEqual({
+      type: 'ordered',
+      task: { id: 'task-1', sort_order: 32768 },
+    });
+  });
+
+  it('reopens a recurring occurrence through a completion-only task update', async () => {
+    const persistence = createPersistence();
+    vi.mocked(persistence.getTask)
+      .mockResolvedValueOnce({
+        id: 'task-1',
+        is_completed: true,
+        recurring_series_id: 'series-1',
+        recurring_occurrence_id: 'occurrence-1',
+      } as never)
+      .mockResolvedValueOnce({
+        id: 'task-1',
+        is_completed: false,
+        status: 'todo',
+      } as never);
+    const editOccurrence = vi.fn().mockResolvedValue({
+      status: 'complete',
+      type: 'complete',
+    });
+    persistence.lifecycle = { editOccurrence } as never;
+    const writes = new TaskWrites(persistence);
+
+    await writes.execute({
+      type: 'update',
+      userId: 'user-1',
+      taskId: 'task-1',
+      values: { is_completed: false },
+    });
+
+    expect(editOccurrence).toHaveBeenCalledWith({
+      userId: 'user-1',
+      seriesId: 'series-1',
+      occurrenceId: 'occurrence-1',
+      updates: {},
+      completed: false,
+    });
+  });
 });

@@ -2,6 +2,10 @@ import { z } from "zod";
 import { TasksDB, RecurringTasksDB } from "@/lib/db";
 import type { RecurrenceRule } from "@/lib/db";
 import { createTaskWrites } from "@/lib/tasks/writes";
+import { createSupabaseRecurringTaskLifecycle } from "@/lib/recurring-tasks";
+import { ensureRecurringTaskCoverageThrough } from "@/lib/recurring-tasks/coverage";
+import { addLocalDays } from "@/lib/recurring-tasks/recurrence";
+import { log } from "@/lib/logger";
 import {
   hasTaskUpdateValues,
   taskFormSchema,
@@ -50,6 +54,7 @@ export function taskTools(): ToolDefinition[] {
         date: z.string().describe("Date in YYYY-MM-DD format"),
       }),
       execute: async (params, ctx: ToolContext) => {
+        await ensureAiRecurringCoverage(ctx, params.date, params.date);
         const db = new TasksDB(ctx.supabase);
         return db.getTodayTasks(ctx.userId, params.date);
       },
@@ -65,6 +70,11 @@ export function taskTools(): ToolDefinition[] {
           .describe("Number of days to look ahead (default 7)"),
       }),
       execute: async (params, ctx: ToolContext) => {
+        await ensureAiRecurringCoverage(
+          ctx,
+          params.date,
+          addLocalDays(params.date, params.days ?? 7),
+        );
         const db = new TasksDB(ctx.supabase);
         return db.getUpcomingTasks(ctx.userId, params.date, params.days);
       },
@@ -76,6 +86,7 @@ export function taskTools(): ToolDefinition[] {
         date: z.string().describe("Current date in YYYY-MM-DD format"),
       }),
       execute: async (params, ctx: ToolContext) => {
+        await ensureAiRecurringCoverage(ctx, params.date, params.date);
         const db = new TasksDB(ctx.supabase);
         return db.getOverdueTasks(ctx.userId, params.date);
       },
@@ -117,7 +128,9 @@ export function taskTools(): ToolDefinition[] {
         params: z.infer<typeof createTaskParameters>,
         ctx: ToolContext,
       ) => {
-        const outcome = await createTaskWrites(ctx.supabase).execute({
+        const outcome = await createTaskWrites(ctx.supabase, {
+          lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
+        }).execute({
           type: "create",
           userId: ctx.userId,
           values: {
@@ -137,7 +150,9 @@ export function taskTools(): ToolDefinition[] {
         taskId: z.string().describe("The task ID"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const outcome = await createTaskWrites(ctx.supabase).execute({
+        const outcome = await createTaskWrites(ctx.supabase, {
+          lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
+        }).execute({
           type: "toggle-completion",
           taskId: params.taskId,
           userId: ctx.userId,
@@ -154,7 +169,9 @@ export function taskTools(): ToolDefinition[] {
         ctx: ToolContext,
       ) => {
         const { taskId, dueDate, projectId, ...rest } = params;
-        const outcome = await createTaskWrites(ctx.supabase).execute({
+        const outcome = await createTaskWrites(ctx.supabase, {
+          lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
+        }).execute({
           type: "update",
           taskId,
           userId: ctx.userId,
@@ -169,7 +186,8 @@ export function taskTools(): ToolDefinition[] {
     },
     {
       name: "deleteTask",
-      description: "Delete a task by ID. This action cannot be undone.",
+      description:
+        "Delete a task by ID, or skip a recurring occurrence while preserving its series lineage.",
       parameters: z.object({
         taskId: z.string().describe("The task ID"),
       }),
@@ -177,7 +195,13 @@ export function taskTools(): ToolDefinition[] {
         const db = new TasksDB(ctx.supabase);
         const task = await db.getTask(params.taskId, ctx.userId);
         if (!task) return { error: "Task not found" };
-        await db.deleteTask(params.taskId, ctx.userId);
+        if (task.recurring_series_id && task.recurring_occurrence_id) {
+          await new RecurringTasksDB(ctx.supabase, {
+            lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
+          }).deleteInstanceWithScope(params.taskId, ctx.userId, "this");
+        } else {
+          await db.deleteTask(params.taskId, ctx.userId);
+        }
         return { success: true };
       },
     },
@@ -191,7 +215,9 @@ export function taskTools(): ToolDefinition[] {
           .describe("Filter by status (default: all)"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new RecurringTasksDB(ctx.supabase);
+        const db = new RecurringTasksDB(ctx.supabase, {
+          lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
+        });
         return db.getUserRecurringTasks(ctx.userId, {
           status: params.status,
         });
@@ -231,6 +257,24 @@ export function taskTools(): ToolDefinition[] {
               .number()
               .optional()
               .describe("Day of month for monthly (1-31)"),
+            week_position: z
+              .enum(["first", "second", "third", "fourth", "last"])
+              .optional()
+              .describe("Week position for monthly weekday recurrences"),
+            day_of_week_monthly: z
+              .number()
+              .int()
+              .min(0)
+              .max(6)
+              .optional()
+              .describe("Day of week for monthly weekday recurrences"),
+            month_of_year: z
+              .number()
+              .int()
+              .min(1)
+              .max(12)
+              .optional()
+              .describe("Month for yearly recurrences (1-12)"),
           })
           .describe("Recurrence rule"),
         endType: z
@@ -247,12 +291,12 @@ export function taskTools(): ToolDefinition[] {
           .describe("Number of occurrences if endType is after_count"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new RecurringTasksDB(ctx.supabase);
+        const db = new RecurringTasksDB(ctx.supabase, {
+          lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
+        });
         // Calculate a rolling window end date (30 days from start)
         // Use string manipulation to avoid UTC date shift from toISOString()
-        const [y, m, d] = params.startDate.split("-").map(Number);
-        const throughDate = new Date(y, m - 1, d + 30);
-        const throughDateStr = `${throughDate.getFullYear()}-${String(throughDate.getMonth() + 1).padStart(2, "0")}-${String(throughDate.getDate()).padStart(2, "0")}`;
+        const throughDateStr = addLocalDays(params.startDate, 30);
 
         return db.createRecurringTask(
           {
@@ -289,7 +333,9 @@ export function taskTools(): ToolDefinition[] {
           .describe("New priority level (0=none, 1=low, 2=medium, 3=high)"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new RecurringTasksDB(ctx.supabase);
+        const db = new RecurringTasksDB(ctx.supabase, {
+          lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
+        });
         const { recurringTaskId, ...rest } = params;
         const updates: Record<string, unknown> = { ...rest };
         for (const key of Object.keys(updates)) {
@@ -306,19 +352,23 @@ export function taskTools(): ToolDefinition[] {
         recurringTaskId: z.string().describe("The recurring task ID"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new RecurringTasksDB(ctx.supabase);
+        const db = new RecurringTasksDB(ctx.supabase, {
+          lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
+        });
         return db.pauseRecurringTask(params.recurringTaskId, ctx.userId);
       },
     },
     {
       name: "deleteRecurringTask",
       description:
-        "Delete a recurring task and all its future incomplete instances. This action cannot be undone. Always confirm with the user first.",
+        "End a recurring task while preserving its lineage and completed history. Always confirm with the user first.",
       parameters: z.object({
         recurringTaskId: z.string().describe("The recurring task ID"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new RecurringTasksDB(ctx.supabase);
+        const db = new RecurringTasksDB(ctx.supabase, {
+          lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
+        });
         const rt = await db.getRecurringTask(params.recurringTaskId, ctx.userId);
         if (!rt) return { error: "Recurring task not found" };
         await db.deleteRecurringTask(
@@ -329,4 +379,28 @@ export function taskTools(): ToolDefinition[] {
       },
     },
   ];
+}
+
+async function ensureAiRecurringCoverage(
+  ctx: ToolContext,
+  fromDate: string,
+  throughDate: string,
+): Promise<void> {
+  const rpc = (ctx.supabase as unknown as { rpc?: unknown }).rpc;
+  if (typeof rpc !== "function") return;
+  try {
+    await ensureRecurringTaskCoverageThrough(
+      ctx.supabase,
+      ctx.userId,
+      fromDate,
+      throughDate,
+    );
+  } catch (error) {
+    log.warn("[ai/tasks] recurring coverage unavailable", {
+      userId: ctx.userId,
+      fromDate,
+      throughDate,
+      error: String(error),
+    });
+  }
 }

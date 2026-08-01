@@ -6,6 +6,9 @@ const { mockEnsureProfile, mockGetUser } = vi.hoisted(() => ({
   mockEnsureProfile: vi.fn(),
   mockGetUser: vi.fn(),
 }));
+const { mockEnsureRecurringCoverageThrough } = vi.hoisted(() => ({
+  mockEnsureRecurringCoverageThrough: vi.fn(),
+}));
 const apiKeyMocks = vi.hoisted(() => ({
   from: vi.fn(),
   maybeSingle: vi.fn(),
@@ -52,6 +55,7 @@ vi.mock('@supabase/supabase-js', async (importOriginal) => {
 
 const mockTasksDB = {
   getUserTasks: vi.fn(),
+  getOverdueTasks: vi.fn(),
   createTask: vi.fn(),
   getTask: vi.fn(),
   updateTask: vi.fn(),
@@ -65,6 +69,10 @@ vi.mock('@/lib/db', () => ({
 
 vi.mock('@/lib/db/ensure-profile', () => ({
   ensureProfile: mockEnsureProfile,
+}));
+
+vi.mock('@/lib/recurring-tasks/coverage', () => ({
+  ensureRecurringTaskCoverageThrough: mockEnsureRecurringCoverageThrough,
 }));
 
 import { createClient } from '@/lib/supabase/server';
@@ -82,6 +90,10 @@ describe('GET /api/tasks', () => {
         },
       },
       error: null,
+    });
+    mockEnsureRecurringCoverageThrough.mockResolvedValue({
+      status: 'complete',
+      failedSeriesIds: [],
     });
     vi.stubEnv('API_KEY_HMAC_SECRET', 'test-hmac-secret');
     vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://test.supabase.co');
@@ -143,6 +155,38 @@ describe('GET /api/tasks', () => {
       is_completed: true,
       priority: 2,
     });
+  });
+
+  it('ensures the exact requested coverage for a due-date read', async () => {
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+
+    const request = new NextRequest(
+      'http://localhost:3000/api/tasks?due_date=2026-02-17',
+    );
+    await GET(request);
+
+    expect(mockEnsureRecurringCoverageThrough).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-123',
+      '2026-02-17',
+      '2026-02-17',
+    );
+  });
+
+  it('ensures the exact requested coverage for an overdue read', async () => {
+    vi.mocked(mockTasksDB.getOverdueTasks).mockResolvedValue([]);
+
+    const request = new NextRequest(
+      'http://localhost:3000/api/tasks?view=overdue&date=2026-02-17',
+    );
+    await GET(request);
+
+    expect(mockEnsureRecurringCoverageThrough).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-123',
+      '2026-02-17',
+      '2026-02-17',
+    );
   });
 
   it('should return 401 if not authenticated', async () => {

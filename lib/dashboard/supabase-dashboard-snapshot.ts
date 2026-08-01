@@ -8,7 +8,7 @@ import {
   TasksDB,
 } from "@/lib/db";
 import { WorkoutsDB } from "@/lib/db/workouts";
-import { ensureRecurringInstances } from "@/lib/recurring-tasks";
+import { ensureRecurringTaskCoverage } from "@/lib/recurring-tasks/coverage";
 
 import {
   createDashboardSnapshot,
@@ -25,7 +25,7 @@ export function createSupabaseDashboardSnapshot(
     milestones: new HabitMilestonesDB(supabase),
     profiles: new ProfilesDB(supabase),
     workouts: new WorkoutsDB(supabase),
-    generateRecurringTasks: (userId, throughDate) =>
-      ensureRecurringInstances(supabase, userId, throughDate),
+    ensureRecurringCoverage: (userId, range) =>
+      ensureRecurringTaskCoverage(supabase, userId, range),
   });
 }

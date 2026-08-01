@@ -6,7 +6,10 @@ import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { taskFormSchema } from '@/lib/validations/task';
 import { ensureProfile } from '@/lib/db/ensure-profile';
-import { ensureRecurringInstances } from '@/lib/recurring-tasks';
+import {
+  ensureRecurringTaskCoverageThrough,
+} from '@/lib/recurring-tasks/coverage';
+import { addLocalDays } from '@/lib/recurring-tasks/recurrence';
 import { getLocalDateString } from '@/lib/utils';
 import { createTaskWrites } from '@/lib/tasks/writes';
 import type { TaskFilters } from '@/lib/db/types';
@@ -54,15 +57,32 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Generate recurring instances when loading today/upcoming views
+    // Materialize exactly the requested local-date horizon before reading.
     let recurringGenFailed = false;
-    if (view === 'today' || view === 'upcoming') {
-      const [dy, dm, dd] = date.split('-').map(Number);
-      const throughDate = getLocalDateString(new Date(dy, dm - 1, dd + 7));
-      await ensureRecurringInstances(supabase, userId, throughDate).catch((err) => {
-        log.error('ensureRecurringInstances failed on tasks', err, { userId });
+    let upcomingDays = 7;
+    if (view === 'today' || view === 'upcoming' || view === 'overdue') {
+      upcomingDays = view === 'upcoming'
+        ? parseInt(searchParams.get('days') || '7')
+        : 0;
+      if (view === 'upcoming' && (isNaN(upcomingDays) || upcomingDays < 1)) {
+        return NextResponse.json(
+          { error: 'Days must be a positive number' },
+          { status: 400 }
+        );
+      }
+      const throughDate = view === 'upcoming' ? addLocalDays(date, upcomingDays) : date;
+      try {
+        const coverage = await ensureRecurringTaskCoverageThrough(
+          supabase,
+          userId,
+          date,
+          throughDate,
+        );
+        recurringGenFailed = coverage.status === 'partial';
+      } catch (err) {
+        log.error('ensure recurring task coverage failed on tasks', err, { userId });
         recurringGenFailed = true;
-      });
+      }
     }
 
     // Handle special views
@@ -74,14 +94,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (view === 'upcoming') {
-      const days = parseInt(searchParams.get('days') || '7');
-      if (isNaN(days) || days < 1) {
-        return NextResponse.json(
-          { error: 'Days must be a positive number' },
-          { status: 400 }
-        );
-      }
-      const tasks = await tasksDB.getUpcomingTasks(userId, date, days);
+      const tasks = await tasksDB.getUpcomingTasks(userId, date, upcomingDays);
       const response: Record<string, unknown> = { tasks };
       if (recurringGenFailed) response._warnings = ['Some recurring tasks may not appear'];
       return NextResponse.json(response);
@@ -89,7 +102,9 @@ export async function GET(request: NextRequest) {
 
     if (view === 'overdue') {
       const tasks = await tasksDB.getOverdueTasks(userId, date);
-      return NextResponse.json({ tasks });
+      const response: Record<string, unknown> = { tasks };
+      if (recurringGenFailed) response._warnings = ['Some recurring tasks may not appear'];
+      return NextResponse.json(response);
     }
 
     // Handle regular filtering
@@ -115,8 +130,25 @@ export async function GET(request: NextRequest) {
       filters.project_id = projectId === 'null' ? null : projectId;
     }
 
+    if (filters.due_date && /^\d{4}-\d{2}-\d{2}$/.test(filters.due_date)) {
+      try {
+        const coverage = await ensureRecurringTaskCoverageThrough(
+          supabase,
+          userId,
+          filters.due_date,
+          filters.due_date,
+        );
+        recurringGenFailed = coverage.status === 'partial';
+      } catch (err) {
+        log.error('ensure recurring task coverage failed on filtered tasks', err, { userId });
+        recurringGenFailed = true;
+      }
+    }
+
     const tasks = await tasksDB.getUserTasks(userId, filters);
-    return NextResponse.json({ tasks });
+    const response: Record<string, unknown> = { tasks };
+    if (recurringGenFailed) response._warnings = ['Some recurring tasks may not appear'];
+    return NextResponse.json(response);
   } catch (error) {
     log.error('GET /api/tasks error', error);
     return NextResponse.json(

@@ -1,257 +1,384 @@
 import type { RecurrenceRule } from "@/lib/db/types";
 
-/**
- * Parse a YYYY-MM-DD date string into year, month (0-based), day components.
- * Uses manual parsing to avoid timezone issues from Date constructor.
- */
-function parseDateParts(dateStr: string): [number, number, number] {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  return [y, m - 1, d]; // month is 0-based for Date constructor
+export interface LocalDateRange {
+  from: string;
+  to: string;
 }
 
-/** Create a YYYY-MM-DD string from a Date */
-function toDateString(date: Date): string {
+export interface ScheduledDateCalculation {
+  rule: RecurrenceRule;
+  recurrenceAnchor: string;
+  activationDate: string;
+  range?: LocalDateRange;
+  rangeStart?: string;
+  rangeEnd?: string;
+}
+
+type DateParts = [year: number, month: number, day: number];
+
+function parseDateParts(dateString: string): DateParts {
+  const match = /^(\d{4,})-(\d{2})-(\d{2})$/.exec(dateString);
+  if (!match) {
+    throw new RangeError(`Invalid local date: ${dateString}`);
+  }
+
+  const parts: DateParts = [
+    Number(match[1]),
+    Number(match[2]),
+    Number(match[3]),
+  ];
+  if (!isValidLocalDate(dateString)) {
+    throw new RangeError(`Invalid local date: ${dateString}`);
+  }
+  return parts;
+}
+
+function formatDateParts([year, month, day]: DateParts): string {
   return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, "0"),
-    String(date.getDate()).padStart(2, "0"),
+    String(year).padStart(4, "0"),
+    String(month).padStart(2, "0"),
+    String(day).padStart(2, "0"),
   ].join("-");
 }
 
-/** Add N days to a date string */
-function addDays(dateStr: string, days: number): string {
-  const [y, m, d] = parseDateParts(dateStr);
-  const date = new Date(y, m, d + days);
-  return toDateString(date);
+function toUtcDate([year, month, day]: DateParts): Date {
+  return new Date(Date.UTC(year, month - 1, day));
 }
 
-/** Compare two YYYY-MM-DD strings: negative if a < b, 0 if equal, positive if a > b */
-function compareDates(a: string, b: string): number {
-  return a.localeCompare(b);
+function fromUtcDate(date: Date): string {
+  return formatDateParts([
+    date.getUTCFullYear(),
+    date.getUTCMonth() + 1,
+    date.getUTCDate(),
+  ]);
+}
+
+function dayNumber(dateString: string): number {
+  return toUtcDate(parseDateParts(dateString)).getTime() / 86_400_000;
+}
+
+/** Compare two YYYY-MM-DD local dates without consulting process timezone. */
+export function compareLocalDates(left: string, right: string): number {
+  return dayNumber(left) - dayNumber(right);
+}
+
+/** Add calendar days to a local date using UTC only as a civil-date carrier. */
+export function addLocalDays(dateString: string, days: number): string {
+  const date = toUtcDate(parseDateParts(dateString));
+  date.setUTCDate(date.getUTCDate() + days);
+  return fromUtcDate(date);
+}
+
+export function daysBetween(start: string, end: string): number {
+  return compareLocalDates(end, start);
+}
+
+export function isValidLocalDate(dateString: string): boolean {
+  const match = /^(\d{4,})-(\d{2})-(\d{2})$/.exec(dateString);
+  if (!match) return false;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1) return false;
+
+  const lastDay = new Date(Date.UTC(year, month, 0));
+  return lastDay.getUTCFullYear() === year
+    && lastDay.getUTCMonth() + 1 === month
+    && day <= lastDay.getUTCDate();
+}
+
+function daysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function dayOfWeek(dateString: string): number {
+  return toUtcDate(parseDateParts(dateString)).getUTCDay();
+}
+
+function monthIndex(dateString: string): number {
+  const [year, month] = parseDateParts(dateString);
+  return year * 12 + month - 1;
+}
+
+function dateForMonth(
+  targetMonthIndex: number,
+  requestedDay: number,
+): string {
+  const year = Math.floor(targetMonthIndex / 12);
+  const month = (targetMonthIndex % 12) + 1;
+  return formatDateParts([
+    year,
+    month,
+    Math.min(requestedDay, daysInMonth(year, month)),
+  ]);
+}
+
+function nthWeekdayOfMonth(
+  targetMonthIndex: number,
+  position: "first" | "second" | "third" | "fourth" | "last",
+  wantedDayOfWeek: number,
+): string {
+  const year = Math.floor(targetMonthIndex / 12);
+  const month = (targetMonthIndex % 12) + 1;
+  const lastDay = daysInMonth(year, month);
+
+  if (position === "last") {
+    for (let day = lastDay; day >= 1; day -= 1) {
+      const candidate = formatDateParts([year, month, day]);
+      if (dayOfWeek(candidate) === wantedDayOfWeek) return candidate;
+    }
+  } else {
+    const positionNumber = {
+      first: 1,
+      second: 2,
+      third: 3,
+      fourth: 4,
+    }[position];
+    let seen = 0;
+    for (let day = 1; day <= lastDay; day += 1) {
+      const candidate = formatDateParts([year, month, day]);
+      if (dayOfWeek(candidate) !== wantedDayOfWeek) continue;
+      seen += 1;
+      if (seen === positionNumber) return candidate;
+    }
+  }
+
+  throw new RangeError("Unable to resolve monthly weekday recurrence");
+}
+
+function maxLocalDate(left: string, right: string): string {
+  return compareLocalDates(left, right) >= 0 ? left : right;
+}
+
+function nextPhaseIndex(
+  firstPhase: number,
+  interval: number,
+  requestedPhase: number,
+): number {
+  if (requestedPhase <= firstPhase) return firstPhase;
+  return firstPhase + Math.ceil((requestedPhase - firstPhase) / interval) * interval;
 }
 
 /**
- * For monthly-by-weekday: find the Nth occurrence of a given weekday in a month.
- * weekPosition: 'first'|'second'|'third'|'fourth'|'last'
- * dayOfWeek: 0-6 (Sun=0)
+ * Calculate scheduled local dates from a stable recurrence anchor.
+ *
+ * The anchor controls interval phase. Activation only controls the first date
+ * that may be materialized, which lets a series resume without backfilling a
+ * paused interval.
  */
-function getNthWeekdayOfMonth(
-  year: number,
-  month: number, // 0-based
-  weekPosition: string,
-  dayOfWeek: number,
-): Date | null {
-  if (weekPosition === "last") {
-    // Start from the last day and work backward
-    const lastDay = new Date(year, month + 1, 0);
-    for (let d = lastDay.getDate(); d >= 1; d--) {
-      const date = new Date(year, month, d);
-      if (date.getDay() === dayOfWeek) return date;
-    }
-    return null;
-  }
-
-  const positionMap: Record<string, number> = {
-    first: 1,
-    second: 2,
-    third: 3,
-    fourth: 4,
-  };
-  const target = positionMap[weekPosition];
-  if (!target) return null;
-
-  let count = 0;
-  for (let d = 1; d <= 31; d++) {
-    const date = new Date(year, month, d);
-    if (date.getMonth() !== month) break; // Went past the month
-    if (date.getDay() === dayOfWeek) {
-      count++;
-      if (count === target) return date;
-    }
-  }
-  return null;
-}
-
-/**
- * Get all occurrence dates of a recurrence rule within a date range [startDate, endDate].
- * Both dates are inclusive. Dates are YYYY-MM-DD strings.
- */
-export function getOccurrencesInRange(
-  rule: RecurrenceRule,
-  ruleStartDate: string,
-  rangeStart: string,
-  rangeEnd: string,
+export function calculateScheduledDates(
+  input: ScheduledDateCalculation,
 ): string[] {
-  const occurrences: string[] = [];
+  const {
+    rule,
+    recurrenceAnchor,
+    activationDate,
+  } = input;
+  const resolvedRange: LocalDateRange | undefined = input.range
+    ?? (input.rangeStart && input.rangeEnd
+      ? { from: input.rangeStart, to: input.rangeEnd }
+      : undefined);
+  if (!resolvedRange) {
+    throw new RangeError("A recurrence range is required");
+  }
+  if (compareLocalDates(resolvedRange.from, resolvedRange.to) > 0) return [];
+  const lowerBound = maxLocalDate(resolvedRange.from, activationDate);
+  if (compareLocalDates(lowerBound, resolvedRange.to) > 0) return [];
+
+  const interval = rule.interval;
+  if (!Number.isInteger(interval) || interval < 1) {
+    throw new RangeError("Recurrence interval must be a positive integer");
+  }
+
+  const dates: string[] = [];
+  const appendIfInRange = (candidate: string) => {
+    if (
+      compareLocalDates(candidate, recurrenceAnchor) >= 0
+      && compareLocalDates(candidate, activationDate) >= 0
+      && compareLocalDates(candidate, lowerBound) >= 0
+      && compareLocalDates(candidate, resolvedRange.to) <= 0
+    ) {
+      dates.push(candidate);
+    }
+  };
 
   switch (rule.frequency) {
     case "daily": {
-      // Every N days from ruleStartDate
-      let current = ruleStartDate;
-      // Fast-forward to rangeStart if rule starts before range
-      if (compareDates(current, rangeStart) < 0) {
-        const [sy, sm, sd] = parseDateParts(ruleStartDate);
-        const [ry, rm, rd] = parseDateParts(rangeStart);
-        const startMs = new Date(sy, sm, sd).getTime();
-        const rangeMs = new Date(ry, rm, rd).getTime();
-        const daysDiff = Math.floor((rangeMs - startMs) / 86400000);
-        const skip = Math.floor(daysDiff / rule.interval) * rule.interval;
-        current = addDays(ruleStartDate, skip);
-        if (compareDates(current, rangeStart) < 0) {
-          current = addDays(current, rule.interval);
-        }
-      }
-      while (compareDates(current, rangeEnd) <= 0) {
-        if (compareDates(current, rangeStart) >= 0) {
-          occurrences.push(current);
-        }
-        current = addDays(current, rule.interval);
+      const anchorToLower = Math.max(0, daysBetween(recurrenceAnchor, lowerBound));
+      let current = addLocalDays(
+        recurrenceAnchor,
+        Math.ceil(anchorToLower / interval) * interval,
+      );
+      while (compareLocalDates(current, resolvedRange.to) <= 0) {
+        appendIfInRange(current);
+        current = addLocalDays(current, interval);
       }
       break;
     }
 
     case "weekly": {
-      const { days_of_week } = rule;
-      // Walk week by week from ruleStartDate
-      // Find the Monday of the week containing ruleStartDate
-      const [sy, sm, sd] = parseDateParts(ruleStartDate);
-      const startDow = new Date(sy, sm, sd).getDay();
-      const weekStart = addDays(ruleStartDate, -startDow); // Sunday of that week
-
-      // Fast-forward to near rangeStart
-      let currentWeekStart = weekStart;
-      if (compareDates(currentWeekStart, rangeStart) < 0) {
-        const [wy, wm, wd] = parseDateParts(currentWeekStart);
-        const [ry, rm, rd] = parseDateParts(rangeStart);
-        const weekMs = new Date(wy, wm, wd).getTime();
-        const rangeMs = new Date(ry, rm, rd).getTime();
-        const weeksDiff = Math.floor((rangeMs - weekMs) / (7 * 86400000));
-        const skip = Math.floor(weeksDiff / rule.interval) * rule.interval;
-        currentWeekStart = addDays(weekStart, skip * 7);
-      }
+      const anchorWeekStart = addLocalDays(
+        recurrenceAnchor,
+        -dayOfWeek(recurrenceAnchor),
+      );
+      const lowerWeekStart = addLocalDays(lowerBound, -dayOfWeek(lowerBound));
+      const requestedWeek = Math.floor(
+        daysBetween(anchorWeekStart, lowerWeekStart) / 7,
+      );
+      let weekIndex = nextPhaseIndex(0, interval, requestedWeek);
+      const uniqueDays = [...new Set(rule.days_of_week)].sort((a, b) => a - b);
 
       while (true) {
-        for (const dow of days_of_week) {
-          const dateStr = addDays(currentWeekStart, dow);
-          if (
-            compareDates(dateStr, ruleStartDate) >= 0 &&
-            compareDates(dateStr, rangeStart) >= 0 &&
-            compareDates(dateStr, rangeEnd) <= 0
-          ) {
-            occurrences.push(dateStr);
-          }
+        const weekStart = addLocalDays(anchorWeekStart, weekIndex * 7);
+        if (compareLocalDates(weekStart, resolvedRange.to) > 0) break;
+        for (const requestedDay of uniqueDays) {
+          if (requestedDay < 0 || requestedDay > 6) continue;
+          appendIfInRange(addLocalDays(weekStart, requestedDay));
         }
-        currentWeekStart = addDays(currentWeekStart, 7 * rule.interval);
-        if (compareDates(currentWeekStart, rangeEnd) > 0) break;
+        weekIndex += interval;
       }
-
-      occurrences.sort();
+      dates.sort();
       break;
     }
 
     case "monthly": {
-      const [sy, sm] = parseDateParts(ruleStartDate);
-      const [ry, rm] = parseDateParts(rangeStart);
-      // Start from ruleStartDate's month and iterate
-      let monthOffset = 0;
-      // Fast-forward
-      const totalMonthsStart = sy * 12 + sm;
-      const totalMonthsRange = ry * 12 + rm;
-      if (totalMonthsRange > totalMonthsStart) {
-        const diff = totalMonthsRange - totalMonthsStart;
-        monthOffset = Math.floor(diff / rule.interval) * rule.interval;
-      }
+      const anchorMonth = monthIndex(recurrenceAnchor);
+      const lowerMonth = monthIndex(lowerBound);
+      let targetMonth = nextPhaseIndex(
+        anchorMonth,
+        interval,
+        Math.max(anchorMonth, lowerMonth),
+      );
 
-      for (let i = monthOffset; ; i += rule.interval) {
-        const targetMonth = new Date(sy, sm + i, 1);
-        const year = targetMonth.getFullYear();
-        const month = targetMonth.getMonth();
-
-        let dateStr: string | null = null;
-
-        if ("week_position" in rule) {
-          // Monthly by weekday position (MonthlyByWeekdayRule)
-          const result = getNthWeekdayOfMonth(
-            year,
-            month,
+      while (true) {
+        const candidate = "week_position" in rule
+          ? nthWeekdayOfMonth(
+            targetMonth,
             rule.week_position,
             rule.day_of_week_monthly,
-          );
-          if (result) dateStr = toDateString(result);
-        } else {
-          // Monthly by date (MonthlyByDateRule)
-          const lastDay = new Date(year, month + 1, 0).getDate();
-          const day = Math.min(rule.day_of_month, lastDay);
-          dateStr = toDateString(new Date(year, month, day));
-        }
-
-        if (dateStr) {
-          if (compareDates(dateStr, rangeEnd) > 0) break;
-          if (
-            compareDates(dateStr, ruleStartDate) >= 0 &&
-            compareDates(dateStr, rangeStart) >= 0
-          ) {
-            occurrences.push(dateStr);
-          }
-        }
-        // Safety: if we've gone too far past the range end
-        if (year > parseInt(rangeEnd.split("-")[0]) + 1) break;
+          )
+          : dateForMonth(targetMonth, rule.day_of_month);
+        if (compareLocalDates(candidate, resolvedRange.to) > 0) break;
+        appendIfInRange(candidate);
+        targetMonth += interval;
       }
       break;
     }
 
     case "yearly": {
-      const [sy] = parseDateParts(ruleStartDate);
-      const [ry] = parseDateParts(rangeStart);
-      const monthOfYear = rule.month_of_year - 1; // 0-based
-      const dayOfMonth = rule.day_of_month;
+      const [anchorYear] = parseDateParts(recurrenceAnchor);
+      const [lowerYear] = parseDateParts(lowerBound);
+      let year = nextPhaseIndex(
+        anchorYear,
+        interval,
+        Math.max(anchorYear, lowerYear),
+      );
 
-      let yearOffset = 0;
-      if (ry > sy) {
-        const diff = ry - sy;
-        yearOffset = Math.floor(diff / rule.interval) * rule.interval;
-      }
-
-      for (let i = yearOffset; ; i += rule.interval) {
-        const year = sy + i;
-        const lastDay = new Date(year, monthOfYear + 1, 0).getDate();
-        const day = Math.min(dayOfMonth, lastDay);
-        const dateStr = toDateString(new Date(year, monthOfYear, day));
-
-        if (compareDates(dateStr, rangeEnd) > 0) break;
-        if (
-          compareDates(dateStr, ruleStartDate) >= 0 &&
-          compareDates(dateStr, rangeStart) >= 0
-        ) {
-          occurrences.push(dateStr);
-        }
-        if (year > parseInt(rangeEnd.split("-")[0]) + 1) break;
+      while (true) {
+        const targetMonthIndex = year * 12 + rule.month_of_year - 1;
+        const candidate = dateForMonth(targetMonthIndex, rule.day_of_month);
+        if (compareLocalDates(candidate, resolvedRange.to) > 0) break;
+        appendIfInRange(candidate);
+        year += interval;
       }
       break;
     }
   }
 
-  return occurrences;
+  return dates;
 }
 
 /**
- * Get the next occurrence date after a given date.
+ * Backwards-compatible adapter for the former helper.
+ *
+ * Four arguments use the supplied date as both anchor and activation. Five
+ * arguments expose the lifecycle vocabulary explicitly:
+ * (rule, recurrenceAnchor, activationDate, rangeStart, rangeEnd).
  */
+export function getOccurrencesInRange(
+  rule: RecurrenceRule,
+  recurrenceAnchor: string,
+  rangeStart: string,
+  rangeEnd: string,
+): string[];
+export function getOccurrencesInRange(
+  rule: RecurrenceRule,
+  recurrenceAnchor: string,
+  activationDate: string,
+  rangeStart: string,
+  rangeEnd: string,
+): string[];
+export function getOccurrencesInRange(
+  rule: RecurrenceRule,
+  recurrenceAnchor: string,
+  thirdDate: string,
+  fourthDate: string,
+  fifthDate?: string,
+): string[] {
+  const activationDate = fifthDate === undefined ? recurrenceAnchor : thirdDate;
+  const rangeStart = fifthDate === undefined ? thirdDate : fourthDate;
+  const rangeEnd = fifthDate === undefined ? fourthDate : fifthDate;
+  return calculateScheduledDates({
+    rule,
+    recurrenceAnchor,
+    activationDate,
+    range: { from: rangeStart, to: rangeEnd },
+  });
+}
+
 export function getNextOccurrence(
   rule: RecurrenceRule,
-  ruleStartDate: string,
+  recurrenceAnchor: string,
   afterDate: string,
+): string | null;
+export function getNextOccurrence(
+  rule: RecurrenceRule,
+  recurrenceAnchor: string,
+  activationDate: string,
+  afterDate: string,
+): string | null;
+export function getNextOccurrence(
+  rule: RecurrenceRule,
+  recurrenceAnchor: string,
+  thirdDate: string,
+  fourthDate?: string,
 ): string | null {
-  // Look up to 2 years ahead for the next occurrence
-  const searchEnd = addDays(afterDate, 731);
-  const nextDay = addDays(afterDate, 1);
-  const occurrences = getOccurrencesInRange(
+  const activationDate = fourthDate === undefined ? recurrenceAnchor : thirdDate;
+  const afterDate = fourthDate === undefined ? thirdDate : fourthDate;
+  const nextDay = addLocalDays(afterDate, 1);
+  const searchEnd = addLocalDays(afterDate, 731);
+  return calculateScheduledDates({
     rule,
-    ruleStartDate,
-    nextDay,
-    searchEnd,
+    recurrenceAnchor,
+    activationDate,
+    range: { from: nextDay, to: searchEnd },
+  })[0] ?? null;
+}
+
+/**
+ * Derive the user's wall-clock date from an injected instant and IANA zone.
+ * This is intentionally separate from recurrence arithmetic: recurrence never
+ * uses a timezone offset to advance a local date.
+ */
+export function getLocalDateInTimeZone(now: Date, timeZone: string): string {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.formatToParts(now);
+  const values = new Map(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
   );
-  return occurrences[0] ?? null;
+  const result = `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
+  if (!isValidLocalDate(result)) {
+    throw new RangeError(`Unable to derive a local date for timezone: ${timeZone}`);
+  }
+  return result;
 }
 
 type TranslateFn = (key: string, params?: Record<string, string | number | Date>) => string;
@@ -322,7 +449,10 @@ export function describeRecurrence(
       const ordinal = t(`recurrence.describe.ordinal_${cat}`, {
         n: rule.day_of_month,
       });
-      return t("recurrence.describe.monthlyOnOrdinal", { prefix, ordinal });
+      return t("recurrence.describe.monthlyOnOrdinal", {
+        prefix,
+        ordinal,
+      });
     }
 
     case "yearly": {

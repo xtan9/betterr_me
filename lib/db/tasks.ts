@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Task, TaskInsert, TaskUpdate, TaskFilters } from './types';
-import { getLocalDateString } from '@/lib/utils';
+import { addLocalDays } from '@/lib/recurring-tasks/recurrence';
 import { syncTaskUpdate } from '@/lib/tasks/sync';
 
 export class TasksDB {
@@ -182,9 +182,7 @@ export class TasksDB {
    * @param days - Number of days to look ahead (default 7)
    */
   async getUpcomingTasks(userId: string, date: string, days: number = 7): Promise<Task[]> {
-    const [year, month, day] = date.split('-').map(Number);
-    const futureDate = new Date(year, month - 1, day + days);
-    const future = getLocalDateString(futureDate);
+    const future = addLocalDays(date, days);
 
     const { data, error } = await this.supabase
       .from('tasks')
