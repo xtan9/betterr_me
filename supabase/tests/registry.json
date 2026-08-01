@@ -94,6 +94,12 @@
     "cleanup": "transactional"
   },
   {
+    "path": "recurring_task_lifecycle_observability.sql",
+    "domain": "recurring-tasks",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
     "path": "recurring_task_occurrence_lifecycle.sql",
     "domain": "recurring-tasks",
     "role": "constrained",

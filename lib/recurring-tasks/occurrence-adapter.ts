@@ -401,6 +401,8 @@ export function occurrenceErrorMessage(
       return "Recurring task coverage is temporarily unavailable";
     case "invalid-transition":
       return outcome.reason;
+    case "skipped":
+      return "Task occurrence was not changed";
   }
 }
 
@@ -415,6 +417,8 @@ export function occurrenceHttpFailure(
     case "coverage-unavailable":
       return { error: occurrenceErrorMessage(outcome), status: 503 };
     case "invalid-transition":
+      return { error: occurrenceErrorMessage(outcome), status: 400 };
+    case "skipped":
       return { error: occurrenceErrorMessage(outcome), status: 400 };
   }
 }

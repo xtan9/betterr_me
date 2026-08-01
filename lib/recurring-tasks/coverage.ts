@@ -6,6 +6,10 @@ import {
 } from "./supabase-lifecycle";
 import { addLocalDays } from "./recurrence";
 import type { LocalDateRange } from "./lifecycle";
+import {
+  emitRecurringLifecycleSignal,
+  errorType,
+} from "./observability";
 
 export const RECURRING_COVERAGE_WARNING_CODE =
   "recurring_coverage_unavailable" as const;
@@ -108,6 +112,15 @@ export async function ensureRecurringTaskCoverage(
   // Production Supabase clients expose rpc. A client without the lifecycle
   // boundary is an explicit degraded result, never a false success.
   if (typeof (supabase as unknown as { rpc?: unknown }).rpc !== "function") {
+    emitRecurringLifecycleSignal({
+      event: "lifecycle_failure",
+      operation: "ensure-user-coverage",
+      source: "interactive",
+      userId,
+      from: range.from,
+      to: range.to,
+      errorType: "missing-lifecycle-boundary",
+    });
     return partialCoverage(range);
   }
   try {
@@ -135,10 +148,14 @@ export async function ensureRecurringTaskCoverage(
       : [];
     return partialCoverage(range, failedSeriesIds);
   } catch (error) {
-    log.error("[recurring-lifecycle] coverage failed", error, {
+    emitRecurringLifecycleSignal({
+      event: "lifecycle_failure",
+      operation: "ensure-user-coverage",
+      source: "interactive",
       userId,
       from: range.from,
       to: range.to,
+      errorType: errorType(error),
     });
     return partialCoverage(range);
   }
