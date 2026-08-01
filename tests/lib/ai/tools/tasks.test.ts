@@ -26,23 +26,24 @@ const mockSupabaseFrom = vi.fn(() => mockSortOrderChain);
 const mockRpc = vi.fn();
 
 vi.mock("@/lib/db", () => ({
-  RecurringTasksDB: class {
-    getUserRecurringTasks = vi.fn();
-    createRecurringTask = vi.fn();
-    updateRecurringTask = vi.fn();
-    pauseRecurringTask = vi.fn();
-  },
-  TasksDB: class {
-    getTodayTasks = mockGetTodayTasks;
-    getUpcomingTasks = mockGetUpcomingTasks;
-    getOverdueTasks = mockGetOverdueTasks;
-    getTask = mockGetTask;
-    getUserTasks = mockGetUserTasks;
-    createTask = mockCreateTask;
-    updateTask = mockUpdateTask;
-    deleteTask = mockDeleteTask;
-  },
-}));
+    recurringTaskFromSeries: vi.fn((series: unknown) => series),
+    RecurringTasksDB: class {
+      getUserRecurringTasks = vi.fn();
+      createRecurringTask = vi.fn();
+      updateRecurringTask = vi.fn();
+      pauseRecurringTask = vi.fn();
+    },
+    TasksDB: class {
+      getTodayTasks = mockGetTodayTasks;
+      getUpcomingTasks = mockGetUpcomingTasks;
+      getOverdueTasks = mockGetOverdueTasks;
+      getTask = mockGetTask;
+      getUserTasks = mockGetUserTasks;
+      createTask = mockCreateTask;
+      updateTask = mockUpdateTask;
+      deleteTask = mockDeleteTask;
+    },
+  }));
 
 function makeCtx(overrides?: Partial<ToolContext>): ToolContext {
   return {
@@ -338,7 +339,7 @@ describe("taskTools", () => {
     expect(result).toEqual({ id: "t1", is_completed: true, status: "done" });
   });
 
-  it("keeps the prepared lifecycle path inactive for recurring occurrences", async () => {
+  it("requires explicit completion policy for recurring occurrences", async () => {
     const ctx = makeCtx();
     const toggleTask = taskTools().find((t) => t.name === "toggleTask")!;
     const currentTask = {
@@ -357,19 +358,9 @@ describe("taskTools", () => {
     const result = await toggleTask.execute({ taskId: "t1" }, ctx);
 
     expect(mockRpc).not.toHaveBeenCalled();
-    expect(mockUpdateTask).toHaveBeenCalledWith(
-      "t1",
-      "user-123",
-      expect.objectContaining({
-        is_completed: true,
-        status: "done",
-        completed_at: expect.any(String),
-      }),
-    );
+    expect(mockUpdateTask).not.toHaveBeenCalled();
     expect(result).toEqual({
-      ...currentTask,
-      is_completed: true,
-      status: "done",
+      error: "Lifecycle occurrences require an explicit completion or reopening command",
     });
   });
 

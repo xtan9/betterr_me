@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authorizeCronRequest } from "@/lib/cron/auth";
 import { log } from "@/lib/logger";
 import { prewarmActiveRecurringTaskCoverage } from "@/lib/recurring-tasks/prewarming";
-import { createSupabaseRecurringTaskLifecycle } from "@/lib/recurring-tasks/supabase-lifecycle";
+import { createActivatedRecurringTaskLifecycle } from "@/lib/recurring-tasks/activation";
 import { errorType } from "@/lib/recurring-tasks/observability";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const lifecycle = createSupabaseRecurringTaskLifecycle(createAdminClient());
+    const lifecycle = createActivatedRecurringTaskLifecycle(createAdminClient());
     const result = await prewarmActiveRecurringTaskCoverage(lifecycle);
     return NextResponse.json({
       status: result.status,

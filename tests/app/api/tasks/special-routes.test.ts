@@ -61,16 +61,14 @@ describe('POST /api/tasks/[id]/toggle', () => {
     );
   });
 
-  it('keeps the prepared lifecycle path inactive for recurring occurrences', async () => {
+  it('requires explicit completion policy for recurring occurrences', async () => {
     const currentTask = {
       id: 'task-1',
       is_completed: false,
       recurring_series_id: 'series-1',
       recurring_occurrence_id: 'occurrence-1',
     };
-    const completedTask = { ...currentTask, is_completed: true, status: 'done' };
     vi.mocked(mockTasksDB.getTask).mockResolvedValue(currentTask as any);
-    vi.mocked(mockTasksDB.updateTask).mockResolvedValue(completedTask as any);
 
     const request = new NextRequest('http://localhost:3000/api/tasks/task-1/toggle', {
       method: 'POST',
@@ -81,14 +79,12 @@ describe('POST /api/tasks/[id]/toggle', () => {
     });
     const data = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(data.task).toEqual(completedTask);
+    expect(response.status).toBe(400);
+    expect(data).toEqual({
+      error: 'Lifecycle occurrences require an explicit completion or reopening command',
+    });
     expect(mockRpc).not.toHaveBeenCalled();
-    expect(mockTasksDB.updateTask).toHaveBeenCalledWith(
-      'task-1',
-      'user-123',
-      expect.objectContaining({ is_completed: true, status: 'done' }),
-    );
+    expect(mockTasksDB.updateTask).not.toHaveBeenCalled();
   });
 
   it('should return 404 if task not found', async () => {

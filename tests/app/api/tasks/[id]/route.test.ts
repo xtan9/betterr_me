@@ -6,6 +6,8 @@ const {
   mockCreateTaskWrites,
   mockTaskDelete,
   mockTaskDeleteSeries,
+  mockStateFactory,
+  mockState,
 } = vi.hoisted(() => {
   const mockTaskExecute = vi.fn(async (intent: any) => {
     if (intent.type === "update") {
@@ -38,6 +40,9 @@ const {
   });
   const mockTaskDelete = vi.fn();
   const mockTaskDeleteSeries = vi.fn();
+  const mockState = {
+    editScope: vi.fn(),
+  };
   return {
     mockCreateTaskWrites: vi.fn(() => ({
       execute: mockTaskExecute,
@@ -46,6 +51,8 @@ const {
     })),
     mockTaskDelete,
     mockTaskDeleteSeries,
+    mockStateFactory: vi.fn(() => mockState),
+    mockState,
   };
 });
 
@@ -88,6 +95,13 @@ vi.mock("@/lib/db", () => ({
     }
   },
 }));
+
+vi.mock("@/lib/recurring-tasks", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/recurring-tasks")>(
+    "@/lib/recurring-tasks",
+  );
+  return { ...actual, createSupabaseSeriesStateAdapter: mockStateFactory };
+});
 
 describe("GET /api/tasks/[id]", () => {
   beforeEach(() => {
@@ -427,14 +441,18 @@ describe("DELETE /api/tasks/[id]", () => {
 describe("PATCH /api/tasks/[id] with scope (recurring)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockState.editScope.mockResolvedValue({
+      status: "complete",
+      type: "complete",
+    });
   });
 
-  it("should delegate scope=this to updateInstanceWithScope", async () => {
+  it("keeps a standalone task on ordinary Task Writes for scope=this", async () => {
     vi.mocked(mockTasksDB.getTask).mockResolvedValue({
       id: "task-1",
       user_id: "user-123",
     } as any);
-    vi.mocked(mockRecurringTasksDB.updateInstanceWithScope).mockResolvedValue();
+    vi.mocked(mockTasksDB.updateTask).mockResolvedValue({ id: "task-1" } as any);
 
     const request = new NextRequest(
       "http://localhost:3000/api/tasks/task-1?scope=this",
@@ -451,16 +469,14 @@ describe("PATCH /api/tasks/[id] with scope (recurring)", () => {
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(mockRecurringTasksDB.updateInstanceWithScope).toHaveBeenCalledWith(
+    expect(mockTasksDB.updateTask).toHaveBeenCalledWith(
       "task-1",
       "user-123",
-      "this",
       expect.objectContaining({ title: "Modified" }),
     );
   });
 
-  it("should delegate scope=following to updateInstanceWithScope", async () => {
-    vi.mocked(mockRecurringTasksDB.updateInstanceWithScope).mockResolvedValue();
+  it("delegates scope=following to the lifecycle Series State adapter", async () => {
 
     const request = new NextRequest(
       "http://localhost:3000/api/tasks/task-1?scope=following",
@@ -475,16 +491,17 @@ describe("PATCH /api/tasks/[id] with scope (recurring)", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mockRecurringTasksDB.updateInstanceWithScope).toHaveBeenCalledWith(
-      "task-1",
-      "user-123",
-      "following",
-      expect.objectContaining({ title: "Following update" }),
+    expect(mockState.editScope).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: "task-1",
+        userId: "user-123",
+        scope: "following",
+        title: "Following update",
+      }),
     );
   });
 
-  it("should delegate scope=all to updateInstanceWithScope", async () => {
-    vi.mocked(mockRecurringTasksDB.updateInstanceWithScope).mockResolvedValue();
+  it("delegates scope=all to the lifecycle Series State adapter", async () => {
 
     const request = new NextRequest(
       "http://localhost:3000/api/tasks/task-1?scope=all",
@@ -499,11 +516,13 @@ describe("PATCH /api/tasks/[id] with scope (recurring)", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mockRecurringTasksDB.updateInstanceWithScope).toHaveBeenCalledWith(
-      "task-1",
-      "user-123",
-      "all",
-      expect.objectContaining({ title: "All update" }),
+    expect(mockState.editScope).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: "task-1",
+        userId: "user-123",
+        scope: "all",
+        title: "All update",
+      }),
     );
   });
 

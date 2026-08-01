@@ -49,6 +49,11 @@ export interface OccurrenceCommandIntent {
 
 export interface OccurrenceAdapterPersistence {
   getTask(taskId: string, userId: string): Promise<Task | null>;
+  /** Task Writes for ordinary standalone tasks only. */
+  standalone?: {
+    edit(intent: OccurrenceEditIntent): Promise<Task>;
+    toggle(intent: OccurrenceCommandIntent): Promise<Task>;
+  };
   legacy?: {
     edit(intent: OccurrenceEditIntent, task: Task): Promise<Task>;
     editScoped(intent: OccurrenceEditIntent, task: Task): Promise<void>;
@@ -125,9 +130,18 @@ export class OccurrenceAdapter {
     const target = this.lifecycleTarget(task);
     if (!target) {
       if (this.options.lifecycle) {
-        return invalidTransition(
-          "Lifecycle mode requires a recurring Task Occurrence",
-        );
+        if (intent.scope && intent.scope !== "this") {
+          return invalidTransition(
+            "Only one-occurrence edits are available through this lifecycle adapter",
+          );
+        }
+        if (this.persistence.standalone) {
+          return {
+            ...complete(),
+            task: await this.persistence.standalone.edit(intent),
+          };
+        }
+        return invalidTransition("Standalone task persistence is unavailable");
       }
       const legacy = this.legacyPersistence();
       if (intent.scope) {
@@ -202,9 +216,13 @@ export class OccurrenceAdapter {
 
     if (this.options.lifecycle) {
       if (!this.lifecycleTarget(task)) {
-        return invalidTransition(
-          "Lifecycle mode requires a recurring Task Occurrence",
-        );
+        if (this.persistence.standalone) {
+          return {
+            ...complete(),
+            task: await this.persistence.standalone.toggle(intent),
+          };
+        }
+        return invalidTransition("Standalone task persistence is unavailable");
       }
       return invalidTransition(
         "Lifecycle occurrences require an explicit completion or reopening command",
@@ -239,10 +257,20 @@ export class OccurrenceAdapter {
       };
     }
 
+    if (!target && this.persistence.standalone) {
+      return {
+        ...complete(),
+        task: await this.persistence.standalone.edit(
+          toOccurrenceEditIntent({
+            ...intent,
+            completed: action === "complete",
+          }),
+        ),
+      };
+    }
+
     if (!target) {
-      return invalidTransition(
-        "Lifecycle mode requires a recurring Task Occurrence",
-      );
+      return invalidTransition("Standalone task persistence is unavailable");
     }
 
     const request: OccurrenceCommandRequest = {

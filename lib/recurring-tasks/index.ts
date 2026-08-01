@@ -5,6 +5,10 @@ export {
 } from './instance-generator';
 export * from './lifecycle';
 export {
+  createActivatedRecurringTaskLifecycle,
+  RECURRING_TASK_LIFECYCLE_CUTOVER,
+} from './activation';
+export {
   SupabaseRecurringTaskLifecycle,
   createSupabaseRecurringTaskLifecycle,
 } from './supabase-lifecycle';

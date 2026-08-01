@@ -15,7 +15,7 @@ import {
 } from '@/lib/recurring-tasks/recurrence';
 import {
   createSupabaseSeriesStateAdapter,
-  createSupabaseRecurringTaskLifecycle,
+  createActivatedRecurringTaskLifecycle,
   isSeriesStateSuccess,
   seriesStateHttpFailure,
 } from '@/lib/recurring-tasks';
@@ -50,7 +50,9 @@ export async function GET(
     }
     const { principal: { userId }, client: supabase } = auth;
 
-    const recurringTasksDB = new RecurringTasksDB(supabase);
+    const recurringTasksDB = new RecurringTasksDB(supabase, {
+      lifecycle: createActivatedRecurringTaskLifecycle(supabase),
+    });
     const template = await recurringTasksDB.getRecurringTask(id, userId);
 
     if (!template) {
@@ -203,7 +205,7 @@ export async function DELETE(
       );
     }
     const outcome = await createTaskWrites(supabase, {
-      lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
+      lifecycle: createActivatedRecurringTaskLifecycle(supabase),
     }).deleteSeries({
       seriesId: id,
       userId,

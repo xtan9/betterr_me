@@ -106,6 +106,12 @@
     "cleanup": "transactional"
   },
   {
+    "path": "recurring_task_lifecycle_cutover.sql",
+    "domain": "recurring-tasks",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
     "path": "recurring_task_lifecycle_observability.sql",
     "domain": "recurring-tasks",
     "role": "constrained",

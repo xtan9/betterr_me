@@ -2,8 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GET, POST } from "@/app/api/recurring-tasks/route";
 import { NextRequest } from "next/server";
 
-const { mockEnsureProfile } = vi.hoisted(() => ({
+const { mockEnsureProfile, mockCreateSeries, mockToLegacyRecurringTask } = vi.hoisted(() => ({
   mockEnsureProfile: vi.fn(),
+  mockCreateSeries: vi.fn(),
+  mockToLegacyRecurringTask: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -33,6 +35,17 @@ vi.mock("@/lib/db/ensure-profile", () => ({
   ensureProfile: mockEnsureProfile,
 }));
 
+vi.mock("@/lib/recurring-tasks/creation", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/recurring-tasks/creation")>(
+    "@/lib/recurring-tasks/creation",
+  );
+  return {
+    ...actual,
+    createSeriesCreation: vi.fn(() => ({ create: mockCreateSeries })),
+    toLegacyRecurringTask: mockToLegacyRecurringTask,
+  };
+});
+
 import { createClient } from "@/lib/supabase/server";
 
 describe("GET /api/recurring-tasks", () => {
@@ -45,6 +58,14 @@ describe("GET /api/recurring-tasks", () => {
         })),
       },
     } as any);
+    mockCreateSeries.mockResolvedValue({
+      mode: "lifecycle",
+      outcome: {
+        status: "complete",
+        type: "complete",
+        series: {},
+      },
+    });
   });
 
   it("should return recurring tasks for authenticated user", async () => {
@@ -135,13 +156,19 @@ describe("POST /api/recurring-tasks", () => {
       },
     } as any);
     mockEnsureProfile.mockResolvedValue(undefined);
+    mockCreateSeries.mockResolvedValue({
+      mode: "lifecycle",
+      outcome: {
+        status: "complete",
+        type: "complete",
+        series: {},
+      },
+    });
   });
 
   it("should create a recurring task with valid body", async () => {
     const created = { id: "rt-1", title: "Read daily" };
-    vi.mocked(mockRecurringTasksDB.createRecurringTask).mockResolvedValue(
-      created,
-    );
+    mockToLegacyRecurringTask.mockReturnValue(created);
 
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks",
@@ -160,13 +187,12 @@ describe("POST /api/recurring-tasks", () => {
 
     expect(response.status).toBe(201);
     expect(data.recurring_task).toEqual(created);
-    expect(mockRecurringTasksDB.createRecurringTask).toHaveBeenCalledWith(
+    expect(mockCreateSeries).toHaveBeenCalledWith(
       expect.objectContaining({
-        user_id: "user-123",
+        userId: "user-123",
         title: "Read daily",
-        status: "active",
+        legacyStartDate: "2026-02-01",
       }),
-      expect.any(String),
     );
   });
 
@@ -227,9 +253,7 @@ describe("POST /api/recurring-tasks", () => {
   });
 
   it("should call ensureProfile before creating", async () => {
-    vi.mocked(mockRecurringTasksDB.createRecurringTask).mockResolvedValue({
-      id: "rt-1",
-    });
+    mockToLegacyRecurringTask.mockReturnValue({ id: "rt-1" });
 
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks",

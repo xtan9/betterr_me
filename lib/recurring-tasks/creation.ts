@@ -1,13 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { RecurringTasksDB, recurringTaskFromSeries } from "@/lib/db";
+import { recurringTaskFromSeries } from "@/lib/db";
 import type {
   EndType,
   RecurrenceRule,
   RecurringTask,
-  RecurringTaskInsert,
 } from "@/lib/db";
 import { addLocalDays } from "./recurrence";
+import { createActivatedRecurringTaskLifecycle } from "./activation";
 import type {
   CreateSeriesRequest,
   LifecycleOutcome,
@@ -15,7 +15,7 @@ import type {
   RecurringTaskSeries,
 } from "./lifecycle";
 
-/** The legacy product window remains the cutover-compatible default. */
+/** The product's initial lifecycle Coverage window. */
 export const INITIAL_COVERAGE_DAYS = 7;
 
 /**
@@ -38,12 +38,10 @@ export interface SeriesCreationIntent {
   coverageThrough: string;
 }
 
-export type SeriesCreationOutcome =
-  | { mode: "legacy"; recurringTask: RecurringTask }
-  | {
-      mode: "lifecycle";
-      outcome: LifecycleOutcome<RecurringTaskSeries>;
-    };
+export type SeriesCreationOutcome = {
+  mode: "lifecycle";
+  outcome: LifecycleOutcome<RecurringTaskSeries>;
+};
 
 export interface SeriesCreationAdapter {
   create(intent: SeriesCreationIntent): Promise<SeriesCreationOutcome>;
@@ -117,26 +115,6 @@ export function toLifecycleCreateSeriesRequest(
   };
 }
 
-export function toLegacyRecurringTaskInsert(
-  intent: SeriesCreationIntent,
-): RecurringTaskInsert {
-  const normalized = normalizeSeriesCreationIntent(intent);
-  return {
-    user_id: normalized.userId,
-    title: normalized.title,
-    description: normalized.description,
-    priority: normalized.priority,
-    category_id: normalized.categoryId,
-    due_time: normalized.dueTime,
-    recurrence_rule: normalized.recurrenceRule,
-    start_date: normalized.legacyStartDate,
-    end_type: normalized.endType,
-    end_date: normalized.endType === "on_date" ? normalized.endDate : null,
-    end_count: normalized.endType === "after_count" ? normalized.endCount : null,
-    status: "active",
-  };
-}
-
 /** Convert a successful lifecycle result to the existing HTTP/AI response model. */
 export function toLegacyRecurringTask(
   series: RecurringTaskSeries,
@@ -145,36 +123,22 @@ export function toLegacyRecurringTask(
 }
 
 /**
- * The lifecycle option is intentionally opt-in. Production callers use the
- * legacy adapter until the coordinated cutover supplies this port.
+ * Every production creation request is lifecycle-owned after the coordinated
+ * cutover. The optional port remains a test/in-process seam, but omitting it
+ * can no longer select the legacy recurring-task writer.
  */
 export function createSeriesCreation(
   supabase: SupabaseClient,
   options: { lifecycle?: SeriesCreationLifecyclePort } = {},
 ): SeriesCreationAdapter {
-  const lifecycle = options.lifecycle;
-  if (lifecycle) {
-    return {
-      async create(intent) {
-        return {
-          mode: "lifecycle",
-          outcome: await lifecycle.createSeries(
-            toLifecycleCreateSeriesRequest(intent),
-          ),
-        };
-      },
-    };
-  }
-
-  const legacy = new RecurringTasksDB(supabase);
+  const lifecycle =
+    options.lifecycle ?? createActivatedRecurringTaskLifecycle(supabase);
   return {
     async create(intent) {
-      const normalized = normalizeSeriesCreationIntent(intent);
       return {
-        mode: "legacy",
-        recurringTask: await legacy.createRecurringTask(
-          toLegacyRecurringTaskInsert(normalized),
-          normalized.coverageThrough,
+        mode: "lifecycle",
+        outcome: await lifecycle.createSeries(
+          toLifecycleCreateSeriesRequest(intent),
         ),
       };
     },

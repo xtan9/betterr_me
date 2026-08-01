@@ -39,10 +39,14 @@ vi.mock("@/lib/db/ensure-profile", () => ({
   ensureProfile: mockEnsureProfile,
 }));
 
-vi.mock("@/lib/db", () => ({
-  TasksDB: class {},
-  RecurringTasksDB: class {},
-}));
+vi.mock("@/lib/db", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/db")>("@/lib/db");
+  return {
+    ...actual,
+    TasksDB: class {},
+    RecurringTasksDB: class {},
+  };
+});
 
 vi.mock("@/lib/recurring-tasks/creation", async () => {
   const actual = await vi.importActual<
@@ -82,13 +86,73 @@ function createRecurringTaskTool() {
   return taskTools().find((tool) => tool.name === "createRecurringTask")!;
 }
 
+function lifecycleSeries() {
+  return {
+    id: "series-1",
+    userId: "user-123",
+    status: "active" as const,
+    timeZone: "America/Toronto",
+    recurrenceAnchor: "2026-08-01",
+    activationDate: "2026-08-01",
+    occurrenceLimit: 3,
+    lastScheduledDate: null,
+    coverageHorizon: "2026-08-07",
+    currentRevisionId: "revision-1",
+    revisionToken: 1,
+    revisions: [{
+      id: "revision-1",
+      seriesId: "series-1",
+      effectiveFrom: "2026-08-01",
+      effectiveTo: null,
+      state: "active" as const,
+      recurrenceRule: { frequency: "daily" as const, interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: {
+        title: "Daily review",
+        description: "Review the plan",
+        priority: 2 as const,
+        categoryId: "00000000-0000-0000-0000-000000000001",
+        dueTime: "09:00:00",
+      },
+      createdAt: "2026-08-01T12:00:00.000Z",
+    }],
+    occurrences: [1, 2, 3].map((index) => ({
+      id: `occurrence-${index}`,
+      seriesId: "series-1",
+      revisionId: "revision-1",
+      scheduledDate: `2026-08-0${index}`,
+      dueDate: null,
+      details: {
+        title: "Daily review",
+        description: "Review the plan",
+        priority: 2 as const,
+        categoryId: "00000000-0000-0000-0000-000000000001",
+        dueTime: "09:00:00",
+      },
+      state: "open" as const,
+      overrides: {},
+      taskId: null,
+      completedAt: null,
+      createdAt: "2026-08-01T12:00:00.000Z",
+    })),
+    intentionalAbsences: [],
+    createdAt: "2026-08-01T12:00:00.000Z",
+    updatedAt: "2026-08-01T12:00:00.000Z",
+  };
+}
+
 describe("AI and HTTP Series creation parity", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockEnsureProfile.mockResolvedValue(undefined);
     mockCreate.mockResolvedValue({
-      mode: "legacy",
-      recurringTask: presentedRecurringTask,
+      mode: "lifecycle",
+      outcome: {
+        status: "complete",
+        type: "complete",
+        series: lifecycleSeries(),
+      },
     });
   });
 

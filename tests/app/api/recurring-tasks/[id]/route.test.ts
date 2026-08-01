@@ -2,11 +2,23 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GET, PATCH, DELETE } from "@/app/api/recurring-tasks/[id]/route";
 import { NextRequest } from "next/server";
 
-const { mockCreateTaskWrites, mockDeleteSeries } = vi.hoisted(() => {
+const {
+  mockCreateTaskWrites,
+  mockDeleteSeries,
+  mockStateFactory,
+  mockState,
+} = vi.hoisted(() => {
   const mockDeleteSeries = vi.fn();
+  const mockState = {
+    update: vi.fn(),
+    pause: vi.fn(),
+    resume: vi.fn(),
+  };
   return {
     mockCreateTaskWrites: vi.fn(() => ({ deleteSeries: mockDeleteSeries })),
     mockDeleteSeries,
+    mockStateFactory: vi.fn(() => mockState),
+    mockState,
   };
 });
 
@@ -39,6 +51,13 @@ vi.mock("@/lib/db", () => ({
     }
   },
 }));
+
+vi.mock("@/lib/recurring-tasks", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/recurring-tasks")>(
+    "@/lib/recurring-tasks",
+  );
+  return { ...actual, createSupabaseSeriesStateAdapter: mockStateFactory };
+});
 
 import { createClient } from "@/lib/supabase/server";
 
@@ -111,9 +130,11 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
 
   it("should update template with valid body", async () => {
     const updated = { id: "rt-1", title: "Updated" };
-    vi.mocked(mockRecurringTasksDB.updateRecurringTask).mockResolvedValue(
-      updated,
-    );
+    mockState.update.mockResolvedValue({
+      status: "complete",
+      type: "complete",
+      recurringTask: updated,
+    });
 
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks/rt-1",
@@ -130,13 +151,18 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
 
     expect(response.status).toBe(200);
     expect(data.recurring_task).toEqual(updated);
+    expect(mockState.update).toHaveBeenCalledWith(
+      expect.objectContaining({ seriesId: "rt-1", userId: "user-123" }),
+    );
   });
 
   it("should handle pause action", async () => {
     const paused = { id: "rt-1", status: "paused" };
-    vi.mocked(mockRecurringTasksDB.pauseRecurringTask).mockResolvedValue(
-      paused,
-    );
+    mockState.pause.mockResolvedValue({
+      status: "complete",
+      type: "complete",
+      recurringTask: paused,
+    });
 
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks/rt-1?action=pause",
@@ -150,17 +176,19 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
 
     expect(response.status).toBe(200);
     expect(data.recurring_task).toEqual(paused);
-    expect(mockRecurringTasksDB.pauseRecurringTask).toHaveBeenCalledWith(
-      "rt-1",
-      "user-123",
-    );
+    expect(mockState.pause).toHaveBeenCalledWith({
+      seriesId: "rt-1",
+      userId: "user-123",
+    });
   });
 
   it("should handle resume action", async () => {
     const resumed = { id: "rt-1", status: "active" };
-    vi.mocked(mockRecurringTasksDB.resumeRecurringTask).mockResolvedValue(
-      resumed,
-    );
+    mockState.resume.mockResolvedValue({
+      status: "complete",
+      type: "complete",
+      recurringTask: resumed,
+    });
 
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks/rt-1?action=resume",
@@ -174,18 +202,19 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
 
     expect(response.status).toBe(200);
     expect(data.recurring_task).toEqual(resumed);
-    expect(mockRecurringTasksDB.resumeRecurringTask).toHaveBeenCalledWith(
-      "rt-1",
-      "user-123",
-      undefined,
-      undefined,
-    );
+    expect(mockState.resume).toHaveBeenCalledWith({
+      seriesId: "rt-1",
+      userId: "user-123",
+      effectiveDate: undefined,
+      coverageThrough: undefined,
+    });
   });
 
   it("passes an explicit resume date through as user intent", async () => {
-    vi.mocked(mockRecurringTasksDB.resumeRecurringTask).mockResolvedValue({
-      id: "rt-1",
-      status: "active",
+    mockState.resume.mockResolvedValue({
+      status: "complete",
+      type: "complete",
+      recurringTask: { id: "rt-1", status: "active" },
     });
 
     const request = new NextRequest(
@@ -195,12 +224,12 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
 
     await PATCH(request, { params: Promise.resolve({ id: "rt-1" }) });
 
-    expect(mockRecurringTasksDB.resumeRecurringTask).toHaveBeenCalledWith(
-      "rt-1",
-      "user-123",
-      "2026-02-17",
-      "2026-02-24",
-    );
+    expect(mockState.resume).toHaveBeenCalledWith({
+      seriesId: "rt-1",
+      userId: "user-123",
+      effectiveDate: "2026-02-17",
+      coverageThrough: "2026-02-24",
+    });
   });
 
   it("should return 400 for invalid action", async () => {
@@ -255,7 +284,7 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
   });
 
   it("should return 404 if resume fails with not found", async () => {
-    vi.mocked(mockRecurringTasksDB.resumeRecurringTask).mockRejectedValue(
+    vi.mocked(mockState.resume).mockRejectedValue(
       new Error("Recurring task not found"),
     );
 

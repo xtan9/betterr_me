@@ -5,7 +5,7 @@ import {
   createTaskWrites,
   taskDeletionErrorMessage,
 } from "@/lib/tasks/writes";
-import { createSupabaseRecurringTaskLifecycle } from "@/lib/recurring-tasks";
+import { createActivatedRecurringTaskLifecycle } from "@/lib/recurring-tasks";
 import {
   isOccurrenceSuccess,
   occurrenceErrorMessage,
@@ -213,7 +213,7 @@ export function taskTools(): ToolDefinition[] {
         ctx: ToolContext,
       ) => {
         const outcome = await createTaskWrites(ctx.supabase, {
-          lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
+          lifecycle: createActivatedRecurringTaskLifecycle(ctx.supabase),
         }).execute({
           type: "create",
           userId: ctx.userId,
@@ -311,7 +311,7 @@ export function taskTools(): ToolDefinition[] {
       }),
       execute: async (params, ctx: ToolContext) => {
         const outcome = await createTaskWrites(ctx.supabase, {
-          lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
+          lifecycle: createActivatedRecurringTaskLifecycle(ctx.supabase),
         }).delete({
           taskId: params.taskId,
           userId: ctx.userId,
@@ -341,7 +341,9 @@ export function taskTools(): ToolDefinition[] {
           .describe("Filter by status (default: all)"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new RecurringTasksDB(ctx.supabase);
+        const db = new RecurringTasksDB(ctx.supabase, {
+          lifecycle: createActivatedRecurringTaskLifecycle(ctx.supabase),
+        });
         return db.getUserRecurringTasks(ctx.userId, {
           status: params.status,
         });
@@ -437,8 +439,6 @@ export function taskTools(): ToolDefinition[] {
             ).to,
           }),
         );
-        if (result.mode === "legacy") return result.recurringTask;
-
         const outcome = result.outcome;
         if (outcome.status === "complete" || outcome.status === "already-applied") {
           return toLegacyRecurringTask(outcome.series);
@@ -551,7 +551,7 @@ export function taskTools(): ToolDefinition[] {
       }),
       execute: async (params, ctx: ToolContext) => {
         const outcome = await createTaskWrites(ctx.supabase, {
-          lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
+          lifecycle: createActivatedRecurringTaskLifecycle(ctx.supabase),
         }).deleteSeries({
           seriesId: params.recurringTaskId,
           userId: ctx.userId,
