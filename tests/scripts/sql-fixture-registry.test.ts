@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -27,6 +28,14 @@ function createFixtureRepository(
     fs.writeFileSync(path.join(fixtureDirectory, name), sql);
   }
   return root;
+}
+
+function runRegistryCli(args: string[], cwd = process.cwd()) {
+  return spawnSync(
+    process.execPath,
+    [path.resolve(process.cwd(), "scripts/ci/sql-fixture-registry.mjs"), ...args],
+    { cwd, encoding: "utf8" },
+  );
 }
 
 afterEach(() => {
@@ -210,5 +219,132 @@ describe("SQL fixture registry", () => {
     ).toContain(
       "supabase/tests/ticket_fixture.sql: only a runner-trusted file may be registered as support",
     );
+  });
+
+  it("reports malformed registry entries and constrained-role policy violations", () => {
+    const root = createFixtureRepository(
+      [
+        null,
+        {
+          path: "Bad.SQL",
+          domain: "runner",
+          role: "constrained",
+          cleanup: "self-cleaning",
+        },
+        {
+          path: "missing.sql",
+          domain: "runner",
+          role: "constrained",
+          cleanup: "self-cleaning",
+        },
+        {
+          path: "duplicate.sql",
+          domain: "runner",
+          role: "constrained",
+          cleanup: "self-cleaning",
+        },
+        {
+          path: "duplicate.sql",
+          domain: "runner",
+          role: "constrained",
+          cleanup: "self-cleaning",
+        },
+        {
+          path: "support.sql",
+          kind: "support",
+          reason: "short",
+          unexpected: true,
+        },
+        {
+          path: "acceptance.sql",
+          domain: "Runner Domain",
+          role: "elevated",
+          cleanup: "leaking",
+          adminReason: "not allowed for constrained fixture",
+          unexpected: true,
+        },
+        {
+          path: "admin.sql",
+          domain: "runner",
+          role: "admin",
+          cleanup: "self-cleaning",
+        },
+        {
+          path: "constrained.sql",
+          domain: "runner",
+          role: "constrained",
+          cleanup: "self-cleaning",
+          adminReason: "only applies to admins",
+        },
+      ],
+      {
+        "duplicate.sql": "-- ralph-ci: true\nselect 1;\n",
+        "support.sql": "select 1;\n",
+        "acceptance.sql": "select 1;\n",
+        "admin.sql": "select 1;\n",
+        "constrained.sql": "-- ralph-ci: true\ncreate role temporary_runner;\n",
+      },
+    );
+
+    const violations = validateSqlFixtureRegistry(
+      root,
+      loadSqlFixtureRegistry(root),
+    );
+    expect(violations).toEqual(expect.arrayContaining([
+      "supabase/tests/registry.json[0]: entry must be an object",
+      "supabase/tests/registry.json[1]: path must be a top-level snake-case .sql filename",
+      "supabase/tests/missing.sql: registered fixture does not exist",
+      "supabase/tests/duplicate.sql: fixture is registered more than once",
+      "supabase/tests/support.sql: unknown support registry field unexpected",
+      "supabase/tests/support.sql: support entry requires an actionable reason",
+      "supabase/tests/support.sql: only a runner-trusted file may be registered as support",
+      "supabase/tests/acceptance.sql: unknown acceptance registry field unexpected",
+      "supabase/tests/acceptance.sql: acceptance fixture requires a domain",
+      "supabase/tests/acceptance.sql: role must be constrained or admin",
+      "supabase/tests/acceptance.sql: cleanup must be transactional or self-cleaning",
+      "supabase/tests/acceptance.sql: adminReason is only valid for admin fixtures",
+      "supabase/tests/admin.sql: admin role requires a least-privilege explanation",
+      "supabase/tests/admin.sql: only a runner-trusted fixture may use the admin role",
+      "supabase/tests/constrained.sql: adminReason is only valid for admin fixtures",
+      "supabase/tests/constrained.sql: constrained-role policy: role administration",
+    ]));
+    expect(validateSqlFixtureRegistry(root, {})).toEqual([
+      "supabase/tests/registry.json: registry must be a JSON array",
+    ]);
+  });
+
+  it("keeps the registry CLI exit codes and output aligned with its public contract", () => {
+    const root = createFixtureRepository(
+      [
+        {
+          path: "passing.sql",
+          domain: "runner",
+          role: "constrained",
+          cleanup: "self-cleaning",
+        },
+      ],
+      { "passing.sql": "-- ralph-ci: true\nselect 1;\n" },
+    );
+
+    expect(runRegistryCli(["--validate", "--root", root])).toMatchObject({
+      status: 0,
+      stderr: "",
+    });
+    expect(runRegistryCli(["--plan", "--domain", "runner", "--root", root])).toMatchObject({
+      status: 0,
+      stdout: "passing.sql\trunner\tconstrained\tself-cleaning\n",
+    });
+    expect(runRegistryCli(["--plan", "--fixture", "missing", "--root", root])).toMatchObject({
+      status: 1,
+    });
+    expect(runRegistryCli([])).toMatchObject({ status: 2 });
+    expect(runRegistryCli(["--validate", "--plan"])).toMatchObject({ status: 2 });
+    expect(runRegistryCli(["--unknown"])).toMatchObject({ status: 2 });
+
+    const missingRoot = fs.mkdtempSync(path.join(os.tmpdir(), "betterr-sql-missing-"));
+    temporaryDirectories.push(missingRoot);
+    expect(runRegistryCli(["--validate", "--root", missingRoot])).toMatchObject({
+      status: 1,
+    });
   });
 });

@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { RecurringTasksDB } from "@/lib/db/recurring-tasks";
+import {
+  RecurringTasksDB,
+  type RecurringTaskLifecycleAdapter,
+} from "@/lib/db/recurring-tasks";
 import { mockSupabaseClient } from "../../setup";
 import {
   queueThenResponses,
@@ -11,6 +14,10 @@ import type {
   RecurringTaskInsert,
   TaskUpdate,
 } from "@/lib/db/types";
+import {
+  InMemoryRecurringTaskLifecyclePersistence,
+  RecurringTaskLifecycle,
+} from "@/lib/recurring-tasks/lifecycle";
 
 // Mock external dependencies used by RecurringTasksDB.
 // `ensureRecurringInstances` (from @/lib/recurring-tasks) and `getNextOccurrence`
@@ -27,7 +34,8 @@ vi.mock("@/lib/recurring-tasks", () => ({
   ensureRecurringInstances: mockEnsureRecurringInstances,
 }));
 
-vi.mock("@/lib/recurring-tasks/recurrence", () => ({
+vi.mock("@/lib/recurring-tasks/recurrence", async (importOriginal) => ({
+  ...(await importOriginal()),
   getNextOccurrence: mockGetNextOccurrence,
 }));
 
@@ -56,6 +64,33 @@ function makeTemplate(over: Partial<RecurringTask> = {}): RecurringTask {
     updated_at: "2026-01-15T00:00:00Z",
     ...over,
   };
+}
+
+function makeLifecycleAdapter() {
+  const persistence = new InMemoryRecurringTaskLifecyclePersistence();
+  const lifecycle = new RecurringTaskLifecycle(persistence, {
+    clock: () => new Date("2026-08-01T12:00:00.000Z"),
+  });
+  const adapter: RecurringTaskLifecycleAdapter = {
+    createSeries: lifecycle.createSeries.bind(lifecycle),
+    ensureCoverage: lifecycle.ensureCoverage.bind(lifecycle),
+    ensureUserCoverage: lifecycle.ensureUserCoverage.bind(lifecycle),
+    reviseSeries: lifecycle.reviseSeries.bind(lifecycle),
+    editOccurrence: lifecycle.editOccurrence.bind(lifecycle),
+    skipOccurrence: lifecycle.skipOccurrence.bind(lifecycle),
+    completeOccurrence: lifecycle.completeOccurrence.bind(lifecycle),
+    reopenOccurrence: lifecycle.reopenOccurrence.bind(lifecycle),
+    pauseSeries: lifecycle.pauseSeries.bind(lifecycle),
+    resumeSeries: lifecycle.resumeSeries.bind(lifecycle),
+    endSeries: lifecycle.endSeries.bind(lifecycle),
+    getSeries: lifecycle.getSeries.bind(lifecycle),
+    listSeries: async (userId, status) => ({
+      series: [...persistence.snapshot().series.values()].filter(
+        (series) => series.userId === userId && (!status || series.status === status),
+      ),
+    }),
+  };
+  return { adapter, lifecycle };
 }
 
 describe("RecurringTasksDB", () => {
@@ -1210,6 +1245,202 @@ describe("RecurringTasksDB", () => {
       await expect(
         db.deleteInstanceWithScope(TASK_ID, USER_ID, "this"),
       ).rejects.toThrow("Task not found or not part of a recurring series");
+    });
+  });
+
+  describe("lifecycle adapter", () => {
+    it("maps lifecycle series and delegates create, list, get, and revisions", async () => {
+      const { adapter } = makeLifecycleAdapter();
+      const lifecycleDB = new RecurringTasksDB(
+        mockSupabaseClient as unknown as SupabaseClient,
+        {
+          lifecycle: adapter,
+          timeZone: "America/Los_Angeles",
+          effectiveDate: () => "2026-08-02",
+        },
+      );
+      const insertData: RecurringTaskInsert = {
+        user_id: USER_ID,
+        title: "Lifecycle task",
+        description: null,
+        priority: 1,
+        category_id: null,
+        due_time: "09:00",
+        recurrence_rule: { frequency: "daily", interval: 1 },
+        start_date: "2026-08-01",
+        end_type: "never",
+        end_date: null,
+        end_count: null,
+        status: "active",
+      };
+
+      const created = await lifecycleDB.createRecurringTask(insertData, "2026-08-03");
+      expect(created).toMatchObject({
+        id: expect.any(String),
+        user_id: USER_ID,
+        title: "Lifecycle task",
+        end_type: "never",
+        instances_generated: 3,
+        next_generate_date: "2026-08-04",
+      });
+
+      const listed = await lifecycleDB.getUserRecurringTasks(USER_ID);
+      expect(listed).toHaveLength(1);
+      expect(listed[0]).toMatchObject({ id: created.id, title: created.title });
+      expect(await lifecycleDB.getRecurringTask(created.id, USER_ID)).toMatchObject({
+        id: created.id,
+        title: "Lifecycle task",
+      });
+
+      const updated = await lifecycleDB.updateRecurringTask(created.id, USER_ID, {
+        title: "Revised task",
+        end_type: "on_date",
+        end_date: "2026-08-05",
+      });
+      expect(updated).toMatchObject({
+        id: created.id,
+        title: "Revised task",
+        end_type: "on_date",
+        end_date: "2026-08-05",
+      });
+
+      const paused = await lifecycleDB.updateRecurringTask(created.id, USER_ID, {
+        status: "paused",
+      });
+      expect(paused.status).toBe("paused");
+      const resumed = await lifecycleDB.updateRecurringTask(created.id, USER_ID, {
+        status: "active",
+      });
+      expect(resumed.status).toBe("active");
+      const archived = await lifecycleDB.updateRecurringTask(created.id, USER_ID, {
+        status: "archived",
+      });
+      expect(archived.status).toBe("archived");
+      expect(await lifecycleDB.getUserRecurringTasks(USER_ID, { status: "archived" }))
+        .toHaveLength(1);
+    });
+
+    it("delegates archive, delete, pause, and resume commands to the lifecycle", async () => {
+      const { adapter } = makeLifecycleAdapter();
+      const lifecycleDB = new RecurringTasksDB(
+        mockSupabaseClient as unknown as SupabaseClient,
+        {
+          lifecycle: adapter,
+          timeZone: "America/Los_Angeles",
+          effectiveDate: () => "2026-08-02",
+        },
+      );
+      const insertData: RecurringTaskInsert = {
+        user_id: USER_ID,
+        title: "Command task",
+        description: null,
+        priority: 0,
+        category_id: null,
+        due_time: null,
+        recurrence_rule: { frequency: "daily", interval: 1 },
+        start_date: "2026-08-01",
+        end_type: "never",
+        end_date: null,
+        end_count: null,
+        status: "active",
+      };
+
+      const first = await lifecycleDB.createRecurringTask(insertData, "2026-08-03");
+      const paused = await lifecycleDB.pauseRecurringTask(first.id, USER_ID);
+      expect(paused.status).toBe("paused");
+      const resumed = await lifecycleDB.resumeRecurringTask(
+        first.id,
+        USER_ID,
+        "2026-08-03",
+        "2026-08-04",
+      );
+      expect(resumed.status).toBe("active");
+      await lifecycleDB.archiveRecurringTask(first.id, USER_ID);
+
+      const second = await lifecycleDB.createRecurringTask(insertData, "2026-08-03");
+      await lifecycleDB.deleteRecurringTask(second.id, USER_ID);
+      expect((await lifecycleDB.getRecurringTask(second.id, USER_ID))?.status).toBe("archived");
+    });
+
+    it("routes instance scopes through lifecycle occurrence and series commands", async () => {
+      const { adapter, lifecycle } = makeLifecycleAdapter();
+      const lifecycleDB = new RecurringTasksDB(
+        mockSupabaseClient as unknown as SupabaseClient,
+        { lifecycle: adapter, timeZone: "America/Los_Angeles" },
+      );
+      const created = await lifecycleDB.createRecurringTask({
+        user_id: USER_ID,
+        title: "Scoped task",
+        description: null,
+        priority: 0,
+        category_id: null,
+        due_time: null,
+        recurrence_rule: { frequency: "daily", interval: 1 },
+        start_date: "2026-08-01",
+        end_type: "never",
+        end_date: null,
+        end_count: null,
+        status: "active",
+      }, "2026-08-03");
+      const series = await lifecycle.getSeries(USER_ID, created.id);
+      expect(series.status).toBe("complete");
+      if (series.status !== "complete") return;
+      const first = series.occurrences[0];
+      const second = series.occurrences[1];
+      const third = series.occurrences[2];
+
+      mockSupabaseClient.setMockResponse({
+        recurring_series_id: created.id,
+        recurring_occurrence_id: first.id,
+        scheduled_date: first.scheduledDate,
+      });
+      await lifecycleDB.updateInstanceWithScope(TASK_ID, USER_ID, "this", {
+        title: "One occurrence",
+        is_completed: true,
+      });
+      const afterThis = await lifecycle.getSeries(USER_ID, created.id);
+      expect(afterThis.status).toBe("complete");
+      if (afterThis.status !== "complete") return;
+      expect(afterThis.occurrences[0]).toMatchObject({
+        state: "completed",
+        details: { title: "One occurrence" },
+      });
+
+      mockSupabaseClient.setMockResponse({
+        recurring_series_id: created.id,
+        recurring_occurrence_id: second.id,
+        scheduled_date: second.scheduledDate,
+      });
+      await lifecycleDB.updateInstanceWithScope(TASK_ID, USER_ID, "following", {
+        description: "Following details",
+      });
+      await lifecycleDB.updateInstanceWithScope(TASK_ID, USER_ID, "all", {
+        priority: 2,
+      });
+
+      mockSupabaseClient.setMockResponse({
+        recurring_series_id: created.id,
+        recurring_occurrence_id: second.id,
+        scheduled_date: second.scheduledDate,
+      });
+      await lifecycleDB.deleteInstanceWithScope(TASK_ID, USER_ID, "this");
+      const afterSkip = await lifecycle.getSeries(USER_ID, created.id);
+      expect(afterSkip.status).toBe("complete");
+      if (afterSkip.status !== "complete") return;
+      expect(afterSkip.occurrences.find((occurrence) => occurrence.id === second.id)?.state)
+        .toBe("skipped");
+
+      mockSupabaseClient.setMockResponse({
+        recurring_series_id: created.id,
+        recurring_occurrence_id: third.id,
+        scheduled_date: third.scheduledDate,
+      });
+      await lifecycleDB.deleteInstanceWithScope(TASK_ID, USER_ID, "following");
+      await lifecycleDB.deleteInstanceWithScope(TASK_ID, USER_ID, "all");
+      const afterEnd = await lifecycle.getSeries(USER_ID, created.id);
+      expect(afterEnd.status).toBe("complete");
+      if (afterEnd.status !== "complete") return;
+      expect(afterEnd.series.status).toBe("ended");
     });
   });
 });
