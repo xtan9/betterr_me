@@ -4,10 +4,10 @@ import { NextRequest } from "next/server";
 // --- Hoisted mocks ---
 const {
   mockAuthenticateRequest,
-  mockStart,
+  mockStartWorkout,
 } = vi.hoisted(() => ({
   mockAuthenticateRequest: vi.fn(),
-  mockStart: vi.fn(),
+  mockStartWorkout: vi.fn(),
 }));
 
 const mockSupabase = {};
@@ -16,8 +16,8 @@ vi.mock("@/lib/auth/authenticated-request", () => ({
   authenticateRequest: mockAuthenticateRequest,
 }));
 
-vi.mock("@/lib/fitness/routine-workout-requests", () => ({
-  createRoutineWorkoutRequests: () => ({ start: mockStart }),
+vi.mock("@/lib/fitness/writes", () => ({
+  createWorkoutWrites: vi.fn(() => ({ start: mockStartWorkout })),
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -47,12 +47,15 @@ describe("POST /api/routines/[id]/start", () => {
       requiredPermission: "write",
       client: mockSupabase,
     });
-    mockStart.mockResolvedValue({
-      id: "w-1",
-      user_id: "user-123",
-      title: "Push Day",
-      status: "in_progress",
-      exercises: [],
+    mockStartWorkout.mockResolvedValue({
+      type: "started",
+      workout: {
+        id: "w-1",
+        user_id: "user-123",
+        title: "Push Day",
+        status: "in_progress",
+        exercises: [],
+      },
     });
   });
 
@@ -63,7 +66,10 @@ describe("POST /api/routines/[id]/start", () => {
     expect(response.status).toBe(201);
     expect(data.workout).toBeDefined();
     expect(data.workout.id).toBe("w-1");
-    expect(mockStart).toHaveBeenCalledWith("user-123", "routine-1");
+    expect(mockStartWorkout).toHaveBeenCalledWith({
+      userId: "user-123",
+      source: { type: "routine", routineId: "routine-1" },
+    });
   });
 
   it("returns 401 for unauthenticated user", async () => {
@@ -96,7 +102,7 @@ describe("POST /api/routines/[id]/start", () => {
   });
 
   it("returns 404 for non-existent routine", async () => {
-    mockStart.mockResolvedValue(null);
+    mockStartWorkout.mockResolvedValue({ type: "not-found" });
 
     const response = await callPOST("nonexistent");
     const data = await response.json();
@@ -105,11 +111,8 @@ describe("POST /api/routines/[id]/start", () => {
     expect(data.error).toBe("Routine not found");
   });
 
-  it("returns 409 when active workout exists", async () => {
-    mockStart.mockRejectedValue({
-      code: "23505",
-      message: 'duplicate key value violates unique constraint "idx_workouts_active"',
-    });
+  it("returns 409 for the expected active-workout conflict", async () => {
+    mockStartWorkout.mockResolvedValue({ type: "conflict" });
 
     const response = await callPOST("routine-1");
 
@@ -119,8 +122,22 @@ describe("POST /api/routines/[id]/start", () => {
     });
   });
 
-  it("returns 500 when the atomic conversion fails", async () => {
-    mockStart.mockRejectedValue({ message: "Insert failed", code: "42000" });
+  it("returns 400 when the shared conversion rejects source data", async () => {
+    mockStartWorkout.mockResolvedValue({
+      type: "invalid-source",
+      message: "Unsupported exercise type",
+    });
+
+    const response = await callPOST("routine-1");
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Unsupported exercise type",
+    });
+  });
+
+  it("returns 500 for an unexpected shared mutation failure", async () => {
+    mockStartWorkout.mockRejectedValue(new Error("database unavailable"));
 
     const response = await callPOST("routine-1");
 

@@ -112,6 +112,28 @@ describe("RoutinesDB", () => {
   // =========================================================================
 
   describe("getRoutine", () => {
+    it("scopes a routine lookup to the trusted user when provided", async () => {
+      mockSupabaseClient.setMockResponse({
+        id: "r1",
+        user_id: "u1",
+        name: "Private routine",
+        routine_exercises: [],
+      });
+
+      await db.getRoutine("r1", "u1");
+
+      mockSupabaseClient.expectQuery({
+        table: "routines",
+        method: "eq",
+        args: ["id", "r1"],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "routines",
+        method: "eq",
+        args: ["user_id", "u1"],
+      });
+    });
+
     it("returns single routine with reshaped exercises", async () => {
       const mockRoutine = {
         id: "r1",
@@ -175,6 +197,48 @@ describe("RoutinesDB", () => {
         code: "500",
         message: "boom",
       });
+    });
+  });
+
+  // =========================================================================
+  // updateRoutineLastPerformedAt
+  // =========================================================================
+
+  describe("updateRoutineLastPerformedAt", () => {
+    it("updates only the owned routine's performed timestamp", async () => {
+      const performedAt = "2026-08-01T12:05:00.000Z";
+      mockSupabaseClient.setMockResponse(null);
+
+      await db.updateRoutineLastPerformedAt("r1", "u1", performedAt);
+
+      mockSupabaseClient.expectQuery({
+        table: "routines",
+        method: "update",
+        args: [{ last_performed_at: performedAt }],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "routines",
+        method: "eq",
+        args: ["id", "r1"],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "routines",
+        method: "eq",
+        args: ["user_id", "u1"],
+      });
+    });
+
+    it("rethrows a timestamp update failure", async () => {
+      const databaseError = { code: "42501", message: "not allowed" };
+      mockSupabaseClient.setMockResponse(null, databaseError);
+
+      await expect(
+        db.updateRoutineLastPerformedAt(
+          "r1",
+          "u1",
+          "2026-08-01T12:05:00.000Z",
+        ),
+      ).rejects.toBe(databaseError);
     });
   });
 

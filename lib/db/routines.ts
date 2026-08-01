@@ -55,8 +55,11 @@ export class RoutinesDB {
    * Get a single routine by ID with nested exercises and exercise details.
    * Returns null if not found (PGRST116).
    */
-  async getRoutine(routineId: string): Promise<RoutineWithExercises | null> {
-    const { data, error } = await this.supabase
+  async getRoutine(
+    routineId: string,
+    userId?: string,
+  ): Promise<RoutineWithExercises | null> {
+    let query = this.supabase
       .from("routines")
       .select(
         `
@@ -67,8 +70,10 @@ export class RoutinesDB {
         )
       `
       )
-      .eq("id", routineId)
-      .order("sort_order", {
+      .eq("id", routineId);
+    if (userId !== undefined) query = query.eq("user_id", userId);
+
+    const { data, error } = await query.order("sort_order", {
         referencedTable: "routine_exercises",
         ascending: true,
       })
@@ -90,6 +95,27 @@ export class RoutinesDB {
         exercise: re.exercise,
       })),
     } as RoutineWithExercises;
+  }
+
+  /** Record a routine start without allowing a caller to cross ownership. */
+  async updateRoutineLastPerformedAt(
+    routineId: string,
+    userId: string,
+    lastPerformedAt: string,
+  ): Promise<void> {
+    const { error } = await this.supabase
+      .from("routines")
+      .update({ last_performed_at: lastPerformedAt })
+      .eq("id", routineId)
+      .eq("user_id", userId);
+
+    if (error) {
+      log.error("Failed to update routine last_performed_at", error, {
+        routineId,
+        userId,
+      });
+      throw error;
+    }
   }
 
   /**

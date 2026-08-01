@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
 // --- Hoisted mocks ---
-const { mockGetUser, mockStartWorkout, mockGetWorkoutsWithSummary } =
+const {
+  mockGetUser,
+  mockStartWorkout,
+  mockGetWorkoutsWithSummary,
+} =
   vi.hoisted(() => ({
     mockGetUser: vi.fn(),
     mockStartWorkout: vi.fn(),
@@ -17,9 +21,12 @@ vi.mock("@/lib/supabase/server", () => ({
 
 vi.mock("@/lib/db/workouts", () => ({
   WorkoutsDB: class {
-    startWorkout = mockStartWorkout;
     getWorkoutsWithSummary = mockGetWorkoutsWithSummary;
   },
+}));
+
+vi.mock("@/lib/fitness/writes", () => ({
+  createWorkoutWrites: vi.fn(() => ({ start: mockStartWorkout })),
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -62,7 +69,7 @@ describe("POST /api/workouts", () => {
       title: "Morning Workout",
       status: "in_progress",
     };
-    mockStartWorkout.mockResolvedValue(mockWorkout);
+    mockStartWorkout.mockResolvedValue({ type: "started", workout: mockWorkout });
 
     const response = await POST(
       makePostRequest({ title: "Morning Workout" })
@@ -71,22 +78,47 @@ describe("POST /api/workouts", () => {
 
     expect(response.status).toBe(201);
     expect(data.workout).toEqual(mockWorkout);
-    expect(mockStartWorkout).toHaveBeenCalledWith("user-123", {
-      title: "Morning Workout",
+    expect(mockStartWorkout).toHaveBeenCalledWith({
+      userId: "user-123",
+      source: { type: "blank", title: "Morning Workout" },
     });
   });
 
   it("creates workout with default title when title is omitted", async () => {
     mockStartWorkout.mockResolvedValue({
-      id: "w-1",
-      title: "Workout",
-      status: "in_progress",
+      type: "started",
+      workout: {
+        id: "w-1",
+        title: "Workout",
+        status: "in_progress",
+      },
     });
 
     const response = await POST(makePostRequest({}));
 
     expect(response.status).toBe(201);
-    expect(mockStartWorkout).toHaveBeenCalledWith("user-123", {});
+    expect(mockStartWorkout).toHaveBeenCalledWith({
+      userId: "user-123",
+      source: { type: "blank" },
+    });
+  });
+
+  it("maps a routine request through the shared source contract", async () => {
+    const routineId = "64500000-0000-4000-8000-000000000001";
+    mockStartWorkout.mockResolvedValue({
+      type: "started",
+      workout: { id: "w-1", routine_id: routineId, exercises: [] },
+    });
+
+    const response = await POST(
+      makePostRequest({ routine_id: routineId, title: "Ignored title" }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mockStartWorkout).toHaveBeenCalledWith({
+      userId: "user-123",
+      source: { type: "routine", routineId },
+    });
   });
 
   it("returns 401 for unauthenticated user", async () => {
@@ -99,16 +131,28 @@ describe("POST /api/workouts", () => {
     expect(data.error).toBe("Unauthorized");
   });
 
-  it("returns 409 when active workout already exists (23505)", async () => {
-    mockStartWorkout.mockRejectedValue(
-      Object.assign(new Error("unique violation"), { code: "23505" })
-    );
+  it("returns 409 for the expected active-workout conflict", async () => {
+    mockStartWorkout.mockResolvedValue({ type: "conflict" });
 
     const response = await POST(makePostRequest({}));
     const data = await response.json();
 
     expect(response.status).toBe(409);
     expect(data.error).toBe("You already have an active workout");
+  });
+
+  it("maps an invalid shared source to a client error", async () => {
+    mockStartWorkout.mockResolvedValue({
+      type: "invalid-source",
+      message: "Routine source is invalid",
+    });
+
+    const response = await POST(makePostRequest({}));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Routine source is invalid",
+    });
   });
 
   it("returns 500 on unexpected error", async () => {
