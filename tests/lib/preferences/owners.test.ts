@@ -135,6 +135,34 @@ describe("Preference Owners", () => {
     ).toEqual({ status: "unavailable", reason: "userTimeZoneUnresolved" });
   });
 
+  it("keeps the disabled Push Quiet Window ready without a User Time Zone", () => {
+    expect(
+      decodeNotificationPreferences(
+        { quiet_hours_start: null, quiet_hours_end: null },
+        null,
+        null,
+      ).pushQuietWindow,
+    ).toEqual({ status: "ready", value: { status: "disabled" } });
+  });
+
+  it("does not accept malformed or zero-length stored windows", () => {
+    expect(
+      decodeNotificationPreferences(
+        { quiet_hours_start: "22:00", quiet_hours_end: "22:00" },
+        null,
+        "America/Los_Angeles",
+      ).pushQuietWindow,
+    ).toEqual({ status: "unavailable", reason: "invalidStoredValue" });
+
+    expect(
+      decodeNotificationPreferences(
+        { quiet_hours_start: "22:00", quiet_hours_end: null },
+        null,
+        "America/Los_Angeles",
+      ).pushQuietWindow,
+    ).toEqual({ status: "unavailable", reason: "invalidStoredValue" });
+  });
+
   it("resolves only valid IANA User Time Zones", () => {
     expect(decodeUserTimeZone("America/New_York")).toEqual({
       status: "resolved",

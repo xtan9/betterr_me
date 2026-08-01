@@ -12,6 +12,12 @@
     "cleanup": "self-cleaning"
   },
   {
+    "path": "notification_push_quiet_window.sql",
+    "domain": "notifications",
+    "role": "constrained",
+    "cleanup": "self-cleaning"
+  },
+  {
     "path": "atomic_profile_preference_updates.sql",
     "domain": "profile",
     "role": "constrained",

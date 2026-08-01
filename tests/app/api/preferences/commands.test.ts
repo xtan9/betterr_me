@@ -13,6 +13,7 @@ const {
   mockSetWeekStartPreference,
   mockSetFitnessPreference,
   mockSetNotificationPreference,
+  mockLogError,
   mockUpdateProfileDetails,
   mockSetUserTimeZone,
 } = vi.hoisted(() => ({
@@ -21,6 +22,7 @@ const {
   mockSetWeekStartPreference: vi.fn(),
   mockSetFitnessPreference: vi.fn(),
   mockSetNotificationPreference: vi.fn(),
+  mockLogError: vi.fn(),
   mockUpdateProfileDetails: vi.fn(),
   mockSetUserTimeZone: vi.fn(),
 }));
@@ -50,7 +52,7 @@ vi.mock("@/lib/db/notifications", () => ({
 }));
 
 vi.mock("@/lib/logger", () => ({
-  log: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+  log: { error: mockLogError, warn: vi.fn(), info: vi.fn() },
 }));
 
 const request = (url: string, body: unknown, method = "POST") =>
@@ -263,6 +265,15 @@ describe("domain-owned Preference commands", () => {
     );
 
     expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      pushQuietWindow: {
+        status: "enabled",
+        startLocal: "22:00",
+        endLocal: "07:00",
+      },
+      preferenceRevision: 8,
+      changed: true,
+    });
     expect(mockSetNotificationPreference).toHaveBeenCalledWith({
       type: "setPushQuietWindow",
       value: { status: "enabled", startLocal: "22:00", endLocal: "07:00" },
@@ -306,6 +317,50 @@ describe("domain-owned Preference commands", () => {
 
     expect(response.status).toBe(400);
     expect(mockSetNotificationPreference).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      label: "one-sided",
+      value: { status: "enabled", startLocal: "22:00" },
+    },
+    {
+      label: "equal-endpoint",
+      value: { status: "enabled", startLocal: "22:00", endLocal: "22:00" },
+    },
+  ])("rejects a $label Push Quiet Window intent before persistence", async ({ value }) => {
+    const response = await postNotifications(
+      request("/api/preferences/notifications", {
+        type: "setPushQuietWindow",
+        value,
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockSetNotificationPreference).not.toHaveBeenCalled();
+  });
+
+  it("keeps Push Quiet Window diagnostics free of endpoint values and raw intents", async () => {
+    mockSetNotificationPreference.mockRejectedValue(
+      new Error(
+        'database rejected intent {"type":"setPushQuietWindow","value":{"startLocal":"22:00","endLocal":"07:00"}}',
+      ),
+    );
+
+    const response = await postNotifications(
+      request("/api/preferences/notifications", {
+        type: "setPushQuietWindow",
+        value: { status: "enabled", startLocal: "22:00", endLocal: "07:00" },
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    const diagnosticText = mockLogError.mock.calls
+      .flat()
+      .map((value) => String(value))
+      .join(" ");
+    expect(diagnosticText).not.toContain("22:00");
+    expect(diagnosticText).not.toContain("setPushQuietWindow");
   });
 
   it("sends only dirty Profile Details fields", async () => {

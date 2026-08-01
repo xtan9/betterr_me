@@ -1,23 +1,21 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
 // Hoisted mocks
 const {
   mockGetPendingReminders,
   mockUpdateReminderStatus,
-  mockGetNotificationProjection,
+  mockGetPushQuietWindow,
   mockSendPushNotification,
   mockSendReminderEmail,
-  mockIsInQuietHours,
   mockCreateAdminClient,
   mockGetVapidDetails,
 } = vi.hoisted(() => ({
   mockGetPendingReminders: vi.fn(),
   mockUpdateReminderStatus: vi.fn(),
-  mockGetNotificationProjection: vi.fn(),
+  mockGetPushQuietWindow: vi.fn(),
   mockSendPushNotification: vi.fn(),
   mockSendReminderEmail: vi.fn(),
-  mockIsInQuietHours: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockGetVapidDetails: vi.fn(),
 }));
@@ -31,7 +29,7 @@ vi.mock("@/lib/db/reminders", () => ({
 
 vi.mock("@/lib/db/notifications", () => ({
   NotificationsDB: class {
-    getNotificationPreferenceProjection = mockGetNotificationProjection;
+    getPushQuietWindow = mockGetPushQuietWindow;
   },
 }));
 
@@ -41,10 +39,6 @@ vi.mock("@/lib/push/send", () => ({
 
 vi.mock("@/lib/email/send", () => ({
   sendReminderEmail: mockSendReminderEmail,
-}));
-
-vi.mock("@/lib/push/quiet-hours", () => ({
-  isInQuietHours: mockIsInQuietHours,
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -89,12 +83,14 @@ const mockReminder = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const mockProfile = (overrides: Record<string, unknown> = {}) => ({
-  timezone: "America/New_York",
-  preferences: {
-    email_notifications_enabled: false,
-    quiet_hours_start: null,
-    quiet_hours_end: null,
+const mockPushQuietWindow = (overrides: Record<string, unknown> = {}) => ({
+  pushQuietWindow: {
+    status: "ready" as const,
+    value: { status: "disabled" as const },
+  },
+  userTimeZone: {
+    status: "resolved" as const,
+    value: "America/New_York",
   },
   ...overrides,
 });
@@ -102,15 +98,20 @@ const mockProfile = (overrides: Record<string, unknown> = {}) => ({
 describe("GET /api/cron/dispatch-reminders", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-01T03:00:00.000Z"));
     vi.stubEnv("CRON_SECRET", CRON_SECRET);
     mockCreateAdminClient.mockReturnValue({});
-    mockIsInQuietHours.mockReturnValue(false);
     mockUpdateReminderStatus.mockResolvedValue({});
     mockGetVapidDetails.mockReturnValue({
       subject: "mailto:test@test.com",
       publicKey: "test-public-key",
       privateKey: "test-private-key",
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("returns 401 without CRON_SECRET", async () => {
@@ -146,7 +147,7 @@ describe("GET /api/cron/dispatch-reminders", () => {
       failed: 1,
       skipped_quiet_hours: 0,
     });
-    expect(mockGetNotificationProjection).not.toHaveBeenCalled();
+    expect(mockGetPushQuietWindow).not.toHaveBeenCalled();
     expect(mockSendPushNotification).not.toHaveBeenCalled();
     expect(mockSendReminderEmail).not.toHaveBeenCalled();
     expect(mockUpdateReminderStatus).toHaveBeenCalledWith(
@@ -158,9 +159,9 @@ describe("GET /api/cron/dispatch-reminders", () => {
 
   it("dispatches push and email for reminder with both channels", async () => {
     const reminder = mockReminder();
-    const profile = mockProfile();
+    const profile = mockPushQuietWindow();
     mockGetPendingReminders.mockResolvedValue([reminder]);
-    mockGetNotificationProjection.mockResolvedValue(profile);
+    mockGetPushQuietWindow.mockResolvedValue(profile);
     mockSendPushNotification.mockResolvedValue({ sent: 1, failed: 0 });
     mockSendReminderEmail.mockResolvedValue({ success: true });
 
@@ -198,15 +199,18 @@ describe("GET /api/cron/dispatch-reminders", () => {
     // Use a recent fire_at so it doesn't hit the staleness threshold
     const recentFireAt = new Date(Date.now() - 30 * 60 * 1000).toISOString(); // 30min ago
     const reminder = mockReminder({ channels: ["push"], fire_at: recentFireAt });
-    const profile = mockProfile({
-      preferences: {
-        quiet_hours_start: "22:00",
-        quiet_hours_end: "07:00",
+    const profile = mockPushQuietWindow({
+      pushQuietWindow: {
+        status: "ready" as const,
+        value: {
+          status: "enabled" as const,
+          startLocal: "22:00",
+          endLocal: "07:00",
+        },
       },
     });
     mockGetPendingReminders.mockResolvedValue([reminder]);
-    mockGetNotificationProjection.mockResolvedValue(profile);
-    mockIsInQuietHours.mockReturnValue(true);
+    mockGetPushQuietWindow.mockResolvedValue(profile);
 
     const res = await GET(createRequest());
     const body = await res.json();
@@ -221,10 +225,18 @@ describe("GET /api/cron/dispatch-reminders", () => {
     // fire_at is old enough to exceed staleness threshold
     const staleFireAt = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(); // 5 hours ago
     const reminder = mockReminder({ channels: ["push"], fire_at: staleFireAt });
-    const profile = mockProfile();
+    const profile = mockPushQuietWindow({
+      pushQuietWindow: {
+        status: "ready" as const,
+        value: {
+          status: "enabled" as const,
+          startLocal: "22:00",
+          endLocal: "07:00",
+        },
+      },
+    });
     mockGetPendingReminders.mockResolvedValue([reminder]);
-    mockGetNotificationProjection.mockResolvedValue(profile);
-    mockIsInQuietHours.mockReturnValue(true);
+    mockGetPushQuietWindow.mockResolvedValue(profile);
 
     const res = await GET(createRequest());
     const body = await res.json();
@@ -236,10 +248,18 @@ describe("GET /api/cron/dispatch-reminders", () => {
 
   it("email-only reminder during quiet hours still dispatches", async () => {
     const reminder = mockReminder({ channels: ["email"] });
-    const profile = mockProfile();
+    const profile = mockPushQuietWindow({
+      pushQuietWindow: {
+        status: "ready" as const,
+        value: {
+          status: "enabled" as const,
+          startLocal: "22:00",
+          endLocal: "07:00",
+        },
+      },
+    });
     mockGetPendingReminders.mockResolvedValue([reminder]);
-    mockGetNotificationProjection.mockResolvedValue(profile);
-    mockIsInQuietHours.mockReturnValue(true);
+    mockGetPushQuietWindow.mockResolvedValue(profile);
     mockSendReminderEmail.mockResolvedValue({ success: true });
 
     const res = await GET(createRequest());
@@ -253,10 +273,18 @@ describe("GET /api/cron/dispatch-reminders", () => {
 
   it("push+email during quiet hours dispatches email only, marks sent", async () => {
     const reminder = mockReminder({ channels: ["push", "email"] });
-    const profile = mockProfile();
+    const profile = mockPushQuietWindow({
+      pushQuietWindow: {
+        status: "ready" as const,
+        value: {
+          status: "enabled" as const,
+          startLocal: "22:00",
+          endLocal: "07:00",
+        },
+      },
+    });
     mockGetPendingReminders.mockResolvedValue([reminder]);
-    mockGetNotificationProjection.mockResolvedValue(profile);
-    mockIsInQuietHours.mockReturnValue(true);
+    mockGetPushQuietWindow.mockResolvedValue(profile);
     mockSendReminderEmail.mockResolvedValue({ success: true });
 
     const res = await GET(createRequest());
@@ -276,9 +304,9 @@ describe("GET /api/cron/dispatch-reminders", () => {
 
   it("all channels fail sets status to failed", async () => {
     const reminder = mockReminder({ channels: ["push", "email"] });
-    const profile = mockProfile();
+    const profile = mockPushQuietWindow();
     mockGetPendingReminders.mockResolvedValue([reminder]);
-    mockGetNotificationProjection.mockResolvedValue(profile);
+    mockGetPushQuietWindow.mockResolvedValue(profile);
     mockSendPushNotification.mockResolvedValue({ sent: 0, failed: 1 });
     mockSendReminderEmail.mockResolvedValue({ success: false, error: "fail" });
 
@@ -297,11 +325,11 @@ describe("GET /api/cron/dispatch-reminders", () => {
   it("one reminder failure does not stop the batch", async () => {
     const reminder1 = mockReminder({ id: "rem-1", user_id: "user-1" });
     const reminder2 = mockReminder({ id: "rem-2", user_id: "user-2" });
-    const profile = mockProfile();
+    const profile = mockPushQuietWindow();
 
     mockGetPendingReminders.mockResolvedValue([reminder1, reminder2]);
-    // First Notifications projection call throws (simulating DB error), second succeeds
-    mockGetNotificationProjection
+    // First Notifications reader call throws (simulating DB error), second succeeds
+    mockGetPushQuietWindow
       .mockRejectedValueOnce(new Error("DB connection error"))
       .mockResolvedValueOnce(profile);
     mockSendPushNotification.mockResolvedValue({ sent: 1, failed: 0 });
@@ -310,7 +338,7 @@ describe("GET /api/cron/dispatch-reminders", () => {
     const res = await GET(createRequest());
     const body = await res.json();
 
-    // First fails (catch at getProfile), second dispatched
+    // First fails (catch at the Notifications reader), second dispatched
     expect(body.dispatched).toBe(1);
     expect(body.failed).toBe(1);
   });

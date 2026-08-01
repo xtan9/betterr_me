@@ -3,7 +3,15 @@ import type {
   NotificationPreferenceIntent,
   NotificationPreferenceOutcome,
 } from "@/lib/preferences/commands";
-import type { PreferenceStorage } from "@/lib/preferences/types";
+import {
+  decodePushQuietWindow,
+  decodeUserTimeZone,
+} from "@/lib/preferences/owners";
+import type {
+  NotificationPreferences,
+  PreferenceStorage,
+  UserTimeZone,
+} from "@/lib/preferences/types";
 
 export interface NotificationPreferenceProjection {
   preferences: PreferenceStorage;
@@ -28,6 +36,23 @@ export class NotificationsDB {
     }
 
     return data as NotificationPreferenceProjection | null;
+  }
+
+  async getPushQuietWindow(userId: string): Promise<{
+    pushQuietWindow: NotificationPreferences["pushQuietWindow"];
+    userTimeZone: UserTimeZone;
+  } | null> {
+    const projection = await this.getNotificationPreferenceProjection(userId);
+    if (!projection) return null;
+
+    const userTimeZone = decodeUserTimeZone(projection.timezone);
+    return {
+      pushQuietWindow: decodePushQuietWindow(
+        projection.preferences,
+        userTimeZone,
+      ),
+      userTimeZone,
+    };
   }
 
   async setNotificationPreference(

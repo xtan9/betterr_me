@@ -855,6 +855,8 @@
         "description": "在此時段暫停推播通知",
         "enabled": "勿擾已啟用",
         "disabled": "勿擾已停用",
+        "unavailable": "勿擾時段無法使用",
+        "unavailableDescription": "設定有效的使用者時區後，才能使用已儲存的勿擾時段。",
         "startTime": "開始時間",
         "endTime": "結束時間",
         "emailNote": "電子郵件通知不受勿擾時段影響",

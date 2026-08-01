@@ -36,6 +36,36 @@ describe("NotificationsDB", () => {
     ).toBe("preferences, timezone");
   });
 
+  it("returns the Notifications-owned Push Quiet Window state", async () => {
+    const db = new NotificationsDB(
+      mockSupabaseClient as unknown as SupabaseClient,
+    );
+
+    mockSupabaseClient.setMockResponse({
+      preferences: { quiet_hours_start: "22:00", quiet_hours_end: "07:00" },
+      timezone: "America/Los_Angeles",
+    });
+    await expect(db.getPushQuietWindow("user-123")).resolves.toEqual({
+      pushQuietWindow: {
+        status: "ready",
+        value: { status: "enabled", startLocal: "22:00", endLocal: "07:00" },
+      },
+      userTimeZone: { status: "resolved", value: "America/Los_Angeles" },
+    });
+
+    mockSupabaseClient.setMockResponse({
+      preferences: { quiet_hours_start: "22:00", quiet_hours_end: "07:00" },
+      timezone: "not/a-time-zone",
+    });
+    await expect(db.getPushQuietWindow("user-123")).resolves.toEqual({
+      pushQuietWindow: {
+        status: "unavailable",
+        reason: "userTimeZoneUnresolved",
+      },
+      userTimeZone: { status: "unresolved" },
+    });
+  });
+
   it("submits the discriminated Notification Intent and returns its owner outcome", async () => {
     const outcome = {
       reminderEmail: { enabled: false },

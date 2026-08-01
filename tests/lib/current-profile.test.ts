@@ -155,6 +155,35 @@ describe("Current Profile", () => {
     });
   });
 
+  it("preserves a complete stored Push Quiet Window while reporting an unresolved zone", () => {
+    const storedWindow = {
+      quiet_hours_start: "22:00",
+      quiet_hours_end: "07:00",
+    };
+    const result = composeCurrentProfile({
+      identityEmail: "taylor@example.com",
+      capabilities: { canAccessAdmin: false },
+      projection: {
+        ...projection,
+        timezone: null,
+        preferences: { ...projection.preferences, ...storedWindow },
+      },
+    });
+
+    expect(result.preferences.notifications.pushQuietWindow).toEqual({
+      status: "unavailable",
+      reason: "userTimeZoneUnresolved",
+    });
+    expect(result.issues).toContainEqual({
+      scope: "notifications.pushQuietWindow",
+      code: "userTimeZoneUnresolved",
+    });
+    expect(storedWindow).toEqual({
+      quiet_hours_start: "22:00",
+      quiet_hours_end: "07:00",
+    });
+  });
+
   it("accepts only the canonical currentProfile envelope", () => {
     const currentProfile = composeCurrentProfile({
       identityEmail: "taylor@example.com",

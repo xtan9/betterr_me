@@ -19,7 +19,7 @@ vi.mock("sonner", () => ({
 
 const mockSetPushQuietWindow = vi.fn();
 let mockQuietState: {
-  status: "ready";
+  status: "ready" | "unavailable";
   value:
     | { status: "disabled" }
     | { status: "enabled"; startLocal: string; endLocal: string };
@@ -76,6 +76,19 @@ describe("QuietHoursSettings", () => {
   it("shows email exemption note text", () => {
     render(<QuietHoursSettings />);
     expect(screen.getByText("quietHours.emailNote")).toBeInTheDocument();
+  });
+
+  it("reports a preserved quiet window as unavailable", () => {
+    mockQuietState = {
+      status: "unavailable",
+      value: { status: "disabled" },
+    };
+
+    render(<QuietHoursSettings />);
+
+    expect(screen.getByText("quietHours.unavailable")).toBeInTheDocument();
+    expect(screen.getByText("quietHours.unavailableDescription")).toBeInTheDocument();
+    expect(screen.getByRole("switch")).toBeDisabled();
   });
 
   it("sends one complete owner-specific quiet-window intent", async () => {
