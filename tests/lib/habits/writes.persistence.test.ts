@@ -753,4 +753,42 @@ describe("createHabitWrites persistence adapter", () => {
       }),
     ).rejects.toBe(persistenceError);
   });
+
+  it("maps graduation-nudge dismissal through the owner-scoped habit adapter", async () => {
+    const writes = createHabitWrites(
+      mockSupabaseClient as unknown as SupabaseClient,
+    );
+
+    await expect(
+      writes.dismissGraduationNudge({
+        userId: "trusted-user",
+        habitId: "habit-1",
+      }),
+    ).resolves.toMatchObject({
+      type: "dismissed",
+      habit: { id: "habit-1", userId: "trusted-user" },
+    });
+    expect(mockSupabaseClient.queryLog).toContainEqual({
+      table: "habits",
+      method: "eq",
+      args: ["user_id", "trusted-user"],
+    });
+  });
+
+  it("maps an owner-scoped nudge dismissal miss to not-found", async () => {
+    mockSupabaseClient.setMockResponse(null, {
+      code: "PGRST116",
+      message: "No rows found",
+    });
+    const writes = createHabitWrites(
+      mockSupabaseClient as unknown as SupabaseClient,
+    );
+
+    await expect(
+      writes.dismissGraduationNudge({
+        userId: "other-user",
+        habitId: "habit-1",
+      }),
+    ).resolves.toEqual({ type: "not-found" });
+  });
 });

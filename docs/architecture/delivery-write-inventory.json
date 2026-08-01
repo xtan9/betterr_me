@@ -1,128 +1,11 @@
 {
-  "schemaVersion": 1,
-  "baseline": {
-    "sourceCommit": "12ba0833608d4211be2fb417336b505f4353725d",
+  "schemaVersion": 2,
+  "review": {
     "reviewedAt": "2026-08-01",
-    "owningTicket": "#692",
-    "policy": "Every write-capable database call from a named HTTP, AI, or operational delivery source is an entry. Query-only persistence access remains allowed. A baseline edit is documented only when this file and its SHA-256 lock change together and the entry names its owning migration ticket."
+    "owningTicket": "#658",
+    "policy": "Every named HTTP, AI, or operational delivery source is checked for write-capable persistence adapter calls and raw database mutations. Query-only persistence access remains allowed. The qualifying direct-write exception list is permanently empty; completed authorities retain linked behavior, persistence, transactional database, and import-boundary verification."
   },
-  "entries": [
-    {
-      "id": "app/api/habits/[id]/dismiss-graduation-nudge/route.ts#HabitsDB.dismissGraduationNudge",
-      "domain": "Habits",
-      "operation": "Dismiss graduation nudge",
-      "channels": ["HTTP"],
-      "invariants": [
-        "The nudge timestamp belongs to the authenticated Habit owner",
-        "Dismissing a nudge must not change Habit lifecycle state or streak facts"
-      ],
-      "atomicity": "Single Habit-row update; no cross-record transaction is required by the current operation.",
-      "migrationStatus": "remaining",
-      "owningTicket": "#632 (follow-up)",
-      "evidence": "app/api/habits/[id]/dismiss-graduation-nudge/route.ts calls HabitsDB.dismissGraduationNudge directly."
-    },
-    {
-      "id": "app/api/reminder-defaults/route.ts#ReminderDefaultsDB.upsertDefault",
-      "domain": "Reminder Configuration",
-      "operation": "Upsert source Reminder Configuration defaults",
-      "channels": ["HTTP"],
-      "invariants": [
-        "Defaults are scoped to the authenticated user and source type",
-        "The user/source uniqueness rule prevents duplicate default intent",
-        "Default channels and relative timing remain valid Reminder Configuration"
-      ],
-      "atomicity": "One database upsert protected by the user/source uniqueness constraint; no source lifecycle transaction currently owns it.",
-      "migrationStatus": "remaining",
-      "owningTicket": "#632 (follow-up)",
-      "evidence": "app/api/reminder-defaults/route.ts calls ReminderDefaultsDB.upsertDefault directly."
-    },
-    {
-      "id": "app/api/routines/[id]/exercises/[reId]/route.ts#RoutinesDB.removeRoutineExercise",
-      "domain": "Workouts",
-      "operation": "Remove an exercise from a routine",
-      "channels": ["HTTP"],
-      "invariants": [
-        "The routine exercise must belong to a user-owned routine",
-        "Removing an exercise must preserve the remaining routine order and targets"
-      ],
-      "atomicity": "Single routine_exercises delete; ownership and routine-level policy remain in the generic persistence adapter.",
-      "migrationStatus": "remaining",
-      "owningTicket": "#632 (follow-up)",
-      "evidence": "app/api/routines/[id]/exercises/[reId]/route.ts calls RoutinesDB.removeRoutineExercise directly."
-    },
-    {
-      "id": "app/api/routines/[id]/exercises/[reId]/route.ts#RoutinesDB.updateRoutineExercise",
-      "domain": "Workouts",
-      "operation": "Edit routine exercise targets",
-      "channels": ["HTTP"],
-      "invariants": [
-        "Target values must match the exercise's supported fields",
-        "The routine exercise remains attached to its user-owned routine",
-        "Sort order and target defaults remain stable"
-      ],
-      "atomicity": "Single routine_exercises update; no routine/workout mutation authority currently owns the aggregate.",
-      "migrationStatus": "remaining",
-      "owningTicket": "#632 (follow-up)",
-      "evidence": "app/api/routines/[id]/exercises/[reId]/route.ts calls RoutinesDB.updateRoutineExercise directly."
-    },
-    {
-      "id": "app/api/routines/[id]/exercises/route.ts#RoutinesDB.addExerciseToRoutine",
-      "domain": "Workouts",
-      "operation": "Add an exercise to a routine",
-      "channels": ["HTTP"],
-      "invariants": [
-        "The exercise must be valid and the routine must be user-owned",
-        "The next sort order must preserve deterministic routine ordering",
-        "Target and rest defaults must be applied consistently"
-      ],
-      "atomicity": "A max-sort-order read followed by an insert is not atomic at the delivery boundary and can race under concurrent edits.",
-      "migrationStatus": "remaining",
-      "owningTicket": "#632 (follow-up)",
-      "evidence": "app/api/routines/[id]/exercises/route.ts calls RoutinesDB.addExerciseToRoutine directly."
-    },
-    {
-      "id": "app/api/routines/[id]/route.ts#RoutinesDB.deleteRoutine",
-      "domain": "Workouts",
-      "operation": "Delete a routine",
-      "channels": ["HTTP"],
-      "invariants": [
-        "The routine must be user-owned",
-        "Dependent routine exercises must not survive the routine deletion"
-      ],
-      "atomicity": "One routine-row delete relies on database cascade cleanup; the routine authoring behavior is not a shared domain authority.",
-      "migrationStatus": "remaining",
-      "owningTicket": "#632 (follow-up)",
-      "evidence": "app/api/routines/[id]/route.ts calls RoutinesDB.deleteRoutine directly."
-    },
-    {
-      "id": "app/api/routines/[id]/route.ts#RoutinesDB.updateRoutine",
-      "domain": "Workouts",
-      "operation": "Edit routine details",
-      "channels": ["HTTP"],
-      "invariants": [
-        "The routine must be user-owned",
-        "Name and notes normalization must be consistent with routine-to-workout conversion"
-      ],
-      "atomicity": "Single routine-row update; no shared routine aggregate or conversion authority currently owns the operation.",
-      "migrationStatus": "remaining",
-      "owningTicket": "#632 (follow-up)",
-      "evidence": "app/api/routines/[id]/route.ts calls RoutinesDB.updateRoutine directly."
-    },
-    {
-      "id": "app/api/routines/route.ts#RoutinesDB.createRoutine",
-      "domain": "Workouts",
-      "operation": "Create a routine",
-      "channels": ["HTTP"],
-      "invariants": [
-        "The routine is owned by the authenticated user",
-        "Routine identity and defaults remain compatible with routine-to-workout conversion"
-      ],
-      "atomicity": "Single routine-row insert; subsequent routine-exercise writes are separate and not part of this delivery transaction.",
-      "migrationStatus": "remaining",
-      "owningTicket": "#632 (follow-up)",
-      "evidence": "app/api/routines/route.ts calls RoutinesDB.createRoutine directly."
-    }
-  ],
+  "entries": [],
   "priorArt": [
     {
       "id": "reminders-reminder-delivery",
@@ -296,9 +179,228 @@
       "owningTicket": "#656",
       "authority": "Habit Writes.configureReminders",
       "evidence": "HTTP and AI Habit reminder adapters call createHabitWrites(...).configureReminders; generic Habit Reminder Configuration writes are absent from delivery sources."
+    },
+    {
+      "id": "app/api/habits/[id]/dismiss-graduation-nudge/route.ts#HabitsDB.dismissGraduationNudge",
+      "domain": "Habits",
+      "operation": "Dismiss graduation nudge",
+      "channels": ["HTTP"],
+      "invariants": [
+        "The nudge timestamp belongs to the authenticated Habit owner",
+        "Dismissing a nudge must not change Habit lifecycle state or streak facts"
+      ],
+      "atomicity": "The Habit Writes boundary owns the owner-scoped nudge timestamp update.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#658",
+      "authority": "HabitWrites.dismissGraduationNudge",
+      "evidence": "The HTTP nudge route calls createHabitWrites(...).dismissGraduationNudge and maps its typed outcome.",
+      "retiredFromInventory": true,
+      "verification": {
+        "status": "complete",
+        "tests": [
+          "tests/lib/habits/writes.test.ts",
+          "tests/lib/habits/writes.persistence.test.ts",
+          "tests/app/api/habits/graduate.test.ts",
+          "tests/scripts/mutation-boundaries.test.ts"
+        ],
+        "sqlFixtures": ["supabase/tests/habit_graduation_lifecycle.sql"],
+        "importBoundary": "tests/scripts/reminder-defaults-architecture.test.ts"
+      }
+    },
+    {
+      "id": "app/api/reminder-defaults/route.ts#ReminderDefaultsDB.upsertDefault",
+      "domain": "Reminder Configuration",
+      "operation": "Upsert source Reminder Configuration defaults",
+      "channels": ["HTTP"],
+      "invariants": [
+        "Defaults are scoped to the authenticated user and source type",
+        "The user/source uniqueness rule prevents duplicate default intent",
+        "Default channels and relative timing remain valid Reminder Configuration"
+      ],
+      "atomicity": "Reminder Default Writes owns the authenticated user's source-default upsert.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#658",
+      "authority": "ReminderDefaultWrites.upsert",
+      "evidence": "The HTTP PUT adapter maps transport fields into createReminderDefaultWrites(...).upsert; GET remains query-only.",
+      "retiredFromInventory": true,
+      "verification": {
+        "status": "complete",
+        "tests": [
+          "tests/lib/reminders/default-writes.test.ts",
+          "tests/app/api/reminder-defaults/route.test.ts",
+          "tests/lib/db/reminder-defaults.test.ts",
+          "tests/scripts/reminder-defaults-architecture.test.ts"
+        ],
+        "sqlFixtures": ["supabase/tests/task_reminder_configuration.sql"],
+        "importBoundary": "tests/scripts/routine-architecture.test.ts"
+      }
+    },
+    {
+      "id": "app/api/routines/[id]/exercises/[reId]/route.ts#RoutinesDB.removeRoutineExercise",
+      "domain": "Workouts",
+      "operation": "Remove an exercise from a routine",
+      "channels": ["HTTP"],
+      "invariants": [
+        "The routine exercise must belong to a user-owned routine",
+        "Removing an exercise must preserve the remaining routine order and targets"
+      ],
+      "atomicity": "Routine Writes owns the owner check and routine-exercise removal boundary.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#658",
+      "authority": "RoutineWrites.removeExercise",
+      "evidence": "The HTTP route calls createRoutineWrites(...).removeExercise; direct RoutinesDB writes are no longer in delivery code.",
+      "retiredFromInventory": true,
+      "verification": {
+        "status": "complete",
+        "tests": [
+          "tests/lib/fitness/routine-writes.test.ts",
+          "tests/app/api/routines/[id]/exercises/[reId]/route.test.ts",
+          "tests/lib/db/routines.test.ts",
+          "tests/scripts/routine-architecture.test.ts"
+        ],
+        "sqlFixtures": ["supabase/tests/routine_workout_transaction.sql"],
+        "importBoundary": "tests/scripts/routine-architecture.test.ts"
+      }
+    },
+    {
+      "id": "app/api/routines/[id]/exercises/[reId]/route.ts#RoutinesDB.updateRoutineExercise",
+      "domain": "Workouts",
+      "operation": "Edit routine exercise targets",
+      "channels": ["HTTP"],
+      "invariants": [
+        "Target values must match the exercise's supported fields",
+        "The routine exercise remains attached to its user-owned routine",
+        "Sort order and target defaults remain stable"
+      ],
+      "atomicity": "Routine Writes owns the owner check and routine-exercise update boundary.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#658",
+      "authority": "RoutineWrites.updateExercise",
+      "evidence": "The HTTP route calls createRoutineWrites(...).updateExercise; query-only routine reads remain on RoutinesDB.",
+      "retiredFromInventory": true,
+      "verification": {
+        "status": "complete",
+        "tests": [
+          "tests/lib/fitness/routine-writes.test.ts",
+          "tests/app/api/routines/[id]/exercises/[reId]/route.test.ts",
+          "tests/lib/db/routines.test.ts",
+          "tests/scripts/routine-architecture.test.ts"
+        ],
+        "sqlFixtures": ["supabase/tests/routine_workout_transaction.sql"],
+        "importBoundary": "tests/scripts/routine-architecture.test.ts"
+      }
+    },
+    {
+      "id": "app/api/routines/[id]/exercises/route.ts#RoutinesDB.addExerciseToRoutine",
+      "domain": "Workouts",
+      "operation": "Add an exercise to a routine",
+      "channels": ["HTTP"],
+      "invariants": [
+        "The exercise must be valid and the routine must be user-owned",
+        "The next sort order must preserve deterministic routine ordering",
+        "Target and rest defaults must be applied consistently"
+      ],
+      "atomicity": "Routine Writes owns the owner check and routine-exercise creation boundary.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#658",
+      "authority": "RoutineWrites.addExercise",
+      "evidence": "The HTTP route calls createRoutineWrites(...).addExercise after transport validation.",
+      "retiredFromInventory": true,
+      "verification": {
+        "status": "complete",
+        "tests": [
+          "tests/lib/fitness/routine-writes.test.ts",
+          "tests/app/api/routines/[id]/exercises/route.test.ts",
+          "tests/lib/db/routines.test.ts",
+          "tests/scripts/routine-architecture.test.ts"
+        ],
+        "sqlFixtures": ["supabase/tests/routine_workout_transaction.sql"],
+        "importBoundary": "tests/scripts/routine-architecture.test.ts"
+      }
+    },
+    {
+      "id": "app/api/routines/[id]/route.ts#RoutinesDB.deleteRoutine",
+      "domain": "Workouts",
+      "operation": "Delete a routine",
+      "channels": ["HTTP"],
+      "invariants": [
+        "The routine must be user-owned",
+        "Dependent routine exercises must not survive the routine deletion"
+      ],
+      "atomicity": "Routine Writes owns the owner check and cascade-backed routine deletion boundary.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#658",
+      "authority": "RoutineWrites.delete",
+      "evidence": "The HTTP route calls createRoutineWrites(...).delete and maps not-found without importing a write method.",
+      "retiredFromInventory": true,
+      "verification": {
+        "status": "complete",
+        "tests": [
+          "tests/lib/fitness/routine-writes.test.ts",
+          "tests/app/api/routines/[id]/route.test.ts",
+          "tests/lib/db/routines.test.ts",
+          "tests/scripts/routine-architecture.test.ts"
+        ],
+        "sqlFixtures": ["supabase/tests/routine_workout_transaction.sql"],
+        "importBoundary": "tests/scripts/routine-architecture.test.ts"
+      }
+    },
+    {
+      "id": "app/api/routines/[id]/route.ts#RoutinesDB.updateRoutine",
+      "domain": "Workouts",
+      "operation": "Edit routine details",
+      "channels": ["HTTP"],
+      "invariants": [
+        "The routine must be user-owned",
+        "Name and notes normalization must be consistent with routine-to-workout conversion"
+      ],
+      "atomicity": "Routine Writes owns the owner check and routine-detail update boundary.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#658",
+      "authority": "RoutineWrites.update",
+      "evidence": "The HTTP route maps validated details into createRoutineWrites(...).update; GET remains query-only.",
+      "retiredFromInventory": true,
+      "verification": {
+        "status": "complete",
+        "tests": [
+          "tests/lib/fitness/routine-writes.test.ts",
+          "tests/app/api/routines/[id]/route.test.ts",
+          "tests/lib/db/routines.test.ts",
+          "tests/scripts/routine-architecture.test.ts"
+        ],
+        "sqlFixtures": ["supabase/tests/routine_workout_transaction.sql"],
+        "importBoundary": "tests/scripts/routine-architecture.test.ts"
+      }
+    },
+    {
+      "id": "app/api/routines/route.ts#RoutinesDB.createRoutine",
+      "domain": "Workouts",
+      "operation": "Create a routine",
+      "channels": ["HTTP"],
+      "invariants": [
+        "The routine is owned by the authenticated user",
+        "Routine identity and defaults remain compatible with routine-to-workout conversion"
+      ],
+      "atomicity": "Routine Writes owns the authenticated routine creation boundary; later routine-exercise writes remain explicit operations.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#658",
+      "authority": "RoutineWrites.create",
+      "evidence": "The HTTP route maps validated details into createRoutineWrites(...).create; GET remains query-only.",
+      "retiredFromInventory": true,
+      "verification": {
+        "status": "complete",
+        "tests": [
+          "tests/lib/fitness/routine-writes.test.ts",
+          "tests/app/api/routines/route.test.ts",
+          "tests/lib/db/routines.test.ts",
+          "tests/scripts/routine-architecture.test.ts"
+        ],
+        "sqlFixtures": ["supabase/tests/routine_workout_transaction.sql"],
+        "importBoundary": "tests/scripts/mutation-boundaries.test.ts"
+      }
     }
   ],
-  "excluded": [
+  "outOfScope": [
     {
       "id": "documented-query-only-persistence-access",
       "paths": [

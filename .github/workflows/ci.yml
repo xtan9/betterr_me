@@ -154,7 +154,7 @@ jobs:
           pnpm exec vitest run "${smoke_tests[@]}"
 
   write-inventory:
-    name: Delivery write inventory
+    name: Delivery mutation boundaries
     needs: changes
     if: fromJSON(needs.changes.outputs.classification_json).suites.architecture
     runs-on: ubuntu-latest
@@ -167,7 +167,7 @@ jobs:
         with:
           install-dependencies: "false"
 
-      - name: Check delivery write inventory baseline
+      - name: Check permanent delivery mutation boundaries
         run: pnpm check:write-inventory
 
   check-migrations:

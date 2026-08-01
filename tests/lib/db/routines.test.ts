@@ -201,6 +201,41 @@ describe("RoutinesDB", () => {
   });
 
   // =========================================================================
+  // getRoutineExercise
+  // =========================================================================
+
+  describe("getRoutineExercise", () => {
+    it("scopes a routine exercise lookup through its owned routine", async () => {
+      const exercise = {
+        id: "re1",
+        routine_id: "r1",
+        exercise_id: "e1",
+      };
+      mockSupabaseClient.setMockResponse(exercise);
+
+      const result = await db.getRoutineExercise("re1", "u1");
+
+      expect(result).toEqual(exercise);
+      mockSupabaseClient.expectQuery({
+        table: "routine_exercises",
+        method: "eq",
+        args: ["id", "re1"],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "routine_exercises",
+        method: "eq",
+        args: ["routine.user_id", "u1"],
+      });
+    });
+
+    it("returns null when the routine exercise is not visible to the user", async () => {
+      mockSupabaseClient.setMockResponse(null, { code: "PGRST116" });
+
+      await expect(db.getRoutineExercise("missing", "u1")).resolves.toBeNull();
+    });
+  });
+
+  // =========================================================================
   // updateRoutineLastPerformedAt
   // =========================================================================
 

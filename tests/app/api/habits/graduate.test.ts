@@ -5,11 +5,13 @@ const {
   graduateMock,
   reactivateMock,
   dismissMock,
+  dismissNudgeMock,
   toHabitResponseMock,
 } = vi.hoisted(() => ({
   graduateMock: vi.fn(),
   reactivateMock: vi.fn(),
   dismissMock: vi.fn(),
+  dismissNudgeMock: vi.fn(),
   toHabitResponseMock: vi.fn(),
 }));
 
@@ -55,6 +57,7 @@ vi.mock('@/lib/habits/writes', () => ({
   createHabitWrites: vi.fn(() => ({
     graduate: graduateMock,
     reactivate: reactivateMock,
+    dismissGraduationNudge: dismissNudgeMock,
   })),
   toHabitResponse: toHabitResponseMock,
 }));
@@ -219,12 +222,31 @@ describe('POST /api/habits/[id]/dismiss-graduation-nudge', () => {
   });
 
   it('stamps the dismissal', async () => {
-    dismissMock.mockResolvedValue({ id: 'h1', nudge_dismissed_at: '2026-04-12T00:00:00Z' });
+    const habit = { id: 'h1', nudge_dismissed_at: '2026-04-12T00:00:00Z' };
+    const presentedHabit = { ...habit, user_id: 'user-1' };
+    dismissNudgeMock.mockResolvedValue({ type: 'dismissed', habit });
+    toHabitResponseMock.mockReturnValue(presentedHabit);
     const res = await dismissPOST(
       new NextRequest('http://localhost/api/habits/h1/dismiss-graduation-nudge', { method: 'POST' }),
       { params }
     );
     expect(res.status).toBe(200);
-    expect(dismissMock).toHaveBeenCalledWith('h1', 'user-1');
+    expect(await res.json()).toEqual({ habit: presentedHabit });
+    expect(dismissNudgeMock).toHaveBeenCalledWith({
+      habitId: 'h1',
+      userId: 'user-1',
+    });
+    expect(toHabitResponseMock).toHaveBeenCalledWith(habit);
+  });
+
+  it('returns 404 for a missing or cross-owner habit', async () => {
+    dismissNudgeMock.mockResolvedValue({ type: 'not-found' });
+    const res = await dismissPOST(
+      new NextRequest('http://localhost/api/habits/h1/dismiss-graduation-nudge', { method: 'POST' }),
+      { params }
+    );
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'Habit not found' });
   });
 });

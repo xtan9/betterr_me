@@ -19,9 +19,14 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/db/routines", () => ({
   RoutinesDB: class {
     getRoutine = mockGetRoutine;
-    updateRoutine = mockUpdateRoutine;
-    deleteRoutine = mockDeleteRoutine;
   },
+}));
+
+vi.mock("@/lib/fitness/routine-writes", () => ({
+  createRoutineWrites: () => ({
+    update: mockUpdateRoutine,
+    delete: mockDeleteRoutine,
+  }),
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -99,7 +104,8 @@ describe("PATCH /api/routines/[id]", () => {
 
   it("updates routine successfully", async () => {
     const updated = { id: "r-1", name: "Updated Push Day" };
-    mockUpdateRoutine.mockResolvedValue(updated);
+    mockGetRoutine.mockResolvedValue({ id: "r-1", exercises: [] });
+    mockUpdateRoutine.mockResolvedValue({ type: "updated", routine: updated });
 
     const response = await PATCH(
       makeRequest("PATCH", { name: "Updated Push Day" }),
@@ -117,9 +123,7 @@ describe("PATCH /api/routines/[id]", () => {
   });
 
   it("returns 404 for not found (PGRST116)", async () => {
-    mockUpdateRoutine.mockRejectedValue(
-      Object.assign(new Error("No rows"), { code: "PGRST116" })
-    );
+    mockUpdateRoutine.mockResolvedValue({ type: "not-found" });
 
     const response = await PATCH(
       makeRequest("PATCH", { name: "Updated" }),
@@ -162,7 +166,8 @@ describe("DELETE /api/routines/[id]", () => {
   });
 
   it("deletes routine successfully", async () => {
-    mockDeleteRoutine.mockResolvedValue(undefined);
+    mockGetRoutine.mockResolvedValue({ id: "r-1", exercises: [] });
+    mockDeleteRoutine.mockResolvedValue({ type: "deleted" });
 
     const response = await DELETE(makeRequest("DELETE"), { params });
     const data = await response.json();

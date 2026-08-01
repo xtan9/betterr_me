@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { ReminderDefaultsDB } from "@/lib/db";
+import { createReminderDefaultWrites } from "@/lib/reminders/default-writes";
 import { validateRequestBody } from "@/lib/validations/api";
 import { log } from "@/lib/logger";
 import { z } from "zod";
@@ -69,10 +70,16 @@ export async function PUT(request: NextRequest) {
     const validation = validateRequestBody(body, reminderDefaultUpsertSchema);
     if (!validation.success) return validation.response;
 
-    const defaultsDB = new ReminderDefaultsDB(supabase);
-    const result = await defaultsDB.upsertDefault(userId, validation.data);
+    const outcome = await createReminderDefaultWrites(supabase).upsert({
+      userId,
+      default: {
+        sourceType: validation.data.source_type,
+        relativeMinutes: validation.data.relative_minutes,
+        channels: validation.data.channels,
+      },
+    });
 
-    return NextResponse.json({ default: result });
+    return NextResponse.json({ default: outcome.default });
   } catch (error) {
     log.error("PUT /api/reminder-defaults error", error);
     return NextResponse.json(

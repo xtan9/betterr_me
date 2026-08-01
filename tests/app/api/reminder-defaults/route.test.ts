@@ -3,8 +3,8 @@ import { NextRequest } from "next/server";
 
 const mockReminderDefaultsDB = {
   getDefaults: vi.fn(),
-  upsertDefault: vi.fn(),
 };
+const mockUpsertDefault = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(() => ({
@@ -22,6 +22,10 @@ vi.mock("@/lib/db", () => ({
       return mockReminderDefaultsDB;
     }
   },
+}));
+
+vi.mock("@/lib/reminders/default-writes", () => ({
+  createReminderDefaultWrites: () => ({ upsert: mockUpsertDefault }),
 }));
 
 import { createClient } from "@/lib/supabase/server";
@@ -90,7 +94,7 @@ describe("PUT /api/reminder-defaults", () => {
       channels: ["push", "email"],
       created_at: "2026-04-01T00:00:00Z",
     };
-    mockReminderDefaultsDB.upsertDefault.mockResolvedValue(mockResult);
+    mockUpsertDefault.mockResolvedValue({ type: "upserted", default: mockResult });
 
     const request = new NextRequest(
       "http://localhost:3000/api/reminder-defaults",
@@ -108,14 +112,14 @@ describe("PUT /api/reminder-defaults", () => {
 
     expect(response.status).toBe(200);
     expect(data.default).toEqual(mockResult);
-    expect(mockReminderDefaultsDB.upsertDefault).toHaveBeenCalledWith(
-      "user-123",
-      {
-        source_type: "calendar_event",
-        relative_minutes: 30,
+    expect(mockUpsertDefault).toHaveBeenCalledWith({
+      userId: "user-123",
+      default: {
+        sourceType: "calendar_event",
+        relativeMinutes: 30,
         channels: ["push", "email"],
-      }
-    );
+      },
+    });
   });
 
   it("returns 401 for unauthenticated request", async () => {
@@ -163,7 +167,7 @@ describe("PUT /api/reminder-defaults", () => {
 
   it("returns 500 when upsert throws", async () => {
     const { PUT } = await import("@/app/api/reminder-defaults/route");
-    mockReminderDefaultsDB.upsertDefault.mockRejectedValue(new Error("db error"));
+    mockUpsertDefault.mockRejectedValue(new Error("db error"));
 
     const request = new NextRequest(
       "http://localhost:3000/api/reminder-defaults",

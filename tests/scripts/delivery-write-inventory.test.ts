@@ -12,9 +12,17 @@ import {
   formatGitHubOutputs,
 } from "../../scripts/ci/classify-changes.mjs";
 
-describe("delivery write inventory guard", () => {
-  it("passes the maintained repository baseline", () => {
+function inventory() {
+  return JSON.parse(
+    readFileSync("docs/architecture/delivery-write-inventory.json", "utf8"),
+  );
+}
+
+describe("delivery mutation inventory guard", () => {
+  it("passes the permanent empty direct-write inventory", () => {
     expect(() => checkDeliveryWriteInventory()).not.toThrow();
+    expect(scanDeliverySources()).toEqual([]);
+    expect(inventory().entries).toEqual([]);
   });
 
   it("allows documented query-only persistence access", () => {
@@ -32,12 +40,31 @@ describe("delivery write inventory guard", () => {
     expect(findings).toEqual([]);
   });
 
-  it("allows a domain authority while rejecting raw table mutation syntax", () => {
-    expect(scanDeliverySource(
+  it("rejects a direct adapter mutation even when the inventory has no exceptions", () => {
+    const findings = scanDeliverySource(
       "app/api/tasks/query-fixture/route.ts",
-      `return createTaskWrites(supabase).delete({ userId, taskId });`,
-    )).toEqual([]);
+      `
+        import { TasksDB as Persistence } from "@/lib/db";
+        const db = new Persistence(supabase);
+        export async function DELETE() {
+          return db.deleteTask("task-id", "user-id");
+        }
+      `,
+    );
 
+    expect(findings).toEqual([
+      expect.objectContaining({
+        id: "app/api/tasks/query-fixture/route.ts#TasksDB.deleteTask",
+        persistence: "database-adapter",
+      }),
+    ]);
+    expect(() => validateDeliveryWriteInventory({
+      inventory: inventory(),
+      findings,
+    })).toThrow("qualifying delivery mutation bypass(es) remain");
+  });
+
+  it("rejects raw table and RPC mutations from delivery sources", () => {
     expect(scanDeliverySource(
       "app/api/tasks/query-fixture/route.ts",
       `await supabase.from("tasks").delete().eq("id", taskId);`,
@@ -60,46 +87,49 @@ describe("delivery write inventory guard", () => {
     ]);
   });
 
-  it("rejects a new direct database write that is absent from the baseline", () => {
-    const findings = scanDeliverySource(
-      "app/api/tasks/query-fixture/route.ts",
-      `
-        import { TasksDB } from "@/lib/db";
-        const db = new TasksDB(supabase);
-        export async function DELETE() {
-          return db.deleteTask("task-id", "user-id");
-        }
-      `,
-    );
-    const inventory = JSON.parse(
-      readFileSync("docs/architecture/delivery-write-inventory.json", "utf8"),
-    );
-
+  it("rejects a reintroduced temporary entry, baseline, or migration allowlist", () => {
+    const changed = inventory();
+    changed.entries = [{ id: "temporary" }];
     expect(() => validateDeliveryWriteInventory({
-      inventory,
-      findings,
-      lockText: readFileSync("docs/architecture/delivery-write-inventory.sha256", "utf8"),
-    })).toThrow("qualifying direct write(s) are not recorded");
+      inventory: changed,
+      findings: [],
+    })).toThrow("temporary direct-write exceptions must be empty");
+
+    const allowlisted = inventory();
+    allowlisted.allowlist = [];
+    expect(() => validateDeliveryWriteInventory({
+      inventory: allowlisted,
+      findings: [],
+    })).toThrow("migration allowlists are not permitted");
+
+    const legacyBaseline = inventory();
+    legacyBaseline.baseline = {};
+    expect(() => validateDeliveryWriteInventory({
+      inventory: legacyBaseline,
+      findings: [],
+    })).toThrow("baseline is not permitted");
   });
 
-  it("rejects an inventory edit without its baseline lock update", () => {
-    const inventory = JSON.parse(
-      readFileSync("docs/architecture/delivery-write-inventory.json", "utf8"),
+  it("requires completed verification links for retired inventory entries", () => {
+    const changed = inventory();
+    const retired = changed.priorArt.find(
+      (entry: { retiredFromInventory?: boolean }) => entry.retiredFromInventory,
     );
-    const changed = structuredClone(inventory);
-    changed.entries[0].evidence = `${changed.entries[0].evidence} (edited)`;
+    delete retired.verification;
 
     expect(() => validateDeliveryWriteInventory({
       inventory: changed,
-      findings: scanDeliverySources(),
-      lockText: readFileSync("docs/architecture/delivery-write-inventory.sha256", "utf8"),
-    })).toThrow("baseline lock is stale or missing");
+      findings: [],
+    })).toThrow("needs verification evidence");
   });
 
-  it("runs the guard as a selected, fail-closed CI prerequisite", () => {
+  it("runs the permanent guard as a selected, fail-closed CI prerequisite", () => {
     const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
     expect(workflow).toContain("run: pnpm check:write-inventory");
-    expect(workflow).toContain("needs: [deployment-policy, changes, lint-and-test, check-migrations, write-inventory]");
+    expect(workflow).toContain("Check permanent delivery mutation boundaries");
+    expect(workflow).toContain(
+      "needs: [deployment-policy, changes, lint-and-test, check-migrations, write-inventory]",
+    );
     expect(workflow).toContain('"name":"write inventory","suite":"architecture"');
   });
 

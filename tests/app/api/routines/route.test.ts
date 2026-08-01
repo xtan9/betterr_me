@@ -23,6 +23,10 @@ vi.mock("@/lib/db/routines", () => ({
   },
 }));
 
+vi.mock("@/lib/fitness/routine-writes", () => ({
+  createRoutineWrites: () => ({ create: mockCreateRoutine }),
+}));
+
 vi.mock("@/lib/logger", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -89,14 +93,15 @@ describe("POST /api/routines", () => {
 
   it("creates routine successfully (201)", async () => {
     const created = { id: "r-new", name: "Leg Day" };
-    mockCreateRoutine.mockResolvedValue(created);
+    mockCreateRoutine.mockResolvedValue({ type: "created", routine: created });
 
     const response = await POST(makePostRequest({ name: "Leg Day" }));
     const data = await response.json();
 
     expect(response.status).toBe(201);
     expect(data.routine).toEqual(created);
-    expect(mockCreateRoutine).toHaveBeenCalledWith("user-123", {
+    expect(mockCreateRoutine).toHaveBeenCalledWith({
+      userId: "user-123",
       name: "Leg Day",
     });
   });
