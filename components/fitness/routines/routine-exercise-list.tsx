@@ -42,11 +42,20 @@ function RoutineExerciseRow({
 
   // Local state for blur-commit pattern
   const [sets, setSets] = useState(String(re.target_sets));
-  const [weight, setWeight] = useState(
+  const [weightInput, setWeightInput] = useState<{
+    unit: WeightUnit;
+    canonicalKg: number | null;
+    value: string;
+  }>();
+  const storedWeight =
     re.target_weight_kg !== null
       ? String(displayWeight(re.target_weight_kg, weightUnit))
-      : ""
-  );
+      : "";
+  const weight =
+    weightInput?.unit === weightUnit &&
+    weightInput.canonicalKg === re.target_weight_kg
+      ? weightInput.value
+      : storedWeight;
   const [reps, setReps] = useState(
     re.target_reps !== null ? String(re.target_reps) : ""
   );
@@ -125,7 +134,13 @@ function RoutineExerciseRow({
                 min={0}
                 step="0.5"
                 value={weight}
-                onChange={(e) => setWeight(e.target.value)}
+                onChange={(e) =>
+                  setWeightInput({
+                    unit: weightUnit,
+                    canonicalKg: re.target_weight_kg,
+                    value: e.target.value,
+                  })
+                }
                 onBlur={() => handleBlur("target_weight_kg", weight)}
                 className="h-7 w-16 text-caption"
                 placeholder="0"

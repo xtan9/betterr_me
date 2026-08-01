@@ -16,10 +16,11 @@ import { CheckCircle, Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { log } from "@/lib/logger";
 import type { CurrentProfileResponse } from "@/lib/current-profile";
+import type { WeightUnitPreference } from "@/lib/preferences/types";
 import {
-  useFitnessPreference,
   useLocalizationPreference,
 } from "@/lib/hooks/use-profile-preferences";
+import { useFitness } from "@/lib/hooks/use-fitness";
 
 interface SettingsContentProps {
   initialData?: CurrentProfileResponse;
@@ -30,10 +31,10 @@ export function SettingsContent({ initialData, initialSubject }: SettingsContent
   const t = useTranslations("settings");
   const profileOptions = { initialData, initialSubject };
   const localization = useLocalizationPreference(profileOptions);
-  const fitness = useFitnessPreference(profileOptions);
+  const fitness = useFitness(profileOptions);
 
   const [weekStartDay, setWeekStartDay] = useState<number>(1);
-  const [weightUnit, setWeightUnit] = useState<"kg" | "lbs">("kg");
+  const [weightUnit, setWeightUnit] = useState<WeightUnitPreference>("kg");
   const [savingConcept, setSavingConcept] = useState<"weekStart" | "weightUnit" | null>(null);
   const [savedConcept, setSavedConcept] = useState<"weekStart" | "weightUnit" | null>(null);
   const acceptedWeekStart = localization.acceptedWeekStart;
@@ -43,8 +44,9 @@ export function SettingsContent({ initialData, initialSubject }: SettingsContent
       ? localization.weekStart.value
       : undefined;
   const remoteWeightUnit =
-    fitness.weightUnit.status === "ready" || fitness.weightUnit.status === "pending"
-      ? fitness.weightUnit.value
+    fitness.weightUnitPreference.status === "ready" ||
+    fitness.weightUnitPreference.status === "pending"
+      ? fitness.weightUnitPreference.value
       : undefined;
 
   useEffect(() => {

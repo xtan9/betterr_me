@@ -9,6 +9,7 @@ import {
 import type {
   AppearancePreferenceIntent,
   AppearancePreferenceOutcome,
+  FitnessPreferenceOutcome,
   FitnessPreferenceIntent,
   LocalizationPreferenceIntent,
   NotificationPreferenceIntent,
@@ -101,8 +102,8 @@ export function useFitnessPreference(options?: UseCurrentProfileOptions) {
   const pending = pendingIntent<FitnessPreferenceIntent>(commands, "fitness");
   const weightUnit = present(accepted, pending?.weightUnit);
   const setWeightUnit = useCallback(
-    (value: WeightUnitPreference) =>
-      runCommand<unknown>("fitness", "/api/preferences/fitness", {
+    (value: WeightUnitPreference): Promise<FitnessPreferenceOutcome> =>
+      runCommand<FitnessPreferenceOutcome>("fitness", "/api/preferences/fitness", {
         type: "setWeightUnit",
         weightUnit: value,
       }),

@@ -87,8 +87,12 @@ vi.mock("@/lib/hooks/use-profile-preferences", () => ({
     error: undefined,
     setWeekStart: mockSetWeekStart,
   }),
-  useFitnessPreference: () => ({
-    weightUnit: { status: "ready", value: "kg" },
+}));
+
+vi.mock("@/lib/hooks/use-fitness", () => ({
+  useFitness: () => ({
+    weightUnit: "kg",
+    weightUnitPreference: { status: "ready", value: "kg" },
     acceptedWeightUnit: { status: "ready", value: "kg" },
     isLoading: false,
     error: undefined,

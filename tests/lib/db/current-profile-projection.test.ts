@@ -44,13 +44,20 @@ describe("ProfilesDB Current Profile projection", () => {
     ).toBe(false);
   });
 
-  it("exposes narrow owner readers without selecting a profile row", async () => {
+  it("exposes a narrow Fitness owner reader without selecting a profile row", async () => {
     const db = new ProfilesDB(mockSupabaseClient as unknown as SupabaseClient);
     mockSupabaseClient.setMockResponse({ weight_unit: "lbs" });
-    await expect(db.getWeightUnitPreference("user-123")).resolves.toBe("lbs");
+    await expect(
+      db.getFitnessWeightUnitPreference("user-123"),
+    ).resolves.toBe("lbs");
     expect(mockSupabaseClient.queryLog.findLast((entry) => entry.method === "select")?.args[0]).toBe(
       "weight_unit:preferences->>weight_unit",
     );
+
+    mockSupabaseClient.setMockResponse({ weight_unit: "stones" });
+    await expect(
+      db.getFitnessWeightUnitPreference("user-123"),
+    ).resolves.toBeNull();
 
     mockSupabaseClient.setMockResponse({ week_start: "0" });
     await expect(db.getWeekStartPreference("user-123")).resolves.toBe(0);
@@ -71,5 +78,20 @@ describe("ProfilesDB Current Profile projection", () => {
     expect(mockSupabaseClient.queryLog.findLast((entry) => entry.method === "select")?.args[0]).toBe(
       "preferences, timezone",
     );
+  });
+
+  it("treats a missing Fitness owner row as unavailable and propagates other read errors", async () => {
+    const db = new ProfilesDB(mockSupabaseClient as unknown as SupabaseClient);
+
+    mockSupabaseClient.setMockResponse(null, { code: "PGRST116" });
+    await expect(
+      db.getFitnessWeightUnitPreference("user-123"),
+    ).resolves.toBeNull();
+
+    const databaseError = new Error("database unavailable");
+    mockSupabaseClient.setMockResponse(null, databaseError);
+    await expect(
+      db.getFitnessWeightUnitPreference("user-123"),
+    ).rejects.toThrow("database unavailable");
   });
 });

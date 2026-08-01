@@ -8,7 +8,10 @@ import {
   type CurrentProfileResponse,
   type PushQuietWindow,
 } from "@/lib/current-profile";
-import { isThemePreference } from "@/lib/preferences/owners";
+import {
+  isThemePreference,
+  isWeightUnitPreference,
+} from "@/lib/preferences/owners";
 import { createClient } from "@/lib/supabase/client";
 
 export const CURRENT_PROFILE_CACHE_KEY = "current-profile";
@@ -135,7 +138,7 @@ function applyNarrowPreferenceOutcome(
   } else if (
     concept === "fitness" &&
     isRecord(outcome) &&
-    (outcome.weightUnit === "kg" || outcome.weightUnit === "lbs")
+    isWeightUnitPreference(outcome.weightUnit)
   ) {
     nextProfile = {
       ...profile,

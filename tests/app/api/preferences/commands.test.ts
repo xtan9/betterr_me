@@ -178,6 +178,47 @@ describe("domain-owned Preference commands", () => {
     expect(mockSetFitnessPreference).toHaveBeenCalledWith("lbs");
   });
 
+  it.each(["kg", "lbs"] as const)(
+    "returns the accepted Fitness Weight Unit outcome for %s",
+    async (weightUnit) => {
+      mockSetFitnessPreference.mockResolvedValue({
+        weightUnit,
+        preferenceRevision: 9,
+        changed: weightUnit === "lbs",
+      });
+
+      const response = await postFitness(
+        request("/api/preferences/fitness", {
+          type: "setWeightUnit",
+          weightUnit,
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual({
+        weightUnit,
+        preferenceRevision: 9,
+        changed: weightUnit === "lbs",
+      });
+      expect(mockSetFitnessPreference).toHaveBeenCalledWith(weightUnit);
+    },
+  );
+
+  it.each(["stones", "lb", ""])(
+    "rejects unsupported Fitness Weight Unit value %s",
+    async (weightUnit) => {
+      const response = await postFitness(
+        request("/api/preferences/fitness", {
+          type: "setWeightUnit",
+          weightUnit,
+        }),
+      );
+
+      expect(response.status).toBe(400);
+      expect(mockSetFitnessPreference).not.toHaveBeenCalled();
+    },
+  );
+
   it("accepts discriminated Notification Preference intents", async () => {
     mockSetNotificationPreference.mockResolvedValue({
       pushQuietWindow: {

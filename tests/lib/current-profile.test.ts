@@ -94,6 +94,24 @@ describe("Current Profile", () => {
     });
   });
 
+  it("publishes kilograms as the assigned Fitness default when storage omits Weight Unit", () => {
+    const { weight_unit: _weightUnit, ...preferencesWithoutWeightUnit } =
+      projection.preferences;
+    const result = composeCurrentProfile({
+      identityEmail: "taylor@example.com",
+      capabilities: { canAccessAdmin: false },
+      projection: {
+        ...projection,
+        preferences: preferencesWithoutWeightUnit,
+      },
+    });
+
+    expect(result.preferences.fitness.weightUnit).toEqual({
+      status: "ready",
+      value: "kg",
+    });
+  });
+
   it("accepts only the canonical currentProfile envelope", () => {
     const currentProfile = composeCurrentProfile({
       identityEmail: "taylor@example.com",

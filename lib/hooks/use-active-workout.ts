@@ -9,13 +9,13 @@ import type {
   WorkoutExerciseWithDetails,
   WorkoutSet,
   WorkoutSetUpdate,
-  WeightUnit,
 } from "@/lib/db/types";
+import type { WeightUnitPreference } from "@/lib/preferences/types";
 import {
   saveWorkoutToStorage,
   clearWorkoutStorage,
 } from "@/lib/fitness/workout-session";
-import { useFitnessPreference } from "@/lib/hooks/use-profile-preferences";
+import { useFitness } from "@/lib/hooks/use-fitness";
 
 // ---------------------------------------------------------------------------
 // Extended types for API response (includes previousSets enrichment)
@@ -514,19 +514,10 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
 }
 
 // ---------------------------------------------------------------------------
-// useWeightUnit — derives the accepted/pending Fitness Preference from Current Profile.
-// Kilograms are an explicit degraded presentation when the preference is unavailable.
+// useWeightUnit — preserves the fitness consumer API while deriving its
+// presentation from the domain-owned Current Profile state.
 // ---------------------------------------------------------------------------
 
-export function useWeightUnit(): WeightUnit {
-  const { weightUnit } = useFitnessPreference();
-  if (weightUnit.status === "ready" || weightUnit.status === "pending") {
-    return weightUnit.value;
-  }
-  if (weightUnit.status === "unavailable") {
-    log.warn("Weight Unit Preference unavailable; using canonical kilograms", {
-      reason: weightUnit.reason,
-    });
-  }
-  return "kg";
+export function useWeightUnit(): WeightUnitPreference {
+  return useFitness().weightUnit;
 }
