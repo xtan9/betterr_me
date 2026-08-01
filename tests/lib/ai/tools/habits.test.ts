@@ -7,6 +7,10 @@ const mockGetHabitStats = vi.fn();
 const mockComplete = vi.fn();
 const mockUncomplete = vi.fn();
 const mockCreateHabit = vi.fn();
+const { mockCreateHabitWrite, mockToHabitResponse } = vi.hoisted(() => ({
+  mockCreateHabitWrite: vi.fn(),
+  mockToHabitResponse: vi.fn(),
+}));
 const mockUpdateHabit = vi.fn();
 const mockPauseHabit = vi.fn();
 const mockResumeHabit = vi.fn();
@@ -39,6 +43,11 @@ vi.mock("@/lib/habits/completion", () => ({
     complete: mockComplete,
     uncomplete: mockUncomplete,
   })),
+}));
+
+vi.mock("@/lib/habits/writes", () => ({
+  createHabitWrites: vi.fn(() => ({ create: mockCreateHabitWrite })),
+  toHabitResponse: mockToHabitResponse,
 }));
 
 function makeCtx(overrides?: Partial<ToolContext>): ToolContext {
@@ -150,22 +159,42 @@ describe("habitTools", () => {
     });
   });
 
-  it("createHabit calls HabitsDB.createHabit with correct params", async () => {
+  it("createHabit maps through HabitWrites and preserves its presentation", async () => {
     const ctx = makeCtx();
-    mockCreateHabit.mockResolvedValue({ id: "h2", name: "Read" });
+    const createdHabit = {
+      id: "h2",
+      userId: "user-123",
+      name: "Read",
+      description: null,
+      categoryId: null,
+      frequency: { type: "daily" },
+      status: "active",
+      currentStreak: 0,
+      bestStreak: 0,
+      pausedAt: null,
+      graduatedAt: null,
+      graduatedStreak: null,
+      nudgeDismissedAt: null,
+      createdAt: "2026-08-01T12:00:00.000Z",
+      updatedAt: "2026-08-01T12:00:00.000Z",
+    };
+    const presentedHabit = { id: "h2", name: "Read" };
+    mockCreateHabitWrite.mockResolvedValue({ type: "created", habit: createdHabit });
+    mockToHabitResponse.mockReturnValue(presentedHabit);
     const result = await findTool("createHabit").execute(
       { name: "Read", frequency: { type: "daily" } },
       ctx,
     );
-    expect(mockCreateHabit).toHaveBeenCalledWith({
-      user_id: "user-123",
+    expect(mockCreateHabitWrite).toHaveBeenCalledWith({
+      userId: "user-123",
       name: "Read",
       description: null,
       frequency: { type: "daily" },
-      category_id: null,
-      status: "active",
+      categoryId: null,
     });
-    expect(result).toEqual({ id: "h2", name: "Read" });
+    expect(mockToHabitResponse).toHaveBeenCalledWith(createdHabit);
+    expect(mockCreateHabit).not.toHaveBeenCalled();
+    expect(result).toEqual(presentedHabit);
   });
 
   it("updateHabit transforms camelCase to snake_case and removes undefined", async () => {
