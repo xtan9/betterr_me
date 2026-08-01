@@ -52,21 +52,6 @@
       "evidence": "app/api/reminder-defaults/route.ts calls ReminderDefaultsDB.upsertDefault directly."
     },
     {
-      "id": "app/api/reminders/[id]/route.ts#RemindersDB.deleteReminder",
-      "domain": "Reminder Configuration",
-      "operation": "Remove non-task Reminder Configuration",
-      "channels": ["HTTP"],
-      "invariants": [
-        "The reminder belongs to the authenticated user",
-        "Removing source notification intent must not be confused with delivery completion",
-        "Task and calendar-event source ownership must remain with their source authorities"
-      ],
-      "atomicity": "Single reminder-row delete; source lifecycle cleanup is not coordinated by this generic path.",
-      "migrationStatus": "remaining",
-      "owningTicket": "#656",
-      "evidence": "app/api/reminders/[id]/route.ts calls RemindersDB.deleteReminder for the remaining non-task, non-calendar branch."
-    },
-    {
       "id": "app/api/reminders/[id]/route.ts#RemindersDB.transitionCalendarEventReminder",
       "domain": "Reminder Delivery",
       "operation": "HTTP calendar-event Reminder Delivery transition",
@@ -95,21 +80,6 @@
       "migrationStatus": "remaining",
       "owningTicket": "#656 / #657",
       "evidence": "app/api/reminders/[id]/route.ts calls RemindersDB.updateReminder for the generic non-task, non-calendar update branch."
-    },
-    {
-      "id": "app/api/reminders/route.ts#RemindersDB.createReminder",
-      "domain": "Reminder Configuration",
-      "operation": "HTTP Habit Reminder Configuration creation",
-      "channels": ["HTTP"],
-      "invariants": [
-        "The source Habit must be owned by the authenticated user",
-        "Reminder timing and channels must be normalized as one complete intent",
-        "Task and calendar-event configuration must not enter the Habit boundary"
-      ],
-      "atomicity": "Single reminder insert with no Habit-plus-reminder transaction at the generic delivery boundary; migrate through #656.",
-      "migrationStatus": "remaining",
-      "owningTicket": "#656",
-      "evidence": "app/api/reminders/route.ts calls RemindersDB.createReminder after the task branch and stores source_type=habit."
     },
     {
       "id": "app/api/routines/[id]/exercises/[reId]/route.ts#RoutinesDB.removeRoutineExercise",
@@ -196,36 +166,6 @@
       "migrationStatus": "remaining",
       "owningTicket": "#632 (follow-up)",
       "evidence": "app/api/routines/route.ts calls RoutinesDB.createRoutine directly."
-    },
-    {
-      "id": "lib/ai/tools/reminders.ts#RemindersDB.createReminder",
-      "domain": "Reminder Configuration",
-      "operation": "AI Habit Reminder Configuration creation",
-      "channels": ["AI"],
-      "invariants": [
-        "The trusted AI user owns the source Habit",
-        "AI timing intent maps to the same normalized Habit Reminder Configuration as HTTP",
-        "Task and calendar-event configuration stays out of the Habit branch"
-      ],
-      "atomicity": "Single reminder insert with no Habit-plus-reminder transaction at the generic delivery boundary; migrate through #656.",
-      "migrationStatus": "remaining",
-      "owningTicket": "#656",
-      "evidence": "lib/ai/tools/reminders.ts calls RemindersDB.createReminder in the sourceType=habit branch."
-    },
-    {
-      "id": "lib/ai/tools/reminders.ts#RemindersDB.deleteReminder",
-      "domain": "Reminder Configuration",
-      "operation": "AI remove non-task Reminder Configuration",
-      "channels": ["AI"],
-      "invariants": [
-        "The reminder belongs to the trusted AI user",
-        "Removing Habit notification intent is distinct from marking a delivery sent",
-        "Task and calendar-event source authorities remain responsible for their own configuration"
-      ],
-      "atomicity": "Single reminder-row delete; Habit lifecycle cleanup is not coordinated by this generic path.",
-      "migrationStatus": "remaining",
-      "owningTicket": "#656",
-      "evidence": "lib/ai/tools/reminders.ts calls RemindersDB.deleteReminder for the non-task, non-calendar branch."
     },
     {
       "id": "lib/ai/tools/reminders.ts#RemindersDB.transitionCalendarEventReminder",
@@ -417,6 +357,18 @@
       "owningTicket": "#655",
       "authority": "Task Writes.configureReminders",
       "evidence": "Task reminder HTTP and AI adapters call createTaskWrites(...).configureReminders; generic task reminder writes are absent."
+    },
+    {
+      "id": "reminders-habit-configuration",
+      "domain": "Reminder Configuration",
+      "operation": "Habit Reminder Configuration create, replace, and removal",
+      "channels": ["HTTP", "AI"],
+      "invariants": ["Habit ownership and no-disclosure outcomes, normalized timing and channel intent, source isolation, and terminal delivery-history preservation"],
+      "atomicity": "Habit Writes commits the complete Habit-owned Reminder Configuration through the configure_habit_reminders database function; source deletion cleanup remains in the Habit lifecycle transaction.",
+      "migrationStatus": "migrated",
+      "owningTicket": "#656",
+      "authority": "Habit Writes.configureReminders",
+      "evidence": "HTTP and AI Habit reminder adapters call createHabitWrites(...).configureReminders; generic Habit Reminder Configuration writes are absent from delivery sources."
     }
   ],
   "excluded": [
