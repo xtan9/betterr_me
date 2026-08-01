@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ProjectsDB } from "@/lib/db";
+import { createProjectWrites, toProjectResponse } from "@/lib/projects/writes";
 import type { ToolDefinition, ToolContext } from "./types";
 
 export function projectTools(): ToolDefinition[] {
@@ -54,13 +55,20 @@ export function projectTools(): ToolDefinition[] {
           .describe("Color hex code (e.g., #3B82F6)"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new ProjectsDB(ctx.supabase);
-        return db.createProject({
-          user_id: ctx.userId,
+        const outcome = await createProjectWrites(ctx.supabase).create({
+          userId: ctx.userId,
           name: params.name,
-          section: params.section ?? "personal",
-          color: params.color ?? "#3B82F6",
+          section: params.section,
+          color: params.color,
         });
+
+        if (outcome.type === "created") {
+          return toProjectResponse(outcome.project);
+        }
+        if (outcome.type === "conflict") {
+          return { error: "Project creation conflicted" };
+        }
+        return { error: outcome.message, field: outcome.field };
       },
     },
     {

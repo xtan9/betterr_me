@@ -5,6 +5,7 @@ import type { ToolContext } from "@/lib/ai/tools/types";
 const mockGetUserProjects = vi.fn();
 const mockGetProject = vi.fn();
 const mockCreateProject = vi.fn();
+const mockProjectCreate = vi.fn();
 const mockUpdateProject = vi.fn();
 const mockDeleteProject = vi.fn();
 
@@ -16,6 +17,11 @@ vi.mock("@/lib/db", () => ({
     updateProject = mockUpdateProject;
     deleteProject = mockDeleteProject;
   },
+}));
+
+vi.mock("@/lib/projects/writes", () => ({
+  createProjectWrites: vi.fn(() => ({ create: mockProjectCreate })),
+  toProjectResponse: vi.fn((project) => project),
 }));
 
 function makeCtx(overrides?: Partial<ToolContext>): ToolContext {
@@ -68,16 +74,18 @@ describe("projectTools", () => {
     expect(result).toEqual({ error: "Project not found" });
   });
 
-  it("createProject calls ProjectsDB.createProject with defaults", async () => {
+  it("createProject delegates trusted identity and existing inputs", async () => {
     const ctx = makeCtx();
-    mockCreateProject.mockResolvedValue({ id: "p2", name: "New proj" });
+    const project = { id: "p2", name: "New proj" };
+    mockProjectCreate.mockResolvedValue({ type: "created", project });
     await findTool("createProject").execute({ name: "New proj" }, ctx);
-    expect(mockCreateProject).toHaveBeenCalledWith({
-      user_id: "user-123",
+    expect(mockProjectCreate).toHaveBeenCalledWith({
+      userId: "user-123",
       name: "New proj",
-      section: "personal",
-      color: "#3B82F6",
+      section: undefined,
+      color: undefined,
     });
+    expect(mockCreateProject).not.toHaveBeenCalled();
   });
 
   it("updateProject removes undefined values", async () => {

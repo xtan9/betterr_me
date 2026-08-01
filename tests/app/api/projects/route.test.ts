@@ -2,8 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET, POST } from '@/app/api/projects/route';
 import { NextRequest } from 'next/server';
 
-const { mockEnsureProfile } = vi.hoisted(() => ({
+const { mockEnsureProfile, mockProjectCreate } = vi.hoisted(() => ({
   mockEnsureProfile: vi.fn(),
+  mockProjectCreate: vi.fn(),
 }));
 const apiKeyMocks = vi.hoisted(() => ({
   from: vi.fn(),
@@ -39,7 +40,6 @@ vi.mock('@supabase/supabase-js', async (importOriginal) => {
 
 const mockProjectsDB = {
   getUserProjects: vi.fn(),
-  createProject: vi.fn(),
 };
 
 vi.mock('@/lib/db', () => ({
@@ -52,6 +52,11 @@ vi.mock('@/lib/db', () => ({
 
 vi.mock('@/lib/db/ensure-profile', () => ({
   ensureProfile: mockEnsureProfile,
+}));
+
+vi.mock('@/lib/projects/writes', () => ({
+  createProjectWrites: vi.fn(() => ({ create: mockProjectCreate })),
+  toProjectResponse: vi.fn((project) => project),
 }));
 
 import { createClient } from '@/lib/supabase/server';
@@ -170,7 +175,7 @@ describe('GET /api/projects', () => {
 
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toEqual({ error: 'Forbidden' });
-    expect(mockProjectsDB.createProject).not.toHaveBeenCalled();
+    expect(mockProjectCreate).not.toHaveBeenCalled();
     expect(apiKeyMocks.queryLog).toEqual([
       { table: 'api_keys', method: 'from', args: ['api_keys'] },
       {
@@ -199,6 +204,10 @@ describe('POST /api/projects', () => {
       },
     } as any);
     mockEnsureProfile.mockResolvedValue(undefined);
+    mockProjectCreate.mockResolvedValue({
+      type: 'created',
+      project: { id: 'p1' },
+    });
   });
 
   it('should create a new project', async () => {
@@ -210,7 +219,10 @@ describe('POST /api/projects', () => {
       color: 'blue',
       status: 'active',
     };
-    vi.mocked(mockProjectsDB.createProject).mockResolvedValue(newProject);
+    mockProjectCreate.mockResolvedValue({
+      type: 'created',
+      project: newProject,
+    });
 
     const request = new NextRequest('http://localhost:3000/api/projects', {
       method: 'POST',
@@ -226,8 +238,8 @@ describe('POST /api/projects', () => {
 
     expect(response.status).toBe(201);
     expect(data.project).toEqual(newProject);
-    expect(mockProjectsDB.createProject).toHaveBeenCalledWith({
-      user_id: 'user-123',
+    expect(mockProjectCreate).toHaveBeenCalledWith({
+      userId: 'user-123',
       name: 'New Project',
       section: 'personal',
       color: 'blue',
@@ -296,8 +308,9 @@ describe('POST /api/projects', () => {
   });
 
   it('should call ensureProfile before creating project', async () => {
-    vi.mocked(mockProjectsDB.createProject).mockResolvedValue({
-      id: 'p1',
+    mockProjectCreate.mockResolvedValue({
+      type: 'created',
+      project: { id: 'p1' },
     } as any);
 
     const request = new NextRequest('http://localhost:3000/api/projects', {
@@ -315,8 +328,9 @@ describe('POST /api/projects', () => {
   });
 
   it('should trim project name', async () => {
-    vi.mocked(mockProjectsDB.createProject).mockResolvedValue({
-      id: 'p1',
+    mockProjectCreate.mockResolvedValue({
+      type: 'created',
+      project: { id: 'p1' },
     } as any);
 
     const request = new NextRequest('http://localhost:3000/api/projects', {
@@ -330,7 +344,7 @@ describe('POST /api/projects', () => {
 
     await POST(request);
 
-    expect(mockProjectsDB.createProject).toHaveBeenCalledWith(
+    expect(mockProjectCreate).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Trimmed Name' })
     );
   });
