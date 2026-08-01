@@ -255,10 +255,10 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $function$
 DECLARE
-  v_requested_user_id UUID := NULLIF(p_request->>'userId', '')::UUID;
+  v_requested_user_id UUID;
   v_authenticated_user_id UUID := auth.uid();
   v_user_id UUID;
-  v_series_id UUID := NULLIF(p_request->>'seriesId', '')::UUID;
+  v_series_id UUID;
   v_series public.recurring_task_series%ROWTYPE;
   v_operation_key TEXT := COALESCE(
     NULLIF(p_request->>'idempotencyKey', ''),
@@ -268,6 +268,13 @@ DECLARE
   v_replay JSONB;
   v_outcome JSONB;
 BEGIN
+  BEGIN
+    v_requested_user_id := NULLIF(p_request->>'userId', '')::UUID;
+    v_series_id := NULLIF(p_request->>'seriesId', '')::UUID;
+  EXCEPTION WHEN others THEN
+    RETURN jsonb_build_object('status', 'not-found', 'type', 'not-found');
+  END;
+
   IF p_operation = 'list-active-series' THEN
     IF COALESCE(auth.role(), '') <> 'service_role' THEN
       RETURN jsonb_build_object('status', 'not-found', 'type', 'not-found');
