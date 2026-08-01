@@ -202,7 +202,11 @@ begin
       "end_date": "2026-08-10",
       "end_time": "11:00:00",
       "is_recurring": true,
-      "recurrence_rule": {"frequency": "weekly"}
+      "recurrence_rule": {
+        "frequency": "weekly",
+        "interval": 1,
+        "days_of_week": [1]
+      }
     }'::jsonb,
     '[{
       "reminder_type": "relative",
