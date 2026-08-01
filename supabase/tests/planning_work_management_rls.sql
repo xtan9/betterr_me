@@ -1826,8 +1826,9 @@ begin
     format('update public.reminders set status = ''failed'' where id = %L', calendar_reminder_id),
     'authenticated direct calendar reminder update'
   );
-  perform pg_temp.ralph_578_expect_zero_changes(
+  perform pg_temp.ralph_578_expect_sqlstate(
     format('delete from public.reminders where id = %L', calendar_reminder_id),
+    '42501',
     'authenticated direct calendar reminder delete'
   );
 
