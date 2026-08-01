@@ -10,6 +10,11 @@ import {
   toTaskReminderResponse,
   type TaskReminderConfigurationPersistenceOutcome,
 } from "@/lib/tasks/writes";
+import {
+  createHabitWrites,
+  toHabitReminderResponse,
+  type HabitReminderConfigurationPersistenceOutcome,
+} from "@/lib/habits/writes";
 
 const lifecycleConflict = { error: CALENDAR_EVENT_REMINDER_LIFECYCLE_ERROR };
 
@@ -36,7 +41,7 @@ export function reminderTools(): ToolDefinition[] {
         sourceType: z
           .enum(["task", "habit"])
           .describe("Type of item this reminder is for"),
-        sourceId: z.string().describe("ID of the task, event, or habit"),
+        sourceId: z.string().describe("ID of the task or habit"),
         fireAt: z
           .string()
           .describe(
@@ -56,16 +61,20 @@ export function reminderTools(): ToolDefinition[] {
           });
           return taskReminderOutcomeForAi(outcome);
         }
-        const db = new RemindersDB(ctx.supabase);
-        return db.createReminder(ctx.userId, {
-          source_type: "habit",
-          source_id: params.sourceId,
-          reminder_type: "absolute",
-          relative_minutes: null,
-          absolute_time: params.fireAt,
-          channels: ["push"],
-          fire_at: params.fireAt,
-        });
+        if (params.sourceType === "habit") {
+          const outcome = await createHabitWrites(ctx.supabase).configureReminders({
+            userId: ctx.userId,
+            habitId: params.sourceId,
+            referenceTime: undefined,
+            reminders: [{
+              reminderType: "absolute",
+              absoluteTime: params.fireAt,
+              channels: ["push"],
+            }],
+          });
+          return habitReminderOutcomeForAi(outcome);
+        }
+        return { error: "Unsupported reminder source" };
       },
     },
     {
@@ -130,8 +139,16 @@ export function reminderTools(): ToolDefinition[] {
           });
           return taskReminderOutcomeForAi(outcome);
         }
-        await db.deleteReminder(ctx.userId, params.reminderId);
-        return { success: true };
+        if (reminder.source_type === "habit") {
+          const outcome = await createHabitWrites(ctx.supabase).configureReminders({
+            userId: ctx.userId,
+            habitId: reminder.source_id,
+            reminders: [],
+          });
+          return habitReminderOutcomeForAi(outcome);
+        }
+        // Generic reminder writes are intentionally unavailable for source-owned configuration.
+        return { error: "Unsupported reminder source" };
       },
     },
   ];
@@ -150,5 +167,21 @@ function taskReminderOutcomeForAi(
   if (outcome.type === "removed") return { success: true };
   return outcome.reminders[0]
     ? toTaskReminderResponse(outcome.reminders[0])
+    : { success: true };
+}
+
+function habitReminderOutcomeForAi(
+  outcome: HabitReminderConfigurationPersistenceOutcome,
+) {
+  if (outcome.type === "not-found") return { error: "Habit not found" };
+  if (outcome.type === "conflict") {
+    return { error: outcome.reason ?? "Habit reminder configuration conflicted" };
+  }
+  if (outcome.type === "invalid") {
+    return { error: outcome.message, field: outcome.field };
+  }
+  if (outcome.type === "removed") return { success: true };
+  return outcome.reminders[0]
+    ? toHabitReminderResponse(outcome.reminders[0])
     : { success: true };
 }

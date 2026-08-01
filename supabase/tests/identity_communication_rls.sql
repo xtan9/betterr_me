@@ -132,7 +132,7 @@ values
     'active'
   );
 
-set local role authenticated;
+reset role;
 insert into public.reminders (
   id,
   user_id,
@@ -344,6 +344,7 @@ set local role authenticated;
 do $$
 declare
   affected_rows bigint;
+  configuration jsonb;
 begin
   if (
     select count(*)
@@ -361,11 +362,14 @@ begin
     raise exception 'owner reminder update changed % rows', affected_rows;
   end if;
 
-  delete from public.reminders
-  where id = '57700000-0000-0000-0000-000000000051';
-  get diagnostics affected_rows = row_count;
-  if affected_rows <> 1 then
-    raise exception 'owner reminder delete changed % rows', affected_rows;
+  configuration := public.configure_habit_reminders(
+    '57700000-0000-0000-0000-000000000001',
+    '57700000-0000-0000-0000-000000000071',
+    '[]'::jsonb,
+    null
+  );
+  if configuration->>'type' <> 'removed' then
+    raise exception 'owner Habit Reminder Configuration removal was incorrect: %', configuration;
   end if;
 end
 $$;
@@ -1625,14 +1629,8 @@ begin
     raise exception 'owner push delete changed % rows', affected_rows;
   end if;
 
-  set local role authenticated;
-  delete from public.reminders
-  where id = '57700000-0000-0000-0000-000000000050';
-  get diagnostics affected_rows = row_count;
-  if affected_rows <> 1 then
-    raise exception 'owner reminder delete changed % rows', affected_rows;
-  end if;
-  reset role;
+  -- The Habit boundary removes pending intent but intentionally preserves the
+  -- sent delivery history for retry/audit ownership.
 
   delete from public.reminder_defaults
   where id = '57700000-0000-0000-0000-000000000060';
@@ -1650,10 +1648,7 @@ begin
 
   if exists (select 1 from public.chat_memories where id = '57700000-0000-0000-0000-000000000030')
     or exists (select 1 from public.push_subscriptions where id = '57700000-0000-0000-0000-000000000040')
-    or exists (select 1 from public.reminders where id in (
-      '57700000-0000-0000-0000-000000000050',
-      '57700000-0000-0000-0000-000000000051'
-    ))
+    or exists (select 1 from public.reminders where id = '57700000-0000-0000-0000-000000000051')
     or exists (select 1 from public.reminder_defaults where id in (
       '57700000-0000-0000-0000-000000000060',
       '57700000-0000-0000-0000-000000000061'

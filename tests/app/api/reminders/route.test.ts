@@ -2,9 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
 // --- Hoisted mocks ---
-const { mockComputeFireAt } = vi.hoisted(() => ({
-  mockComputeFireAt: vi.fn(),
-}));
 const {
   mockConfigureTaskReminders,
   mockTaskReminderResponse,
@@ -12,14 +9,19 @@ const {
   mockConfigureTaskReminders: vi.fn(),
   mockTaskReminderResponse: vi.fn((reminder: unknown) => reminder),
 }));
+const {
+  mockConfigureHabitReminders,
+  mockHabitReminderResponse,
+} = vi.hoisted(() => ({
+  mockConfigureHabitReminders: vi.fn(),
+  mockHabitReminderResponse: vi.fn((reminder: unknown) => reminder),
+}));
 
 const mockRemindersDB = {
-  createReminder: vi.fn(),
   getRemindersBySource: vi.fn(),
   getReminder: vi.fn(),
   updateReminder: vi.fn(),
   transitionCalendarEventReminder: vi.fn(),
-  deleteReminder: vi.fn(),
 };
 
 // Mock supabase server client
@@ -48,8 +50,11 @@ vi.mock("@/lib/tasks/writes", () => ({
   toTaskReminderResponse: mockTaskReminderResponse,
 }));
 
-vi.mock("@/lib/reminders/fire-at", () => ({
-  computeFireAt: mockComputeFireAt,
+vi.mock("@/lib/habits/writes", () => ({
+  createHabitWrites: vi.fn(() => ({
+    configureReminders: mockConfigureHabitReminders,
+  })),
+  toHabitReminderResponse: mockHabitReminderResponse,
 }));
 
 import { createClient } from "@/lib/supabase/server";
@@ -60,6 +65,10 @@ describe("GET /api/reminders", () => {
     mockConfigureTaskReminders.mockResolvedValue({
       type: "configured",
       reminders: [{ id: "r1", source_type: "task" }],
+    });
+    mockConfigureHabitReminders.mockResolvedValue({
+      type: "configured",
+      reminders: [{ id: "r2", source_type: "habit" }],
     });
   });
 
@@ -156,8 +165,6 @@ describe("POST /api/reminders", () => {
         channels: ["push"],
       }],
     });
-    expect(mockComputeFireAt).not.toHaveBeenCalled();
-    expect(mockRemindersDB.createReminder).not.toHaveBeenCalled();
   });
 
   it("does not require event_start_time for Task configuration", async () => {
@@ -178,6 +185,33 @@ describe("POST /api/reminders", () => {
     expect(mockConfigureTaskReminders).toHaveBeenCalled();
   });
 
+  it("routes Habit reminder configuration through HabitWrites", async () => {
+    const { POST } = await import("@/app/api/reminders/route");
+
+    const response = await POST(new NextRequest("http://localhost:3000/api/reminders", {
+      method: "POST",
+      body: JSON.stringify({
+        source_type: "habit",
+        source_id: "11111111-1111-1111-1111-111111111111",
+        reminder_type: "absolute",
+        absolute_time: "2026-04-10T08:00:00Z",
+        channels: ["email"],
+      }),
+    }));
+
+    expect(response.status).toBe(201);
+    expect(mockConfigureHabitReminders).toHaveBeenCalledWith({
+      userId: "user-123",
+      habitId: "11111111-1111-1111-1111-111111111111",
+      referenceTime: undefined,
+      reminders: [{
+        reminderType: "absolute",
+        absoluteTime: "2026-04-10T08:00:00Z",
+        channels: ["email"],
+      }],
+    });
+  });
+
   it("creates an absolute reminder", async () => {
     const { POST } = await import("@/app/api/reminders/route");
     const mockReminder = {
@@ -195,8 +229,10 @@ describe("POST /api/reminders", () => {
       created_at: "2026-04-01T00:00:00Z",
     };
 
-    mockComputeFireAt.mockReturnValue("2026-04-10T08:00:00.000Z");
-    mockRemindersDB.createReminder.mockResolvedValue(mockReminder);
+    mockConfigureHabitReminders.mockResolvedValue({
+      type: "configured",
+      reminders: [mockReminder],
+    });
 
     const request = new NextRequest("http://localhost:3000/api/reminders", {
       method: "POST",
@@ -214,14 +250,16 @@ describe("POST /api/reminders", () => {
 
     expect(response.status).toBe(201);
     expect(data.reminder.reminder_type).toBe("absolute");
-    expect(mockComputeFireAt).toHaveBeenCalledWith(
-      {
-        reminder_type: "absolute",
-        relative_minutes: null,
-        absolute_time: "2026-04-10T08:00:00Z",
-      },
-      "2026-04-10T14:00:00Z"
-    );
+    expect(mockConfigureHabitReminders).toHaveBeenCalledWith({
+      userId: "user-123",
+      habitId: "11111111-1111-1111-1111-111111111111",
+      referenceTime: "2026-04-10T14:00:00Z",
+      reminders: [{
+        reminderType: "absolute",
+        absoluteTime: "2026-04-10T08:00:00Z",
+        channels: ["email"],
+      }],
+    });
   });
 
   it("returns 401 for unauthenticated request", async () => {
@@ -269,8 +307,6 @@ describe("POST /api/reminders", () => {
       error:
         "Calendar event reminders must be updated through the calendar event lifecycle",
     });
-    expect(mockComputeFireAt).not.toHaveBeenCalled();
-    expect(mockRemindersDB.createReminder).not.toHaveBeenCalled();
   });
 
   it("returns 400 when relative reminder is missing relative_minutes", async () => {
@@ -481,6 +517,44 @@ describe("PATCH /api/reminders/[id]", () => {
     expect(mockRemindersDB.updateReminder).not.toHaveBeenCalled();
   });
 
+  it("routes Habit channel replacement through HabitWrites", async () => {
+    const { PATCH } = await import("@/app/api/reminders/[id]/route");
+    mockRemindersDB.getReminder.mockResolvedValue({
+      id: "r1",
+      source_type: "habit",
+      source_id: "11111111-1111-1111-1111-111111111111",
+      reminder_type: "absolute",
+      relative_minutes: null,
+      absolute_time: "2026-04-10T09:00:00Z",
+      channels: ["push"],
+    });
+    mockConfigureHabitReminders.mockResolvedValue({
+      type: "configured",
+      reminders: [{ id: "r1", source_type: "habit" }],
+    });
+
+    const response = await PATCH(
+      new NextRequest("http://localhost:3000/api/reminders/r1", {
+        method: "PATCH",
+        body: JSON.stringify({ channels: ["email"] }),
+      }),
+      { params: Promise.resolve({ id: "r1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockConfigureHabitReminders).toHaveBeenCalledWith({
+      userId: "user-123",
+      habitId: "11111111-1111-1111-1111-111111111111",
+      referenceTime: undefined,
+      reminders: [{
+        reminderType: "absolute",
+        absoluteTime: "2026-04-10T09:00:00Z",
+        channels: ["email"],
+      }],
+    });
+    expect(mockRemindersDB.updateReminder).not.toHaveBeenCalled();
+  });
+
   it("returns 401 for unauthenticated request", async () => {
     const { PATCH } = await import("@/app/api/reminders/[id]/route");
     vi.mocked(createClient).mockResolvedValueOnce({
@@ -569,7 +643,6 @@ describe("DELETE /api/reminders/[id]", () => {
     });
 
     expect(response.status).toBe(409);
-    expect(mockRemindersDB.deleteReminder).not.toHaveBeenCalled();
   });
 
   it("deletes reminder and returns 200", async () => {
@@ -592,7 +665,34 @@ describe("DELETE /api/reminders/[id]", () => {
       taskId: "11111111-1111-1111-1111-111111111111",
       reminders: [],
     });
-    expect(mockRemindersDB.deleteReminder).not.toHaveBeenCalled();
+  });
+
+  it("routes Habit reminder removal through HabitWrites", async () => {
+    const { DELETE } = await import("@/app/api/reminders/[id]/route");
+    mockRemindersDB.getReminder.mockResolvedValue({
+      id: "r1",
+      source_type: "habit",
+      source_id: "11111111-1111-1111-1111-111111111111",
+    });
+    mockConfigureHabitReminders.mockResolvedValue({
+      type: "removed",
+      reminders: [],
+    });
+
+    const response = await DELETE(
+      new NextRequest("http://localhost:3000/api/reminders/r1", {
+        method: "DELETE",
+      }),
+      { params: Promise.resolve({ id: "r1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ success: true });
+    expect(mockConfigureHabitReminders).toHaveBeenCalledWith({
+      userId: "user-123",
+      habitId: "11111111-1111-1111-1111-111111111111",
+      reminders: [],
+    });
   });
 
   it("returns 401 for unauthenticated request", async () => {
@@ -623,7 +723,7 @@ describe("DELETE /api/reminders/[id]", () => {
       source_type: "habit",
       source_id: "h1",
     });
-    mockRemindersDB.deleteReminder.mockRejectedValue(new Error("DB error"));
+    mockConfigureHabitReminders.mockRejectedValue(new Error("DB error"));
 
     const request = new NextRequest(
       "http://localhost:3000/api/reminders/r1",

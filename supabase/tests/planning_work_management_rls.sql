@@ -392,7 +392,7 @@ select set_config(
 
 -- Calendar data has lifecycle-owned event reminders, while ordinary
 -- application reminders/defaults use the Habit-owned configuration surface.
-set local role authenticated;
+reset role;
 insert into public.reminders (
   id,
   user_id,
@@ -435,7 +435,7 @@ select set_config(
   '57800000-0000-0000-0000-000000000002',
   false
 );
-set local role authenticated;
+reset role;
 insert into public.reminders (
   id,
   user_id,
@@ -1844,46 +1844,10 @@ begin
     raise exception 'calendar owner delete left a reminder behind';
   end if;
 
-  insert into public.reminders (
-    id,
-    user_id,
-    source_type,
-    source_id,
-    reminder_type,
-    relative_minutes,
-    channels,
-    fire_at
-  ) values (
-    '57800000-0000-0000-0000-000000000903',
-    '57800000-0000-0000-0000-000000000001',
-    'habit',
-    '57800000-0000-0000-0000-000000000401',
-    'relative',
-    10,
-    array['push'],
-    '2026-08-04 08:50:00+00'
-  );
-  update public.reminders
-  set status = 'snoozed'
-  where id = '57800000-0000-0000-0000-000000000903';
-  if not exists (
-    select 1 from public.reminders
-    where id = '57800000-0000-0000-0000-000000000903'
-      and status = 'snoozed'
-  ) then
-    raise exception 'owner reminder update did not persist';
-  end if;
-  perform pg_temp.ralph_578_expect_sqlstate(
-    $$update public.reminders set user_id = '57800000-0000-0000-0000-000000000002' where id = '57800000-0000-0000-0000-000000000903'$$,
-    '42501',
-    'reminder ownership transfer'
-  );
-  delete from public.reminders where id = '57800000-0000-0000-0000-000000000903';
-
   perform pg_temp.ralph_578_expect_sqlstate(
     $$insert into public.reminders (id, user_id, source_type, source_id, reminder_type, channels, fire_at) values ('57800000-0000-0000-0000-000000000907', '57800000-0000-0000-0000-000000000001', 'habit', '57800000-0000-0000-0000-000000000401', 'absolute', array['push'], '2026-08-04 08:55:00+00')$$,
-    '23514',
-    'absolute reminder time constraint'
+    '42501',
+    'authenticated direct Habit Reminder Configuration insert privilege'
   );
 
   perform pg_temp.ralph_578_expect_sqlstate(
@@ -2050,7 +2014,7 @@ end
 $push$;
 
 -- The second authenticated user also owns a complete calendar/reminder
--- matrix, including the lifecycle RPCs and the direct reminder seams.
+-- matrix, including the lifecycle RPCs and delivery-only reminder reads.
 set local role authenticated;
 do $block$
 declare
@@ -2125,29 +2089,6 @@ begin
     null
   );
 
-  insert into public.reminders (
-    id,
-    user_id,
-    source_type,
-    source_id,
-    reminder_type,
-    relative_minutes,
-    channels,
-    fire_at
-  ) values (
-    '57800000-0000-0000-0000-000000000905',
-    '57800000-0000-0000-0000-000000000002',
-    'habit',
-    '57800000-0000-0000-0000-000000000402',
-    'relative',
-    10,
-    array['push'],
-    '2026-08-04 10:50:00+00'
-  );
-  update public.reminders
-  set status = 'snoozed'
-  where id = '57800000-0000-0000-0000-000000000905';
-  delete from public.reminders where id = '57800000-0000-0000-0000-000000000905';
 end
 $block$;
 reset role;

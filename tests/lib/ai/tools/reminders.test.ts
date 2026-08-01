@@ -3,23 +3,22 @@ import { reminderTools } from "@/lib/ai/tools/reminders";
 import type { ToolContext } from "@/lib/ai/tools/types";
 
 const mockGetPendingReminders = vi.fn();
-const mockCreateReminder = vi.fn();
 const mockUpdateReminderStatus = vi.fn();
 const mockUpdateReminder = vi.fn();
-const mockDeleteReminder = vi.fn();
 const mockGetReminder = vi.fn();
 const mockTransitionCalendarEventReminder = vi.fn();
 const { mockConfigureTaskReminders } = vi.hoisted(() => ({
   mockConfigureTaskReminders: vi.fn(),
 }));
+const { mockConfigureHabitReminders } = vi.hoisted(() => ({
+  mockConfigureHabitReminders: vi.fn(),
+}));
 
 vi.mock("@/lib/db", () => ({
   RemindersDB: class {
     getPendingReminders = mockGetPendingReminders;
-    createReminder = mockCreateReminder;
     updateReminderStatus = mockUpdateReminderStatus;
     updateReminder = mockUpdateReminder;
-    deleteReminder = mockDeleteReminder;
     getReminder = mockGetReminder;
     transitionCalendarEventReminder = mockTransitionCalendarEventReminder;
   },
@@ -30,6 +29,13 @@ vi.mock("@/lib/tasks/writes", () => ({
     configureReminders: mockConfigureTaskReminders,
   })),
   toTaskReminderResponse: (reminder: unknown) => reminder,
+}));
+
+vi.mock("@/lib/habits/writes", () => ({
+  createHabitWrites: vi.fn(() => ({
+    configureReminders: mockConfigureHabitReminders,
+  })),
+  toHabitReminderResponse: (reminder: unknown) => reminder,
 }));
 
 function makeCtx(): ToolContext {
@@ -52,6 +58,10 @@ describe("reminderTools", () => {
     mockConfigureTaskReminders.mockResolvedValue({
       type: "configured",
       reminders: [{ id: "r1", source_type: "task" }],
+    });
+    mockConfigureHabitReminders.mockResolvedValue({
+      type: "configured",
+      reminders: [{ id: "r1", source_type: "habit" }],
     });
   });
 
@@ -78,23 +88,21 @@ describe("reminderTools", () => {
         channels: ["push"],
       }],
     });
-    expect(mockCreateReminder).not.toHaveBeenCalled();
   });
 
-  it("keeps Habit reminder configuration on the generic source adapter", async () => {
-    mockCreateReminder.mockResolvedValue({ id: "r1" });
+  it("routes Habit reminder configuration through HabitWrites", async () => {
     await findTool("createReminder").execute(
       { sourceType: "habit", sourceId: "h1", fireAt: "2026-04-10T09:00:00Z" },
       makeCtx(),
     );
-    expect(mockCreateReminder).toHaveBeenCalledWith("user-123", {
-      source_type: "habit",
-      source_id: "h1",
-      reminder_type: "absolute",
-      relative_minutes: null,
-      absolute_time: "2026-04-10T09:00:00Z",
-      channels: ["push"],
-      fire_at: "2026-04-10T09:00:00Z",
+    expect(mockConfigureHabitReminders).toHaveBeenCalledWith({
+      userId: "user-123",
+      habitId: "h1",
+      reminders: [{
+        reminderType: "absolute",
+        absoluteTime: "2026-04-10T09:00:00Z",
+        channels: ["push"],
+      }],
     });
   });
 
@@ -185,14 +193,18 @@ describe("reminderTools", () => {
       taskId: "t1",
       reminders: [],
     });
-    expect(mockDeleteReminder).not.toHaveBeenCalled();
     expect(result).toEqual({ success: true });
   });
 
-  it("keeps Habit reminder removal on the generic source adapter", async () => {
-    mockGetReminder.mockResolvedValue({ id: "r1", source_type: "habit" });
+  it("routes Habit reminder removal through HabitWrites", async () => {
+    mockGetReminder.mockResolvedValue({ id: "r1", source_type: "habit", source_id: "h1" });
+    mockConfigureHabitReminders.mockResolvedValue({ type: "removed", reminders: [] });
     const result = await findTool("deleteReminder").execute({ reminderId: "r1" }, makeCtx());
-    expect(mockDeleteReminder).toHaveBeenCalledWith("user-123", "r1");
+    expect(mockConfigureHabitReminders).toHaveBeenCalledWith({
+      userId: "user-123",
+      habitId: "h1",
+      reminders: [],
+    });
     expect(result).toEqual({ success: true });
   });
 
@@ -201,7 +213,6 @@ describe("reminderTools", () => {
     await expect(
       findTool("deleteReminder").execute({ reminderId: "missing" }, makeCtx()),
     ).resolves.toEqual({ error: "Reminder not found" });
-    expect(mockDeleteReminder).not.toHaveBeenCalled();
   });
 
   it("refuses deletion of calendar-event intent", async () => {
@@ -211,6 +222,5 @@ describe("reminderTools", () => {
     ).resolves.toEqual({
       error: "Calendar event reminders must be updated through the calendar event lifecycle",
     });
-    expect(mockDeleteReminder).not.toHaveBeenCalled();
   });
 });

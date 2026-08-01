@@ -157,6 +157,7 @@ begin
 end
 $$;
 
+reset role;
 insert into public.reminders (
   id,
   user_id,
@@ -267,8 +268,7 @@ values (
   11
 );
 
-set local role authenticated;
-
+reset role;
 insert into public.reminders (
   id,
   user_id,
@@ -348,17 +348,17 @@ begin
     raise exception 'anonymous habit deletion execute privilege leaked';
   end if;
 
-  if exists (
+  if not exists (
     select 1
     from pg_proc
     where oid = 'public.delete_habit_atomically(uuid,uuid)'::regprocedure
       and prosecdef
   ) then
-    raise exception 'habit deletion lifecycle must remain SECURITY INVOKER';
+    raise exception 'habit deletion lifecycle must use the Habit lifecycle owner';
   end if;
 
-  if not has_table_privilege('authenticated', 'public.reminders', 'DELETE') then
-    raise exception 'authenticated lacks source reminder delete privilege';
+  if has_table_privilege('authenticated', 'public.reminders', 'DELETE') then
+    raise exception 'authenticated retained direct source reminder delete privilege';
   end if;
 
   if not exists (
