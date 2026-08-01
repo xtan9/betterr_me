@@ -1925,11 +1925,12 @@ begin
     ),
     'non-owner reminder update'
   );
-  perform pg_temp.ralph_578_expect_zero_changes(
+  perform pg_temp.ralph_578_expect_sqlstate(
     format(
       'delete from public.reminders where id = %L',
       current_setting('ralph.planning_other_habit_reminder_id')::uuid
     ),
+    '42501',
     'non-owner reminder delete'
   );
   perform pg_temp.ralph_578_expect_sqlstate(
