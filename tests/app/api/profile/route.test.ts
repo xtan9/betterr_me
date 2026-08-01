@@ -44,6 +44,7 @@ describe('GET /api/profile', () => {
       email: 'test@example.com',
       full_name: 'Test User',
       preferences: { theme: 'dark' },
+      preference_revision: 2,
     };
     vi.mocked(mockProfilesDB.getProfile).mockResolvedValue(mockProfile as any);
 
@@ -54,9 +55,24 @@ describe('GET /api/profile', () => {
     expect(data.profile).toEqual(mockProfile);
     expect(mockProfilesDB.getProfile).toHaveBeenCalledWith('user-123');
     expect(mockLegacyInfo).toHaveBeenCalledWith(
-      '[legacy-profile] compatibility traffic',
-      { route: '/api/profile', method: 'GET' },
+      '[legacy] deprecated route',
+      expect.objectContaining({
+        route: '/api/profile',
+        domain: 'profile',
+        revision: 2,
+      }),
     );
+    const telemetry = mockLegacyInfo.mock.calls.at(-1)?.[1];
+    expect(Object.keys(telemetry).sort()).toEqual([
+      'correlationId',
+      'domain',
+      'revision',
+      'route',
+    ]);
+    expect(telemetry.correlationId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    expect(JSON.stringify(telemetry)).not.toContain('user-123');
   });
 
   it('should return 404 if profile not found', async () => {
@@ -88,6 +104,15 @@ describe('GET /api/profile', () => {
 
     expect(response.status).toBe(500);
     expect(data.error).toBe('Failed to fetch profile');
+    expect(mockLegacyInfo).toHaveBeenCalledWith(
+      '[legacy] deprecated route',
+      expect.objectContaining({
+        route: '/api/profile',
+        domain: 'profile',
+        errorCode: 'profile_read_failed',
+      }),
+    );
+    expect(JSON.stringify(mockLegacyInfo.mock.calls)).not.toContain('db error');
   });
 });
 

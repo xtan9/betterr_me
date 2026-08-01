@@ -9,6 +9,11 @@ select public.ralph_ci_create_auth_user(
 
 set role authenticated;
 select set_config(
+  'request.jwt.claim.sub',
+  '63400000-0000-0000-0000-000000000001',
+  false
+);
+select set_config(
   'request.jwt.claims',
   '{"sub":"63400000-0000-0000-0000-000000000001","role":"authenticated"}',
   false
@@ -68,6 +73,15 @@ begin
     or command_result->>'changed' <> 'false'
     or (command_result->>'preferenceRevision')::bigint <> 3 then
     raise exception 'disabled Reminder Email command was not a no-op: %', command_result;
+  end if;
+
+  command_result := public.set_notification_preference(
+    '{"type":"setReminderEmail","enabled":true}'::jsonb
+  );
+  if command_result->'reminderEmail'->>'enabled' <> 'true'
+    or command_result->>'changed' <> 'true'
+    or (command_result->>'preferenceRevision')::bigint <> 4 then
+    raise exception 'verified Identity Email command returned wrong outcome: %', command_result;
   end if;
 
   begin

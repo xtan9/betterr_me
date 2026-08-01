@@ -55,9 +55,19 @@ describe('PATCH /api/profile/preferences', () => {
       requiredPermission: 'write',
     });
     expect(mockLegacyInfo).toHaveBeenCalledWith(
-      '[legacy-profile] compatibility traffic',
-      { route: '/api/profile/preferences', method: 'PATCH' },
+      '[legacy] deprecated route',
+      expect.objectContaining({
+        route: '/api/profile/preferences',
+        domain: 'preferences',
+      }),
     );
+    const telemetry = mockLegacyInfo.mock.calls.at(-1)?.[1];
+    expect(Object.keys(telemetry).sort()).toEqual([
+      'correlationId',
+      'domain',
+      'route',
+    ]);
+    expect(JSON.stringify(telemetry)).not.toContain('user-123');
   });
 
   it('should update preferences', async () => {
@@ -252,6 +262,15 @@ describe('PATCH /api/profile/preferences', () => {
 
     expect(response.status).toBe(500);
     expect(data.error).toBe('Failed to update preferences');
+    expect(mockLegacyInfo).toHaveBeenCalledWith(
+      '[legacy] deprecated route',
+      expect.objectContaining({
+        route: '/api/profile/preferences',
+        domain: 'preferences',
+        errorCode: 'preference_write_failed',
+      }),
+    );
+    expect(JSON.stringify(mockLegacyInfo.mock.calls)).not.toContain('connection lost');
   });
 
   it('should return 500 when error is a non-Error object', async () => {
