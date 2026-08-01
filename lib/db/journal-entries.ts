@@ -1,35 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   JournalEntry,
-  JournalEntryInsert,
-  JournalEntryUpdate,
   JournalCalendarDay,
 } from "./types";
 import { log } from "@/lib/logger";
 
 export class JournalEntriesDB {
   constructor(private supabase: SupabaseClient) {}
-
-  /**
-   * Create or update a journal entry for a given date.
-   * Uses upsert on the UNIQUE(user_id, entry_date) constraint.
-   * CRITICAL: entry data MUST include user_id and entry_date for onConflict to work.
-   */
-  async upsertEntry(entry: JournalEntryInsert): Promise<JournalEntry> {
-    const { data, error } = await this.supabase
-      .from("journal_entries")
-      .upsert(entry, { onConflict: "user_id,entry_date" })
-      .select()
-      .single();
-
-    if (error) {
-      log.error("JournalEntriesDB.upsertEntry failed", error, {
-        entry_date: entry.entry_date,
-      });
-      throw error;
-    }
-    return data;
-  }
 
   /**
    * Get entry by date for a user (the primary access pattern).
@@ -73,29 +50,6 @@ export class JournalEntriesDB {
     if (error) {
       if (error.code === "PGRST116") return null;
       log.error("JournalEntriesDB.getEntry failed", error, { entryId });
-      throw error;
-    }
-    return data;
-  }
-
-  /**
-   * Update a journal entry by ID.
-   */
-  async updateEntry(
-    entryId: string,
-    userId: string,
-    updates: JournalEntryUpdate
-  ): Promise<JournalEntry> {
-    const { data, error } = await this.supabase
-      .from("journal_entries")
-      .update(updates)
-      .eq("id", entryId)
-      .eq("user_id", userId)
-      .select()
-      .single();
-
-    if (error) {
-      log.error("JournalEntriesDB.updateEntry failed", error, { entryId });
       throw error;
     }
     return data;

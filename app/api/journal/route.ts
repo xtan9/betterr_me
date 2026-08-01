@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, cookieRouteErrorMessage } from '@/lib/auth/authenticated-request';
 import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { JournalEntriesDB } from '@/lib/db';
+import { createJournalWrites, toJournalEntryResponse } from '@/lib/journal/writes';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { journalEntryFormSchema } from '@/lib/validations/journal';
@@ -87,7 +88,7 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/journal
- * Upsert a journal entry (creates new or updates existing for same user+date).
+ * Save a journal entry (creates new or updates existing for same user+date).
  * Always returns 201.
  */
 export async function POST(request: NextRequest) {
@@ -116,19 +117,40 @@ export async function POST(request: NextRequest) {
       ...auth.principal.profile,
     });
 
-    const journalDB = new JournalEntriesDB(supabase);
-    const entry = await journalDB.upsertEntry({
-      user_id: userId,
-      entry_date: parsed.entry_date,
+    const outcome = await createJournalWrites(supabase).save({
+      userId,
+      entryDate: parsed.entry_date,
       title: parsed.title,
       content: parsed.content,
       mood: parsed.mood,
-      word_count: parsed.word_count,
+      wordCount: parsed.word_count,
       tags: parsed.tags,
-      prompt_key: parsed.prompt_key ?? null,
+      promptKey: parsed.prompt_key ?? null,
     });
 
-    return NextResponse.json({ entry }, { status: 201 });
+    if (outcome.type === 'invalid') {
+      return NextResponse.json(
+        { error: outcome.message, field: outcome.field },
+        { status: 400 },
+      );
+    }
+    if (outcome.type === 'conflict') {
+      return NextResponse.json(
+        { error: 'Journal entry conflict' },
+        { status: 409 },
+      );
+    }
+    if (outcome.type === 'not-found') {
+      return NextResponse.json(
+        { error: 'Journal entry not found' },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json(
+      { entry: toJournalEntryResponse(outcome.entry) },
+      { status: 201 },
+    );
   } catch (error) {
     log.error('POST /api/journal error', error);
     return NextResponse.json(

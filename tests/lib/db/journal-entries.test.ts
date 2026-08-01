@@ -5,7 +5,6 @@ import { restoreMockSupabaseThen } from "../../helpers/mock-supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   JournalEntry,
-  JournalEntryInsert,
   JournalCalendarDay,
 } from "@/lib/db/types";
 
@@ -54,68 +53,6 @@ describe("JournalEntriesDB", () => {
 
   afterEach(() => {
     restoreMockSupabaseThen();
-  });
-
-  // ─── upsertEntry ──────────────────────────────────────────────────────────
-  describe("upsertEntry", () => {
-    const insertData: JournalEntryInsert = {
-      user_id: USER_ID,
-      entry_date: "2026-02-22",
-      title: "Test Entry",
-      content: { type: "doc", content: [] },
-      mood: 4,
-      word_count: 1,
-      tags: ["test"],
-      prompt_key: null,
-    };
-
-    it("upserts the entry and returns the inserted record", async () => {
-      const expected = makeEntry();
-      mockSupabaseClient.setMockResponse(expected);
-
-      const result = await db.upsertEntry(insertData);
-
-      expect(result).toEqual(expected);
-
-      // Full chain: from → upsert(row, onConflict) → select() → single()
-      mockSupabaseClient.expectQuery({
-        table: "journal_entries",
-        method: "from",
-        args: ["journal_entries"],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "journal_entries",
-        method: "upsert",
-        args: [insertData, { onConflict: "user_id,entry_date" }],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "journal_entries",
-        method: "select",
-        args: [],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "journal_entries",
-        method: "single",
-        args: [],
-      });
-
-      // Happy path must NOT log.
-      expect(log.error).not.toHaveBeenCalled();
-    });
-
-    it("logs and throws when the upsert fails", async () => {
-      const dbErr = new Error("duplicate key");
-      mockSupabaseClient.setMockResponse(null, dbErr);
-
-      await expect(db.upsertEntry(insertData)).rejects.toThrow("duplicate key");
-
-      expect(log.error).toHaveBeenCalledTimes(1);
-      expect(log.error).toHaveBeenCalledWith(
-        "JournalEntriesDB.upsertEntry failed",
-        dbErr,
-        { entry_date: insertData.entry_date },
-      );
-    });
   });
 
   // ─── getEntryByDate ───────────────────────────────────────────────────────
@@ -232,58 +169,6 @@ describe("JournalEntriesDB", () => {
       expect(log.error).toHaveBeenCalledTimes(1);
       expect(log.error).toHaveBeenCalledWith(
         "JournalEntriesDB.getEntry failed",
-        dbErr,
-        { entryId: ENTRY_ID },
-      );
-    });
-  });
-
-  // ─── updateEntry ──────────────────────────────────────────────────────────
-  describe("updateEntry", () => {
-    it("updates and returns the entry", async () => {
-      const updates = { title: "Updated Title", mood: 5 as const };
-      const expected = makeEntry({ title: "Updated Title", mood: 5 });
-      mockSupabaseClient.setMockResponse(expected);
-
-      const result = await db.updateEntry(ENTRY_ID, USER_ID, updates);
-
-      expect(result).toEqual(expected);
-
-      // Full chain: from → update → eq(id) → eq(user_id) → select → single
-      expect(mockSupabaseClient.queryLog).toEqual([
-        {
-          table: "journal_entries",
-          method: "from",
-          args: ["journal_entries"],
-        },
-        { table: "journal_entries", method: "update", args: [updates] },
-        {
-          table: "journal_entries",
-          method: "eq",
-          args: ["id", ENTRY_ID],
-        },
-        {
-          table: "journal_entries",
-          method: "eq",
-          args: ["user_id", USER_ID],
-        },
-        { table: "journal_entries", method: "select", args: [] },
-        { table: "journal_entries", method: "single", args: [] },
-      ]);
-      expect(log.error).not.toHaveBeenCalled();
-    });
-
-    it("logs and throws on db error", async () => {
-      const dbErr = new Error("update failed");
-      mockSupabaseClient.setMockResponse(null, dbErr);
-
-      await expect(
-        db.updateEntry(ENTRY_ID, USER_ID, { title: "New" }),
-      ).rejects.toThrow("update failed");
-
-      expect(log.error).toHaveBeenCalledTimes(1);
-      expect(log.error).toHaveBeenCalledWith(
-        "JournalEntriesDB.updateEntry failed",
         dbErr,
         { entryId: ENTRY_ID },
       );
