@@ -1415,6 +1415,194 @@ describe("RecurringTaskLifecycle revision behavior", () => {
     expect(resumed.status).toBe("invalid-transition");
   });
 
+  it("withdraws untouched work when ending and keeps Ended Series terminal across retries and coverage", async () => {
+    const lifecycle = new RecurringTaskLifecycle(
+      new InMemoryRecurringTaskLifecyclePersistence(),
+      { clock: () => new Date("2026-08-01T12:00:00.000Z") },
+    );
+    const created = await lifecycle.createSeries({
+      userId: "user-terminal-end",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("Terminal end"),
+      coverage: { from: "2026-08-01", to: "2026-08-06" },
+    });
+    expect(created.status).toBe("complete");
+    if (created.status !== "complete") return;
+
+    const byDate = new Map(
+      created.series.occurrences.map((occurrence) => [occurrence.scheduledDate, occurrence]),
+    );
+    await lifecycle.completeOccurrence({
+      userId: "user-terminal-end",
+      seriesId: created.series.id,
+      occurrenceId: byDate.get("2026-08-01")!.id,
+    });
+    await lifecycle.editOccurrence({
+      userId: "user-terminal-end",
+      seriesId: created.series.id,
+      occurrenceId: byDate.get("2026-08-02")!.id,
+      updates: { title: "Retained before end" },
+    });
+    await lifecycle.skipOccurrence({
+      userId: "user-terminal-end",
+      seriesId: created.series.id,
+      occurrenceId: byDate.get("2026-08-03")!.id,
+    });
+
+    const endRequest = {
+      userId: "user-terminal-end",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-04",
+      coverage: { from: "2026-08-04", to: "2026-08-08" },
+      idempotencyKey: "terminal-end",
+    };
+    const ended = await lifecycle.endSeries(endRequest);
+    expect(ended.status).toBe("complete");
+    if (ended.status !== "complete") return;
+
+    const endedByDate = new Map(
+      ended.series.occurrences.map((occurrence) => [occurrence.scheduledDate, occurrence]),
+    );
+    expect(ended.series.status).toBe("ended");
+    expect(ended.series.revisions).toHaveLength(2);
+    expect(endedByDate.get("2026-08-01")?.state).toBe("completed");
+    expect(endedByDate.get("2026-08-02")?.state).toBe("open");
+    expect(endedByDate.get("2026-08-03")?.state).toBe("skipped");
+    expect(ended.series.occurrences.filter(
+      (occurrence) => occurrence.state === "withdrawn",
+    ).map((occurrence) => occurrence.scheduledDate)).toEqual([
+      "2026-08-04",
+      "2026-08-05",
+      "2026-08-06",
+    ]);
+
+    const repeated = await lifecycle.endSeries(endRequest);
+    expect(repeated).toMatchObject({ status: "already-applied", type: "already-applied" });
+
+    const covered = await lifecycle.ensureCoverage({
+      userId: "user-terminal-end",
+      seriesId: created.series.id,
+      range: { from: "2026-08-04", to: "2026-08-10" },
+    });
+    expect(covered.status).toBe("complete");
+    if (covered.status !== "complete") return;
+    expect(covered.series.occurrences).toHaveLength(6);
+    expect(covered.series.occurrences.some(
+      (occurrence) => occurrence.scheduledDate > "2026-08-06",
+    )).toBe(false);
+    expect(await lifecycle.resumeSeries({
+      userId: "user-terminal-end",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-10",
+    })).toMatchObject({ status: "invalid-transition", type: "invalid-transition" });
+    expect(await lifecycle.endSeries({
+      userId: "user-terminal-end",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-10",
+      expectedRevisionToken: 1,
+    })).toMatchObject({ status: "conflict", type: "conflict" });
+  });
+
+  it("treats Last Scheduled Date as an inclusive boundary", async () => {
+    const lifecycle = new RecurringTaskLifecycle(
+      new InMemoryRecurringTaskLifecyclePersistence(),
+      { clock: () => new Date("2026-08-01T12:00:00.000Z") },
+    );
+    const result = await lifecycle.createSeries({
+      userId: "user-inclusive-last-date",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("Inclusive last date"),
+      lastScheduledDate: "2026-08-03",
+      coverage: { from: "2026-08-01", to: "2026-08-05" },
+    });
+    expect(result.status).toBe("complete");
+    if (result.status !== "complete") return;
+    expect(result.series.status).toBe("ended");
+    expect(result.occurrences.map((occurrence) => occurrence.scheduledDate)).toEqual([
+      "2026-08-01",
+      "2026-08-02",
+      "2026-08-03",
+    ]);
+    expect(result.series.occurrences.some(
+      (occurrence) => occurrence.scheduledDate === "2026-08-04",
+    )).toBe(false);
+  });
+
+  it("ends a Paused Series when its inclusive Last Scheduled Date is reached", async () => {
+    const lifecycle = new RecurringTaskLifecycle(
+      new InMemoryRecurringTaskLifecyclePersistence(),
+      { clock: () => new Date("2026-08-01T12:00:00.000Z") },
+    );
+    const created = await lifecycle.createSeries({
+      userId: "user-paused-end",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("Paused end"),
+      lastScheduledDate: "2026-08-03",
+      coverage: { from: "2026-08-01", to: "2026-08-01" },
+    });
+    expect(created.status).toBe("complete");
+    if (created.status !== "complete") return;
+
+    const ended = await lifecycle.pauseSeries({
+      userId: "user-paused-end",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-02",
+      coverage: { from: "2026-08-02", to: "2026-08-03" },
+    });
+    expect(ended.status).toBe("complete");
+    if (ended.status !== "complete") return;
+    expect(ended.series.status).toBe("ended");
+    expect(ended.series.occurrences.map((occurrence) => occurrence.scheduledDate)).toEqual([
+      "2026-08-01",
+    ]);
+
+    expect(await lifecycle.resumeSeries({
+      userId: "user-paused-end",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-04",
+    })).toMatchObject({ status: "invalid-transition", type: "invalid-transition" });
+  });
+
+  it("allows a Paused Series to end explicitly", async () => {
+    const lifecycle = new RecurringTaskLifecycle(
+      new InMemoryRecurringTaskLifecyclePersistence(),
+      { clock: () => new Date("2026-08-01T12:00:00.000Z") },
+    );
+    const created = await lifecycle.createSeries({
+      userId: "user-explicit-paused-end",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("Explicit paused end"),
+      coverage: { from: "2026-08-01", to: "2026-08-01" },
+    });
+    expect(created.status).toBe("complete");
+    if (created.status !== "complete") return;
+
+    const paused = await lifecycle.pauseSeries({
+      userId: "user-explicit-paused-end",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-02",
+    });
+    expect(paused.status).toBe("complete");
+
+    const ended = await lifecycle.endSeries({
+      userId: "user-explicit-paused-end",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-03",
+    });
+    expect(ended).toMatchObject({ status: "complete", type: "complete" });
+    if (ended.status !== "complete") return;
+    expect(ended.series.status).toBe("ended");
+    expect(ended.series.revisions.at(-1)?.state).toBe("ended");
+  });
+
   it("fills a coverage gap and ends exactly when the retained occurrence limit is reached", async () => {
     const lifecycle = new RecurringTaskLifecycle(
       new InMemoryRecurringTaskLifecyclePersistence(),
@@ -1449,5 +1637,128 @@ describe("RecurringTaskLifecycle revision behavior", () => {
       "2026-08-01",
       "2026-08-02",
     ]);
+  });
+
+  it("counts retained open, completed, changed, skipped, and Extra Occurrences while excluding pause-suppressed dates", async () => {
+    const lifecycle = new RecurringTaskLifecycle(
+      new InMemoryRecurringTaskLifecyclePersistence(),
+      { clock: () => new Date("2026-08-01T12:00:00.000Z") },
+    );
+    const created = await lifecycle.createSeries({
+      userId: "user-retained-count",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("Retained count"),
+      coverage: { from: "2026-08-01", to: "2026-08-07" },
+    });
+    expect(created.status).toBe("complete");
+    if (created.status !== "complete") return;
+
+    await lifecycle.completeOccurrence({
+      userId: "user-retained-count",
+      seriesId: created.series.id,
+      occurrenceId: created.occurrences[0].id,
+    });
+    await lifecycle.editOccurrence({
+      userId: "user-retained-count",
+      seriesId: created.series.id,
+      occurrenceId: created.occurrences[1].id,
+      updates: { title: "Changed" },
+    });
+    await lifecycle.skipOccurrence({
+      userId: "user-retained-count",
+      seriesId: created.series.id,
+      occurrenceId: created.occurrences[2].id,
+    });
+    await lifecycle.editOccurrence({
+      userId: "user-retained-count",
+      seriesId: created.series.id,
+      occurrenceId: created.occurrences[4].id,
+      updates: { title: "Retained override" },
+    });
+
+    const paused = await lifecycle.pauseSeries({
+      userId: "user-retained-count",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-04",
+      coverage: { from: "2026-08-04", to: "2026-08-05" },
+    });
+    expect(paused.status).toBe("complete");
+    const resumed = await lifecycle.resumeSeries({
+      userId: "user-retained-count",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-06",
+      coverage: { from: "2026-08-06", to: "2026-08-08" },
+    });
+    expect(resumed.status).toBe("complete");
+
+    const ended = await lifecycle.reviseSeries({
+      userId: "user-retained-count",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-06",
+      occurrenceLimit: 7,
+      coverage: { from: "2026-08-06", to: "2026-08-08" },
+    });
+    expect(ended.status).toBe("complete");
+    if (ended.status !== "complete") return;
+    expect(ended.series.status).toBe("ended");
+    expect(ended.series.occurrences.filter(
+      (occurrence) => occurrence.state !== "withdrawn",
+    )).toHaveLength(7);
+    expect(ended.series.occurrences.find(
+      (occurrence) => occurrence.scheduledDate === "2026-08-04",
+    )?.state).toBe("withdrawn");
+    expect(ended.series.occurrences.find(
+      (occurrence) => occurrence.scheduledDate === "2026-08-05",
+    )?.state).toBe("extra");
+  });
+
+  it("does not reopen a withdrawn occurrence after a revision moves Last Scheduled Date before it", async () => {
+    const lifecycle = new RecurringTaskLifecycle(
+      new InMemoryRecurringTaskLifecyclePersistence(),
+      { clock: () => new Date("2026-08-01T12:00:00.000Z") },
+    );
+    const created = await lifecycle.createSeries({
+      userId: "user-last-date",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("Last date"),
+      coverage: { from: "2026-08-01", to: "2026-08-05" },
+    });
+    expect(created.status).toBe("complete");
+    if (created.status !== "complete") return;
+
+    const narrowedRule = await lifecycle.reviseSeries({
+      userId: "user-last-date",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-03",
+      recurrenceRule: {
+        frequency: "weekly",
+        interval: 1,
+        days_of_week: [1],
+      },
+      coverage: { from: "2026-08-03", to: "2026-08-05" },
+    });
+    expect(narrowedRule.status).toBe("complete");
+
+    const ended = await lifecycle.reviseSeries({
+      userId: "user-last-date",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-03",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      lastScheduledDate: "2026-08-03",
+      coverage: { from: "2026-08-03", to: "2026-08-05" },
+    });
+    expect(ended.status).toBe("complete");
+    if (ended.status !== "complete") return;
+    expect(ended.series.status).toBe("ended");
+    expect(ended.series.occurrences.find(
+      (occurrence) => occurrence.scheduledDate === "2026-08-04",
+    )?.state).toBe("withdrawn");
+    expect(ended.series.occurrences.find(
+      (occurrence) => occurrence.scheduledDate === "2026-08-05",
+    )?.state).toBe("withdrawn");
   });
 });

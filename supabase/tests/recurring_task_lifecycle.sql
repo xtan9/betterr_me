@@ -147,6 +147,526 @@ begin
 end
 $$;
 
+do $stopping_policy_reconciliation$
+declare
+  v_series_id uuid;
+  v_invalid_series_id uuid;
+  v_extension_series_id uuid;
+  v_outcome jsonb;
+begin
+  v_outcome := public.recurring_task_lifecycle(
+    'create-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'recurrenceRule', jsonb_build_object('frequency', 'daily', 'interval', 1),
+      'recurrenceAnchor', '2026-08-01',
+      'activationDate', '2026-08-01',
+      'defaults', jsonb_build_object('title', 'Stopping policy revision'),
+      'coverage', jsonb_build_object('from', '2026-08-01', 'to', '2026-08-05'),
+      'idempotencyKey', 'stopping-revision-create-684'
+    )
+  );
+  v_series_id := (v_outcome->'series'->>'id')::uuid;
+
+  v_outcome := public.recurring_task_lifecycle(
+    'revise-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'effectiveDate', '2026-08-03',
+      'recurrenceRule', jsonb_build_object(
+        'frequency', 'weekly',
+        'interval', 1,
+        'days_of_week', jsonb_build_array(1)
+      ),
+      'coverage', jsonb_build_object('from', '2026-08-03', 'to', '2026-08-05'),
+      'idempotencyKey', 'stopping-revision-weekly-684'
+    )
+  );
+  if (select state from public.recurring_task_occurrences occurrence
+      where occurrence.series_id = v_series_id
+        and occurrence.scheduled_date = date '2026-08-04') <> 'withdrawn'
+     or (select state from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = date '2026-08-05') <> 'withdrawn' then
+    raise exception 'revision did not withdraw obsolete open work';
+  end if;
+
+  v_outcome := public.recurring_task_lifecycle(
+    'revise-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'effectiveDate', '2026-08-03',
+      'recurrenceRule', jsonb_build_object('frequency', 'daily', 'interval', 1),
+      'lastScheduledDate', '2026-08-03',
+      'coverage', jsonb_build_object('from', '2026-08-03', 'to', '2026-08-05'),
+      'idempotencyKey', 'stopping-revision-last-date-684'
+    )
+  );
+  if v_outcome->>'status' <> 'complete'
+     or v_outcome->'series'->>'status' <> 'ended'
+     or (select state from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = date '2026-08-04') <> 'withdrawn'
+     or (select state from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = date '2026-08-05') <> 'withdrawn' then
+    raise exception 'Last Scheduled Date reopened or retained work after its inclusive boundary: %', v_outcome;
+  end if;
+
+  v_outcome := public.recurring_task_lifecycle(
+    'create-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'recurrenceRule', jsonb_build_object('frequency', 'daily', 'interval', 1),
+      'recurrenceAnchor', '2026-08-01',
+      'activationDate', '2026-08-01',
+      'defaults', jsonb_build_object('title', 'Stopping policy extension'),
+      'coverage', jsonb_build_object('from', '2026-08-01', 'to', '2026-08-02'),
+      'idempotencyKey', 'stopping-extension-create-684'
+    )
+  );
+  v_extension_series_id := (v_outcome->'series'->>'id')::uuid;
+  v_outcome := public.recurring_task_lifecycle(
+    'revise-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_extension_series_id,
+      'effectiveDate', '2026-08-03',
+      'lastScheduledDate', '2026-08-05',
+      'coverage', jsonb_build_object('from', '2026-08-03', 'to', '2026-08-05'),
+      'idempotencyKey', 'stopping-extension-revision-684'
+    )
+  );
+  if v_outcome->>'status' <> 'complete'
+     or (select count(*) from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_extension_series_id) <> 5
+     or not exists (
+       select 1
+       from public.recurring_task_occurrences occurrence
+       where occurrence.series_id = v_extension_series_id
+         and occurrence.scheduled_date = date '2026-08-05'
+     )
+     or v_outcome->'series'->>'status' <> 'ended' then
+    raise exception 'Last Scheduled Date extension did not materialize its inclusive boundary: %', v_outcome;
+  end if;
+
+  v_outcome := public.recurring_task_lifecycle(
+    'create-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'recurrenceRule', jsonb_build_object('frequency', 'daily', 'interval', 1),
+      'recurrenceAnchor', '2026-08-01',
+      'activationDate', '2026-08-01',
+      'defaults', jsonb_build_object('title', 'End validation'),
+      'coverage', jsonb_build_object('from', '2026-08-01', 'to', '2026-08-01'),
+      'idempotencyKey', 'end-validation-create-684'
+    )
+  );
+  v_invalid_series_id := (v_outcome->'series'->>'id')::uuid;
+
+  begin
+    v_outcome := public.recurring_task_lifecycle(
+      'end-series',
+      jsonb_build_object(
+        'userId', '65900000-0000-0000-0000-000000000001',
+        'seriesId', v_invalid_series_id,
+        'effectiveDate', 'not-a-local-date'
+      )
+    );
+  exception when others then
+    raise exception 'invalid end request raised instead of returning a typed outcome';
+  end;
+  if v_outcome->>'status' <> 'invalid-transition'
+     or v_outcome->>'type' <> 'invalid-transition' then
+    raise exception 'invalid end request was not typed: %', v_outcome;
+  end if;
+
+  begin
+    v_outcome := public.recurring_task_lifecycle(
+      'end-series',
+      jsonb_build_object(
+        'userId', '65900000-0000-0000-0000-000000000001',
+        'seriesId', 'not-a-series-id',
+        'effectiveDate', '2026-08-01'
+      )
+    );
+  exception when others then
+    raise exception 'missing end request raised instead of returning a typed outcome';
+  end;
+  if v_outcome->>'status' <> 'not-found'
+     or v_outcome->>'type' <> 'not-found' then
+    raise exception 'missing end request disclosed or was not typed: %', v_outcome;
+  end if;
+
+  v_outcome := public.recurring_task_lifecycle(
+    'end-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000002',
+      'seriesId', v_invalid_series_id,
+      'effectiveDate', '2026-08-01'
+    )
+  );
+  if v_outcome->>'status' <> 'not-found'
+     or v_outcome->>'type' <> 'not-found' then
+    raise exception 'cross-owner end request disclosed the Series: %', v_outcome;
+  end if;
+end
+$stopping_policy_reconciliation$;
+
+do $end_terminal$
+declare
+  v_series_id uuid;
+  v_outcome jsonb;
+  v_occurrence_id uuid;
+begin
+  perform set_config(
+    'request.jwt.claims',
+    '{"sub":"65900000-0000-0000-0000-000000000001"}',
+    true
+  );
+  v_outcome := public.recurring_task_lifecycle(
+    'create-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'recurrenceRule', jsonb_build_object('frequency', 'daily', 'interval', 1),
+      'recurrenceAnchor', '2026-08-01',
+      'activationDate', '2026-08-01',
+      'defaults', jsonb_build_object('title', 'Terminal end'),
+      'coverage', jsonb_build_object('from', '2026-08-01', 'to', '2026-08-06'),
+      'idempotencyKey', 'end-terminal-create-684'
+    )
+  );
+  if v_outcome->>'status' <> 'complete' then
+    raise exception 'end terminal setup failed: %', v_outcome;
+  end if;
+  v_series_id := (v_outcome->'series'->>'id')::uuid;
+
+  select occurrence.id into v_occurrence_id
+  from public.recurring_task_occurrences occurrence
+  where occurrence.series_id = v_series_id
+    and occurrence.scheduled_date = date '2026-08-01';
+  v_outcome := public.recurring_task_lifecycle(
+    'complete-occurrence',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'occurrenceId', v_occurrence_id,
+      'idempotencyKey', 'end-terminal-complete-684'
+    )
+  );
+
+  select occurrence.id into v_occurrence_id
+  from public.recurring_task_occurrences occurrence
+  where occurrence.series_id = v_series_id
+    and occurrence.scheduled_date = date '2026-08-02';
+  v_outcome := public.recurring_task_lifecycle(
+    'edit-occurrence',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'occurrenceId', v_occurrence_id,
+      'updates', jsonb_build_object('title', 'Retained before end'),
+      'idempotencyKey', 'end-terminal-edit-684'
+    )
+  );
+
+  select occurrence.id into v_occurrence_id
+  from public.recurring_task_occurrences occurrence
+  where occurrence.series_id = v_series_id
+    and occurrence.scheduled_date = date '2026-08-03';
+  v_outcome := public.recurring_task_lifecycle(
+    'skip-occurrence',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'occurrenceId', v_occurrence_id,
+      'idempotencyKey', 'end-terminal-skip-684'
+    )
+  );
+  v_outcome := public.recurring_task_lifecycle(
+    'end-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'effectiveDate', '2026-08-04',
+      'coverage', jsonb_build_object('from', '2026-08-04', 'to', '2026-08-08'),
+      'idempotencyKey', 'end-terminal-684'
+    )
+  );
+  if v_outcome->>'status' <> 'complete'
+     or v_outcome->'series'->>'status' <> 'ended'
+     or (select count(*) from public.recurring_task_series_revisions revision
+         where revision.series_id = v_series_id) <> 2
+     or (select state from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = date '2026-08-01') <> 'completed'
+     or (select state from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = date '2026-08-02') <> 'open'
+     or (select state from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = date '2026-08-03') <> 'skipped'
+     or (select count(*) from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.state = 'withdrawn') <> 3 then
+    raise exception 'end did not retain history and withdraw untouched open work: %', v_outcome;
+  end if;
+
+  v_outcome := public.recurring_task_lifecycle(
+    'end-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'effectiveDate', '2026-08-04',
+      'coverage', jsonb_build_object('from', '2026-08-04', 'to', '2026-08-08'),
+      'idempotencyKey', 'end-terminal-684'
+    )
+  );
+  if v_outcome->>'status' <> 'already-applied' then
+    raise exception 'repeated end did not replay idempotently: %', v_outcome;
+  end if;
+
+  v_outcome := public.recurring_task_lifecycle(
+    'ensure-coverage',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'range', jsonb_build_object('from', '2026-08-04', 'to', '2026-08-10'),
+      'idempotencyKey', 'end-terminal-coverage-684'
+    )
+  );
+  if v_outcome->>'status' <> 'complete'
+     or (select count(*) from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id) <> 6
+     or exists (
+       select 1 from public.recurring_task_occurrences occurrence
+       where occurrence.series_id = v_series_id
+         and occurrence.scheduled_date > date '2026-08-06'
+     ) then
+    raise exception 'Ended Series materialized later work: %', v_outcome;
+  end if;
+
+  v_outcome := public.recurring_task_lifecycle(
+    'resume-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'effectiveDate', '2026-08-10'
+    )
+  );
+  if v_outcome->>'status' <> 'invalid-transition'
+     or v_outcome->>'type' <> 'invalid-transition' then
+    raise exception 'Ended Series was resumable: %', v_outcome;
+  end if;
+end
+$end_terminal$;
+
+do $retained_limit$
+declare
+  v_series_id uuid;
+  v_occurrence_id uuid;
+  v_outcome jsonb;
+begin
+  perform set_config(
+    'request.jwt.claims',
+    '{"sub":"65900000-0000-0000-0000-000000000001"}',
+    true
+  );
+  v_outcome := public.recurring_task_lifecycle(
+    'create-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'recurrenceRule', jsonb_build_object('frequency', 'daily', 'interval', 1),
+      'recurrenceAnchor', '2026-08-01',
+      'activationDate', '2026-08-01',
+      'defaults', jsonb_build_object('title', 'Retained limit'),
+      'coverage', jsonb_build_object('from', '2026-08-01', 'to', '2026-08-07'),
+      'idempotencyKey', 'retained-limit-create-684'
+    )
+  );
+  v_series_id := (v_outcome->'series'->>'id')::uuid;
+
+  select occurrence.id into v_occurrence_id
+  from public.recurring_task_occurrences occurrence
+  where occurrence.series_id = v_series_id
+    and occurrence.scheduled_date = date '2026-08-01';
+  perform public.recurring_task_lifecycle(
+    'complete-occurrence',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'occurrenceId', v_occurrence_id
+    )
+  );
+
+  select occurrence.id into v_occurrence_id
+  from public.recurring_task_occurrences occurrence
+  where occurrence.series_id = v_series_id
+    and occurrence.scheduled_date = date '2026-08-02';
+  perform public.recurring_task_lifecycle(
+    'edit-occurrence',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'occurrenceId', v_occurrence_id,
+      'updates', jsonb_build_object('title', 'Changed retained'),
+      'idempotencyKey', 'retained-limit-edit-684'
+    )
+  );
+
+  select occurrence.id into v_occurrence_id
+  from public.recurring_task_occurrences occurrence
+  where occurrence.series_id = v_series_id
+    and occurrence.scheduled_date = date '2026-08-03';
+  perform public.recurring_task_lifecycle(
+    'skip-occurrence',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'occurrenceId', v_occurrence_id
+    )
+  );
+
+  select occurrence.id into v_occurrence_id
+  from public.recurring_task_occurrences occurrence
+  where occurrence.series_id = v_series_id
+    and occurrence.scheduled_date = date '2026-08-05';
+  perform public.recurring_task_lifecycle(
+    'edit-occurrence',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'occurrenceId', v_occurrence_id,
+      'updates', jsonb_build_object('title', 'Extra retained'),
+      'idempotencyKey', 'retained-limit-extra-684'
+    )
+  );
+
+  perform public.recurring_task_lifecycle(
+    'pause-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'effectiveDate', '2026-08-04',
+      'coverage', jsonb_build_object('from', '2026-08-04', 'to', '2026-08-05')
+    )
+  );
+  perform public.recurring_task_lifecycle(
+    'resume-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'effectiveDate', '2026-08-06',
+      'coverage', jsonb_build_object('from', '2026-08-06', 'to', '2026-08-08')
+    )
+  );
+  v_outcome := public.recurring_task_lifecycle(
+    'revise-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'effectiveDate', '2026-08-06',
+      'occurrenceLimit', 7,
+      'coverage', jsonb_build_object('from', '2026-08-06', 'to', '2026-08-08'),
+      'idempotencyKey', 'retained-limit-revision-684'
+    )
+  );
+  if v_outcome->>'status' <> 'complete'
+     or v_outcome->'series'->>'status' <> 'ended'
+     or (select count(*) from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.state <> 'withdrawn') <> 7
+     or (select state from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = date '2026-08-04') <> 'withdrawn'
+     or (select state from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = date '2026-08-05') <> 'extra'
+     or not exists (
+       select 1 from public.recurring_task_intentional_absences absence
+       where absence.series_id = v_series_id
+         and absence.scheduled_date = date '2026-08-04'
+         and absence.reason = 'paused'
+     ) then
+    raise exception 'Occurrence Limit did not count retained history exactly: %', v_outcome;
+  end if;
+end
+$retained_limit$;
+
+do $end_rollback$
+declare
+  v_series_id uuid;
+  v_outcome jsonb;
+  v_request jsonb;
+  v_failed boolean := false;
+begin
+  perform set_config(
+    'request.jwt.claims',
+    '{"sub":"65900000-0000-0000-0000-000000000001"}',
+    true
+  );
+  create function pg_temp.fail_end_withdrawal()
+  returns trigger
+  language plpgsql
+  as $function$
+  begin
+    if new.recurrence_occurrence_state = 'withdrawn'
+       and current_setting('betterr.allow_end_withdrawal', true)
+           is distinct from 'on' then
+      raise exception 'fixture end withdrawal rollback probe';
+    end if;
+    return new;
+  end
+  $function$;
+  create trigger recurring_lifecycle_fixture_end_failure
+  before update on public.tasks
+  for each row execute function pg_temp.fail_end_withdrawal();
+
+  v_outcome := public.recurring_task_lifecycle(
+    'create-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'recurrenceRule', jsonb_build_object('frequency', 'daily', 'interval', 1),
+      'recurrenceAnchor', '2026-08-01',
+      'activationDate', '2026-08-01',
+      'defaults', jsonb_build_object('title', 'End rollback'),
+      'coverage', jsonb_build_object('from', '2026-08-01', 'to', '2026-08-03'),
+      'idempotencyKey', 'end-rollback-create-684'
+    )
+  );
+  v_series_id := (v_outcome->'series'->>'id')::uuid;
+  v_request := jsonb_build_object(
+    'userId', '65900000-0000-0000-0000-000000000001',
+    'seriesId', v_series_id,
+    'effectiveDate', '2026-08-02',
+    'coverage', jsonb_build_object('from', '2026-08-02', 'to', '2026-08-04'),
+    'idempotencyKey', 'end-rollback-684'
+  );
+
+  begin
+    perform public.recurring_task_lifecycle('end-series', v_request);
+  exception when others then
+    v_failed := true;
+  end;
+  if not v_failed
+     or (select status from public.recurring_task_series where id = v_series_id) <> 'active'
+     or (select count(*) from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.state = 'open') <> 3 then
+    raise exception 'failed end did not roll back completely';
+  end if;
+
+  perform set_config('betterr.allow_end_withdrawal', 'on', true);
+  v_outcome := public.recurring_task_lifecycle('end-series', v_request);
+  if v_outcome->>'status' <> 'complete'
+     or v_outcome->'series'->>'status' <> 'ended' then
+    raise exception 'end retry after rollback did not converge: %', v_outcome;
+  end if;
+end
+$end_rollback$;
+
 do $$
 declare
   v_series_id uuid;
