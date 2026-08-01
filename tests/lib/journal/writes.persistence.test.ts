@@ -19,6 +19,14 @@ const entryRow = {
   updated_at: "2026-08-01T12:01:00.000Z",
 };
 
+const linkRow = {
+  id: "link-1",
+  entry_id: "entry-1",
+  link_type: "habit" as const,
+  link_id: "habit-1",
+  created_at: "2026-08-01T12:00:00.000Z",
+};
+
 describe("SupabaseJournalSavePersistence", () => {
   const rpc = vi.fn();
   let persistence: SupabaseJournalSavePersistence;
@@ -155,5 +163,111 @@ describe("SupabaseJournalSavePersistence", () => {
     expect(first).toMatchObject({ type: "created", entry: { id: "entry-1" } });
     expect(second).toMatchObject({ type: "updated", entry: { id: "entry-1" } });
     expect(rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["habit", "task", "project"] as const)(
+    "maps the ownership-aware %s link RPC into a domain record",
+    async (linkType) => {
+      rpc.mockResolvedValue({
+        data: {
+          type: "linked",
+          link: { ...linkRow, link_type: linkType, link_id: `${linkType}-1` },
+        },
+        error: null,
+      });
+
+      await expect(
+        persistence.linkEntry({
+          userId: "user-1",
+          entryId: "entry-1",
+          linkType,
+          targetId: `${linkType}-1`,
+        }),
+      ).resolves.toEqual({
+        type: "linked",
+        link: {
+          id: "link-1",
+          entryId: "entry-1",
+          linkType,
+          targetId: `${linkType}-1`,
+          createdAt: "2026-08-01T12:00:00.000Z",
+        },
+      });
+
+      expect(rpc).toHaveBeenCalledWith("link_journal_entry", {
+        p_user_id: "user-1",
+        p_entry_id: "entry-1",
+        p_link_type: linkType,
+        p_link_id: `${linkType}-1`,
+      });
+    },
+  );
+
+  it.each([
+    ["already-applied", { type: "already-applied" as const, link: linkRow }],
+    ["conflict", { type: "conflict" as const }],
+    ["not-found", { type: "not-found" as const }],
+  ])("preserves the %s link database outcome", async (_label, outcome) => {
+    rpc.mockResolvedValue({ data: outcome, error: null });
+
+    await expect(
+      persistence.linkEntry({
+        userId: "user-1",
+        entryId: "entry-1",
+        linkType: "habit",
+        targetId: "habit-1",
+      }),
+    ).resolves.toMatchObject({ type: outcome.type });
+  });
+
+  it("maps an unlink RPC and propagates unexpected link failures", async () => {
+    rpc.mockResolvedValueOnce({
+      data: { type: "unlinked", link: linkRow },
+      error: null,
+    });
+
+    await expect(
+      persistence.unlinkEntry({
+        userId: "user-1",
+        entryId: "entry-1",
+        linkId: "link-1",
+      }),
+    ).resolves.toEqual({
+      type: "unlinked",
+      link: {
+        id: "link-1",
+        entryId: "entry-1",
+        linkType: "habit",
+        targetId: "habit-1",
+        createdAt: "2026-08-01T12:00:00.000Z",
+      },
+    });
+    expect(rpc).toHaveBeenCalledWith("unlink_journal_entry", {
+      p_user_id: "user-1",
+      p_entry_id: "entry-1",
+      p_link_id: "link-1",
+    });
+
+    const failure = { code: "42P01", message: "function missing" };
+    rpc.mockResolvedValue({ data: null, error: failure });
+    await expect(
+      persistence.unlinkEntry({
+        userId: "user-1",
+        entryId: "entry-1",
+        linkId: "link-1",
+      }),
+    ).rejects.toBe(failure);
+
+    rpc.mockResolvedValue({
+      data: { type: "unlinked", link: { id: "link-1" } },
+      error: null,
+    });
+    await expect(
+      persistence.unlinkEntry({
+        userId: "user-1",
+        entryId: "entry-1",
+        linkId: "link-1",
+      }),
+    ).rejects.toThrow("Invalid journal link");
   });
 });

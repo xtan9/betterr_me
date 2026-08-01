@@ -4,12 +4,15 @@ import { NextRequest } from "next/server";
 
 const mockLinksDB = {
   getLinksForEntry: vi.fn(),
-  addLink: vi.fn(),
-  removeLink: vi.fn(),
 };
 
 const mockJournalDB = {
   getEntry: vi.fn(),
+};
+
+const mockJournalWrites = {
+  link: vi.fn(),
+  unlink: vi.fn(),
 };
 
 // Track supabase query calls for enrichment
@@ -39,6 +42,23 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
+vi.mock("@/lib/journal/writes", () => ({
+  createJournalWrites: vi.fn(() => mockJournalWrites),
+  toJournalLinkResponse: (link: {
+    id: string;
+    entryId: string;
+    linkType: string;
+    targetId: string;
+    createdAt: string;
+  }) => ({
+    id: link.id,
+    entry_id: link.entryId,
+    link_type: link.linkType,
+    link_id: link.targetId,
+    created_at: link.createdAt,
+  }),
+}));
+
 import { createClient } from "@/lib/supabase/server";
 
 const makeParams = (id: string) => Promise.resolve({ id });
@@ -49,6 +69,16 @@ const mockLink = {
   link_type: "habit" as const,
   link_id: "habit-abc",
   created_at: "2026-02-23T10:00:00Z",
+};
+
+const mutationEntryId = "d47f3c2a-1234-4abc-9def-0123456789aa";
+const mutationTargetId = "d47f3c2a-1234-4abc-9def-0123456789ab";
+const mutationLink = {
+  id: "d47f3c2a-1234-4abc-9def-0123456789ac",
+  entryId: mutationEntryId,
+  linkType: "habit" as const,
+  targetId: mutationTargetId,
+  createdAt: "2026-02-23T10:00:00Z",
 };
 
 describe("GET /api/journal/[id]/links", () => {
@@ -171,47 +201,136 @@ describe("POST /api/journal/[id]/links", () => {
   });
 
   it("creates link with valid body and returns 201", async () => {
-    mockJournalDB.getEntry.mockResolvedValue({
-      id: "entry-123",
-      user_id: "user-123",
+    mockJournalWrites.link.mockResolvedValue({
+      type: "linked",
+      link: mutationLink,
     });
-    mockLinksDB.addLink.mockResolvedValue(mockLink);
 
-    const request = new NextRequest("http://localhost:3000/api/journal/entry-123/links", {
+    const request = new NextRequest(`http://localhost:3000/api/journal/${mutationEntryId}/links`, {
       method: "POST",
       body: JSON.stringify({
         link_type: "habit",
-        link_id: "d47f3c2a-1234-4abc-9def-0123456789ab",
+        link_id: mutationTargetId,
       }),
     });
-    const response = await POST(request, { params: makeParams("entry-123") });
+    const response = await POST(request, { params: makeParams(mutationEntryId) });
     const data = await response.json();
 
     expect(response.status).toBe(201);
-    expect(data.link).toEqual(mockLink);
+    expect(data.link).toEqual({
+      id: mutationLink.id,
+      entry_id: mutationEntryId,
+      link_type: "habit",
+      link_id: mutationTargetId,
+      created_at: mutationLink.createdAt,
+    });
+    expect(mockJournalWrites.link).toHaveBeenCalledWith({
+      userId: "user-123",
+      entryId: mutationEntryId,
+      linkType: "habit",
+      targetId: mutationTargetId,
+    });
+    expect(mockJournalDB.getEntry).not.toHaveBeenCalled();
+  });
+
+  it.each(["habit", "task", "project"] as const)(
+    "passes the %s link type through the shared mutation",
+    async (linkType) => {
+      mockJournalWrites.link.mockResolvedValue({
+        type: "linked",
+        link: { ...mutationLink, linkType },
+      });
+
+      const request = new NextRequest(`http://localhost:3000/api/journal/${mutationEntryId}/links`, {
+        method: "POST",
+        body: JSON.stringify({
+          link_type: linkType,
+          link_id: mutationTargetId,
+        }),
+      });
+      const response = await POST(request, { params: makeParams(mutationEntryId) });
+
+      expect(response.status).toBe(201);
+      expect(mockJournalWrites.link).toHaveBeenCalledWith({
+        userId: "user-123",
+        entryId: mutationEntryId,
+        linkType,
+        targetId: mutationTargetId,
+      });
+    },
+  );
+
+  it("maps a duplicate link to an already-applied success without writing directly", async () => {
+    mockJournalWrites.link.mockResolvedValue({
+      type: "already-applied",
+      link: mutationLink,
+    });
+
+    const request = new NextRequest(`http://localhost:3000/api/journal/${mutationEntryId}/links`, {
+      method: "POST",
+      body: JSON.stringify({
+        link_type: "habit",
+        link_id: mutationTargetId,
+      }),
+    });
+    const response = await POST(request, { params: makeParams(mutationEntryId) });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.link.entry_id).toBe(mutationEntryId);
+  });
+
+  it.each([
+    ["not-found", 404, "Journal entry or link target not found"],
+    ["conflict", 409, "Journal entry link conflict"],
+  ] as const)("maps a %s domain outcome", async (type, status, error) => {
+    mockJournalWrites.link.mockResolvedValue({ type });
+
+    const request = new NextRequest(`http://localhost:3000/api/journal/${mutationEntryId}/links`, {
+      method: "POST",
+      body: JSON.stringify({
+        link_type: "project",
+        link_id: mutationTargetId,
+      }),
+    });
+    const response = await POST(request, { params: makeParams(mutationEntryId) });
+
+    expect(response.status).toBe(status);
+    await expect(response.json()).resolves.toEqual({ error });
   });
 
   it("returns 400 for invalid body", async () => {
-    const request = new NextRequest("http://localhost:3000/api/journal/entry-123/links", {
+    const request = new NextRequest(`http://localhost:3000/api/journal/${mutationEntryId}/links`, {
       method: "POST",
       body: JSON.stringify({ link_type: "invalid_type" }),
     });
-    const response = await POST(request, { params: makeParams("entry-123") });
+    const response = await POST(request, { params: makeParams(mutationEntryId) });
 
     expect(response.status).toBe(400);
   });
 
-  it("returns 404 when entry not found", async () => {
-    mockJournalDB.getEntry.mockResolvedValue(null);
+  it("returns 400 for an invalid entry ID without calling the mutation", async () => {
+    const request = new NextRequest("http://localhost:3000/api/journal/not-an-entry/links", {
+      method: "POST",
+      body: JSON.stringify({ link_type: "habit", link_id: mutationTargetId }),
+    });
+    const response = await POST(request, { params: makeParams("not-an-entry") });
 
-    const request = new NextRequest("http://localhost:3000/api/journal/entry-123/links", {
+    expect(response.status).toBe(400);
+    expect(mockJournalWrites.link).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 when entry not found", async () => {
+    mockJournalWrites.link.mockResolvedValue({ type: "not-found" });
+
+    const request = new NextRequest(`http://localhost:3000/api/journal/${mutationEntryId}/links`, {
       method: "POST",
       body: JSON.stringify({
         link_type: "habit",
-        link_id: "d47f3c2a-1234-4abc-9def-0123456789ab",
+        link_id: mutationTargetId,
       }),
     });
-    const response = await POST(request, { params: makeParams("entry-123") });
+    const response = await POST(request, { params: makeParams(mutationEntryId) });
 
     expect(response.status).toBe(404);
   });
@@ -238,46 +357,89 @@ describe("DELETE /api/journal/[id]/links", () => {
       from: mockFrom,
     } as any);
 
-    const request = new NextRequest("http://localhost:3000/api/journal/entry-123/links?link_id=link-1", {
+    const request = new NextRequest(`http://localhost:3000/api/journal/${mutationEntryId}/links?link_id=${mutationTargetId}`, {
       method: "DELETE",
     });
-    const response = await DELETE(request, { params: makeParams("entry-123") });
+    const response = await DELETE(request, { params: makeParams(mutationEntryId) });
 
     expect(response.status).toBe(401);
   });
 
   it("removes link and returns success", async () => {
-    mockLinksDB.removeLink.mockResolvedValue(undefined);
+    mockJournalWrites.unlink.mockResolvedValue({
+      type: "unlinked",
+      link: mutationLink,
+    });
 
-    const request = new NextRequest("http://localhost:3000/api/journal/entry-123/links?link_id=link-1", {
+    const request = new NextRequest(`http://localhost:3000/api/journal/${mutationEntryId}/links?link_id=${mutationTargetId}`, {
       method: "DELETE",
     });
-    const response = await DELETE(request, { params: makeParams("entry-123") });
+    const response = await DELETE(request, { params: makeParams(mutationEntryId) });
     const data = await response.json();
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(mockLinksDB.removeLink).toHaveBeenCalledWith("link-1", "entry-123");
+    expect(mockJournalWrites.unlink).toHaveBeenCalledWith({
+      userId: "user-123",
+      entryId: mutationEntryId,
+      linkId: mutationTargetId,
+    });
+    expect(mockJournalDB.getEntry).not.toHaveBeenCalled();
   });
 
   it("returns 400 when link_id param is missing", async () => {
-    const request = new NextRequest("http://localhost:3000/api/journal/entry-123/links", {
+    const request = new NextRequest(`http://localhost:3000/api/journal/${mutationEntryId}/links`, {
       method: "DELETE",
     });
-    const response = await DELETE(request, { params: makeParams("entry-123") });
+    const response = await DELETE(request, { params: makeParams(mutationEntryId) });
 
     expect(response.status).toBe(400);
   });
 
-  it("returns 404 when entry not owned by user", async () => {
-    mockJournalDB.getEntry.mockResolvedValue(null);
-
-    const request = new NextRequest("http://localhost:3000/api/journal/entry-123/links?link_id=link-1", {
+  it("returns 400 for an invalid entry ID without calling the mutation", async () => {
+    const request = new NextRequest(`http://localhost:3000/api/journal/not-an-entry/links?link_id=${mutationTargetId}`, {
       method: "DELETE",
     });
-    const response = await DELETE(request, { params: makeParams("entry-123") });
+    const response = await DELETE(request, { params: makeParams("not-an-entry") });
+
+    expect(response.status).toBe(400);
+    expect(mockJournalWrites.unlink).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when link_id is not a UUID", async () => {
+    const request = new NextRequest(`http://localhost:3000/api/journal/${mutationEntryId}/links?link_id=not-a-uuid`, {
+      method: "DELETE",
+    });
+    const response = await DELETE(request, { params: makeParams(mutationEntryId) });
+
+    expect(response.status).toBe(400);
+    expect(mockJournalWrites.unlink).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 when entry not owned by user", async () => {
+    mockJournalWrites.unlink.mockResolvedValue({ type: "not-found" });
+
+    const request = new NextRequest(`http://localhost:3000/api/journal/${mutationEntryId}/links?link_id=${mutationTargetId}`, {
+      method: "DELETE",
+    });
+    const response = await DELETE(request, { params: makeParams(mutationEntryId) });
 
     expect(response.status).toBe(404);
+  });
+
+  it.each([
+    ["not-found", 404, "Journal entry link not found"],
+    ["conflict", 409, "Journal entry link conflict"],
+  ] as const)("maps a %s unlink outcome", async (type, status, error) => {
+    mockJournalWrites.unlink.mockResolvedValue({ type });
+
+    const request = new NextRequest(`http://localhost:3000/api/journal/${mutationEntryId}/links?link_id=${mutationTargetId}`, {
+      method: "DELETE",
+    });
+    const response = await DELETE(request, { params: makeParams(mutationEntryId) });
+
+    expect(response.status).toBe(status);
+    await expect(response.json()).resolves.toEqual({ error });
   });
 });
 
@@ -484,18 +646,17 @@ describe("POST /api/journal/[id]/links — error paths", () => {
     } as any);
   });
 
-  it("returns 500 when addLink throws", async () => {
-    mockJournalDB.getEntry.mockResolvedValue({ id: "entry-123", user_id: "user-123" });
-    mockLinksDB.addLink.mockRejectedValue(new Error("insert failed"));
+  it("returns 500 when the Journal link mutation throws", async () => {
+    mockJournalWrites.link.mockRejectedValue(new Error("insert failed"));
 
-    const request = new NextRequest("http://localhost:3000/api/journal/entry-123/links", {
+    const request = new NextRequest(`http://localhost:3000/api/journal/${mutationEntryId}/links`, {
       method: "POST",
       body: JSON.stringify({
         link_type: "habit",
-        link_id: "d47f3c2a-1234-4abc-9def-0123456789ab",
+        link_id: mutationTargetId,
       }),
     });
-    const response = await POST(request, { params: makeParams("entry-123") });
+    const response = await POST(request, { params: makeParams(mutationEntryId) });
     const data = await response.json();
 
     expect(response.status).toBe(500);
@@ -517,13 +678,13 @@ describe("DELETE /api/journal/[id]/links — error paths", () => {
     mockJournalDB.getEntry.mockResolvedValue({ id: "entry-123", user_id: "user-123" });
   });
 
-  it("returns 500 when removeLink throws", async () => {
-    mockLinksDB.removeLink.mockRejectedValue(new Error("delete failed"));
+  it("returns 500 when the Journal unlink mutation throws", async () => {
+    mockJournalWrites.unlink.mockRejectedValue(new Error("delete failed"));
 
-    const request = new NextRequest("http://localhost:3000/api/journal/entry-123/links?link_id=link-1", {
+    const request = new NextRequest(`http://localhost:3000/api/journal/${mutationEntryId}/links?link_id=${mutationTargetId}`, {
       method: "DELETE",
     });
-    const response = await DELETE(request, { params: makeParams("entry-123") });
+    const response = await DELETE(request, { params: makeParams(mutationEntryId) });
     const data = await response.json();
 
     expect(response.status).toBe(500);

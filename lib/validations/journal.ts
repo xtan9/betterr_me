@@ -28,9 +28,13 @@ export const journalEntryUpdateSchema = journalEntryFormSchema
 
 export type JournalEntryUpdateValues = z.infer<typeof journalEntryUpdateSchema>;
 
+export const journalLinkIdSchema = z.string().uuid("Invalid link ID");
+
+export const journalEntryIdSchema = z.string().uuid("Invalid entry ID");
+
 export const journalLinkSchema = z.object({
   link_type: z.enum(["habit", "task", "project"]),
-  link_id: z.string().uuid("Invalid link ID"),
+  link_id: journalLinkIdSchema,
 });
 
 export type JournalLinkValues = z.infer<typeof journalLinkSchema>;

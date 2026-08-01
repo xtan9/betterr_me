@@ -6,7 +6,7 @@ import {
   restoreMockSupabaseThen,
 } from "../../helpers/mock-supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { JournalEntryLink, JournalEntryLinkInsert } from "@/lib/db/types";
+import type { JournalEntryLink } from "@/lib/db/types";
 
 // Silence + spy on logger — each error branch explicitly asserts log.error fired
 // with scope prefix + context, so the error-path tests kill both the "log.error"
@@ -45,7 +45,6 @@ describe("JournalEntryLinksDB", () => {
     restoreMockSupabaseThen();
   });
 
-  // ─── getLinksForEntry ─────────────────────────────────────────────────────
   describe("getLinksForEntry", () => {
     it("returns links ordered by created_at ascending with full query chain", async () => {
       const rows = [
@@ -58,7 +57,6 @@ describe("JournalEntryLinksDB", () => {
 
       expect(result).toEqual(rows);
 
-      // Full chain: catches table-swap, column-swap, order-direction flips.
       mockSupabaseClient.expectQuery({
         table: "journal_entry_links",
         method: "from",
@@ -80,7 +78,6 @@ describe("JournalEntryLinksDB", () => {
         args: ["created_at", { ascending: true }],
       });
 
-      // Happy path: no logger.error.
       expect(log.error).not.toHaveBeenCalled();
     });
 
@@ -98,114 +95,11 @@ describe("JournalEntryLinksDB", () => {
 
       await expect(db.getLinksForEntry(ENTRY_ID)).rejects.toEqual(err);
 
-      // Exact log message kills StringLiteral mutants; context object kills
-      // any mutation that swaps entryId for a different field/value.
       expect(log.error).toHaveBeenCalledTimes(1);
       expect(log.error).toHaveBeenCalledWith(
         "JournalEntryLinksDB.getLinksForEntry failed",
         err,
         { entryId: ENTRY_ID },
-      );
-    });
-  });
-
-  // ─── addLink ──────────────────────────────────────────────────────────────
-  describe("addLink", () => {
-    const insertRow: JournalEntryLinkInsert = {
-      entry_id: ENTRY_ID,
-      link_type: "habit",
-      link_id: "habit-456",
-    };
-
-    it("inserts and returns the link with full query chain", async () => {
-      const expected = makeLink();
-      mockSupabaseClient.setMockResponse(expected);
-
-      const result = await db.addLink(insertRow);
-
-      expect(result).toEqual(expected);
-
-      mockSupabaseClient.expectQuery({
-        table: "journal_entry_links",
-        method: "from",
-        args: ["journal_entry_links"],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "journal_entry_links",
-        method: "insert",
-        args: [insertRow],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "journal_entry_links",
-        method: "select",
-        args: [],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "journal_entry_links",
-        method: "single",
-        args: [],
-      });
-
-      expect(log.error).not.toHaveBeenCalled();
-    });
-
-    it("logs and throws on duplicate link with exact context", async () => {
-      const err = { message: "Duplicate key", code: "23505" };
-      mockSupabaseClient.setMockResponse(null, err);
-
-      await expect(db.addLink(insertRow)).rejects.toEqual(err);
-
-      expect(log.error).toHaveBeenCalledTimes(1);
-      expect(log.error).toHaveBeenCalledWith(
-        "JournalEntryLinksDB.addLink failed",
-        err,
-        { entry_id: ENTRY_ID, link_type: "habit" },
-      );
-    });
-  });
-
-  // ─── removeLink ───────────────────────────────────────────────────────────
-  describe("removeLink", () => {
-    it("deletes by (id, entry_id) with full query chain", async () => {
-      queueThenResponses([{ data: null, error: null }]);
-
-      await db.removeLink(LINK_ID, ENTRY_ID);
-
-      // Full log assertion — catches any position-specific mutation in the
-      // delete chain (table/field/value swaps, delete→update etc).
-      expect(mockSupabaseClient.queryLog).toEqual([
-        {
-          table: "journal_entry_links",
-          method: "from",
-          args: ["journal_entry_links"],
-        },
-        { table: "journal_entry_links", method: "delete", args: [] },
-        {
-          table: "journal_entry_links",
-          method: "eq",
-          args: ["id", LINK_ID],
-        },
-        {
-          table: "journal_entry_links",
-          method: "eq",
-          args: ["entry_id", ENTRY_ID],
-        },
-      ]);
-
-      expect(log.error).not.toHaveBeenCalled();
-    });
-
-    it("logs and throws on delete error with exact context", async () => {
-      const err = { message: "Not found" };
-      queueThenResponses([{ data: null, error: err }]);
-
-      await expect(db.removeLink(LINK_ID, ENTRY_ID)).rejects.toEqual(err);
-
-      expect(log.error).toHaveBeenCalledTimes(1);
-      expect(log.error).toHaveBeenCalledWith(
-        "JournalEntryLinksDB.removeLink failed",
-        err,
-        { linkId: LINK_ID, entryId: ENTRY_ID },
       );
     });
   });

@@ -3,7 +3,17 @@ import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authent
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { JournalEntriesDB, JournalEntryLinksDB } from "@/lib/db";
 import { validateRequestBody } from "@/lib/validations/api";
-import { journalLinkSchema } from "@/lib/validations/journal";
+import {
+  journalEntryIdSchema,
+  journalLinkIdSchema,
+  journalLinkSchema,
+} from "@/lib/validations/journal";
+import {
+  createJournalWrites,
+  toJournalLinkResponse,
+  type JournalLinkOutcome,
+  type JournalUnlinkOutcome,
+} from "@/lib/journal/writes";
 import { log } from "@/lib/logger";
 import type { JournalLinkType } from "@/lib/db/types";
 
@@ -16,6 +26,66 @@ const WRITE_REQUEST_POLICY = {
   allowedCredentials: ["cookie"],
   requiredPermission: "write",
 } as const satisfies AuthenticatedRequestPolicy;
+
+function validateJournalEntryId(id: string): string | NextResponse {
+  const validation = journalEntryIdSchema.safeParse(id);
+  if (!validation.success) {
+    return NextResponse.json(
+      { error: "Validation failed", details: { id: ["Invalid entry ID"] } },
+      { status: 400 },
+    );
+  }
+  return validation.data;
+}
+
+function mapLinkOutcome(outcome: JournalLinkOutcome): NextResponse {
+  switch (outcome.type) {
+    case "linked":
+      return NextResponse.json(
+        { link: toJournalLinkResponse(outcome.link) },
+        { status: 201 },
+      );
+    case "already-applied":
+      return NextResponse.json({ link: toJournalLinkResponse(outcome.link) });
+    case "not-found":
+      return NextResponse.json(
+        { error: "Journal entry or link target not found" },
+        { status: 404 },
+      );
+    case "conflict":
+      return NextResponse.json(
+        { error: "Journal entry link conflict" },
+        { status: 409 },
+      );
+    case "invalid":
+      return NextResponse.json(
+        { error: outcome.message, field: outcome.field },
+        { status: 400 },
+      );
+  }
+}
+
+function mapUnlinkOutcome(outcome: JournalUnlinkOutcome): NextResponse {
+  switch (outcome.type) {
+    case "unlinked":
+      return NextResponse.json({ success: true });
+    case "not-found":
+      return NextResponse.json(
+        { error: "Journal entry link not found" },
+        { status: 404 },
+      );
+    case "conflict":
+      return NextResponse.json(
+        { error: "Journal entry link conflict" },
+        { status: 409 },
+      );
+    case "invalid":
+      return NextResponse.json(
+        { error: outcome.message, field: outcome.field },
+        { status: 400 },
+      );
+  }
+}
 
 /**
  * GET /api/journal/[id]/links
@@ -136,30 +206,22 @@ export async function POST(
     }
     const { principal: { userId }, client: supabase } = auth;
 
+    const entryId = validateJournalEntryId(id);
+    if (typeof entryId !== "string") return entryId;
+
     const body = await request.json();
     const validation = validateRequestBody(body, journalLinkSchema);
     if (!validation.success) return validation.response;
 
     const { link_type, link_id } = validation.data;
 
-    // Verify entry ownership
-    const journalDB = new JournalEntriesDB(supabase);
-    const entry = await journalDB.getEntry(id, userId);
-    if (!entry) {
-      return NextResponse.json(
-        { error: "Journal entry not found" },
-        { status: 404 }
-      );
-    }
-
-    const linksDB = new JournalEntryLinksDB(supabase);
-    const link = await linksDB.addLink({
-      entry_id: id,
-      link_type,
-      link_id,
+    const outcome = await createJournalWrites(supabase).link({
+      userId,
+      entryId,
+      linkType: link_type,
+      targetId: link_id,
     });
-
-    return NextResponse.json({ link }, { status: 201 });
+    return mapLinkOutcome(outcome);
   } catch (error) {
     log.error("POST /api/journal/[id]/links error", error);
     return NextResponse.json(
@@ -189,15 +251,8 @@ export async function DELETE(
     }
     const { principal: { userId }, client: supabase } = auth;
 
-    // Verify entry ownership
-    const journalDB = new JournalEntriesDB(supabase);
-    const ownerEntry = await journalDB.getEntry(id, userId);
-    if (!ownerEntry) {
-      return NextResponse.json(
-        { error: "Journal entry not found" },
-        { status: 404 }
-      );
-    }
+    const entryId = validateJournalEntryId(id);
+    if (typeof entryId !== "string") return entryId;
 
     const linkId = request.nextUrl.searchParams.get("link_id");
     if (!linkId) {
@@ -207,10 +262,20 @@ export async function DELETE(
       );
     }
 
-    const linksDB = new JournalEntryLinksDB(supabase);
-    await linksDB.removeLink(linkId, id);
+    const linkIdValidation = journalLinkIdSchema.safeParse(linkId);
+    if (!linkIdValidation.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: { link_id: ["Invalid link ID"] } },
+        { status: 400 },
+      );
+    }
 
-    return NextResponse.json({ success: true });
+    const outcome = await createJournalWrites(supabase).unlink({
+      userId,
+      entryId,
+      linkId: linkIdValidation.data,
+    });
+    return mapUnlinkOutcome(outcome);
   } catch (error) {
     log.error("DELETE /api/journal/[id]/links error", error);
     return NextResponse.json(
