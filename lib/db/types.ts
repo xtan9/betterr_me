@@ -16,6 +16,7 @@ export interface Profile {
   email_notifications_enabled: boolean;
   role: ProfileRole;
   preferences: ProfilePreferences;
+  preference_revision: number;
   created_at: string;
   updated_at: string;
 }
@@ -32,13 +33,16 @@ export interface ProfilePreferences {
 
 export type ProfileInsert = Omit<
   Profile,
-  "id" | "created_at" | "updated_at"
+  "id" | "preference_revision" | "created_at" | "updated_at"
 > & {
   id?: string;
 };
 
 export type ProfileUpdate = Partial<
-  Omit<Profile, "id" | "email" | "created_at" | "updated_at">
+  Omit<
+    Profile,
+    "id" | "email" | "preference_revision" | "created_at" | "updated_at"
+  >
 >;
 
 // =============================================================================

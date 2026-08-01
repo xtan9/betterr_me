@@ -12,6 +12,13 @@
     "cleanup": "self-cleaning"
   },
   {
+    "path": "preference_storage_foundation.sql",
+    "domain": "profile",
+    "role": "admin",
+    "cleanup": "transactional",
+    "adminReason": "temporarily reapplies the preference storage migration to legacy rows"
+  },
+  {
     "path": "calendar_event_reminder_lifecycle.sql",
     "domain": "calendar",
     "role": "admin",

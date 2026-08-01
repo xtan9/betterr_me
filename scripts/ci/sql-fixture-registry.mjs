@@ -21,6 +21,7 @@ const TRUSTED_ADMIN_FIXTURES = new Set([
   "finance_cushion_rls.sql",
   "oauth_refresh_token_lifecycle.sql",
   "oauth_refresh_token_upgrade.sql",
+  "preference_storage_foundation.sql",
 ]);
 const TRUSTED_SUPPORT_FIXTURES = new Set(["e2e_local_authenticated_grants.sql"]);
 
