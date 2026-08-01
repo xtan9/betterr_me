@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
 // Hoist mock functions
-const { mockVerifyToken, mockUpdatePreferences } = vi.hoisted(() => ({
+const { mockVerifyToken, mockDisableReminderEmail } = vi.hoisted(() => ({
   mockVerifyToken: vi.fn(),
-  mockUpdatePreferences: vi.fn(),
+  mockDisableReminderEmail: vi.fn(),
 }));
 
 // Mock unsubscribe module
@@ -17,10 +17,10 @@ vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: vi.fn(() => ({})),
 }));
 
-// Mock profiles DB
-vi.mock('@/lib/db', () => ({
-  ProfilesDB: class {
-    updatePreferences = mockUpdatePreferences;
+// Mock Notifications DB
+vi.mock('@/lib/db/notifications', () => ({
+  NotificationsDB: class {
+    disableReminderEmail = mockDisableReminderEmail;
   },
 }));
 
@@ -59,7 +59,7 @@ describe('GET /api/email/unsubscribe', () => {
 
   it('returns 200 and disables email notifications with valid token', async () => {
     mockVerifyToken.mockReturnValue('user-123');
-    mockUpdatePreferences.mockResolvedValue({});
+    mockDisableReminderEmail.mockResolvedValue(undefined);
 
     const request = new NextRequest('http://localhost:3000/api/email/unsubscribe?token=valid-token');
     const response = await GET(request);
@@ -68,14 +68,12 @@ describe('GET /api/email/unsubscribe', () => {
     const text = await response.text();
     expect(text).toContain('Unsubscribed');
     expect(text).toContain('re-enable them in your settings');
-    expect(mockUpdatePreferences).toHaveBeenCalledWith('user-123', {
-      email_notifications_enabled: false,
-    });
+    expect(mockDisableReminderEmail).toHaveBeenCalledWith('user-123');
   });
 
-  it('returns 500 when updatePreferences throws', async () => {
+  it('returns 500 when disabling Reminder Email throws', async () => {
     mockVerifyToken.mockReturnValue('user-123');
-    mockUpdatePreferences.mockRejectedValue(new Error('DB error'));
+    mockDisableReminderEmail.mockRejectedValue(new Error('DB error'));
 
     const request = new NextRequest('http://localhost:3000/api/email/unsubscribe?token=valid-token');
     const response = await GET(request);

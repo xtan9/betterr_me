@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ProfilesDB } from "@/lib/db";
+import { NotificationsDB } from "@/lib/db/notifications";
 import { validateRequestBody } from "@/lib/validations/api";
 import { notificationPreferenceIntentSchema } from "@/lib/preferences/commands";
 import { readJson, runPreferenceCommand } from "@/lib/preferences/api";
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
       );
       if (!validation.success) return validation.response;
 
-      const result = await new ProfilesDB(auth.client).setNotificationPreference(
+      const result = await new NotificationsDB(auth.client).setNotificationPreference(
         validation.data,
       );
       return NextResponse.json(result);

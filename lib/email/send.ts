@@ -2,7 +2,7 @@ import { getResendClient } from './resend';
 import { EMAIL_TEMPLATES, getSubject } from './templates';
 import { getUnsubscribeUrl } from './unsubscribe';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { ProfilesDB } from '@/lib/db';
+import { NotificationsDB } from '@/lib/db/notifications';
 import type { ReminderSourceType } from '@/lib/db/types';
 import { log } from '@/lib/logger';
 import { decodeNotificationPreferences } from '@/lib/preferences/owners';
@@ -25,7 +25,7 @@ export interface SendReminderEmailResult {
   success: boolean;
   messageId?: string;
   error?: string;
-  skipped?: boolean;   // true if user has email_notifications_enabled=false
+  skipped?: boolean;   // true if Reminder Email is disabled or unavailable
 }
 
 export async function sendReminderEmail(
@@ -35,8 +35,8 @@ export async function sendReminderEmail(
   try {
     // Look up user profile (use admin client to bypass RLS since this runs from cron)
     const supabase = createAdminClient();
-    const profilesDB = new ProfilesDB(supabase);
-    const projection = await profilesDB.getNotificationPreferenceProjection(userId);
+    const notificationsDB = new NotificationsDB(supabase);
+    const projection = await notificationsDB.getNotificationPreferenceProjection(userId);
 
     if (!projection) {
       return { success: false, error: 'Profile not found' };

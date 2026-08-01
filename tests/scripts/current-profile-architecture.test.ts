@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 function trackedSourceFiles(directory: string): string[] {
@@ -7,7 +7,7 @@ function trackedSourceFiles(directory: string): string[] {
     encoding: "utf8",
   })
     .split("\0")
-    .filter((path) => /\.(?:ts|tsx)$/.test(path));
+    .filter((path) => /\.(?:ts|tsx)$/.test(path) && existsSync(path));
 }
 
 function source(path: string): string {

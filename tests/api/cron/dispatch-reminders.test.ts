@@ -29,8 +29,8 @@ vi.mock("@/lib/db/reminders", () => ({
   },
 }));
 
-vi.mock("@/lib/db/profiles", () => ({
-  ProfilesDB: class {
+vi.mock("@/lib/db/notifications", () => ({
+  NotificationsDB: class {
     getNotificationPreferenceProjection = mockGetNotificationProjection;
   },
 }));

@@ -42,13 +42,17 @@ const quietWindowValueSchema = z
       }),
   ]);
 
+export const reminderEmailIntentSchema = z
+  .object({ type: z.literal("setReminderEmail"), enabled: z.boolean() })
+  .strict();
+
+export const pushQuietWindowIntentSchema = z
+  .object({ type: z.literal("setPushQuietWindow"), value: quietWindowValueSchema })
+  .strict();
+
 export const notificationPreferenceIntentSchema = z.discriminatedUnion("type", [
-  z
-    .object({ type: z.literal("setReminderEmail"), enabled: z.boolean() })
-    .strict(),
-  z
-    .object({ type: z.literal("setPushQuietWindow"), value: quietWindowValueSchema })
-    .strict(),
+  reminderEmailIntentSchema,
+  pushQuietWindowIntentSchema,
 ]);
 
 export const profileDetailsCommandSchema = z
@@ -72,6 +76,8 @@ export type LocalizationPreferenceIntent = z.infer<
   typeof localizationPreferenceIntentSchema
 >;
 export type FitnessPreferenceIntent = z.infer<typeof fitnessPreferenceIntentSchema>;
+export type ReminderEmailIntent = z.infer<typeof reminderEmailIntentSchema>;
+export type PushQuietWindowIntent = z.infer<typeof pushQuietWindowIntentSchema>;
 export type NotificationPreferenceIntent = z.infer<
   typeof notificationPreferenceIntentSchema
 >;
@@ -103,17 +109,21 @@ export type FitnessPreferenceOutcome = {
   changed: boolean;
 };
 
+export type ReminderEmailOutcome = {
+  reminderEmail: { enabled: boolean };
+  preferenceRevision: number;
+  changed: boolean;
+};
+
+export type PushQuietWindowOutcome = {
+  pushQuietWindow: PushQuietWindow;
+  preferenceRevision: number;
+  changed: boolean;
+};
+
 export type NotificationPreferenceOutcome =
-  | {
-      reminderEmail: { enabled: boolean };
-      preferenceRevision: number;
-      changed: boolean;
-    }
-  | {
-      pushQuietWindow: PushQuietWindow;
-      preferenceRevision: number;
-      changed: boolean;
-    };
+  | ReminderEmailOutcome
+  | PushQuietWindowOutcome;
 
 export type ProfileDetailsOutcome = {
   fullName: string | null;

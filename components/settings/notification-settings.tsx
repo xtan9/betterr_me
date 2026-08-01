@@ -19,7 +19,7 @@ import { toast } from "sonner";
 
 import { fetcher } from "@/lib/fetcher";
 import type { CurrentProfileResponse } from "@/lib/current-profile";
-import { useNotificationPreferences } from "@/lib/hooks/use-profile-preferences";
+import { useNotifications } from "@/lib/hooks/use-notifications";
 import { QuietHoursSettings } from "./quiet-hours-settings";
 import { ReminderDefaultsSettings } from "./reminder-defaults-settings";
 
@@ -49,12 +49,11 @@ export function NotificationSettings({
   );
   const deviceCount: number = subsData?.count ?? 0;
 
-  const notifications = useNotificationPreferences({ initialData, initialSubject });
-  const emailState = notifications.reminderEmail;
-  const emailEnabled =
-    emailState.status === "ready" || emailState.status === "pending"
-      ? emailState.value.enabled
-      : false;
+  const notifications = useNotifications({ initialData, initialSubject });
+  const emailEnabled = notifications.reminderEmail.enabled;
+  const emailUnavailable =
+    notifications.reminderEmailPreference.status === "unavailable" ||
+    notifications.reminderEmailPreference.status === "loading";
   const [isEmailToggling, setIsEmailToggling] = useState(false);
 
   const handleToggle = async (checked: boolean) => {
@@ -136,7 +135,7 @@ export function NotificationSettings({
                 id="email-notifications-toggle"
                 checked={emailEnabled}
                 onCheckedChange={handleEmailToggle}
-                disabled={isEmailToggling}
+                disabled={isEmailToggling || emailUnavailable}
               />
             </div>
           </CardContent>
@@ -241,7 +240,7 @@ export function NotificationSettings({
               id="email-notifications-toggle"
               checked={emailEnabled}
               onCheckedChange={handleEmailToggle}
-              disabled={isEmailToggling}
+              disabled={isEmailToggling || emailUnavailable}
             />
           </div>
         </CardContent>

@@ -12,8 +12,8 @@ vi.mock("@/lib/supabase/admin", () => ({
   }),
 }));
 
-vi.mock("@/lib/db", () => ({
-  ProfilesDB: class {
+vi.mock("@/lib/db/notifications", () => ({
+  NotificationsDB: class {
     getNotificationPreferenceProjection = mockGetNotificationProjection;
   },
 }));
@@ -87,5 +87,48 @@ describe("sendReminderEmail preference intent", () => {
 
     expect(result).toEqual({ success: true, messageId: "email-1" });
     expect(mockSend).toHaveBeenCalledOnce();
+  });
+
+  it("does not deliver an enabled preference without a verified Identity Email", async () => {
+    mockGetNotificationProjection.mockResolvedValue({
+      ...projection,
+      preferences: { email_notifications_enabled: true },
+    });
+    mockGetUserById.mockResolvedValue({
+      data: {
+        user: {
+          email: "person@example.test",
+          email_confirmed_at: null,
+        },
+      },
+      error: null,
+    });
+
+    const result = await sendReminderEmail("user-1", {
+      sourceType: "task",
+      itemName: "Plan tomorrow",
+    });
+
+    expect(result).toEqual({ success: true, skipped: true });
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it("does not invent a delivery address when Identity Email is absent", async () => {
+    mockGetNotificationProjection.mockResolvedValue({
+      ...projection,
+      preferences: { email_notifications_enabled: true },
+    });
+    mockGetUserById.mockResolvedValue({
+      data: { user: null },
+      error: null,
+    });
+
+    const result = await sendReminderEmail("user-1", {
+      sourceType: "task",
+      itemName: "Plan tomorrow",
+    });
+
+    expect(result).toEqual({ success: true, skipped: true });
+    expect(mockSend).not.toHaveBeenCalled();
   });
 });

@@ -71,19 +71,6 @@ describe("ProfilesDB Current Profile projection", () => {
       "week_start:preferences->>week_start_day",
     );
 
-    mockSupabaseClient.setMockResponse({
-      preferences: { email_notifications_enabled: false },
-      timezone: null,
-    });
-    await expect(
-      db.getNotificationPreferenceProjection("user-123"),
-    ).resolves.toEqual({
-      preferences: { email_notifications_enabled: false },
-      timezone: null,
-    });
-    expect(mockSupabaseClient.queryLog.findLast((entry) => entry.method === "select")?.args[0]).toBe(
-      "preferences, timezone",
-    );
   });
 
   it("treats a missing Fitness owner row as unavailable and propagates other read errors", async () => {

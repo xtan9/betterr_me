@@ -817,6 +817,69 @@ describe("useCurrentProfile", () => {
     });
   });
 
+  it("keeps Push Quiet Window unchanged when Reminder Email changes", async () => {
+    const { useNotificationPreferences } = await import(
+      "@/lib/hooks/use-profile-preferences"
+    );
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          reminderEmail: { enabled: true },
+          preferenceRevision: 4,
+          changed: true,
+        }),
+    });
+    const profileWithQuietWindow: CurrentProfileResponse = {
+      ...baseProfile,
+      currentProfile: {
+        ...baseProfile.currentProfile,
+        preferences: {
+          ...baseProfile.currentProfile.preferences,
+          notifications: {
+            reminderEmail: { status: "ready", value: { enabled: false } },
+            pushQuietWindow: {
+              status: "ready",
+              value: {
+                status: "enabled",
+                startLocal: "22:00",
+                endLocal: "07:00",
+              },
+            },
+          },
+        },
+      },
+    };
+    currentSWRData = profileWithQuietWindow;
+    mockMutate.mockResolvedValue(profileWithQuietWindow);
+
+    const { result } = renderHook(() => useNotificationPreferences());
+    await waitFor(() =>
+      expect(mockSWR).toHaveBeenLastCalledWith(
+        ["current-profile", "user-a"],
+        expect.any(Function),
+        expect.any(Object),
+      ),
+    );
+
+    await act(async () => {
+      await result.current.setReminderEmail(true);
+    });
+
+    expect(result.current.reminderEmail).toEqual({
+      status: "ready",
+      value: { enabled: true },
+    });
+    expect(result.current.pushQuietWindow).toEqual({
+      status: "ready",
+      value: {
+        status: "enabled",
+        startLocal: "22:00",
+        endLocal: "07:00",
+      },
+    });
+  });
+
   it("does not apply a no-op outcome as a new accepted revision", async () => {
     const { useFitnessPreference } = await import(
       "@/lib/hooks/use-profile-preferences"

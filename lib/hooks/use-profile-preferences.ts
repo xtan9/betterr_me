@@ -13,6 +13,7 @@ import type {
   FitnessPreferenceIntent,
   LocalizationPreferenceIntent,
   NotificationPreferenceIntent,
+  NotificationPreferenceOutcome,
   ProfileDetailsCommand,
   ProfileDetailsOutcome,
   PushQuietWindowCommandValue,
@@ -135,18 +136,26 @@ export function useNotificationPreferences(options?: UseCurrentProfileOptions) {
 
   const setReminderEmail = useCallback(
     (enabled: boolean) =>
-      runCommand<unknown>("notifications", "/api/preferences/notifications", {
-        type: "setReminderEmail",
-        enabled,
-      }),
+      runCommand<NotificationPreferenceOutcome>(
+        "notifications",
+        "/api/preferences/notifications",
+        {
+          type: "setReminderEmail",
+          enabled,
+        },
+      ),
     [runCommand],
   );
   const setPushQuietWindow = useCallback(
     (value: PushQuietWindowCommandValue) =>
-      runCommand<unknown>("notifications", "/api/preferences/notifications", {
-        type: "setPushQuietWindow",
-        value,
-      }),
+      runCommand<NotificationPreferenceOutcome>(
+        "notifications",
+        "/api/preferences/notifications",
+        {
+          type: "setPushQuietWindow",
+          value,
+        },
+      ),
     [runCommand],
   );
 

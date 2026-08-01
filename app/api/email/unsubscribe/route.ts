@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyUnsubscribeToken } from '@/lib/email/unsubscribe';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { ProfilesDB } from '@/lib/db';
+import { NotificationsDB } from '@/lib/db/notifications';
 import { log } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
@@ -27,10 +27,8 @@ export async function GET(request: NextRequest) {
 
     // Use admin client to bypass RLS (user is not authenticated via browser)
     const supabase = createAdminClient();
-    const profilesDB = new ProfilesDB(supabase);
-    await profilesDB.updatePreferences(resolvedUserId, {
-      email_notifications_enabled: false,
-    });
+    const notificationsDB = new NotificationsDB(supabase);
+    await notificationsDB.disableReminderEmail(resolvedUserId);
 
     return new NextResponse(
       renderHtml('Unsubscribed', 'You have been unsubscribed from BetterR.Me email notifications. You can re-enable them in your settings at any time.'),

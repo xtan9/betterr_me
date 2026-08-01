@@ -87,6 +87,12 @@ describe("Preference Owners", () => {
     ).toEqual({ status: "ready", value: { enabled: false } });
   });
 
+  it("defaults Reminder Email to disabled when no stored value exists", () => {
+    expect(
+      decodeNotificationPreferences({}, null, null).reminderEmail,
+    ).toEqual({ status: "ready", value: { enabled: false } });
+  });
+
   it("does not claim enabled Reminder Email is accepted without an Identity Email", () => {
     expect(
       decodeNotificationPreferences(
