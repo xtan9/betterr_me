@@ -6,7 +6,7 @@ import {
   restoreMockSupabaseThen,
 } from "../../helpers/mock-supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Project, ProjectInsert, ProjectUpdate } from "@/lib/db/types";
+import type { Project, ProjectUpdate } from "@/lib/db/types";
 
 const USER_ID = "user-123";
 const PROJECT_ID = "project-123";
@@ -209,54 +209,6 @@ describe("ProjectsDB", () => {
       mockSupabaseClient.setMockResponse(null, err);
 
       await expect(db.getProject(PROJECT_ID, USER_ID)).rejects.toEqual(err);
-    });
-  });
-
-  // ─── createProject ────────────────────────────────────────────────────────
-  describe("createProject", () => {
-    const insertRow: ProjectInsert = {
-      user_id: USER_ID,
-      name: "New Project",
-      section: "personal",
-      color: "blue",
-      status: "active",
-    };
-
-    it("inserts and returns the created project", async () => {
-      const expected = makeProject();
-      mockSupabaseClient.setMockResponse(expected);
-
-      const result = await db.createProject(insertRow);
-
-      expect(result).toEqual(expected);
-
-      mockSupabaseClient.expectQuery({
-        table: "projects",
-        method: "from",
-        args: ["projects"],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "projects",
-        method: "insert",
-        args: [insertRow],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "projects",
-        method: "select",
-        args: [],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "projects",
-        method: "single",
-        args: [],
-      });
-    });
-
-    it("throws when the insert errors", async () => {
-      const err = { message: "Duplicate key" };
-      mockSupabaseClient.setMockResponse(null, err);
-
-      await expect(db.createProject(insertRow)).rejects.toEqual(err);
     });
   });
 

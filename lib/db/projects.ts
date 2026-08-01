@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Project, ProjectInsert, ProjectUpdate, ProjectSection, ProjectStatus } from './types';
+import type { Project, ProjectUpdate, ProjectSection, ProjectStatus } from './types';
 
 export class ProjectsDB {
   constructor(private supabase: SupabaseClient) {}
@@ -47,20 +47,6 @@ export class ProjectsDB {
       throw error;
     }
 
-    return data;
-  }
-
-  /**
-   * Create a new project
-   */
-  async createProject(project: ProjectInsert): Promise<Project> {
-    const { data, error } = await this.supabase
-      .from('projects')
-      .insert(project)
-      .select()
-      .single();
-
-    if (error) throw error;
     return data;
   }
 

@@ -60,6 +60,20 @@ describe("SQL fixture registry", () => {
     expect(validateSqlFixtureRegistry(repositoryRoot, registry)).toEqual([]);
   });
 
+  it("registers the project creation lifecycle as a constrained acceptance fixture", () => {
+    const registry = loadSqlFixtureRegistry(process.cwd());
+
+    expect(selectSqlFixtures(registry, { domain: "projects" })).toEqual([
+      {
+        path: "project_creation_lifecycle.sql",
+        domain: "projects",
+        role: "constrained",
+        cleanup: "self-cleaning",
+      },
+    ]);
+    expect(validateSqlFixtureRegistry(process.cwd(), registry)).toEqual([]);
+  });
+
   it("keeps the complete calendar lifecycle group registered in stable order", () => {
     const registry = loadSqlFixtureRegistry(process.cwd());
 

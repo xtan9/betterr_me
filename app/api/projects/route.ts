@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/auth/authenticated-request';
 import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { ProjectsDB } from '@/lib/db';
+import { createProjectWrites, toProjectResponse } from '@/lib/projects/writes';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { projectFormSchema } from '@/lib/validations/project';
@@ -89,15 +90,31 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const projectsDB = new ProjectsDB(supabase);
-    const project = await projectsDB.createProject({
-      user_id: userId,
-      name: validation.data.name.trim(),
+    const outcome = await createProjectWrites(supabase).create({
+      userId,
+      name: validation.data.name,
       section: validation.data.section,
       color: validation.data.color,
     });
 
-    return NextResponse.json({ project }, { status: 201 });
+    if (outcome.type === 'conflict') {
+      return NextResponse.json(
+        { error: 'Project creation conflicted' },
+        { status: 409 },
+      );
+    }
+
+    if (outcome.type === 'invalid') {
+      return NextResponse.json(
+        { error: outcome.message, field: outcome.field },
+        { status: 400 },
+      );
+    }
+
+    return NextResponse.json(
+      { project: toProjectResponse(outcome.project) },
+      { status: 201 },
+    );
   } catch (error) {
     log.error('POST /api/projects error', error);
     return NextResponse.json(
