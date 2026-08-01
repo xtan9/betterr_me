@@ -17,9 +17,7 @@ import type {
   PreferenceStorage,
   WeightUnitPreference,
 } from '@/lib/preferences/types';
-import {
-  isWeightUnitPreference,
-} from '@/lib/preferences/owners';
+import { isWeightUnitPreference } from '@/lib/preferences/owners';
 
 export class ProfilesDB {
   constructor(private supabase: SupabaseClient) {}
