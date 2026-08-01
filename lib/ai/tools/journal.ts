@@ -79,10 +79,13 @@ export function journalTools(): ToolDefinition[] {
         entryId: z.string().describe("The journal entry ID"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new JournalEntriesDB(ctx.supabase);
-        const entry = await db.getEntry(params.entryId, ctx.userId);
-        if (!entry) return { error: "Journal entry not found" };
-        await db.deleteEntry(params.entryId, ctx.userId);
+        const outcome = await createJournalWrites(ctx.supabase).delete({
+          entryId: params.entryId,
+          userId: ctx.userId,
+        });
+        if (outcome.type === "not-found") {
+          return { error: "Journal entry not found" };
+        }
         return { success: true };
       },
     },

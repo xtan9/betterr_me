@@ -204,6 +204,12 @@
     "cleanup": "self-cleaning"
   },
   {
+    "path": "journal_entry_deletion_lifecycle.sql",
+    "domain": "journal",
+    "role": "constrained",
+    "cleanup": "self-cleaning"
+  },
+  {
     "path": "recurring_task_lifecycle_storage.sql",
     "domain": "recurring-task-storage",
     "role": "constrained",

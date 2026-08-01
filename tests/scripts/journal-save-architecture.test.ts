@@ -63,4 +63,27 @@ describe("Journal save mutation architecture boundaries", () => {
     expect(linksDb).not.toMatch(/async addLink\s*\(/);
     expect(linksDb).not.toMatch(/async removeLink\s*\(/);
   });
+
+  it("routes HTTP deletion through JournalWrites without a direct-write bypass", () => {
+    const route = source("app/api/journal/[id]/route.ts");
+    const deletion = section(route, "export async function DELETE", "\n}");
+
+    expect(deletion).toContain("createJournalWrites(supabase).delete");
+    expect(deletion).not.toMatch(/new JournalEntriesDB|\.deleteEntry\(/);
+  });
+
+  it("routes AI deletion through JournalWrites without losing confirmation", () => {
+    const tools = source("lib/ai/tools/journal.ts");
+    const deletion = section(tools, 'name: "deleteJournalEntry"', "    },\n  ];");
+
+    expect(deletion).toContain("createJournalWrites(ctx.supabase).delete");
+    expect(deletion).toContain("Always confirm with the user first");
+    expect(deletion).not.toMatch(/new JournalEntriesDB|\.deleteEntry\(/);
+  });
+
+  it("keeps Journal deletion out of the generic database write inventory", () => {
+    const journalDb = source("lib/db/journal-entries.ts");
+
+    expect(journalDb).not.toMatch(/async deleteEntry\s*\(/);
+  });
 });

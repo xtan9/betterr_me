@@ -146,8 +146,16 @@ export async function DELETE(
     }
     const { principal: { userId }, client: supabase } = auth;
 
-    const journalDB = new JournalEntriesDB(supabase);
-    await journalDB.deleteEntry(id, userId);
+    const outcome = await createJournalWrites(supabase).delete({
+      entryId: id,
+      userId,
+    });
+    if (outcome.type === 'not-found') {
+      return NextResponse.json(
+        { error: 'Journal entry not found' },
+        { status: 404 },
+      );
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

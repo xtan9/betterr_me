@@ -270,4 +270,60 @@ describe("SupabaseJournalSavePersistence", () => {
       }),
     ).rejects.toThrow("Invalid journal link");
   });
+
+  describe("deleteEntry", () => {
+    it("uses one atomic owner-scoped RPC and maps a deleted outcome", async () => {
+      rpc.mockResolvedValue({ data: { type: "deleted" }, error: null });
+
+      await expect(
+        persistence.deleteEntry({
+          userId: "trusted-user",
+          entryId: "entry-1",
+        }),
+      ).resolves.toEqual({ type: "deleted" });
+      expect(rpc).toHaveBeenCalledWith("delete_journal_entry_atomically", {
+        p_entry_id: "entry-1",
+        p_user_id: "trusted-user",
+      });
+    });
+
+    it.each(["missing", "repeated", "cross-owner"] as const)(
+      "maps the same not-found database outcome for %s requests",
+      async () => {
+        rpc.mockResolvedValue({ data: { type: "not-found" }, error: null });
+
+        await expect(
+          persistence.deleteEntry({
+            userId: "trusted-user",
+            entryId: "entry-1",
+          }),
+        ).resolves.toEqual({ type: "not-found" });
+        expect(rpc).toHaveBeenCalledTimes(1);
+      },
+    );
+
+    it("propagates an atomic RPC failure without compensating writes", async () => {
+      const persistenceError = new Error("deletion transaction failed");
+      rpc.mockResolvedValue({ data: null, error: persistenceError });
+
+      await expect(
+        persistence.deleteEntry({
+          userId: "trusted-user",
+          entryId: "entry-1",
+        }),
+      ).rejects.toBe(persistenceError);
+      expect(rpc).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects malformed database outcomes", async () => {
+      rpc.mockResolvedValue({ data: { type: "unexpected" }, error: null });
+
+      await expect(
+        persistence.deleteEntry({
+          userId: "trusted-user",
+          entryId: "entry-1",
+        }),
+      ).rejects.toThrow("Invalid journal deletion outcome returned by the database");
+    });
+  });
 });

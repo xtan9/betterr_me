@@ -8,21 +8,23 @@ const { mockSaveJournalEntry } = vi.hoisted(() => ({
 
 const mockGetEntryByDate = vi.fn();
 const mockGetTimeline = vi.fn();
-const mockDeleteEntry = vi.fn();
 
 const mockGetEntry = vi.fn();
+const mockDeleteJournalEntry = vi.fn();
 
 vi.mock("@/lib/db", () => ({
   JournalEntriesDB: class {
     getEntryByDate = mockGetEntryByDate;
     getTimeline = mockGetTimeline;
     getEntry = mockGetEntry;
-    deleteEntry = mockDeleteEntry;
   },
 }));
 
 vi.mock("@/lib/journal/writes", () => ({
-  createJournalWrites: vi.fn(() => ({ save: mockSaveJournalEntry })),
+  createJournalWrites: vi.fn(() => ({
+    save: mockSaveJournalEntry,
+    delete: mockDeleteJournalEntry,
+  })),
   toJournalEntryResponse: (entry: unknown) => entry,
 }));
 
@@ -54,28 +56,54 @@ describe("journalTools", () => {
     ]);
   });
 
-  it("deleteJournalEntry verifies existence then deletes", async () => {
+  it("deleteJournalEntry delegates to the mutation command and preserves confirmation", async () => {
     const ctx = makeCtx();
-    mockGetEntry.mockResolvedValue({ id: "j1" });
-    mockDeleteEntry.mockResolvedValue(undefined);
+    mockDeleteJournalEntry.mockResolvedValue({ type: "deleted" });
+    const tool = findTool("deleteJournalEntry");
     const result = await findTool("deleteJournalEntry").execute(
       { entryId: "j1" },
       ctx,
     );
-    expect(mockGetEntry).toHaveBeenCalledWith("j1", "user-123");
-    expect(mockDeleteEntry).toHaveBeenCalledWith("j1", "user-123");
+    expect(tool.description).toContain("Always confirm with the user first");
+    expect(mockDeleteJournalEntry).toHaveBeenCalledWith({
+      entryId: "j1",
+      userId: "user-123",
+    });
+    expect(mockGetEntry).not.toHaveBeenCalled();
     expect(result).toEqual({ success: true });
   });
 
-  it("deleteJournalEntry returns error when not found", async () => {
+  it.each(["missing", "repeated", "cross-owner"] as const)(
+    "deleteJournalEntry maps the mutation not-found outcome for %s requests",
+    async () => {
+      const ctx = makeCtx();
+      mockDeleteJournalEntry.mockResolvedValue({ type: "not-found" });
+      const result = await findTool("deleteJournalEntry").execute(
+        { entryId: "j999" },
+        ctx,
+      );
+      expect(result).toEqual({ error: "Journal entry not found" });
+    },
+  );
+
+  it("deleteJournalEntry propagates unexpected mutation failures", async () => {
+    const persistenceError = new Error("database unavailable");
+    mockDeleteJournalEntry.mockRejectedValue(persistenceError);
+
+    await expect(
+      findTool("deleteJournalEntry").execute({ entryId: "j1" }, makeCtx()),
+    ).rejects.toBe(persistenceError);
+  });
+
+  it("does not query the generic Journal DB for deletion", async () => {
     const ctx = makeCtx();
-    mockGetEntry.mockResolvedValue(null);
+    mockDeleteJournalEntry.mockResolvedValue({ type: "not-found" });
     const result = await findTool("deleteJournalEntry").execute(
       { entryId: "j999" },
       ctx,
     );
     expect(result).toEqual({ error: "Journal entry not found" });
-    expect(mockDeleteEntry).not.toHaveBeenCalled();
+    expect(mockGetEntry).not.toHaveBeenCalled();
   });
 
   it("createJournalEntry translates plain text into the shared journal save request", async () => {
