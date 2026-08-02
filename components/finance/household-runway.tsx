@@ -277,13 +277,22 @@ export function HouseholdRunway({
   const scenario = interviewState.draft.selectedScenario ?? "current";
   const draftAnswers = runwayAnswersForPresentation(interviewState.draft.answers);
   const answers = interviewState.planInputs ?? draftAnswers;
+  const persistedBoundaryDraft =
+    typeof window !== "undefined" ? readHouseholdRunwayInterviewDraft() : null;
+  const persistedRunwayDraft =
+    typeof window !== "undefined" ? readRunwayDraft() : null;
   const draftCompleted =
     interviewState.status === "completed" ||
-    (typeof window !== "undefined" && readRunwayDraft()?.completed === true);
+    (persistedBoundaryDraft
+      ? persistedBoundaryDraft.stageStatus?.result === "completed"
+      : persistedRunwayDraft?.completed === true);
+  const draftSyncOperation = interviewState.operations.draftSynchronization;
   const draftSyncState =
-    interviewState.operations.draftSynchronization.status === "succeeded"
+    draftSyncOperation.status === "succeeded"
       ? "synchronized"
-      : "pending";
+      : draftSyncOperation.status === "failed"
+        ? "failed"
+        : "pending";
   const planOperation = interviewState.operations.planPersistence;
   const planOperationState =
     planOperation.status === "pending"
@@ -307,6 +316,8 @@ export function HouseholdRunway({
           : t("save.error")
       : interviewState.operations.reportDownload.status === "failed"
         ? t("save.downloadError")
+        : draftSyncOperation.status === "failed"
+          ? t("save.draftSyncError")
         : "";
   const boundaryLocation =
     interviewState.renderModel.kind === "location"
@@ -354,9 +365,12 @@ export function HouseholdRunway({
       committedPlan,
     });
     if (boundaryDraft) {
+      const hasBoundaryCompletionStatus =
+        boundaryDraft.stageStatus?.result !== undefined;
       const completed =
         boundaryDraft.stageStatus?.result === "completed" ||
-        (runwayDraft?.completed === true &&
+        (!hasBoundaryCompletionStatus &&
+          runwayDraft?.completed === true &&
           assessHouseholdRunway({ answers: runwayDraft.answers }).success);
       restoredBoundary = restoreHouseholdRunwayInterview({
         version: 2,
@@ -590,9 +604,18 @@ export function HouseholdRunway({
               snapshots?: RunwaySnapshotSummary[];
             };
             if (payload.snapshots) setSnapshots(payload.snapshots);
-            clearRunwayDraft();
-            clearHouseholdRunwayInterviewDraft();
-            setHasLocalDraft(false);
+            const currentPlanOperation =
+              interviewStateRef.current.operations.planPersistence;
+            const isCurrentPlanPersistence =
+              currentPlanOperation.status === "pending" &&
+              currentPlanOperation.sourceRevision === sourceRevision &&
+              currentPlanOperation.correlationId === correlationId &&
+              interviewStateRef.current.draft.revision === sourceRevision;
+            if (isCurrentPlanPersistence) {
+              clearRunwayDraft();
+              clearHouseholdRunwayInterviewDraft();
+              setHasLocalDraft(false);
+            }
             dispatchInterviewCommand(
               {
                 type: "plan_persistence_succeeded",

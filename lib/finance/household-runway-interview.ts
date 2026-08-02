@@ -3288,6 +3288,16 @@ function beginCompletedPlanEdit(
   const draft = normalizeDraft({
     ...state.draft,
     revision: state.draft.revision + 1,
+    stageStatus: {
+      ...state.draft.stageStatus,
+      review: "pending",
+      result: "pending",
+    },
+    validationIssues: {
+      ...state.draft.validationIssues,
+      review: null,
+      result: null,
+    },
     planAdjustment: emptyPlanAdjustment(),
   });
   return transition(
@@ -3520,7 +3530,7 @@ function requestPlanPersistence(
   capabilities: HouseholdRunwayInterviewCapabilities,
 ): HouseholdRunwayInterviewTransition {
   if (
-    (state.status !== "reviewing" && state.status !== "completed") ||
+    state.status !== "completed" ||
     !state.planInputs ||
     !state.assessment
   ) {

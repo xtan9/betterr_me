@@ -140,6 +140,8 @@ describe("provisional Plan Adjustment and completed-Plan lifecycle", () => {
     expect(editing.state.stage).toBe("review");
     expect(editing.state.committedPlan).toEqual(original.committedPlan);
     expect(editing.state.draft.revision).toBeGreaterThan(original.draft.revision);
+    expect(editing.state.draft.stageStatus.review).toBe("pending");
+    expect(editing.state.draft.stageStatus.result).not.toBe("completed");
 
     const changed = dispatch(
       editing.state,
@@ -156,6 +158,26 @@ describe("provisional Plan Adjustment and completed-Plan lifecycle", () => {
       type: "history",
       action: "replace",
       destination: "interview",
+    });
+  });
+
+  it("does not save a completed Plan while its edited Draft still needs review", () => {
+    const editing = dispatch(
+      completedPlanState(),
+      { type: "edit_completed_plan" },
+      "edit",
+    );
+    const result = dispatch(
+      editing.state,
+      { type: "save_plan" },
+      "save-before-review",
+      { planPersistence: "available" },
+    );
+
+    expect(result.effects).toEqual([]);
+    expect(result.events[0]).toMatchObject({
+      type: "command_ignored",
+      reason: "invalid_stage",
     });
   });
 

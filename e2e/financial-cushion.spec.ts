@@ -104,10 +104,13 @@ test("completes the quick interview, edits take-home pay, and previews What-if w
   await expect(page.getByTestId("runway-hero-cta")).toContainText("View my result");
   await page.getByTestId("runway-hero-cta").click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("6.0 months");
-  await page.getByRole("button", { name: "Review inputs", exact: true }).click();
-  await expect(page.locator('[data-runway-progress="reviewing"]')).toBeVisible();
-  await expect(page.locator('[data-interview-stage="review"][data-interview-render="review"]')).toBeVisible();
-  await page.getByRole("button", { name: "Back", exact: true }).click();
+   await page.getByRole("button", { name: "Review inputs", exact: true }).click();
+   await expect(page.locator('[data-runway-progress="reviewing"]')).toBeVisible();
+   await expect(page.locator('[data-interview-stage="review"][data-interview-render="review"]')).toBeVisible();
+   await page.reload();
+   await expect(page.locator('[data-runway-progress="reviewing"]')).toBeVisible();
+   await expect(page.locator('[data-interview-stage="review"][data-interview-render="review"]')).toBeVisible();
+   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(page.locator('[data-interview-stage="reductions"][data-interview-render="reductions"]')).toBeVisible();
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page.locator('[data-interview-stage="review"][data-interview-render="review"]')).toBeVisible();
@@ -191,6 +194,24 @@ test("restores an unconfirmed currency proposal without turning it into input", 
   await expect(page.getByRole("button", { name: "Canada", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("combobox", { name: "Household currency" })).toHaveValue("CAD");
   await expect(page.getByText("Suggested CAD; continuing confirms this choice.")).toBeVisible();
+});
+
+test("surfaces a local Draft synchronization failure without blocking the Interview", async ({ page }) => {
+  await page.addInitScript(() => {
+    const originalSetItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key.startsWith("betterr.household-runway")) {
+        throw new Error("simulated local storage failure");
+      }
+      return originalSetItem.call(this, key, value);
+    };
+  });
+  await page.goto("/finance/cushion?campaign=draft-sync-failure&cta=test");
+  await page.getByTestId("runway-hero-cta").click();
+
+  await expect(page.locator('[data-runway-draft-sync="failed"]')).toBeVisible();
+  await expect(page.getByText("This draft could not be saved on this device", { exact: false })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Where does your household live?" })).toBeVisible();
 });
 
 test("adapts household income stages and makes currency retention explicit", async ({ page }) => {
