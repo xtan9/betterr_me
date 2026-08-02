@@ -1265,7 +1265,7 @@ async function inspectGrantForClient(
 async function revokeGrantForClient(
   target: McpAccessGrantTarget,
   clientId: string,
-  tokens: OAuthTokens,
+  tokens: OAuthTokens | undefined,
   requests: RequestEvidence[],
 ): Promise<GrantBoundaryObservation> {
   let clientResult: { client?: SupabaseClient; error?: string };
@@ -1880,7 +1880,7 @@ async function runConsentRejection(
     const credentials = tokenEvidenceObserved(requests.slice(requestStart), metadata.token_endpoint);
     const browserFragmentCredentials = browserUrlCredentialEvidence(page.url());
     const stateMatches = callbackResult.state === authorizationState;
-    const status = classifyAuthorizationOutcome({
+    const callbackStatus = classifyAuthorizationOutcome({
       kind,
       callbackReceived,
       authorizationError: callbackResult.oauthError === true,
@@ -1892,17 +1892,28 @@ async function runConsentRejection(
       idTokenObserved: credentials.idTokenObserved || Boolean(callbackResult.idTokenPresent) || browserFragmentCredentials.idTokenPresent,
       browserFragmentCredentialObserved: browserFragmentCredentials.credentialObserved,
     });
+    const grantObservation = await inspectGrantForClient(target, clientInformation.client_id, requests);
+    const unexpectedGrantCleanup = grantObservation.status === "present"
+      ? await revokeGrantForClient(target, clientInformation.client_id, undefined, requests)
+      : undefined;
+    const status: GateStatus = callbackStatus === "fail"
+      ? "fail"
+      : grantObservation.status === "absent"
+        ? callbackStatus
+        : grantObservation.status === "present"
+          ? "fail"
+          : "not-proven";
     addGate(
       gates,
       gateId,
       status,
       kind === "denial"
         ? status === "pass"
-          ? "Explicit denial returned the provider authorization error without an authorization code, access token, refresh token, or token request."
-          : "Explicit denial did not produce the required provider authorization error without credentials."
+          ? "Explicit denial returned the provider authorization error without credentials and left no grant in the supported user-facing grant list."
+          : "Explicit denial did not produce the required provider authorization error without credentials and grant absence."
         : status === "pass"
-          ? "Abandoning the consent page produced no callback, authorization code, access token, refresh token, or token request."
-          : "Abandoning the consent page produced a callback or usable credentials.",
+          ? "Abandoning the consent page produced no callback, credentials, token request, or grant in the supported user-facing grant list."
+          : "Abandoning the consent page produced a callback, usable credentials, or an unclassified/present grant.",
       {
         registration: registrationEvidence,
         decision: kind,
@@ -1916,6 +1927,12 @@ async function runConsentRejection(
         idTokenObserved: credentials.idTokenObserved || Boolean(callbackResult.idTokenPresent) || browserFragmentCredentials.idTokenPresent,
         browserFragmentCredentialObserved: browserFragmentCredentials.credentialObserved,
         browserFragmentKeys: browserFragmentCredentials.fragmentKeys,
+        callbackStatus,
+        grantStatus: grantObservation.status,
+        grantEvidence: grantObservation.evidence,
+        unexpectedGrantCleanup: unexpectedGrantCleanup
+          ? { status: unexpectedGrantCleanup.status, detail: unexpectedGrantCleanup.detail, evidence: unexpectedGrantCleanup.evidence }
+          : "not-needed",
       },
     );
   } catch (error) {
