@@ -1,18 +1,14 @@
 -- ralph-ci: true
--- Exercises Current Profile storage defaults, owner commands, revision semantics,
--- subject scoping, and database-enforced supported Preference invariants.
+-- Exercises Current Profile storage defaults, owner commands, revision
+-- semantics, subject scoping, and database-enforced Preference invariants.
+-- Direct storage assertions use the constrained runner role; owner commands
+-- intentionally switch to the production authenticated role.
 
 select public.ralph_ci_create_auth_user(
   '63400000-0000-0000-0000-000000000001',
   'current-profile@example.test'
 );
 
-set role authenticated;
-select set_config(
-  'request.jwt.claim.sub',
-  '63400000-0000-0000-0000-000000000001',
-  false
-);
 select set_config(
   'request.jwt.claims',
   '{"sub":"63400000-0000-0000-0000-000000000001","role":"authenticated"}',
@@ -23,7 +19,6 @@ do $$
 declare
   profile_preferences jsonb;
   revision bigint;
-  command_result jsonb;
 begin
   select preferences, preference_revision
   into profile_preferences, revision
@@ -40,7 +35,15 @@ begin
     raise exception 'stable Preference defaults were not assigned: % / %',
       profile_preferences, revision;
   end if;
+end
+$$;
 
+set role authenticated;
+
+do $$
+declare
+  command_result jsonb;
+begin
   command_result := public.set_fitness_preference('kg');
   if command_result->>'changed' <> 'false'
     or (command_result->>'preferenceRevision')::bigint <> 0 then
@@ -107,12 +110,6 @@ begin
     when sqlstate '22023' then null;
   end;
 
-  if (select timezone from public.profiles
-      where id = '63400000-0000-0000-0000-000000000001')
-      <> 'America/Los_Angeles' then
-    raise exception 'rejected User Time Zone changed the accepted value';
-  end if;
-
   command_result := public.set_notification_preference(
     '{"type":"setPushQuietWindow","value":{"status":"enabled","startLocal":"22:00","endLocal":"07:00"}}'::jsonb
   );
@@ -133,6 +130,31 @@ begin
   exception
     when insufficient_privilege then null;
   end;
+end
+$$;
+
+reset role;
+
+do $$
+declare
+  profile_preferences jsonb;
+  profile_revision bigint;
+begin
+  select preferences, preference_revision
+  into profile_preferences, profile_revision
+  from public.profiles
+  where id = '63400000-0000-0000-0000-000000000001';
+
+  if profile_preferences->>'theme' <> 'dark'
+    or profile_preferences->>'week_start_day' <> '0'
+    or profile_preferences->>'weight_unit' <> 'lbs'
+    or profile_preferences->>'email_notifications_enabled' <> 'true'
+    or profile_preferences->>'quiet_hours_start' <> '22:00'
+    or profile_preferences->>'quiet_hours_end' <> '07:00'
+    or profile_revision <> 5 then
+    raise exception 'accepted Preference commands did not persist the canonical state: % / %',
+      profile_preferences, profile_revision;
+  end if;
 
   begin
     update public.profiles
@@ -154,7 +176,6 @@ begin
 end
 $$;
 
-reset role;
 select public.ralph_ci_delete_auth_user(
   '63400000-0000-0000-0000-000000000001'
 );

@@ -251,16 +251,17 @@ reset role;
 set local role authenticated;
 do $$
 declare
-  updated_profile jsonb;
+  appearance_result jsonb;
+  notification_result jsonb;
 begin
-  updated_profile := public.update_profile_preferences(
-    '57700000-0000-0000-0000-000000000001',
-    '{"theme":"dark","email_notifications_enabled":true}'::jsonb
+  appearance_result := public.set_appearance_preference('dark');
+  notification_result := public.set_notification_preference(
+    '{"type":"setReminderEmail","enabled":true}'::jsonb
   );
-  if updated_profile->'preferences'->>'theme' is distinct from 'dark'
-    or updated_profile->'preferences'->>'email_notifications_enabled' is distinct from 'true' then
-    raise exception 'owner settings update returned the wrong preferences: %',
-      updated_profile->'preferences';
+  if appearance_result->>'theme' is distinct from 'dark'
+    or notification_result->'reminderEmail'->>'enabled' is distinct from 'true' then
+    raise exception 'owner settings command returned the wrong outcome: % / %',
+      appearance_result, notification_result;
   end if;
 end
 $$;
@@ -508,27 +509,6 @@ begin
 end
 $$;
 
-reset role;
-set local role authenticated;
-do $$
-declare
-  operation_message text;
-begin
-  operation_message := null;
-  begin
-    perform public.update_profile_preferences(
-      '57700000-0000-0000-0000-000000000001',
-      '{"theme":"light"}'::jsonb
-    );
-  exception when others then
-    get stacked diagnostics operation_message = message_text;
-  end;
-  if operation_message is distinct from 'Cannot update preferences for another user' then
-    raise exception 'non-owner settings update was not rejected: %',
-      coalesce(operation_message, 'no error');
-  end if;
-end
-$$;
 reset role;
 
 set local role authenticated;
@@ -1528,27 +1508,6 @@ begin
 end
 $$;
 
-reset role;
-set local role anon;
-do $$
-declare
-  operation_sqlstate text;
-begin
-  operation_sqlstate := null;
-  begin
-    perform public.update_profile_preferences(
-      '57700000-0000-0000-0000-000000000001',
-      '{"email_notifications_enabled":false}'::jsonb
-    );
-  exception when others then
-    get stacked diagnostics operation_sqlstate = returned_sqlstate;
-  end;
-  if operation_sqlstate is distinct from '42501' then
-    raise exception 'anonymous settings update was not denied: %',
-      coalesce(operation_sqlstate, 'no error');
-  end if;
-end
-$$;
 reset role;
 
 set local role anon;

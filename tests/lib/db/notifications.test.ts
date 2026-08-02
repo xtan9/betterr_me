@@ -112,9 +112,19 @@ describe("NotificationsDB", () => {
     const db = new NotificationsDB({ rpc } as unknown as SupabaseClient);
 
     await expect(db.disableReminderEmail("user-123")).resolves.toBeUndefined();
-    expect(rpc).toHaveBeenCalledWith("update_profile_preferences_for_service", {
+    expect(rpc).toHaveBeenCalledWith("disable_reminder_email_for_service", {
       profile_id: "user-123",
-      preference_patch: { email_notifications_enabled: false },
     });
+  });
+
+  it("surfaces service unsubscribe failures", async () => {
+    const rpc = vi
+      .fn()
+      .mockResolvedValue({ data: null, error: new Error("database unavailable") });
+    const db = new NotificationsDB({ rpc } as unknown as SupabaseClient);
+
+    await expect(db.disableReminderEmail("user-123")).rejects.toThrow(
+      "database unavailable",
+    );
   });
 });

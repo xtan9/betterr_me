@@ -279,14 +279,12 @@ function setupSWR({
   habitLoading = false,
   stats = makeStats(),
   logs = [],
-  profile = null,
 }: {
   habit?: ReturnType<typeof makeHabit> | null;
   habitError?: Error;
   habitLoading?: boolean;
   stats?: ReturnType<typeof makeStats> | null;
   logs?: unknown[];
-  profile?: unknown;
 } = {}) {
   const mutateHabit = makeMutate();
   const mutateLogs = makeMutate();
@@ -317,16 +315,6 @@ function setupSWR({
     if (url === `/api/habits/${HABIT_ID}/stats`) {
       return {
         data: stats ?? undefined,
-        error: undefined,
-        isLoading: false,
-        mutate: vi.fn(),
-        isValidating: false,
-      } as ReturnType<typeof useSWR>;
-    }
-
-    if (url === "/api/profile") {
-      return {
-        data: profile,
         error: undefined,
         isLoading: false,
         mutate: vi.fn(),

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ProfilesDB } from "@/lib/db";
+import { AppearanceDB } from "@/lib/db/appearance";
 import { validateRequestBody } from "@/lib/validations/api";
 import {
   appearancePreferenceIntentSchema,
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
       );
       if (!validation.success) return validation.response;
 
-      const result = await new ProfilesDB(auth.client).setAppearancePreference(
+      const result = await new AppearanceDB(auth.client).setAppearancePreference(
         validation.data.theme,
       );
       return NextResponse.json(result);

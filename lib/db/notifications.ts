@@ -93,11 +93,8 @@ export class NotificationsDB {
 
   async disableReminderEmail(userId: string): Promise<void> {
     const { data, error } = await this.supabase.rpc(
-      "update_profile_preferences_for_service",
-      {
-        profile_id: userId,
-        preference_patch: { email_notifications_enabled: false },
-      },
+      "disable_reminder_email_for_service",
+      { profile_id: userId },
     );
     if (error) throw this.normalizeRpcError(error);
     if (!data) throw new Error("Profile not found");

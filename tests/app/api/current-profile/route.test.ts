@@ -15,8 +15,8 @@ vi.mock("@/lib/auth/authenticated-request", () => ({
     error.status === 401 ? "Unauthorized" : error.error,
 }));
 
-vi.mock("@/lib/db", () => ({
-  ProfilesDB: class {
+vi.mock("@/lib/db/current-profile", () => ({
+  CurrentProfileDB: class {
     getCurrentProfileProjection = mockGetCurrentProfileProjection;
   },
 }));

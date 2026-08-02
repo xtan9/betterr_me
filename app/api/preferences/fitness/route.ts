@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ProfilesDB } from "@/lib/db";
+import { FitnessDB } from "@/lib/db/fitness";
 import { validateRequestBody } from "@/lib/validations/api";
 import { fitnessPreferenceIntentSchema } from "@/lib/preferences/commands";
 import { readJson, runPreferenceCommand } from "@/lib/preferences/api";
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
       );
       if (!validation.success) return validation.response;
 
-      const result = await new ProfilesDB(auth.client).setFitnessPreference(
+      const result = await new FitnessDB(auth.client).setFitnessPreference(
         validation.data.weightUnit,
       );
       return NextResponse.json(result);

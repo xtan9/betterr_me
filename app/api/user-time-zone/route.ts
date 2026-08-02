@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { decodeUserTimeZone } from "@/lib/preferences/owners";
-import { ProfilesDB } from "@/lib/db";
+import { UserTimeZoneDB } from "@/lib/db/user-time-zone";
 import { validateRequestBody } from "@/lib/validations/api";
 import { userTimeZoneCommandSchema } from "@/lib/preferences/commands";
 import { readJson, runPreferenceCommand } from "@/lib/preferences/api";
@@ -28,7 +28,7 @@ export async function PUT(request: Request) {
         );
       }
 
-      const result = await new ProfilesDB(auth.client).setUserTimeZone(
+      const result = await new UserTimeZoneDB(auth.client).setUserTimeZone(
         validation.data.timeZone,
       );
       return NextResponse.json(result);

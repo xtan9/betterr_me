@@ -33,13 +33,31 @@ vi.mock("@/lib/auth/authenticated-request", () => ({
     error.status === 401 ? "Unauthorized" : error.error,
 }));
 
-vi.mock("@/lib/db", () => ({
-  ProfilesDB: class {
+vi.mock("@/lib/db/appearance", () => ({
+  AppearanceDB: class {
     setAppearancePreference = mockSetAppearancePreference;
+  },
+}));
+
+vi.mock("@/lib/db/fitness", () => ({
+  FitnessDB: class {
     setFitnessPreference = mockSetFitnessPreference;
+  },
+}));
+
+vi.mock("@/lib/db/profile-details", () => ({
+  ProfileDetailsDB: class {
     updateProfileDetails = mockUpdateProfileDetails;
+  },
+}));
+
+vi.mock("@/lib/db/user-time-zone", () => ({
+  UserTimeZoneDB: class {
     setUserTimeZone = mockSetUserTimeZone;
   },
+}));
+
+vi.mock("@/lib/db/localization", () => ({
   LocalizationDB: class {
     setWeekStartPreference = mockSetWeekStartPreference;
   },
