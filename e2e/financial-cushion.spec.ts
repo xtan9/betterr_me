@@ -327,6 +327,7 @@ test("requires an explicit choice before remembering a Draft on the device", asy
   await page.getByRole("combobox", { name: "State, province, or region" }).selectOption("CA");
 
   await expect(page.getByRole("button", { name: "Remember on this device" })).toBeVisible();
+  await expect(page.getByTestId("runway-expiry-disclosure")).toBeVisible();
   expect(await page.evaluate(() => window.localStorage.getItem("betterr.household-runway.interview.v2"))).toBeNull();
   await page.getByRole("button", { name: "Remember on this device" }).click();
   await expect.poll(() => page.evaluate(() => window.localStorage.getItem("betterr.household-runway.interview.v2"))).not.toBeNull();
@@ -337,6 +338,57 @@ test("requires an explicit choice before remembering a Draft on the device", asy
     draft: window.localStorage.getItem("betterr.household-runway.interview.v2"),
     consent: window.localStorage.getItem("betterr.household-runway.interview.device-consent.v1"),
   }))).toEqual({ draft: null, consent: null });
+});
+
+test("restores the same stage and open nested expense category after consented device import", async ({ page }) => {
+  await page.goto("/finance/cushion?campaign=device-restore&cta=test");
+  await page.evaluate(() => {
+    window.sessionStorage.clear();
+    window.localStorage.clear();
+  });
+  await page.getByTestId("runway-hero-cta").click();
+  await page.getByRole("button", { name: "United States", exact: true }).click();
+  await page.getByRole("combobox", { name: "State, province, or region" }).selectOption("CA");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: "I know take-home pay" }).click();
+  await page.getByRole("textbox", { name: "Income amount" }).fill("5000");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: "Skip for now", exact: true }).click();
+  await page.getByRole("textbox", { name: "Cash available now" }).fill("30000");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: "Skip for now", exact: true }).click();
+  await expect(page.locator('[data-interview-stage="expenses"][data-interview-render="expenses"]')).toBeVisible();
+  await page.getByRole("button", { name: /Housing/ }).click();
+  await expect(page.getByRole("heading", { name: /Housing/ })).toBeVisible();
+  await page.getByRole("button", { name: "Remember on this device" }).click();
+  await expect.poll(() => page.evaluate(() => window.localStorage.getItem("betterr.household-runway.interview.v2"))).not.toBeNull();
+
+  await page.evaluate(() => window.sessionStorage.clear());
+  await page.reload();
+  await expect(page.locator('[data-interview-stage="expenses"][data-interview-render="expenses"]')).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Housing/ })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.localStorage.getItem("betterr.household-runway.interview.v2"))).toBeNull();
+});
+
+test("clears malformed device data and keeps the Interview usable", async ({ page }) => {
+  await page.goto("/finance/cushion?campaign=invalid-device&cta=test");
+  await page.evaluate(() => {
+    window.sessionStorage.clear();
+    window.localStorage.setItem("betterr.household-runway.interview.v2", "not-json");
+    window.localStorage.setItem("betterr.household-runway.interview.device-consent.v1", "granted");
+  });
+  await page.reload();
+
+  await expect(page.getByTestId("runway-hero-cta")).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: "Draft" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => ({
+    draft: window.localStorage.getItem("betterr.household-runway.interview.v2"),
+    consent: window.localStorage.getItem("betterr.household-runway.interview.device-consent.v1"),
+  }))).toEqual({ draft: null, consent: "granted" });
+  await page.getByTestId("runway-hero-cta").click();
+  await expect(page.getByRole("heading", { name: "Where does your household live?" })).toBeVisible();
 });
 
 test("uses guided income, asset, housing, and transportation cards", async ({ page }) => {

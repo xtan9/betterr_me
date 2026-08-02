@@ -1620,7 +1620,8 @@
   "householdRunway": {
     "currencyChange": { "confirmation": "更改货币不会重新解释已有金额。请选择清除已填写金额，或保留原样输入的分值。", "reset": "清除已填写金额", "retain": "保留已输入分值" },
     "boundary": { "currencyProposal": "建议使用 {currency}；继续即确认此选择。", "countryRequired": "请选择家庭所在国家后继续。", "regionRequired": "请填写州、省或地区后继续。", "currencyRequired": "请选择家庭货币后继续。" },
-    "privacy": { "local": "默认仅保存在本次会话。除非你选择记住，否则不会保存到此设备。", "session": "此 Draft 仅保留在本次会话。选择“在此设备上记住”可保留最多 30 天。", "remember": "在此设备上记住", "remembered": "已记住在此设备上，最多保留 30 天。", "forget": "移除设备副本" },
+    "privacy": { "local": "默认仅保存在本次会话。除非你选择记住，否则不会保存到此设备。", "session": "此 Draft 仅保留在本次会话。选择“在此设备上记住”可保留最多 30 天。", "expiryDisclosure": "如果选择记住，此设备副本会在 {days} 天后自动过期。", "remember": "在此设备上记住", "remembered": "已记住在此设备上，最多保留 30 天。", "forget": "移除设备副本" },
+    "resume": { "eyebrow": "选择要恢复的内容", "title": "已保存的 Plan 和较新的 Draft 都在这里", "description": "两种版本都会保留，请选择要打开的版本。较新的 Draft 会标记为推荐选项。", "draft": "恢复 Draft", "draftDescription": "从上次离开的 Interview 阶段继续。", "plan": "使用已提交的 Plan", "planDescription": "打开上次保存的 Plan，Draft 仍会保留以便稍后选择。", "recommended": "推荐" },
     "progress": { "remaining": "预计还需 {minutes} 分钟" },
     "steps": {
       "welcome": { "eyebrow": "欢迎", "title": "如果收入中断，你的家庭能撑多久？", "description": "家庭抗风险跑道把你现在知道的数字，变成一份可解释的收入中断计划。无需注册。" },
@@ -1661,7 +1662,7 @@
     "comparison": { "title": "同一个家庭的三种视角", "description": "主要答案采用收入中断计划；当前生活显示不做调整的成本；极端模式用保守折价预览退休账户。", "current": "当前生活", "interruption": "收入中断计划", "extreme": "极端模式", "extremeHelp": "计入退休账户余额的 70%，房屋净值仍排除。", "sustainable": "每月支出可被覆盖", "months": "{months} 个月", "over": "超过 {months} 个月" },
     "whatIf": { "title": "什么改变能争取更多时间？", "description": "应用前，这些改变只用于临时预览。", "months": "个月", "reduceExpenses": "减少中断后每月支出", "addCash": "增加可用现金", "addIncome": "增加可靠月收入", "expectedFunds": "预览未确认资金", "investmentAccess": "可动用投资比例", "retirement": "极端模式：计入退休账户", "retirementHelp": "按 30% 折价显示，实际税费和罚金可能不同。" },
     "method": { "title": "计算方法", "formula": "每月：期初流动余额 + 持续收入 + 当月到账的已确认资金 − 中断后支出。", "excluded": "除非主动预览极端模式，否则退休账户和房屋净值不计入。", "updated": "输入最后更新于 {date}。", "disclaimer": "仅为教育性的情景估算，不构成税务、投资、法律、福利资格或财务建议。" },
-    "save": { "title": "持续更新你的跑道", "description": "完整结果免费。只有希望保存、比较变化并以后返回时才需要注册。", "button": "保存此跑道", "createAccount": "注册并保存", "saving": "保存中…", "saved": "已保存", "error": "暂时无法保存，请重试。" }
+    "save": { "title": "持续更新你的跑道", "description": "完整结果免费。只有希望保存、比较变化并以后返回时才需要注册。", "button": "保存此跑道", "createAccount": "注册并保存", "saving": "保存中…", "saved": "已保存", "error": "暂时无法保存，请重试。", "draftRecovery": "已保存的 Draft 无效或已过期，因此已清除。你仍可在此继续 Interview。" }
   },
   "admin": {
     "title": "管理后台",

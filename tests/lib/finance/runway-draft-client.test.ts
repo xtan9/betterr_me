@@ -3,12 +3,15 @@ import { createHouseholdRunwayInterview } from "@/lib/finance/household-runway-i
 import {
   HOUSEHOLD_RUNWAY_DRAFT_DEVICE_CONSENT_KEY,
   HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY,
+  HOUSEHOLD_RUNWAY_DRAFT_TTL_MS,
 } from "@/lib/finance/household-runway-draft-codec";
 import {
   clearHouseholdRunwayDeviceDraft,
   clearHouseholdRunwayDraft,
   hasHouseholdRunwayDeviceStorageConsent,
   persistHouseholdRunwayDraft,
+  persistHouseholdRunwaySessionDraft,
+  readHouseholdRunwayDeviceDraft,
   readHouseholdRunwayDraft,
   rememberHouseholdRunwayDraft,
 } from "@/lib/finance/runway-draft-client";
@@ -58,6 +61,29 @@ describe("Household Runway Draft storage adapter", () => {
       status: "restored",
       source: "device",
     });
+  });
+
+  it("reads the device scope independently and exposes the codec expiry", () => {
+    rememberHouseholdRunwayDraft(draftState(), { now });
+
+    const result = readHouseholdRunwayDeviceDraft({ now });
+
+    expect(result).toMatchObject({
+      status: "restored",
+      source: "device",
+      expiresAt: new Date(now.getTime() + HOUSEHOLD_RUNWAY_DRAFT_TTL_MS).toISOString(),
+    });
+  });
+
+  it("supports session import before a separate durable cleanup", () => {
+    rememberHouseholdRunwayDraft(draftState(), { now });
+    const imported = persistHouseholdRunwaySessionDraft(draftState(), { now });
+
+    expect(imported).toEqual({ success: true, source: "session" });
+    expect(localStorage.getItem(HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY)).not.toBeNull();
+    clearHouseholdRunwayDeviceDraft({ revokeConsent: false });
+    expect(localStorage.getItem(HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY)).toBeNull();
+    expect(sessionStorage.getItem(HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY)).not.toBeNull();
   });
 
   it("clears an invalid session envelope recoverably", () => {

@@ -24,6 +24,7 @@ export type HouseholdRunwayDraftStorageReadResult =
       status: "restored";
       state: HouseholdRunwayDraftState;
       source: HouseholdRunwayDraftStorageSource;
+      expiresAt: string;
     }
   | {
       status: "rejected";
@@ -42,6 +43,10 @@ export type HouseholdRunwayDraftStorageWriteResult =
       success: false;
       code: "storage_unavailable" | HouseholdRunwayDraftCodecErrorCode;
     };
+
+export type HouseholdRunwayDraftStorageClearResult =
+  | { success: true }
+  | { success: false; code: "storage_unavailable" };
 
 function browserStorage(
   source: HouseholdRunwayDraftStorageSource,
@@ -63,11 +68,14 @@ function readItem(storage: Storage | null, key: string): string | null {
   }
 }
 
-function removeItem(storage: Storage | null, key: string) {
+function removeItem(storage: Storage | null, key: string): boolean {
+  if (!storage) return false;
   try {
-    storage?.removeItem(key);
+    storage.removeItem(key);
+    return true;
   } catch {
     // Cleanup is best effort. The Interview remains usable in memory.
+    return false;
   }
 }
 
@@ -81,9 +89,9 @@ function writeItem(storage: Storage | null, key: string, value: string): boolean
   }
 }
 
-function removeLegacyDeviceDrafts() {
+function removeLegacyDeviceDrafts(): boolean {
   const storage = browserStorage("device");
-  LEGACY_DRAFT_STORAGE_KEYS.forEach((key) => removeItem(storage, key));
+  return LEGACY_DRAFT_STORAGE_KEYS.every((key) => removeItem(storage, key));
 }
 
 export function hasHouseholdRunwayDeviceStorageConsent(): boolean {
@@ -104,6 +112,7 @@ function decodeStoredDraft(
       status: "restored",
       state: decoded.state,
       source: "session",
+      expiresAt: decoded.expiresAt,
     };
   }
   return {
@@ -113,6 +122,33 @@ function decodeStoredDraft(
     code: decoded.code,
     cleanup: true,
   };
+}
+
+type HouseholdRunwayDraftEncodingResult =
+  | { success: true; encoded: string }
+  | {
+      success: false;
+      code: HouseholdRunwayDraftCodecErrorCode;
+    };
+
+function encodeStoredDraft(
+  state: HouseholdRunwayDraftState,
+  now: Date,
+): HouseholdRunwayDraftEncodingResult {
+  try {
+    return {
+      success: true,
+      encoded: encodeHouseholdRunwayDraft(state, now),
+    };
+  } catch (error) {
+    return {
+      success: false,
+      code:
+        typeof error === "object" && error !== null && "code" in error
+          ? (error.code as HouseholdRunwayDraftCodecErrorCode)
+          : "invalid_draft",
+    };
+  }
 }
 
 export function readHouseholdRunwayDraft(
@@ -138,6 +174,18 @@ export function readHouseholdRunwayDraft(
   }
 
   return readDeviceDraft(now) ?? { status: "empty", state: null, source: null };
+}
+
+export function readHouseholdRunwayDeviceDraft(
+  options: { now?: Date } = {},
+): HouseholdRunwayDraftStorageReadResult {
+  return (
+    readDeviceDraft(options.now ?? new Date()) ?? {
+      status: "empty",
+      state: null,
+      source: null,
+    }
+  );
 }
 
 function readDeviceDraft(
@@ -172,6 +220,7 @@ function readDeviceDraft(
       status: "restored",
       state: decoded.state,
       source: "device",
+      expiresAt: decoded.expiresAt,
     };
   }
   removeItem(deviceStorage, HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY);
@@ -189,24 +238,14 @@ export function persistHouseholdRunwayDraft(
   state: HouseholdRunwayDraftState,
   options: { now?: Date } = {},
 ): HouseholdRunwayDraftStorageWriteResult {
-  let encoded: string;
-  try {
-    encoded = encodeHouseholdRunwayDraft(state, options.now ?? new Date());
-  } catch (error) {
-    return {
-      success: false,
-      code:
-        typeof error === "object" && error !== null && "code" in error
-          ? (error.code as HouseholdRunwayDraftCodecErrorCode)
-          : "invalid_draft",
-    };
-  }
+  const encoded = encodeStoredDraft(state, options.now ?? new Date());
+  if (!encoded.success) return encoded;
   const sessionStorage = browserStorage("session");
-  if (!writeItem(sessionStorage, HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY, encoded)) {
+  if (!writeItem(sessionStorage, HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY, encoded.encoded)) {
     return { success: false, code: "storage_unavailable" };
   }
   if (hasHouseholdRunwayDeviceStorageConsent()) {
-    if (!writeItem(browserStorage("device"), HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY, encoded)) {
+    if (!writeItem(browserStorage("device"), HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY, encoded.encoded)) {
       return { success: false, code: "storage_unavailable" };
     }
     return { success: true, source: "device" };
@@ -214,50 +253,75 @@ export function persistHouseholdRunwayDraft(
   return { success: true, source: "session" };
 }
 
+/** Persist an authorized import into the session scope without touching device storage. */
+export function persistHouseholdRunwaySessionDraft(
+  state: HouseholdRunwayDraftState,
+  options: { now?: Date } = {},
+): HouseholdRunwayDraftStorageWriteResult {
+  const encoded = encodeStoredDraft(state, options.now ?? new Date());
+  if (!encoded.success) return encoded;
+  return writeItem(
+    browserStorage("session"),
+    HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY,
+    encoded.encoded,
+  )
+    ? { success: true, source: "session" }
+    : { success: false, code: "storage_unavailable" };
+}
+
 export function rememberHouseholdRunwayDraft(
   state: HouseholdRunwayDraftState,
   options: { now?: Date } = {},
 ): HouseholdRunwayDraftStorageWriteResult {
-  let encoded: string;
-  try {
-    encoded = encodeHouseholdRunwayDraft(state, options.now ?? new Date());
-  } catch (error) {
-    return {
-      success: false,
-      code:
-        typeof error === "object" && error !== null && "code" in error
-          ? (error.code as HouseholdRunwayDraftCodecErrorCode)
-          : "invalid_draft",
-    };
-  }
+  const encoded = encodeStoredDraft(state, options.now ?? new Date());
+  if (!encoded.success) return encoded;
   const deviceStorage = browserStorage("device");
-  if (!writeItem(deviceStorage, HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY, encoded)) {
+  if (!writeItem(deviceStorage, HOUSEHOLD_RUNWAY_DRAFT_DEVICE_CONSENT_KEY, "granted")) {
     return { success: false, code: "storage_unavailable" };
   }
-  if (!writeItem(deviceStorage, HOUSEHOLD_RUNWAY_DRAFT_DEVICE_CONSENT_KEY, "granted")) {
+  if (!writeItem(deviceStorage, HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY, encoded.encoded)) {
+    removeItem(deviceStorage, HOUSEHOLD_RUNWAY_DRAFT_DEVICE_CONSENT_KEY);
     removeItem(deviceStorage, HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY);
     return { success: false, code: "storage_unavailable" };
   }
   const sessionStorage = browserStorage("session");
-  if (!writeItem(sessionStorage, HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY, encoded)) {
+  if (!writeItem(sessionStorage, HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY, encoded.encoded)) {
     return { success: false, code: "storage_unavailable" };
   }
   return { success: true, source: "device" };
 }
 
-export function clearHouseholdRunwayDeviceDraft() {
+export function clearHouseholdRunwayDeviceDraft(options: {
+  revokeConsent?: boolean;
+} = {}): HouseholdRunwayDraftStorageClearResult {
   const storage = browserStorage("device");
-  removeItem(storage, HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY);
-  removeLegacyDeviceDrafts();
-  removeItem(storage, HOUSEHOLD_RUNWAY_DRAFT_DEVICE_CONSENT_KEY);
+  const cleared =
+    removeItem(storage, HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY) &&
+    removeLegacyDeviceDrafts() &&
+    (options.revokeConsent === false
+      ? true
+      : removeItem(storage, HOUSEHOLD_RUNWAY_DRAFT_DEVICE_CONSENT_KEY));
+  return cleared
+    ? { success: true }
+    : { success: false, code: "storage_unavailable" };
 }
 
-export function clearHouseholdRunwayDraft(options: { revokeConsent?: boolean } = {}) {
-  removeItem(browserStorage("session"), HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY);
+export function clearHouseholdRunwayDraft(
+  options: { revokeConsent?: boolean } = {},
+): HouseholdRunwayDraftStorageClearResult {
+  const clearedSession = removeItem(
+    browserStorage("session"),
+    HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY,
+  );
   const deviceStorage = browserStorage("device");
-  removeItem(deviceStorage, HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY);
-  removeLegacyDeviceDrafts();
-  if (options.revokeConsent !== false) {
-    removeItem(deviceStorage, HOUSEHOLD_RUNWAY_DRAFT_DEVICE_CONSENT_KEY);
-  }
+  const clearedDevice =
+    removeItem(deviceStorage, HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY) &&
+    removeLegacyDeviceDrafts();
+  const clearedConsent =
+    options.revokeConsent === false
+      ? true
+      : removeItem(deviceStorage, HOUSEHOLD_RUNWAY_DRAFT_DEVICE_CONSENT_KEY);
+  return clearedSession && clearedDevice && clearedConsent
+    ? { success: true }
+    : { success: false, code: "storage_unavailable" };
 }

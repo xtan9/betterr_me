@@ -7,6 +7,7 @@ import {
   EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT,
   createHouseholdRunwayInterview,
   dispatchHouseholdRunwayInterview,
+  restoreHouseholdRunwayInterview,
   type HouseholdRunwayInterviewCommand,
   type HouseholdRunwayInterviewCommandInput,
   type HouseholdRunwayInterviewState,
@@ -154,6 +155,18 @@ describe("provisional Plan Adjustment and completed-Plan lifecycle", () => {
     expect(discarded.state.stage).toBe("result");
     expect(discarded.state.draft.answers.available_cash.cents).toBe(3_000_000);
     expect(discarded.state.committedPlan).toEqual(original.committedPlan);
+    expect(discarded.state.operations.deviceDraft).toMatchObject({
+      status: "pending",
+      action: "clear",
+      scope: "all",
+    });
+    expect(discarded.effects).toContainEqual(
+      expect.objectContaining({
+        type: "draft_device_clear_requested",
+        scope: "all",
+        sourceRevision: changed.draft.revision,
+      }),
+    );
     expect(discarded.effects).toContainEqual({
       type: "history",
       action: "replace",
@@ -312,6 +325,18 @@ describe("typed operation-local effects", () => {
       idempotencyKey: expect.any(String),
       snapshot: { id: "snapshot-a" },
     });
+    expect(saved.state.operations.deviceDraft).toMatchObject({
+      status: "pending",
+      action: "clear",
+      sourceRevision: requested.state.draft.revision,
+      correlationId: "save:clear",
+    });
+    expect(saved.effects).toContainEqual({
+      type: "draft_device_clear_requested",
+      scope: "all",
+      sourceRevision: requested.state.draft.revision,
+      correlationId: "save:clear",
+    });
   });
 
   it("reuses the pending commit idempotency key when a failed save is retried", () => {
@@ -382,5 +407,203 @@ describe("typed operation-local effects", () => {
       sourceRevision: changed.state.draft.revision,
       correlationId: "analytics",
     });
+  });
+
+  it("keeps an in-flight Draft edit dirty and coalesces the next matching completion", () => {
+    const changed = dispatch(
+      completedPlanState(),
+      { type: "set_plan_adjustment", patch: { added_cash_cents: 100_000 } },
+      "adjust-1",
+    );
+    const first = dispatch(
+      changed.state,
+      { type: "synchronize_draft" },
+      "sync-1",
+    );
+    const editedWhilePending = dispatch(
+      first.state,
+      { type: "set_plan_adjustment", patch: { added_cash_cents: 200_000 } },
+      "adjust-2",
+    );
+
+    expect(first.state.operations.draftSynchronization).toMatchObject({
+      status: "pending",
+      sourceRevision: changed.state.draft.revision,
+      correlationId: "sync-1",
+    });
+    expect(editedWhilePending.state.operations.draftSynchronization).toEqual({
+      status: "dirty",
+      sourceRevision: editedWhilePending.state.draft.revision,
+    });
+
+    const stale = dispatch(
+      editedWhilePending.state,
+      {
+        type: "draft_synchronization_succeeded",
+        sourceRevision: first.state.draft.revision,
+        correlationId: "sync-1",
+      },
+      "sync-1-result",
+    );
+    expect(stale.state.operations.draftSynchronization).toEqual({
+      status: "dirty",
+      sourceRevision: editedWhilePending.state.draft.revision,
+    });
+    expect(stale.events[0]).toMatchObject({
+      type: "command_ignored",
+      reason: "operation_not_pending",
+    });
+
+    const latest = dispatch(
+      stale.state,
+      { type: "synchronize_draft" },
+      "sync-2",
+    );
+    const completed = dispatch(
+      latest.state,
+      {
+        type: "draft_synchronization_succeeded",
+        sourceRevision: latest.state.draft.revision,
+        correlationId: "sync-2",
+      },
+      "sync-2-result",
+    );
+    expect(completed.state.operations.draftSynchronization).toEqual({
+      status: "succeeded",
+      sourceRevision: latest.state.draft.revision,
+      correlationId: "sync-2",
+    });
+  });
+
+  it("returns typed device clear effects and ignores out-of-order device completions", () => {
+    const requested = dispatch(
+      completedPlanState(),
+      { type: "clear_device_draft" },
+      "clear-device",
+    );
+
+    expect(requested.effects).toContainEqual({
+      type: "draft_device_clear_requested",
+      scope: "device",
+      sourceRevision: requested.state.draft.revision,
+      correlationId: "clear-device",
+    });
+
+    const stale = dispatch(
+      requested.state,
+      {
+        type: "draft_device_operation_succeeded",
+        action: "clear",
+        sourceRevision: requested.state.draft.revision + 1,
+        correlationId: "clear-device",
+      },
+      "clear-device-stale",
+    );
+    expect(stale.state.operations.deviceDraft).toMatchObject({
+      status: "pending",
+      action: "clear",
+    });
+
+    const completed = dispatch(
+      requested.state,
+      {
+        type: "draft_device_operation_succeeded",
+        action: "clear",
+        sourceRevision: requested.state.draft.revision,
+        correlationId: "clear-device",
+      },
+      "clear-device-result",
+    );
+    expect(completed.state.operations.deviceDraft).toEqual({
+      status: "succeeded",
+      action: "clear",
+      sourceRevision: requested.state.draft.revision,
+      correlationId: "clear-device",
+    });
+    expect(completed.events[0]).toMatchObject({
+      type: "draft_device_operation_succeeded",
+      action: "clear",
+    });
+  });
+
+  it("requires an explicit resume choice when a differing device Draft accompanies a Plan", () => {
+    const committed = completedPlanState();
+    const editedDraft = dispatch(
+      committed,
+      { type: "edit_completed_plan" },
+      "edit-device-draft",
+    ).state;
+    const choice = dispatchHouseholdRunwayInterview(
+      restoreHouseholdRunwayInterview({
+        version: 2,
+        status: "not_started",
+        stage: null,
+        draft: editedDraft.draft,
+        committedPlan: committed.committedPlan,
+        resumeChoice: {
+          draftStatus: editedDraft.status,
+          draftStage: editedDraft.stage,
+          recommended: "draft",
+        },
+        validationIssue: null,
+      }),
+      command({ type: "resume_draft", interviewId: "resume-device" }, "choose-draft"),
+    );
+
+    expect(choice.state.renderModel).toMatchObject({
+      kind: "review",
+    });
+    expect(choice.state.committedPlan).toEqual(committed.committedPlan);
+    expect(choice.effects).toContainEqual(
+      expect.objectContaining({
+        type: "draft_device_import_requested",
+        sourceRevision: editedDraft.draft.revision,
+        correlationId: "choose-draft",
+      }),
+    );
+
+    const planChoice = dispatchHouseholdRunwayInterview(
+      restoreHouseholdRunwayInterview({
+        version: 2,
+        status: "not_started",
+        stage: null,
+        draft: editedDraft.draft,
+        committedPlan: committed.committedPlan,
+        resumeChoice: {
+          draftStatus: editedDraft.status,
+          draftStage: editedDraft.stage,
+          recommended: "draft",
+        },
+        validationIssue: null,
+      }),
+      command({ type: "resume_committed_plan" }, "choose-plan"),
+    );
+    expect(planChoice.state.renderModel).toMatchObject({ kind: "stage", stage: "result" });
+    expect(planChoice.state.draft.answers).toEqual(committed.committedPlan?.inputs);
+    expect(planChoice.state.draft).not.toEqual(editedDraft.draft);
+  });
+
+  it("starts a collecting Interview when the chosen Draft has no saved stage yet", () => {
+    const committed = completedPlanState();
+    const choice = dispatchHouseholdRunwayInterview(
+      restoreHouseholdRunwayInterview({
+        version: 2,
+        status: "not_started",
+        stage: null,
+        draft: committed.draft,
+        committedPlan: committed.committedPlan,
+        resumeChoice: {
+          draftStatus: "not_started",
+          draftStage: null,
+          recommended: "draft",
+        },
+        validationIssue: null,
+      }),
+      command({ type: "resume_draft", interviewId: "resume-empty" }, "choose-empty"),
+    );
+
+    expect(choice.state.status).toBe("collecting");
+    expect(choice.state.stage).toBe("location");
+    expect(choice.state.renderModel.kind).toBe("location");
   });
 });
