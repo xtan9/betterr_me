@@ -16,6 +16,7 @@
     "test:db:runner": "bash scripts/ci/verify-sql-fixture-runner.sh",
     "test:e2e": "playwright test",
     "test:e2e:mcp-access-grant": "playwright test --config=playwright.mcp-access-grant.config.ts",
+    "test:e2e:mcp-access-grant:policy": "pnpm exec vitest run tests/e2e/mcp-access-grant-policy.test.ts",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:chromium": "playwright test --project=chromium",
     "test:e2e:project-organization": "node scripts/e2e/run-project-organization.mjs",
