@@ -43,6 +43,14 @@ security invoker
 set search_path = pg_catalog, public
 as $function$
 begin
+  -- Direct Snapshot deletes remain forbidden, but an auth.users cleanup
+  -- legitimately reaches this trigger through the finance foreign-key
+  -- cascade. Allow only that nested internal delete to preserve disposable
+  -- identity cleanup and the table's append-only user-facing contract.
+  if tg_op = 'DELETE' and pg_trigger_depth() > 1 then
+    return old;
+  end if;
+
   raise exception 'Household Runway Snapshots are append-only';
 end;
 $function$;
