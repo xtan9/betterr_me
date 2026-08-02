@@ -101,6 +101,63 @@ test("completes the quick interview, edits take-home pay, and previews What-if w
   await expect(page.getByRole("heading", { level: 1 })).toContainText("5.0 months");
 });
 
+test("normalizes a shared draft into a reviewable assessment and switches scenarios through the UI boundary", async ({ page }) => {
+  const planWrites: string[] = [];
+  page.on("request", (request) => {
+    if (
+      request.url().endsWith("/api/finance/cushion") &&
+      request.method() === "PUT"
+    ) {
+      planWrites.push(request.method());
+    }
+  });
+
+  await page.goto("/finance/cushion?campaign=review-assessment&cta=test");
+  await page.getByTestId("runway-hero-cta").click();
+
+  await page.getByRole("button", { name: "United States", exact: true }).click();
+  await page.getByRole("combobox", { name: "State, province, or region" }).selectOption("CA");
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await page.getByRole("button", { name: "I share household finances" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await page.getByRole("button", { name: "I know take-home pay" }).click();
+  await page.getByRole("textbox", { name: "Income amount" }).fill("5000");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "I know take-home pay" }).click();
+  await page.getByRole("textbox", { name: "Income amount" }).fill("4000");
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await page.getByRole("button", { name: "Skip for now" }).click();
+  await page.getByRole("textbox", { name: "Cash available now" }).fill("30000");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Skip for now" }).click();
+
+  await expect(page.getByRole("button", { name: /Housing/ })).toBeVisible();
+  await page.getByRole("button", { name: "I already know my totals" }).click();
+  await page.getByRole("textbox", { name: "Current total monthly spending" }).fill("6000");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("textbox", { name: "After interruption" }).fill("5000");
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await expect(page.locator('[data-runway-progress="reviewing"]')).toBeVisible();
+  await expect(page.locator('[data-interview-stage="review"][data-interview-render="review"]')).toBeVisible();
+  await expect(page.locator('[data-runway-plan-operation="dirty"]')).toBeVisible();
+  await page.getByRole("button", { name: "Show my runway" }).click();
+
+  await expect(page.locator('[data-runway-progress="completed"]')).toBeVisible();
+  await expect(page.getByRole("tab", { name: "My income stops" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "Partner income stops" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Both incomes stop" })).toBeVisible();
+
+  await page.getByRole("tab", { name: "Partner income stops" }).click();
+  await expect(page.getByRole("tab", { name: "Partner income stops" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "My income stops" })).toHaveAttribute("aria-selected", "false");
+  expect(planWrites).toEqual([]);
+});
+
 test("restores an unconfirmed currency proposal without turning it into input", async ({ page }) => {
   await page.goto("/finance/cushion?campaign=proposal-reload&cta=test");
   await page.getByTestId("runway-hero-cta").click();

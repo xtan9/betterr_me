@@ -99,6 +99,33 @@ const EMPTY_ADJUSTMENTS: RunwayAdjustments = {
 };
 const RUNWAY_IMPORT_ACTION_KEY = "betterr.household-runway.import-action";
 
+type DraftSyncOperationState = "pending" | "synchronized";
+type PlanOperationState = "idle" | "dirty" | "saving" | "saved" | "failed";
+
+const PLAN_INPUT_COMMAND_TYPES = new Set<HouseholdRunwayInterviewCommandInput["type"]>([
+  "select_country",
+  "select_region",
+  "select_currency",
+  "request_currency_change",
+  "reset_currency_entries",
+  "retain_currency_entries",
+  "set_household",
+  "set_employment",
+  "set_income",
+  "set_other_income_sources",
+  "set_cash",
+  "set_asset",
+  "set_expense_mode",
+  "set_quick_expenses",
+  "set_expense_category_mode",
+  "set_expense_category_subtotal",
+  "set_expense_item",
+  "set_housing_tenure",
+  "update_answers",
+  "set_reduction",
+  "complete_expense_category",
+]);
+
 const OTHER_INCOME_TYPES: Exclude<RecurringIncomeType, "other">[] = [
   "rental_net",
   "side_business",
@@ -223,6 +250,8 @@ function interviewValidationMessage(
       return t("boundary.countryRequired");
     case "region_required":
       return t("boundary.regionRequired");
+    case "region_invalid":
+      return t("boundary.regionRequired");
     case "currency_required":
       return t("boundary.currencyRequired");
     case "currency_change_confirmation_required":
@@ -234,6 +263,8 @@ function interviewValidationMessage(
     case "expenses_interruption_required":
       return t("validation.expenses");
     case "assessment_required":
+    case "draft_timestamp_required":
+    case "plan_input_invalid":
       return t("validation.assessment");
     default:
       return "";
@@ -261,9 +292,11 @@ export function HouseholdRunway({
   );
   const [hydrated, setHydrated] = useState(false);
   const [hasLocalDraft, setHasLocalDraft] = useState(false);
+  const [draftCompleted, setDraftCompleted] = useState(false);
   const [snapshots, setSnapshots] = useState(initialSnapshots);
   const [planExists, setPlanExists] = useState(hasSavedPlan);
-  const [draftSynced, setDraftSynced] = useState(false);
+  const [draftSyncState, setDraftSyncState] =
+    useState<DraftSyncOperationState>("pending");
   const [interviewState, setInterviewState] =
     useState<HouseholdRunwayInterviewState>(() =>
       createHouseholdRunwayInterview(),
@@ -282,22 +315,23 @@ export function HouseholdRunway({
             initialAnswers?.extreme_access.retirement_tax_free_cents ?? 0,
         },
   );
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(hasSavedPlan);
+  const [planOperationState, setPlanOperationState] =
+    useState<PlanOperationState>(hasSavedPlan ? "saved" : "idle");
   const landingTracked = useRef(false);
   const resumeStageRef = useRef<RunwayStepId | null>(null);
   const interviewStarted =
     isAuthenticated || interviewState.status !== "not_started";
   const stepId = (interviewState.stage ?? "location") as RunwayStepId;
-  const completed =
-    interviewState.status === "completed" ||
-    interviewState.draft.stageStatus.result === "completed";
   const activeExpenseCategory = interviewState.draft.activeExpenseCategory;
   const scenario = interviewState.draft.selectedScenario ?? "current";
-  const answers = useMemo(
+  const draftAnswers = useMemo(
     () => runwayAnswersForPresentation(interviewState.draft.answers),
     [interviewState.draft.answers],
   );
+  const answers = interviewState.planInputs ?? draftAnswers;
+  const draftSynced = draftSyncState === "synchronized";
+  const saving = planOperationState === "saving";
+  const saved = planOperationState === "saved";
   const boundaryLocation =
     interviewState.renderModel.kind === "location"
       ? interviewState.renderModel
@@ -311,8 +345,17 @@ export function HouseholdRunway({
       householdRunwayInterviewCommand(input),
     );
     setInterviewState(result.state);
+    setDraftCompleted(result.state.status === "completed");
     persistHouseholdRunwayInterviewDraft(result.state.draft);
     applyHouseholdRunwayInterviewEffects(result.effects);
+    if (result.state.draft.revision !== sourceState.draft.revision) {
+      setDraftSyncState("pending");
+      if (PLAN_INPUT_COMMAND_TYPES.has(input.type)) {
+        setPlanOperationState((current) =>
+          current === "saving" ? current : "dirty",
+        );
+      }
+    }
     return result;
   };
 
@@ -344,6 +387,7 @@ export function HouseholdRunway({
             : current,
         );
       } else {
+        setDraftCompleted(readRunwayDraft()?.completed === true);
         setInterviewState((current) =>
           current.status === "not_started"
             ? current
@@ -361,6 +405,7 @@ export function HouseholdRunway({
     if (draft && !initialAnswers) {
       const draftAssessment = assessHouseholdRunway({ answers: draft.answers });
       const completedDraftIsValid = draft.completed && draftAssessment.success;
+      setDraftCompleted(completedDraftIsValid);
       resumeStageRef.current =
         draft.completed && !completedDraftIsValid ? "location" : draft.step_id;
       setHasLocalDraft(true);
@@ -385,6 +430,7 @@ export function HouseholdRunway({
       }
     }
     if (initialAnswers) {
+      setDraftCompleted(initialAssessment?.success === true);
       restoredBoundary = restoreHouseholdRunwayInterview({
         version: 2,
         status: initialAssessment?.success ? "completed" : "not_started",
@@ -422,19 +468,21 @@ export function HouseholdRunway({
 
   useEffect(() => {
     if (draftSynced || !hydrated || (!interviewStarted && !hasLocalDraft)) return;
-    persistRunwayDraft(answers, stepId, completed);
+    persistRunwayDraft(draftAnswers, stepId, draftCompleted);
     setHasLocalDraft(true);
-  }, [answers, completed, draftSynced, hasLocalDraft, hydrated, interviewStarted, stepId]);
+    setDraftSyncState("synchronized");
+  }, [draftAnswers, draftCompleted, draftSynced, hasLocalDraft, hydrated, interviewStarted, stepId]);
 
   useEffect(() => {
     const flushDraft = () => {
       if (draftSynced || (!interviewStarted && !hasLocalDraft)) return;
-      persistRunwayDraft(answers, stepId, completed);
+      persistRunwayDraft(draftAnswers, stepId, draftCompleted);
+      setDraftSyncState("synchronized");
     };
     window.addEventListener("betterr:before-locale-change", flushDraft);
     return () =>
       window.removeEventListener("betterr:before-locale-change", flushDraft);
-  }, [answers, completed, draftSynced, hasLocalDraft, interviewStarted, stepId]);
+  }, [draftAnswers, draftCompleted, draftSynced, hasLocalDraft, hydrated, interviewStarted, stepId]);
 
   const showLanding = hydrated && !isAuthenticated && !interviewStarted;
   useEffect(() => {
@@ -450,13 +498,17 @@ export function HouseholdRunway({
     heading?.focus({ preventScroll: true });
   }, [hydrated, showLanding, stepId]);
 
-  const assessment = useMemo(
-    () =>
-      stepId === "review" || stepId === "result"
-        ? assessHouseholdRunway({ answers, adjustments })
-        : null,
-    [adjustments, answers, stepId],
-  );
+  const assessment = useMemo(() => {
+    if (stepId !== "review" && stepId !== "result") return null;
+    if (!interviewState.planInputs || !interviewState.assessment) return null;
+    const hasAdjustments = Object.values(adjustments).some((value) => value > 0);
+    return hasAdjustments
+      ? assessHouseholdRunway({
+          answers: interviewState.planInputs,
+          adjustments,
+        })
+      : interviewState.assessment;
+  }, [adjustments, interviewState.assessment, interviewState.planInputs, stepId]);
   const selectedAssessment = assessment?.success
     ? (assessment.scenarios.find((item) => item.scenario === scenario) ??
       assessment.firstScenario)
@@ -466,15 +518,15 @@ export function HouseholdRunway({
     person: "mine" | "partner",
     patch: Partial<IncomeAnswer>,
   ) => {
-    setSaved(false);
-    setDraftSynced(false);
     return dispatchInterviewCommand({ type: "set_income", person, patch });
   };
 
   const startInterview = (fresh = false) => {
     if (fresh) {
       setHasLocalDraft(false);
-      setDraftSynced(false);
+      setDraftSyncState("pending");
+      setDraftCompleted(false);
+      setPlanOperationState("idle");
       setAdjustments({ ...EMPTY_ADJUSTMENTS });
       resumeStageRef.current = null;
       clearRunwayDraft();
@@ -486,7 +538,7 @@ export function HouseholdRunway({
       interviewId: newId("runway-interview"),
       stage: fresh
         ? undefined
-        : completed
+        : draftCompleted
           ? "result"
           : resumableRunwayStep(resumeStageRef.current),
     });
@@ -502,7 +554,8 @@ export function HouseholdRunway({
     if (!window.confirm(t("actions.clearConfirm"))) return;
     clearRunwayDraft();
     window.localStorage.removeItem(RUNWAY_IMPORT_ACTION_KEY);
-    setSaved(false);
+    setPlanOperationState("idle");
+    setDraftCompleted(false);
     setHasLocalDraft(false);
     setAdjustments({ ...EMPTY_ADJUSTMENTS });
     dispatchInterviewCommand(
@@ -555,7 +608,7 @@ export function HouseholdRunway({
 
   const savePlan = async () => {
     if (!isAuthenticated) return;
-    setSaving(true);
+    setPlanOperationState("saving");
     setError("");
     try {
       let actionId = window.localStorage.getItem(RUNWAY_IMPORT_ACTION_KEY);
@@ -584,19 +637,17 @@ export function HouseholdRunway({
       clearRunwayDraft();
       clearHouseholdRunwayInterviewDraft();
       setHasLocalDraft(false);
-      setDraftSynced(true);
+      setDraftSyncState("synchronized");
       setPlanExists(true);
       window.localStorage.removeItem(RUNWAY_IMPORT_ACTION_KEY);
-      setSaved(true);
+      setPlanOperationState("saved");
     } catch {
       setError(t("save.error"));
-    } finally {
-      setSaving(false);
+      setPlanOperationState("failed");
     }
   };
 
   const applyWhatIf = () => {
-    setDraftSynced(false);
     const next = {
       ...answers,
       available_cash: {
@@ -632,7 +683,6 @@ export function HouseholdRunway({
       );
     }
     dispatchInterviewCommand({ type: "update_answers", patch: next });
-    setSaved(false);
     setAdjustments({
       ...EMPTY_ADJUSTMENTS,
       usable_illiquid_investments_cents:
@@ -685,6 +735,9 @@ export function HouseholdRunway({
     <main
       className={`${isAuthenticated ? "min-h-full" : "min-h-screen"} bg-[#f5f6f2] text-slate-950 dark:bg-[#101310] dark:text-white`}
       data-runway-presentation={isAuthenticated ? "authenticated" : "public"}
+      data-runway-progress={interviewState.status}
+      data-runway-draft-sync={draftSyncState}
+      data-runway-plan-operation={planOperationState}
     >
       {!isAuthenticated ? <RunwayHeader t={t} /> : null}
       {showLanding ? (
@@ -692,7 +745,7 @@ export function HouseholdRunway({
           t={t}
           renderModel={interviewState.renderModel}
           hasDraft={hasLocalDraft}
-          draftCompleted={completed}
+          draftCompleted={draftCompleted}
           onPrimary={() => startInterview(false)}
           onStartOver={confirmStartOver}
         />

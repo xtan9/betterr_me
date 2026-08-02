@@ -123,6 +123,20 @@ updates:
     expect(new Set(configuredVersions)).toEqual(new Set(["24"]));
   });
 
+  it("keeps the anonymous Household Runway E2E project independent of auth setup", () => {
+    const workflow = readFileSync(
+      resolve(workflowDirectory, "e2e.yml"),
+      "utf8",
+    ).replaceAll("\r\n", "\n");
+
+    expect(workflow).toContain(
+      "pnpm exec playwright test e2e/financial-cushion.spec.ts --project=runway-public-desktop --no-deps",
+    );
+    expect(workflow).toContain(
+      "# Household Runway has a dedicated anonymous project. Do not pull",
+    );
+  });
+
   it("keeps github-script v9 blocks compatible with its injected context", () => {
     const incompatiblePatterns = automationFiles.flatMap(({ name, contents }) =>
       [

@@ -4,6 +4,7 @@ import {
   estimateMonthlyTakeHome,
   expenseCategoryTotals,
   expenseTotals,
+  RUNWAY_MODEL_VERSION,
   type EmploymentStatus,
   type ExpenseCategoryMode,
   type ExpenseLineItem,
@@ -29,7 +30,11 @@ import {
   type ExpenseItemType,
   type ExpenseCategory,
 } from "@/lib/finance/runway-expenses";
-import { assessHouseholdRunway } from "@/lib/finance/household-runway-assessment";
+import {
+  assessHouseholdRunway,
+  type SuccessfulHouseholdRunwayAssessment,
+} from "@/lib/finance/household-runway-assessment";
+import { householdRunwayAnswersSchema } from "@/lib/validations/finance-cushion";
 
 /**
  * Framework-independent Household Runway Interview behavior.
@@ -141,16 +146,20 @@ export type HouseholdRunwayInterviewAnswers = Omit<
 export type HouseholdRunwayValidationIssueCode =
   | "country_required"
   | "region_required"
+  | "region_invalid"
   | "currency_required"
   | "currency_change_confirmation_required"
   | "income_required"
   | "expenses_current_required"
   | "expenses_interruption_required"
+  | "draft_timestamp_required"
+  | "plan_input_invalid"
   | "assessment_required";
 
 export interface HouseholdRunwayValidationIssue {
   code: HouseholdRunwayValidationIssueCode;
   stage?: HouseholdRunwayInterviewStage;
+  path?: readonly (string | number)[];
 }
 
 export interface HouseholdRunwayPendingCurrencyChange {
@@ -178,6 +187,16 @@ export interface HouseholdRunwayInterviewDraft {
   pendingCurrencyChange: HouseholdRunwayPendingCurrencyChange | null;
   activeExpenseCategory: ExpenseCategory | null;
 }
+
+export type HouseholdRunwayDraftNormalizationOutcome =
+  | {
+      success: true;
+      planInputs: HouseholdRunwayAnswers;
+    }
+  | {
+      success: false;
+      validationIssues: readonly HouseholdRunwayValidationIssue[];
+    };
 
 export interface HouseholdRunwayLandingRenderModel {
   kind: "landing";
@@ -339,6 +358,11 @@ export interface HouseholdRunwayReviewRenderModel {
     currency: RunwayCurrency | null;
   };
   answers: HouseholdRunwayInterviewAnswers;
+  planInputs: HouseholdRunwayAnswers | null;
+  assessment: SuccessfulHouseholdRunwayAssessment | null;
+  availableScenarios: readonly ScenarioOption[];
+  selectedScenario: RunwayScenario | null;
+  assessmentModelVersion: typeof RUNWAY_MODEL_VERSION | null;
   ready: boolean;
   availableStages: readonly HouseholdRunwayInterviewStage[];
   stageStatus: HouseholdRunwayInterviewStageStatus;
@@ -351,6 +375,11 @@ export interface HouseholdRunwayGenericStageRenderModel {
   availableStages: readonly HouseholdRunwayInterviewStage[];
   stageStatus: HouseholdRunwayInterviewStageStatus;
   blockingIssue: HouseholdRunwayValidationIssue | null;
+  planInputs: HouseholdRunwayAnswers | null;
+  assessment: SuccessfulHouseholdRunwayAssessment | null;
+  availableScenarios: readonly ScenarioOption[];
+  selectedScenario: RunwayScenario | null;
+  assessmentModelVersion: typeof RUNWAY_MODEL_VERSION | null;
 }
 
 export type HouseholdRunwayInterviewRenderModel =
@@ -373,6 +402,10 @@ interface HouseholdRunwayInterviewStateBase {
   stage: HouseholdRunwayInterviewStage | null;
   draft: HouseholdRunwayInterviewDraft;
   validationIssue: HouseholdRunwayValidationIssue | null;
+  /** Complete Plan inputs exist only after a successful review normalization. */
+  planInputs: HouseholdRunwayAnswers | null;
+  /** Assessment is derived from planInputs and never persisted as Interview state. */
+  assessment: SuccessfulHouseholdRunwayAssessment | null;
   renderModel: HouseholdRunwayInterviewRenderModel;
   /** Alias retained for adapters that call the projection simply `render`. */
   render: HouseholdRunwayInterviewRenderModel;
@@ -607,6 +640,10 @@ export interface HouseholdRunwayInterviewTransition {
   state: HouseholdRunwayInterviewState;
   nextState: HouseholdRunwayInterviewState;
   renderModel: HouseholdRunwayInterviewRenderModel;
+  /** Derived complete inputs exposed at the public transition boundary. */
+  planInputs: HouseholdRunwayAnswers | null;
+  /** Current assessment derived from planInputs, when the state is reviewable. */
+  assessment: SuccessfulHouseholdRunwayAssessment | null;
   events: readonly HouseholdRunwayInterviewEvent[];
   effects: readonly HouseholdRunwayInterviewEffect[];
 }
@@ -952,6 +989,144 @@ function calculationAnswers(
   } as HouseholdRunwayAnswers;
 }
 
+function issueForPlanPath(
+  path: readonly (string | number)[],
+): HouseholdRunwayValidationIssue {
+  const first = path[0];
+  if (first === "country") {
+    return { code: "country_required", stage: "location", path };
+  }
+  if (first === "region") {
+    return { code: "region_invalid", stage: "location", path };
+  }
+  if (first === "currency") {
+    return { code: "currency_required", stage: "location", path };
+  }
+  if (first === "mine") {
+    return { code: "income_required", stage: "myIncome", path };
+  }
+  if (first === "partner") {
+    return { code: "income_required", stage: "partnerIncome", path };
+  }
+  if (
+    first === "expense_items" ||
+    first === "expense_category_modes" ||
+    first === "expense_category_subtotals" ||
+    first === "quick_expenses"
+  ) {
+    return { code: "plan_input_invalid", stage: "expenses", path };
+  }
+  if (first === "updated_at") {
+    return { code: "draft_timestamp_required", stage: "review", path };
+  }
+  if (first === "extreme_access") {
+    // Preserve the established public review gate for relational asset
+    // validation while keeping the detailed path available at the schema
+    // boundary itself.
+    return { code: "assessment_required" };
+  }
+  return { code: "plan_input_invalid", stage: "review", path };
+}
+
+function hasPlanIssue(
+  issues: readonly HouseholdRunwayValidationIssue[],
+  code: HouseholdRunwayValidationIssueCode,
+  stage?: HouseholdRunwayInterviewStage,
+) {
+  return issues.some((issue) => issue.code === code && issue.stage === stage);
+}
+
+/**
+ * Convert the partial Interview Draft into the complete shape accepted by the
+ * public Household Runway calculation boundary.
+ *
+ * The returned Plan inputs are deliberately not stored on the Draft. They are
+ * a derived, review-only projection so provisional answers cannot be mistaken
+ * for a committable Plan.
+ */
+export function normalizeHouseholdRunwayDraft(
+  draft: HouseholdRunwayInterviewDraft,
+): HouseholdRunwayDraftNormalizationOutcome {
+  const location = draft.location;
+  const normalized = normalizeAnswers(draft.answers, location);
+  const issues: HouseholdRunwayValidationIssue[] = [];
+
+  if (!location.country) {
+    issues.push({ code: "country_required", stage: "location" });
+  }
+  if (!location.region) {
+    issues.push({ code: "region_required", stage: "location" });
+  }
+  if (!location.currency) {
+    issues.push({ code: "currency_required", stage: "location" });
+  }
+  if (draft.pendingCurrencyChange) {
+    issues.push({
+      code: "currency_change_confirmation_required",
+      stage: "location",
+    });
+  }
+  if (
+    !normalized.updated_at ||
+    Number.isNaN(new Date(normalized.updated_at).getTime())
+  ) {
+    issues.push({ code: "draft_timestamp_required", stage: "review" });
+  }
+
+  const locationReady = Boolean(
+    location.country && location.region && location.currency,
+  );
+  const planCandidate = {
+    ...normalized,
+    ...(locationReady
+      ? {
+          mine: recomputeEstimatedIncome(normalized.mine, location).income,
+          partner: normalized.partner
+            ? recomputeEstimatedIncome(normalized.partner, location).income
+            : null,
+        }
+      : {}),
+    country: location.country,
+    region: location.region ?? "",
+    currency: location.currency,
+    updated_at: normalized.updated_at ?? "",
+  };
+
+  const planAnswers = planCandidate as HouseholdRunwayAnswers;
+  if (isWorking(planAnswers.mine) && planAnswers.mine.monthly_take_home_cents <= 0) {
+    issues.push({ code: "income_required", stage: "myIncome" });
+  }
+  if (
+    planAnswers.partner &&
+    isWorking(planAnswers.partner) &&
+    planAnswers.partner.monthly_take_home_cents <= 0
+  ) {
+    issues.push({ code: "income_required", stage: "partnerIncome" });
+  }
+  const totals = expenseTotals(calculationAnswers(normalized));
+  if (totals.current <= 0) {
+    issues.push({ code: "expenses_current_required", stage: "expenses" });
+  }
+  if (totals.interruption <= 0) {
+    issues.push({
+      code: "expenses_interruption_required",
+      stage: "reductions",
+    });
+  }
+
+  const parsed = householdRunwayAnswersSchema.safeParse(planCandidate);
+  if (!parsed.success) {
+    for (const issue of parsed.error.issues) {
+      const mapped = issueForPlanPath(issue.path);
+      if (!hasPlanIssue(issues, mapped.code, mapped.stage)) issues.push(mapped);
+    }
+  }
+
+  return issues.length > 0
+    ? { success: false, validationIssues: issues }
+    : { success: true, planInputs: parsed.data as HouseholdRunwayAnswers };
+}
+
 function availableScenarios(
   answers: HouseholdRunwayInterviewAnswers,
 ): ScenarioOption[] {
@@ -1257,14 +1432,46 @@ function blockingIssueFor(
   return stage ? current ?? draft.validationIssues[stage] ?? null : null;
 }
 
-function reviewReadinessIssue(
-  answers: HouseholdRunwayInterviewAnswers,
-): HouseholdRunwayValidationIssue | null {
+interface HouseholdRunwayReviewProjection {
+  planInputs: HouseholdRunwayAnswers | null;
+  assessment: SuccessfulHouseholdRunwayAssessment | null;
+  validationIssue: HouseholdRunwayValidationIssue | null;
+}
+
+function reviewProjectionForDraft(
+  draft: HouseholdRunwayInterviewDraft,
+): HouseholdRunwayReviewProjection {
+  const normalized = normalizeHouseholdRunwayDraft(draft);
+  if (!normalized.success) {
+    return {
+      planInputs: null,
+      assessment: null,
+      validationIssue: normalized.validationIssues[0] ?? {
+        code: "plan_input_invalid",
+        stage: "review",
+      },
+    };
+  }
+
   const assessment = assessHouseholdRunway({
-    answers: calculationAnswers(answers),
-    startDate: new Date(answers.updated_at ?? "1970-01-01T00:00:00.000Z"),
+    answers: normalized.planInputs,
+    startDate: new Date(normalized.planInputs.updated_at),
   });
-  return assessment.success ? null : { code: "assessment_required" };
+  if (!assessment.success) {
+    return {
+      planInputs: normalized.planInputs,
+      assessment: null,
+      validationIssue: {
+        code: "assessment_required",
+        stage: "review",
+      },
+    };
+  }
+  return {
+    planInputs: normalized.planInputs,
+    assessment,
+    validationIssue: null,
+  };
 }
 
 function renderFor(
@@ -1272,6 +1479,7 @@ function renderFor(
   stage: HouseholdRunwayInterviewStage | null,
   draft: HouseholdRunwayInterviewDraft,
   validationIssue: HouseholdRunwayValidationIssue | null,
+  reviewProjection: HouseholdRunwayReviewProjection | null,
 ): HouseholdRunwayInterviewRenderModel {
   if (status === "not_started" || stage === null) {
     return { kind: "landing", stage: null, location: null };
@@ -1283,9 +1491,8 @@ function renderFor(
     draft,
   } as HouseholdRunwayInterviewState);
   const stageStatus = draft.stageStatus[stage];
-  const blockingIssue =
-    blockingIssueFor(draft, stage, validationIssue) ??
-    (stage === "review" ? reviewReadinessIssue(draft.answers) : null);
+  const blockingIssue = blockingIssueFor(draft, stage, validationIssue) ??
+    (stage === "review" ? reviewProjection?.validationIssue ?? null : null);
 
   if (stage === "location") {
     return {
@@ -1470,7 +1677,12 @@ function renderFor(
         currency: draft.location.currency,
       },
       answers: draft.answers,
-      ready: blockingIssue === null,
+      planInputs: reviewProjection?.planInputs ?? null,
+      assessment: reviewProjection?.assessment ?? null,
+      availableScenarios: draft.availableScenarios,
+      selectedScenario: draft.selectedScenario,
+      assessmentModelVersion: reviewProjection?.assessment?.modelVersion ?? null,
+      ready: blockingIssue === null && reviewProjection?.assessment != null,
       availableStages,
       stageStatus,
       blockingIssue,
@@ -1483,6 +1695,11 @@ function renderFor(
     availableStages,
     stageStatus,
     blockingIssue,
+    planInputs: reviewProjection?.planInputs ?? null,
+    assessment: reviewProjection?.assessment ?? null,
+    availableScenarios: draft.availableScenarios,
+    selectedScenario: draft.selectedScenario,
+    assessmentModelVersion: reviewProjection?.assessment?.modelVersion ?? null,
   };
 }
 
@@ -1501,14 +1718,31 @@ function stateFrom(
           : snapshot.stage && snapshot.stage !== "result"
             ? snapshot.stage
             : "location";
-  const renderModel = renderFor(status, stage, draft, snapshot.validationIssue);
+  const reviewProjection =
+    status === "reviewing" || status === "completed"
+      ? reviewProjectionForDraft(draft)
+      : null;
+  const validationIssue =
+    snapshot.validationIssue ?? reviewProjection?.validationIssue ?? null;
+  const renderModel = renderFor(
+    status,
+    stage,
+    draft,
+    validationIssue,
+    reviewProjection,
+  );
+  const derived = {
+    planInputs: reviewProjection?.planInputs ?? null,
+    assessment: reviewProjection?.assessment ?? null,
+  };
   if (status === "not_started") {
     return {
       version: HOUSEHOLD_RUNWAY_INTERVIEW_VERSION,
       status,
       stage: null,
       draft,
-      validationIssue: snapshot.validationIssue,
+      validationIssue,
+      ...derived,
       renderModel: renderModel as HouseholdRunwayLandingRenderModel,
       render: renderModel as HouseholdRunwayLandingRenderModel,
     };
@@ -1519,7 +1753,8 @@ function stateFrom(
       status,
       stage: "review",
       draft,
-      validationIssue: snapshot.validationIssue,
+      validationIssue,
+      ...derived,
       renderModel: renderModel as HouseholdRunwayReviewRenderModel,
       render: renderModel as HouseholdRunwayReviewRenderModel,
     };
@@ -1530,7 +1765,8 @@ function stateFrom(
       status,
       stage: "result",
       draft,
-      validationIssue: snapshot.validationIssue,
+      validationIssue,
+      ...derived,
       renderModel: renderModel as HouseholdRunwayGenericStageRenderModel,
       render: renderModel as HouseholdRunwayGenericStageRenderModel,
     };
@@ -1540,7 +1776,8 @@ function stateFrom(
     status: "collecting",
     stage: stage as Exclude<HouseholdRunwayInterviewStage, "result">,
     draft,
-    validationIssue: snapshot.validationIssue,
+    validationIssue,
+    ...derived,
     renderModel: renderModel as Exclude<
       HouseholdRunwayInterviewRenderModel,
       HouseholdRunwayLandingRenderModel
@@ -1563,6 +1800,8 @@ function transition(
     state: nextState,
     nextState,
     renderModel: nextState.renderModel,
+    planInputs: nextState.planInputs,
+    assessment: nextState.assessment,
     events,
     effects,
   };
@@ -1678,6 +1917,7 @@ function updateDraftAnswers(
   });
   invalidateValidationIssues(draft, command);
   const previousAnswers = state.draft.answers;
+  const previousScenario = state.draft.selectedScenario;
   const clearedStages: HouseholdRunwayInterviewStage[] = [];
   const cleanupEvents: HouseholdRunwayInterviewEvent[] = [];
 
@@ -1707,9 +1947,9 @@ function updateDraftAnswers(
   }
 
   const scenarios = availableScenarios(draft.answers);
-  const previousScenario = state.draft.selectedScenario;
   draft.availableScenarios = scenarios;
-  if (draft.selectedScenario && scenarios.some((item) => item.id === draft.selectedScenario)) {
+  if (previousScenario && scenarios.some((item) => item.id === previousScenario)) {
+    draft.selectedScenario = previousScenario;
     // Keep a still-applicable Scenario stable across unrelated edits.
   } else {
     draft.selectedScenario = scenarios[0]?.id ?? null;
@@ -2373,7 +2613,7 @@ function validateStage(
     return { code: "expenses_interruption_required" };
   }
   if (stage === "review") {
-    return reviewReadinessIssue(answers);
+    return reviewProjectionForDraft(state.draft).validationIssue;
   }
   return null;
 }
@@ -2420,7 +2660,7 @@ function continueInterview(
         ) ?? null;
   if (!next) return ignored(state, command, "invalid_stage");
   if (next === "review") {
-    const reviewIssue = reviewReadinessIssue(draft.answers);
+    const reviewIssue = reviewProjectionForDraft(draft).validationIssue;
     if (reviewIssue) {
       const blockedDraft = normalizeDraft({
         ...state.draft,
