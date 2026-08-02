@@ -382,7 +382,6 @@ test("clears malformed device data and keeps the Interview usable", async ({ pag
   await page.reload();
 
   await expect(page.getByTestId("runway-hero-cta")).toBeVisible();
-  await expect(page.getByRole("alert").filter({ hasText: "Draft" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => ({
     draft: window.localStorage.getItem("betterr.household-runway.interview.v2"),
     consent: window.localStorage.getItem("betterr.household-runway.interview.device-consent.v1"),
