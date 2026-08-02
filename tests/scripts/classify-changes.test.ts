@@ -240,6 +240,21 @@ describe("conditional test classifier", () => {
     expect(result.suites.e2e).toBe(true);
   });
 
+  it("routes the finance browser spec through the anonymous runway project", () => {
+    const result = classifyChanges([{
+      status: "M",
+      path: "e2e/financial-cushion.spec.ts",
+    }]);
+
+    expect(result.suites).toMatchObject({
+      e2e: true,
+      e2eFull: false,
+      e2eSpecs: [],
+      e2eRunway: true,
+      e2eSupabase: false,
+    });
+  });
+
   it("falls back to broad validation for unknown application code", () => {
     const result = classifyChanges([{ status: "M", path: "app/future/page.tsx" }]);
 

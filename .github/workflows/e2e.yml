@@ -190,7 +190,9 @@ jobs:
           fi
 
           if [[ "$E2E_RUNWAY" == "true" ]]; then
-            pnpm exec playwright test e2e/financial-cushion.spec.ts --project=runway-public-desktop
+            # Household Runway has a dedicated anonymous project. Do not pull
+            # the authenticated setup project into this public-only check.
+            pnpm exec playwright test e2e/financial-cushion.spec.ts --project=runway-public-desktop --no-deps
           fi
 
           if [[ "$E2E_VISUAL" == "true" ]]; then
