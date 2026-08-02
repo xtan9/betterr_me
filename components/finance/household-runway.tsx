@@ -25,7 +25,6 @@ import { MoneyField } from "@/components/finance/runway-money-field";
 import { ResultExperience } from "@/components/finance/household-runway-result";
 import {
   RUNWAY_STEP_IDS,
-  currencyForCountry,
   estimateMonthlyTakeHome,
   expenseTotals,
   formatCents,
@@ -42,19 +41,18 @@ import {
   type RunwaySnapshotSummary,
   type RunwayStepId,
 } from "@/lib/finance/cushion";
-import { assessHouseholdRunway } from "@/lib/finance/household-runway-assessment";
 import { downloadHouseholdRunwayAssessment } from "@/lib/finance/household-runway-download";
 import {
   EXPENSE_ITEM_TYPES,
   type ExpenseItemType,
 } from "@/lib/finance/runway-expenses";
 import {
-  clearHouseholdRunwayInterviewDraft,
-  clearRunwayDraft,
-  persistHouseholdRunwayInterviewDraft,
-  persistRunwayDraft,
-  readHouseholdRunwayInterviewDraft,
-  readRunwayDraft,
+  clearHouseholdRunwayDeviceDraft,
+  clearHouseholdRunwayDraft,
+  hasHouseholdRunwayDeviceStorageConsent,
+  persistHouseholdRunwayDraft,
+  rememberHouseholdRunwayDraft,
+  readHouseholdRunwayDraft,
 } from "@/lib/finance/runway-draft-client";
 import {
   runwayAttribution,
@@ -179,31 +177,6 @@ function runwayAnswersForPresentation(
   } as HouseholdRunwayAnswers;
 }
 
-function interviewDraftFromRunwayAnswers(answers: HouseholdRunwayAnswers) {
-  return {
-    revision: 0,
-    interviewId: null,
-    startedAt: null,
-    location: {
-      country: answers.country,
-      region: answers.region || null,
-      currency: answers.currency,
-      proposedCurrency: currencyForCountry(answers.country),
-      currencySelection: "explicit" as const,
-    },
-    answers,
-    planAdjustment: {
-      expense_reduction_cents: 0,
-      added_cash_cents: 0,
-      added_monthly_income_cents: 0,
-      expected_unconfirmed_funds_cents: 0,
-      usable_illiquid_investments_cents: 0,
-      usable_retirement_tax_deferred_cents: 0,
-      usable_retirement_tax_free_cents: 0,
-    },
-  };
-}
-
 function resumableRunwayStep(
   stage: RunwayStepId | null,
 ): RunwayStepId | undefined {
@@ -252,6 +225,7 @@ export function HouseholdRunway({
   const locale = useLocale();
   const [hydrated, setHydrated] = useState(false);
   const [hasLocalDraft, setHasLocalDraft] = useState(false);
+  const [deviceStorageConsent, setDeviceStorageConsent] = useState(false);
   const [snapshots, setSnapshots] = useState(initialSnapshots);
   const [interviewState, setInterviewState] =
     useState<HouseholdRunwayInterviewState>(() =>
@@ -277,15 +251,9 @@ export function HouseholdRunway({
   const scenario = interviewState.draft.selectedScenario ?? "current";
   const draftAnswers = runwayAnswersForPresentation(interviewState.draft.answers);
   const answers = interviewState.planInputs ?? draftAnswers;
-  const persistedBoundaryDraft =
-    typeof window !== "undefined" ? readHouseholdRunwayInterviewDraft() : null;
-  const persistedRunwayDraft =
-    typeof window !== "undefined" ? readRunwayDraft() : null;
   const draftCompleted =
     interviewState.status === "completed" ||
-    (persistedBoundaryDraft
-      ? persistedBoundaryDraft.stageStatus?.result === "completed"
-      : persistedRunwayDraft?.completed === true);
+    interviewState.draft.stageStatus.result === "completed";
   const draftSyncOperation = interviewState.operations.draftSynchronization;
   const draftSyncState =
     draftSyncOperation.status === "succeeded"
@@ -356,42 +324,27 @@ export function HouseholdRunway({
 
   useEffect(() => {
     let hydrationFrame: number | null = null;
-    const boundaryDraft = readHouseholdRunwayInterviewDraft();
-    const runwayDraft = readRunwayDraft();
+    const storedDraft = readHouseholdRunwayDraft();
+    const restoredDraft =
+      storedDraft.status === "restored" ? storedDraft.state : null;
+    setDeviceStorageConsent(hasHouseholdRunwayDeviceStorageConsent());
     const committedPlan = initialAnswers
       ? { revision: 0, inputs: initialAnswers }
       : null;
     let restoredBoundary = createHouseholdRunwayInterview({
       committedPlan,
     });
-    if (boundaryDraft) {
-      const hasBoundaryCompletionStatus =
-        boundaryDraft.stageStatus?.result !== undefined;
-      const completed =
-        boundaryDraft.stageStatus?.result === "completed" ||
-        (!hasBoundaryCompletionStatus &&
-          runwayDraft?.completed === true &&
-          assessHouseholdRunway({ answers: runwayDraft.answers }).success);
+    if (restoredDraft) {
+      const completed = restoredDraft.status === "completed";
       restoredBoundary = restoreHouseholdRunwayInterview({
         version: 2,
         status: completed ? "completed" : "not_started",
         stage: completed ? "result" : null,
-        draft: boundaryDraft,
+        draft: restoredDraft.draft,
         committedPlan,
         validationIssue: null,
       });
-    } else if (runwayDraft) {
-      const completed =
-        runwayDraft.completed &&
-        assessHouseholdRunway({ answers: runwayDraft.answers }).success;
-      restoredBoundary = restoreHouseholdRunwayInterview({
-        version: 2,
-        status: completed ? "completed" : "not_started",
-        stage: completed ? "result" : null,
-        draft: interviewDraftFromRunwayAnswers(runwayDraft.answers),
-        committedPlan,
-        validationIssue: null,
-      });
+      resumeStageRef.current = restoredDraft.stage;
     }
     const syncUrlMode = () => {
       const started = new URLSearchParams(window.location.search).get("start") === "1";
@@ -428,9 +381,8 @@ export function HouseholdRunway({
         }
       }
     };
-    if (runwayDraft || boundaryDraft) {
+    if (restoredDraft) {
       setHasLocalDraft(true);
-      resumeStageRef.current = runwayDraft?.step_id ?? null;
     }
     const started = new URLSearchParams(window.location.search).get("start") === "1";
     if ((isAuthenticated || started) && restoredBoundary.status === "not_started") {
@@ -453,7 +405,7 @@ export function HouseholdRunway({
       setInterviewState(restoredBoundary);
     }
     window.addEventListener("popstate", syncUrlMode);
-    if (runwayDraft || boundaryDraft) {
+    if (restoredDraft) {
       // Commit restored answers before enabling autosave so a locale reload
       // can never overwrite the draft with the component defaults.
       hydrationFrame = window.requestAnimationFrame(() => setHydrated(true));
@@ -532,14 +484,14 @@ export function HouseholdRunway({
             ) {
               return;
             }
-            const step = (current.stage ?? "location") as RunwayStepId;
-            persistHouseholdRunwayInterviewDraft(effect.draft);
-            persistRunwayDraft(
-              runwayAnswersForPresentation(effect.draft.answers),
-              step,
-              effect.draft.stageStatus.result === "completed",
-            );
+            const persisted = persistHouseholdRunwayDraft({
+              status: current.status,
+              stage: current.stage,
+              draft: effect.draft,
+            });
+            if (!persisted.success) throw new Error(persisted.code);
             setHasLocalDraft(true);
+            setDeviceStorageConsent(hasHouseholdRunwayDeviceStorageConsent());
             dispatchInterviewCommand(
               {
                 type: "draft_synchronization_succeeded",
@@ -612,8 +564,7 @@ export function HouseholdRunway({
               currentPlanOperation.correlationId === correlationId &&
               interviewStateRef.current.draft.revision === sourceRevision;
             if (isCurrentPlanPersistence) {
-              clearRunwayDraft();
-              clearHouseholdRunwayInterviewDraft();
+              clearHouseholdRunwayDraft({ revokeConsent: false });
               setHasLocalDraft(false);
             }
             dispatchInterviewCommand(
@@ -781,9 +732,9 @@ export function HouseholdRunway({
   const startInterview = (fresh = false) => {
     if (fresh) {
       setHasLocalDraft(false);
+      setDeviceStorageConsent(false);
       resumeStageRef.current = null;
-      clearRunwayDraft();
-      clearHouseholdRunwayInterviewDraft();
+      clearHouseholdRunwayDraft({ revokeConsent: true });
     }
     const resumeStage = fresh
       ? null
@@ -821,10 +772,31 @@ export function HouseholdRunway({
 
   const clearDraft = () => {
     if (!window.confirm(t("actions.clearConfirm"))) return;
-    clearRunwayDraft();
+    clearHouseholdRunwayDraft({ revokeConsent: true });
     setHasLocalDraft(false);
-    clearHouseholdRunwayInterviewDraft();
+    setDeviceStorageConsent(false);
     dispatchInterviewCommand({ type: "discard_draft" });
+  };
+
+  const rememberDraft = () => {
+    const current = interviewStateRef.current;
+    const result = rememberHouseholdRunwayDraft({
+      status: current.status,
+      stage: current.stage,
+      draft: current.draft,
+    });
+    if (!result.success) {
+      setError(t("save.draftSyncError"));
+      return;
+    }
+    setDeviceStorageConsent(true);
+    setHasLocalDraft(true);
+    setError("");
+  };
+
+  const forgetDeviceDraft = () => {
+    clearHouseholdRunwayDeviceDraft();
+    setDeviceStorageConsent(false);
   };
 
   const next = () => {
@@ -915,6 +887,14 @@ export function HouseholdRunway({
       data-runway-plan-operation={planOperationState}
     >
       {!isAuthenticated ? <RunwayHeader t={t} /> : null}
+      {!showLanding ? (
+        <DraftStorageControl
+          t={t}
+          deviceStorageConsent={deviceStorageConsent}
+          onRemember={rememberDraft}
+          onForget={forgetDeviceDraft}
+        />
+      ) : null}
       {showLanding ? (
         <HouseholdRunwayLanding
           t={t}
@@ -1025,6 +1005,44 @@ function RunwayHeader({ t }: { t: ReturnType<typeof useTranslations> }) {
         </div>
       </div>
     </header>
+  );
+}
+
+function DraftStorageControl({
+  t,
+  deviceStorageConsent,
+  onRemember,
+  onForget,
+}: {
+  t: ReturnType<typeof useTranslations>;
+  deviceStorageConsent: boolean;
+  onRemember: () => void;
+  onForget: () => void;
+}) {
+  return (
+    <div
+      className="mx-auto max-w-6xl px-5 pt-3"
+      data-runway-storage-scope={deviceStorageConsent ? "device" : "session"}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-black/5 bg-white/65 px-4 py-3 text-sm text-slate-600 dark:border-white/10 dark:bg-white/[.04] dark:text-slate-300">
+        <p>
+          {t(
+            deviceStorageConsent
+              ? "privacy.remembered"
+              : "privacy.session",
+          )}
+        </p>
+        {deviceStorageConsent ? (
+          <Button type="button" variant="ghost" size="sm" onClick={onForget}>
+            {t("privacy.forget")}
+          </Button>
+        ) : (
+          <Button type="button" variant="outline" size="sm" onClick={onRemember}>
+            {t("privacy.remember")}
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }
 

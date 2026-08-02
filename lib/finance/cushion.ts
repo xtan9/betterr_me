@@ -1,4 +1,3 @@
-import { normalizeLegacyRegion } from "@/lib/finance/runway-regions";
 import {
   estimateRegionalTakeHome,
   estimateUsTakeHome,
@@ -7,20 +6,15 @@ import {
 } from "@/lib/finance/runway-tax";
 import {
   EXPENSE_CATEGORIES,
-  EXPENSE_ITEM_TYPES,
-  isExpenseItemType,
   type ExpenseCategory,
   type ExpenseItemType,
 } from "@/lib/finance/runway-expenses";
-import { householdRunwayAnswersSchema } from "@/lib/validations/finance-cushion";
+import { migrateRunwayAnswers } from "@/lib/finance/runway-answer-migrations";
 export { EXPENSE_CATEGORIES } from "@/lib/finance/runway-expenses";
 export type { ExpenseCategory } from "@/lib/finance/runway-expenses";
 export type { TakeHomeEstimateBreakdown, TaxFilingStatus } from "@/lib/finance/runway-tax";
 
 export const RUNWAY_MODEL_VERSION = "4.0.0";
-export const RUNWAY_DRAFT_VERSION = 4;
-export const RUNWAY_DRAFT_STORAGE_KEY = "betterr.household-runway.v2";
-export const RUNWAY_DRAFT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export const RUNWAY_STEP_IDS = [
   "location",
@@ -35,11 +29,6 @@ export const RUNWAY_STEP_IDS = [
   "reductions",
   "review",
   "result",
-] as const;
-
-const LEGACY_V2_STEP_IDS = [
-  "welcome",
-  ...RUNWAY_STEP_IDS.filter((step) => step !== "reductions"),
 ] as const;
 
 export type RunwayStepId = (typeof RUNWAY_STEP_IDS)[number];
@@ -686,232 +675,6 @@ export function highestLeverageActions(
       monthlyBurn * target - effectiveResources,
     ),
   };
-}
-
-function legacyIncome(value: unknown): IncomeAnswer {
-  const income = (value ?? {}) as Record<string, unknown>;
-  const monthly = Number(income.monthly_take_home_cents) || 0;
-  const enteredAs = income.entered_as === "net" ? "net" : "gross";
-  const reviewed = Boolean(income.take_home_reviewed);
-  return {
-    employment: (["employed", "self_employed", "unemployed", "not_working"].includes(
-      String(income.employment),
-    )
-      ? income.employment
-      : "employed") as EmploymentStatus,
-    monthly_take_home_cents: monthly,
-    estimated_monthly_take_home_cents: enteredAs === "gross" ? monthly : 0,
-    entered_amount_cents: Number(income.entered_amount_cents) || 0,
-    entered_period: income.entered_period === "monthly" ? "monthly" : "annual",
-    entered_as: enteredAs,
-    gross_amount_cents: enteredAs === "gross" ? Number(income.entered_amount_cents) || 0 : 0,
-    gross_period: income.entered_period === "monthly" ? "monthly" : "annual",
-    net_amount_cents: enteredAs === "net" ? Number(income.entered_amount_cents) || 0 : monthly,
-    net_period: income.entered_period === "annual" && enteredAs === "net" ? "annual" : "monthly",
-    tax_filing_status: "single",
-    annual_other_deductions_cents: 0,
-    take_home_source:
-      enteredAs === "net" || reviewed ? "user_confirmed" : "estimated",
-    confidence: (income.confidence as InputConfidence) ?? "estimated",
-    estimate_rule_version:
-      typeof income.estimate_rule_version === "string"
-        ? income.estimate_rule_version
-        : undefined,
-  };
-}
-
-function legacyMoney(value: unknown): MoneyAnswer {
-  const money = (value ?? {}) as Record<string, unknown>;
-  return {
-    cents: Number(money.cents) || 0,
-    confidence: (money.confidence as InputConfidence) ?? "skipped",
-  };
-}
-
-function validateCurrentRunwayAnswers(
-  value: unknown,
-  allowIncompleteRegion: boolean,
-): HouseholdRunwayAnswers | null {
-  if (!value || typeof value !== "object") return null;
-  const raw = value as Record<string, unknown>;
-  const allowEmptyRegion = allowIncompleteRegion && raw.region === "";
-  const country = (["US", "CA", "CN", "TW"].includes(String(raw.country))
-    ? raw.country
-    : "US") as RunwayCountry;
-  const parsed = householdRunwayAnswersSchema.safeParse(
-    allowEmptyRegion
-      ? { ...raw, region: country === "US" ? "AL" : country === "CA" ? "AB" : country === "CN" ? "BJ" : "TPE" }
-      : raw,
-  );
-  return parsed.success
-    ? ({ ...parsed.data, region: allowEmptyRegion ? "" : parsed.data.region } as HouseholdRunwayAnswers)
-    : null;
-}
-
-export function migrateRunwayAnswers(
-  value: unknown,
-  now = new Date(),
-  options: { allowIncompleteRegion?: boolean } = {},
-): HouseholdRunwayAnswers | null {
-  if (!value || typeof value !== "object") return null;
-  const raw = value as Record<string, unknown>;
-  if (raw.schema_version === 4) {
-    return validateCurrentRunwayAnswers(raw, Boolean(options.allowIncompleteRegion));
-  }
-  if (raw.schema_version !== 2 && raw.schema_version !== 3) return null;
-  const country = (["US", "CA", "CN", "TW"].includes(String(raw.country))
-    ? raw.country
-    : "US") as RunwayCountry;
-  const legacyExpenses = (raw.expenses ?? {}) as Record<
-    string,
-    { current_cents?: number; interruption_cents?: number; confidence?: InputConfidence }
-  >;
-  const priorQuick = (raw.quick_expenses ?? {}) as Record<string, unknown>;
-  const current = raw.schema_version === 3 ? Number(priorQuick.current_monthly_cents) || 0 : Object.values(legacyExpenses).reduce(
-    (sum, item) => sum + (Number(item.current_cents) || 0),
-    0,
-  );
-  const interruption = raw.schema_version === 3 ? Number(priorQuick.interruption_monthly_cents) || current : Object.values(legacyExpenses).reduce(
-    (sum, item) => sum + (Number(item.interruption_cents) || 0),
-    0,
-  );
-  const other = legacyMoney(raw.other_monthly_income);
-  const oldAssets = (raw.assets ?? {}) as Record<string, unknown>;
-  const retirement = raw.schema_version === 3 ? legacyMoney(oldAssets.retirement_tax_deferred) : legacyMoney(raw.retirement_accounts);
-  const migrated: HouseholdRunwayAnswers = {
-    ...createDefaultRunwayAnswers(now),
-    country,
-    region: normalizeLegacyRegion(country, String(raw.region ?? "")),
-    currency: currencyForCountry(country),
-    shares_finances: Boolean(raw.shares_finances),
-    has_children: Boolean(raw.has_children),
-    has_support_obligations: Boolean(raw.has_support_obligations),
-    mine: legacyIncome(raw.mine),
-    partner: raw.partner ? legacyIncome(raw.partner) : null,
-    other_income_sources: raw.schema_version === 3 && Array.isArray(raw.other_income_sources)
-      ? raw.other_income_sources as RecurringIncomeSource[]
-      : other.cents > 0
-        ? [
-            {
-              id: "legacy-other-income",
-              type: "other",
-              label: "Migrated other income",
-              monthly_cents: other.cents,
-              confidence: "needs_review",
-            },
-          ]
-        : [],
-    available_cash: legacyMoney(raw.available_cash),
-    assets: {
-      liquid_investments: legacyMoney(raw.schema_version === 3 ? oldAssets.liquid_investments : raw.taxable_investments),
-      illiquid_investments: legacyMoney(oldAssets.illiquid_investments),
-      home_equity: legacyMoney(raw.schema_version === 3 ? oldAssets.home_equity : raw.home_equity),
-      retirement_tax_deferred: {
-        ...retirement,
-        confidence: retirement.cents > 0 ? "needs_review" : retirement.confidence,
-      },
-      retirement_tax_free: legacyMoney(oldAssets.retirement_tax_free),
-    },
-    housing_tenure: raw.schema_version === 3 && ["rent", "own", "other"].includes(String(raw.housing_tenure)) ? raw.housing_tenure as HousingTenure : null,
-    expense_mode: raw.schema_version === 3 && raw.expense_mode === "guided" ? "guided" : "quick",
-    expense_items: raw.schema_version === 3 && Array.isArray(raw.expense_items)
-      ? (raw.expense_items as Array<Record<string, unknown>>).map((item) => {
-          const category = EXPENSE_CATEGORIES.includes(item.category as ExpenseCategory)
-            ? (item.category as ExpenseCategory)
-            : "other";
-          const fallback = EXPENSE_ITEM_TYPES[category][0] ?? "other_commitment";
-          return {
-            ...item,
-            category,
-            type: isExpenseItemType(item.type) ? item.type : fallback,
-          } as ExpenseLineItem;
-        })
-      : [],
-    completed_expense_categories: raw.schema_version === 3 && Array.isArray(raw.completed_expense_categories) ? raw.completed_expense_categories as ExpenseCategory[] : [],
-    expense_category_modes: raw.schema_version === 3 && Array.isArray(raw.expense_items)
-      ? Object.fromEntries((raw.expense_items as ExpenseLineItem[]).map((item) => [item.category, "itemized"]))
-      : {},
-    expense_category_subtotals: {},
-    quick_expenses: {
-      current_monthly_cents: current,
-      interruption_monthly_cents: interruption,
-      confidence: current > 0 ? "needs_review" : "skipped",
-    },
-    updated_at:
-      typeof raw.updated_at === "string" ? raw.updated_at : now.toISOString(),
-  };
-  return validateCurrentRunwayAnswers(migrated, true);
-}
-
-export interface RunwayDraftEnvelope {
-  version: 4;
-  expires_at: string;
-  step_id: RunwayStepId;
-  completed: boolean;
-  answers: HouseholdRunwayAnswers;
-}
-
-export function createDraftEnvelope(
-  answers: HouseholdRunwayAnswers,
-  stepId: RunwayStepId,
-  completed: boolean,
-  now = new Date(),
-): RunwayDraftEnvelope {
-  return {
-    version: RUNWAY_DRAFT_VERSION,
-    expires_at: new Date(now.getTime() + RUNWAY_DRAFT_TTL_MS).toISOString(),
-    step_id: stepId,
-    completed,
-    answers,
-  };
-}
-
-export function parseDraftEnvelope(
-  raw: string | null,
-  now = new Date(),
-): RunwayDraftEnvelope | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    if (new Date(String(parsed.expires_at)) <= now) return null;
-    if (parsed.version === 4 || parsed.version === 3) {
-      const answers = migrateRunwayAnswers(parsed.answers, now, {
-        allowIncompleteRegion: true,
-      });
-      const legacyStepId = String(parsed.step_id);
-      const stepId = (legacyStepId === "confirmedFunds" ? "assets" : legacyStepId === "temporaryIncome" ? "review" : legacyStepId) as RunwayStepId;
-      if (!answers || !RUNWAY_STEP_IDS.includes(stepId)) return null;
-      return {
-        version: 4,
-        expires_at: String(parsed.expires_at),
-        step_id: stepId,
-        completed: Boolean(parsed.completed),
-        answers,
-      };
-    }
-    if (parsed.version === 2) {
-      const answers = migrateRunwayAnswers(parsed.answers, now, {
-        allowIncompleteRegion: true,
-      });
-      if (!answers) return null;
-      const legacyStep = Number(parsed.step) || 0;
-      const legacyId = LEGACY_V2_STEP_IDS[
-        Math.min(legacyStep, LEGACY_V2_STEP_IDS.length - 1)
-      ];
-      const stepId: RunwayStepId =
-        legacyId === "welcome" ? "location" : legacyId;
-      return {
-        version: 4,
-        expires_at: String(parsed.expires_at),
-        step_id: stepId,
-        completed: Boolean(parsed.completed),
-        answers,
-      };
-    }
-    return null;
-  } catch {
-    return null;
-  }
 }
 
 interface RequiredCushionColumns {

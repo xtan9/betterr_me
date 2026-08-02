@@ -3,17 +3,15 @@ import {
   availableScenarios,
   applyExpenseReduction,
   createDefaultRunwayAnswers,
-  createDraftEnvelope,
   estimateMonthlyTakeHome,
   expenseTotals,
-  migrateRunwayAnswers,
   normalizeExpenseToMonthly,
-  parseDraftEnvelope,
   simulateHouseholdRunway,
   toFinanceCushionView,
   withCurrentLifestyleExpenses,
   type HouseholdRunwayAnswers,
 } from "@/lib/finance/cushion";
+import { migrateRunwayAnswers } from "@/lib/finance/runway-answer-migrations";
 
 function runway(overrides?: Partial<HouseholdRunwayAnswers>) {
   const answers = createDefaultRunwayAnswers(
@@ -276,39 +274,6 @@ describe("estimates, drafts, and migration", () => {
       expect(estimate.annual_federal_income_tax_cents).toBeGreaterThanOrEqual(0);
     },
   );
-
-  it("restores stable step IDs and expires after 30 days", () => {
-    const now = new Date("2026-07-26T00:00:00.000Z");
-    const envelope = createDraftEnvelope(runway(), "assets", false, now);
-    expect(parseDraftEnvelope(JSON.stringify(envelope), now)?.step_id).toBe("assets");
-    expect(parseDraftEnvelope(JSON.stringify(envelope), new Date("2026-08-26T00:00:00.000Z"))).toBeNull();
-  });
-
-  it("restores an in-progress location draft before a region is selected", () => {
-    const now = new Date("2026-07-26T00:00:00.000Z");
-    const envelope = createDraftEnvelope(createDefaultRunwayAnswers(now), "location", false, now);
-    expect(parseDraftEnvelope(JSON.stringify(envelope), now)?.answers.region).toBe("");
-  });
-
-  it("discards malformed current-version drafts instead of trusting their shape", () => {
-    const now = new Date("2026-07-26T00:00:00.000Z");
-    const malformed = {
-      version: 4,
-      expires_at: "2026-08-01T00:00:00.000Z",
-      step_id: "result",
-      completed: true,
-      answers: { schema_version: 4, country: "US" },
-    };
-    expect(parseDraftEnvelope(JSON.stringify(malformed), now)).toBeNull();
-  });
-
-  it("maps removed version 3 steps forward and drops old baseline inflows", () => {
-    const oldAnswers = { ...runway(), schema_version: 3, confirmed_funds: [{ id: "old", amount_cents: 100_000, arrives_month: 2, confidence: "confirmed" }], temporary_income: { monthly_cents: 50_000, remaining_months: 2, confidence: "confirmed" } };
-    const parsed = parseDraftEnvelope(JSON.stringify({ version: 3, expires_at: "2026-08-01T00:00:00.000Z", step_id: "confirmedFunds", completed: false, answers: oldAnswers }), new Date("2026-07-26T00:00:00.000Z"));
-    expect(parsed?.step_id).toBe("assets");
-    expect(parsed?.answers).not.toHaveProperty("confirmed_funds");
-    expect(parsed?.answers).not.toHaveProperty("temporary_income");
-  });
 
   it("discards malformed nested version 3 data after migration", () => {
     const oldAnswers = {

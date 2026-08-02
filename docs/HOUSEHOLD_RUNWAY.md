@@ -18,11 +18,26 @@ questions and result scenarios to the household's employment state. Optional
 detail can be skipped, and essential expenses can be entered as totals or by
 category.
 
-Anonymous answers are stored only in the browser using a versioned envelope
-with a 30-day expiry. Visitors can clear the draft at any time. Registration
-does not upload the draft automatically: the result page asks for explicit
-consent, uses an idempotency key for the import, and deletes the local draft
-only after the server confirms the save.
+The provisional Draft is owned by the framework-independent
+`household-runway-draft-codec`. Its versioned envelope includes the current
+answers, interview stage/status, nested expense progress, Plan Adjustment, and
+selected applicable Scenario. It deliberately excludes localized messages,
+request/operation state, focus/modal state, analytics, and other presentation
+state. The codec receives the clock explicitly, expires envelopes after 30
+days, and returns recoverable rejection codes for malformed, unsupported,
+expired, invalid-stage, invalid-scenario, and incomplete-completion data.
+
+Anonymous Drafts remain in memory and `sessionStorage` by default. The adapter
+does not write durable device storage without an explicit “Remember on this
+device” action and a visible 30-day disclosure. Clearing, importing, or saving
+a Plan removes the session Draft and the remembered device copy; the consent
+marker is revoked by clear/discard. Invalid or expired stored envelopes are
+removed without blocking the in-memory interview. No localized or presentation
+state is serialized, and there are no hidden durable writes.
+
+Registration does not upload the Draft automatically: the result page asks for
+explicit consent, uses an idempotency key for the import, and deletes the local
+Draft only after the server confirms the save.
 
 ## Calculation contract
 
@@ -92,6 +107,8 @@ them safely.
 ## Verification
 
 - Pure calculation and state branching: `tests/lib/finance/cushion.test.ts`
+- Draft codec and storage boundary: `tests/lib/finance/household-runway-draft-codec.test.ts`,
+  `tests/lib/finance/runway-draft-client.test.ts`
 - API validation and server recomputation:
   `tests/app/api/finance/cushion/route.test.ts`
 - Amount-free analytics boundary:

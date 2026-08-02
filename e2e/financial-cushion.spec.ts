@@ -210,7 +210,7 @@ test("surfaces a local Draft synchronization failure without blocking the Interv
   await page.getByTestId("runway-hero-cta").click();
 
   await expect(page.locator('[data-runway-draft-sync="failed"]')).toBeVisible();
-  await expect(page.getByText("This draft could not be saved on this device", { exact: false })).toBeVisible();
+  await expect(page.getByText("This Draft could not be saved for this session", { exact: false })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Where does your household live?" })).toBeVisible();
 });
 
@@ -268,8 +268,8 @@ test("switches locale without losing the current step, attribution, or canonical
   await region.selectOption("CA");
   await expect.poll(() =>
     page.evaluate(() => {
-      const raw = window.localStorage.getItem("betterr.household-runway.v2");
-      return raw ? JSON.parse(raw).answers.region : null;
+      const raw = window.sessionStorage.getItem("betterr.household-runway.interview.v2");
+      return raw ? JSON.parse(raw).draft.answers.region : null;
     }),
   ).toBe("CA");
 
@@ -278,13 +278,65 @@ test("switches locale without losing the current step, attribution, or canonical
   await expect(page.getByRole("heading", { name: "你的家庭住在哪里？" })).toBeVisible();
   await expect.poll(() =>
     page.evaluate(() => {
-      const raw = window.localStorage.getItem("betterr.household-runway.v2");
-      return raw ? JSON.parse(raw).answers.region : null;
+      const raw = window.sessionStorage.getItem("betterr.household-runway.interview.v2");
+      return raw ? JSON.parse(raw).draft.answers.region : null;
     }),
   ).toBe("CA");
   await expect(page).toHaveURL(/campaign=locale-test.*cta=header.*start=1/);
   await expect(page.getByRole("combobox", { name: "州、省或地区" })).toHaveValue("CA");
   await expect(page.getByRole("button", { name: "Language" })).toContainText("简体中文");
+});
+
+test("keeps an anonymous Draft in the session through navigation without durable device storage", async ({ page }) => {
+  await page.goto("/finance/cushion?campaign=session-only&cta=test");
+  await page.evaluate(() => {
+    window.sessionStorage.clear();
+    window.localStorage.clear();
+  });
+
+  await page.getByTestId("runway-hero-cta").click();
+  await page.getByRole("button", { name: "United States", exact: true }).click();
+  await page.getByRole("combobox", { name: "State, province, or region" }).selectOption("CA");
+
+  await expect.poll(() =>
+    page.evaluate(() => {
+      const raw = window.sessionStorage.getItem("betterr.household-runway.interview.v2");
+      return {
+        region: raw ? JSON.parse(raw).draft.answers.region : null,
+        durable: window.localStorage.getItem("betterr.household-runway.interview.v2"),
+        durableKeys: Object.keys(window.localStorage).filter((key) => key.startsWith("betterr.household-runway")),
+      };
+    }),
+  ).toEqual({ region: "CA", durable: null, durableKeys: [] });
+
+  await page.goBack();
+  await expect(page.getByRole("heading", { name: "How long could your household keep going?" })).toBeVisible();
+  await expect(page.getByTestId("runway-hero-cta")).toContainText("Resume my check-up");
+  await page.getByTestId("runway-hero-cta").click();
+  await expect(page.getByRole("combobox", { name: "State, province, or region" })).toHaveValue("CA");
+});
+
+test("requires an explicit choice before remembering a Draft on the device", async ({ page }) => {
+  await page.goto("/finance/cushion?campaign=remember-consent&cta=test");
+  await page.evaluate(() => {
+    window.sessionStorage.clear();
+    window.localStorage.clear();
+  });
+  await page.getByTestId("runway-hero-cta").click();
+  await page.getByRole("button", { name: "United States", exact: true }).click();
+  await page.getByRole("combobox", { name: "State, province, or region" }).selectOption("CA");
+
+  await expect(page.getByRole("button", { name: "Remember on this device" })).toBeVisible();
+  expect(await page.evaluate(() => window.localStorage.getItem("betterr.household-runway.interview.v2"))).toBeNull();
+  await page.getByRole("button", { name: "Remember on this device" }).click();
+  await expect.poll(() => page.evaluate(() => window.localStorage.getItem("betterr.household-runway.interview.v2"))).not.toBeNull();
+  await expect(page.getByRole("button", { name: "Remove device copy" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Remove device copy" }).click();
+  await expect.poll(() => page.evaluate(() => ({
+    draft: window.localStorage.getItem("betterr.household-runway.interview.v2"),
+    consent: window.localStorage.getItem("betterr.household-runway.interview.device-consent.v1"),
+  }))).toEqual({ draft: null, consent: null });
 });
 
 test("uses guided income, asset, housing, and transportation cards", async ({ page }) => {
