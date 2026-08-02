@@ -110,6 +110,48 @@ test("restores an unconfirmed currency proposal without turning it into input", 
   await expect(page.getByText("Suggested CAD; continuing confirms this choice.")).toBeVisible();
 });
 
+test("adapts household income stages and makes currency retention explicit", async ({ page }) => {
+  await page.goto("/finance/cushion?campaign=adaptive-income&cta=test");
+  await page.getByTestId("runway-hero-cta").click();
+
+  await page.getByRole("button", { name: "United States", exact: true }).click();
+  await page.getByRole("combobox", { name: "State, province, or region" }).selectOption("CA");
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await page.getByRole("button", { name: "I share household finances" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Unemployed", exact: true }).last().click();
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await expect(page.getByRole("heading", { name: "What income reaches the household from your work?" })).toBeVisible();
+  await page.getByRole("button", { name: "I know take-home pay" }).click();
+  await page.getByRole("textbox", { name: "Income amount" }).fill("5000");
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await expect(page.getByRole("heading", { name: "Does dependable income continue outside work?" })).toBeVisible();
+  await page.getByRole("button", { name: "Skip for now" }).click();
+  await expect(page.getByRole("heading", { name: "How much could pay a bill today?" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Back" }).click();
+  await page.getByRole("button", { name: "Back" }).click();
+  await page.getByRole("button", { name: "Back" }).click();
+  await page.getByRole("button", { name: "Back" }).click();
+  await page.getByRole("button", { name: "Back" }).click();
+  await expect(page.getByRole("heading", { name: "Where does your household live?" })).toBeVisible();
+
+  await page.getByRole("combobox", { name: "Household currency" }).selectOption("CAD");
+  await expect(page.getByRole("alert").filter({ hasText: "Changing currency will not reinterpret existing entries" })).toBeVisible();
+  await page.getByRole("button", { name: "Retain entered cents" }).click();
+  await expect(page.getByRole("combobox", { name: "Household currency" })).toHaveValue("CAD");
+
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByRole("heading", { name: "What income reaches the household from your work?" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Income amount" })).toHaveValue("5000");
+  await expect(page.getByRole("heading", { name: "What income reaches the household from your partner's work?" })).toHaveCount(0);
+});
+
 test("switches locale without losing the current step, attribution, or canonical region", async ({ page }) => {
   await page.goto("/finance/cushion?campaign=locale-test&cta=header");
   await page.getByTestId("runway-hero-cta").click();

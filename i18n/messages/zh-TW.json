@@ -1618,6 +1618,7 @@
     "loading": "載入中..."
   },
   "householdRunway": {
+    "currencyChange": { "confirmation": "更改貨幣不會重新解讀既有金額。請選擇清除已填金額，或保留原樣輸入的分值。", "reset": "清除已填金額", "retain": "保留已輸入分值" },
     "boundary": { "currencyProposal": "建議使用 {currency}；繼續即確認此選擇。", "countryRequired": "請選擇家庭所在國家後繼續。", "regionRequired": "請填寫州、省或地區後繼續。", "currencyRequired": "請選擇家庭貨幣後繼續。" },
     "privacy": { "local": "草稿僅保存在此裝置" },
     "progress": { "remaining": "預計還需 {minutes} 分鐘" },

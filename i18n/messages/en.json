@@ -1618,6 +1618,7 @@
     "loading": "Loading..."
   },
   "householdRunway": {
+    "currencyChange": { "confirmation": "Changing currency will not reinterpret existing entries. Choose whether to reset entered amounts or retain the cents as entered.", "reset": "Reset entered amounts", "retain": "Retain entered cents" },
     "boundary": { "currencyProposal": "Suggested {currency}; continuing confirms this choice.", "countryRequired": "Choose the country where your household lives to continue.", "regionRequired": "Add your state, province, or region to continue.", "currencyRequired": "Choose a household currency to continue." },
     "privacy": { "local": "Your draft stays on this device" },
     "progress": { "remaining": "About {minutes} min left" },
