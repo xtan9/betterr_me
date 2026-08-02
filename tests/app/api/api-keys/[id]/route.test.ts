@@ -17,7 +17,7 @@ const mockApiKeysDB = {
   deleteKey: vi.fn(),
 };
 
-vi.mock('@/lib/db', () => ({
+vi.mock('@/lib/db/api-keys', () => ({
   ApiKeysDB: class {
     constructor() {
       return mockApiKeysDB;

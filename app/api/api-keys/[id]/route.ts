@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, cookieRouteErrorMessage } from '@/lib/auth/authenticated-request';
 import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
-import { ApiKeysDB } from '@/lib/db';
+import { ApiKeysDB } from '@/lib/db/api-keys';
 import { log } from '@/lib/logger';
 
 const WRITE_REQUEST_POLICY = {
