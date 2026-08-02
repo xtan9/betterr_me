@@ -159,6 +159,40 @@ grant, and post-revocation gates were therefore explicitly `not-proven`; no
 credentials were configured or issued, and the Playwright test remained green
 with outcome `blocked`.
 
+## Public-client registration, loopback, and consent evidence (#765)
+
+The #765 layer runs in the same Playwright compatibility test and uses the
+official MCP SDK plus real nonproduction provider and browser boundaries. It
+parameterizes the native public-client journey over both `127.0.0.1` and `::1`.
+Registration uses authorization-code grant, code response, no token-endpoint
+client authentication, and exactly one host/path-only loopback redirect. The
+public registration boundary is also probed with unsupported client
+authentication, grant and response types, malformed metadata, and unsafe
+redirect metadata; unavailable or ambiguous responses remain `not-proven`.
+
+Each family binds its callback on port `0`, verifies that the authorization
+request selects the actual request-time port while preserving the registered
+host and path, and only passes the full loopback/PKCE gate after a callback and
+public-client code exchange. The browser checks the Registered MCP Client
+name, logo, URL, and software metadata as untrusted claims, requires an
+authenticated user's explicit affirmative consent, and exercises fresh-client
+denial and abandonment journeys. Denial must return an OAuth error; abandonment
+must return no callback; neither path may expose a code, access token, refresh
+token, ID token, or token request.
+
+The layer records family-specific and aggregate `pass`, `fail`, or `not-proven`
+gates with sanitized public-boundary evidence. It uses a harness-local SVG logo
+fixture and does not add a BetterR.Me OAuth fallback, production cutover,
+provider database access, route mocks, or a custom token/grant store.
+
+The local #765 run on 2026-08-02 had no reachable provider target or dedicated
+test identity. Canonical Resource/provider discovery therefore stopped the
+family journeys, with IPv4/IPv6 registration, loopback, consent, denial, and
+abandonment rows explicitly `not-proven`; exact dependency versions and
+sanitized evidence were recorded. A configured nonproduction run must replace
+those rows with observed provider and browser evidence; documentation alone
+never passes a gate.
+
 Official protocol and provider references used by the harness:
 
 - [MCP authorization](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
