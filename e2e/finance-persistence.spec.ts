@@ -98,9 +98,14 @@ test.describe('Authenticated finance persistence', () => {
   test('requires an explicit choice when a newer device Draft meets the committed Plan', async ({ page }) => {
     await page.goto('/finance/cushion');
 
-    await expect(
-      page.getByRole('heading', { name: 'Where does your household live?' }),
-    ).toBeVisible();
+    const locationHeading = page.getByRole('heading', { name: 'Where does your household live?' });
+    const startNew = page.getByRole('button', { name: 'Start a new check-up', exact: true });
+    await expect(page.locator('[data-runway-presentation="authenticated"]')).toBeVisible();
+    if (await startNew.isVisible()) {
+      page.once('dialog', (dialog) => void dialog.accept());
+      await startNew.click();
+    }
+    await expect(locationHeading).toBeVisible();
     await page.getByRole('button', { name: 'United States', exact: true }).click();
     await page.getByRole('combobox', { name: 'State, province, or region' }).selectOption('CA');
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
