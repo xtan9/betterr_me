@@ -15,7 +15,7 @@ still requires its own evidence.
 | Approved telemetry fields only | PASS | `validateLegacyTelemetryRecord` and the legacy route tests |
 | Current Profile contract and route suites with legacy client paths disabled | PASS | Focused Vitest command below; `tests/setup.ts` sets `TEST_LEGACY_PROFILE_CLIENT_PATHS=disabled` |
 | Owner commands, revision reconciliation, session isolation, degraded presentation | PASS | Focused Current Profile and Preference suites below |
-| Authenticated browser journeys | PENDING ENVIRONMENT | `e2e/current-profile-preferences.spec.ts` blocks retained legacy client paths and requires disposable authenticated E2E state |
+| Authenticated browser journeys | PASS | [E2E (full Chromium)](https://github.com/xtan9/betterr_me/actions/runs/30725111519/job/91435225256) and [E2E Gate](https://github.com/xtan9/betterr_me/actions/runs/30725111519/job/91435742199) passed with disposable authenticated E2E state |
 | Architecture policy boundaries | PASS | `tests/scripts/current-profile-architecture.test.ts`, the retirement scanner, and the narrow admin role projection |
 | Retained legacy implementation paths unchanged | PASS | `changedRetainedLegacyProfilePaths()` against the supplied base commit |
 
@@ -130,6 +130,11 @@ pnpm exec playwright test e2e/current-profile-preferences.spec.ts --project=chro
 
 It is stateful and intentionally skips production-backed read-only targets. Its
 request guards fail the test if either retained legacy client path is requested.
+
+Hosted result: **PASS** — the disposable Supabase workflow ran the full
+Chromium suite and its aggregate E2E Gate passed. The local worktree could not
+execute this stateful journey because it has no disposable E2E credentials;
+the hosted run is the recorded authenticated evidence for this ticket.
 
 ## Retained implementation check
 

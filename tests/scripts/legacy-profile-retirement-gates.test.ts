@@ -163,6 +163,9 @@ describe("legacy Profile retirement gates", () => {
     expect(evidence).toContain("https://github.com/xtan9/betterr_me/issues/674#issuecomment-5154136937");
     expect(evidence).toContain("explicit risk acceptance");
     expect(evidence).toContain("does not claim that the fourteen-day interval was observed");
+    expect(evidence).toContain("| Authenticated browser journeys | PASS |");
+    expect(evidence).toContain("E2E (full Chromium)");
+    expect(evidence).toContain("91435225256");
     expect(evidence).toContain("node scripts/ci/legacy-profile-retirement-gates.mjs");
     expect(evidence).toContain("pnpm exec vitest run");
     expect(evidence).toContain("pnpm exec playwright test e2e/current-profile-preferences.spec.ts --project=chromium");
