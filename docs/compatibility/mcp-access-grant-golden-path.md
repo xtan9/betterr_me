@@ -173,12 +173,15 @@ redirect metadata; unavailable or ambiguous responses remain `not-proven`.
 Each family binds its callback on port `0`, verifies that the authorization
 request selects the actual request-time port while preserving the registered
 host and path, and only passes the full loopback/PKCE gate after a callback and
-public-client code exchange. The browser checks the Registered MCP Client
+public-client code exchange. Before approval, the official Supabase client
+checks the supported user-facing grant list and requires the newly registered
+client to have no existing grant. The browser checks the Registered MCP Client
 name, logo, URL, and software metadata as untrusted claims, requires an
 authenticated user's explicit affirmative consent, and exercises fresh-client
-denial and abandonment journeys. Denial must return an OAuth error; abandonment
-must return no callback; neither path may expose a code, access token, refresh
-token, ID token, or token request.
+denial and abandonment journeys. After each successful IPv4/IPv6 approval, the
+same user-facing boundary identifies and revokes that family's grant. Denial
+must return an OAuth error; abandonment must return no callback; neither path
+may expose a code, access token, refresh token, ID token, or token request.
 
 The layer records family-specific and aggregate `pass`, `fail`, or `not-proven`
 gates with sanitized public-boundary evidence. It uses a harness-local SVG logo

@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
 
 import type { Page, Request as PlaywrightRequest, TestInfo } from "@playwright/test";
@@ -24,6 +24,7 @@ import type {
   OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export type GateStatus = "pass" | "fail" | "not-proven";
 
@@ -45,6 +46,7 @@ export interface McpAccessGrantTarget {
   supabaseUrl: string;
   expectedAuthorizationServer: string;
   loopbackHosts?: LoopbackHost[];
+  anonKey?: string;
   email?: string;
   password?: string;
 }
@@ -71,6 +73,15 @@ interface RequestEvidence {
   url: string;
   requestBodyFields: string[];
   authorizationHeaderPresent: boolean;
+  requestClientId?: string;
+  requestGrantType?: string;
+  requestRedirectUri?: string;
+  requestResource?: string;
+  requestCodeChallengeMethod?: string;
+  requestCodeChallengePresent?: boolean;
+  requestCodePresent?: boolean;
+  requestCodeVerifierPresent?: boolean;
+  requestCodeVerifierHash?: string;
   status?: number;
   responseLocation?: string;
   responseBody?: Record<string, unknown>;
@@ -246,11 +257,13 @@ export interface AuthorizationOutcomeObservation {
   kind: "denial" | "abandonment";
   callbackReceived: boolean;
   authorizationError: boolean;
+  stateMatches?: boolean;
   authorizationCodePresent: boolean;
   tokenRequestObserved: boolean;
   accessTokenObserved: boolean;
   refreshTokenObserved: boolean;
   idTokenObserved?: boolean;
+  browserFragmentCredentialObserved?: boolean;
 }
 
 export function classifyAuthorizationOutcome(
@@ -260,14 +273,86 @@ export function classifyAuthorizationOutcome(
     observation.tokenRequestObserved ||
     observation.accessTokenObserved ||
     observation.refreshTokenObserved ||
-    Boolean(observation.idTokenObserved);
+    Boolean(observation.idTokenObserved) ||
+    Boolean(observation.browserFragmentCredentialObserved);
   if (credentialObserved) {
     return "fail";
   }
   if (observation.kind === "denial") {
-    return observation.callbackReceived && observation.authorizationError ? "pass" : "fail";
+    return observation.callbackReceived && observation.authorizationError && observation.stateMatches === true ? "pass" : "fail";
   }
   return observation.callbackReceived ? "fail" : "pass";
+}
+
+export interface BrowserUrlCredentialEvidence {
+  credentialObserved: boolean;
+  authorizationCodePresent: boolean;
+  accessTokenPresent: boolean;
+  refreshTokenPresent: boolean;
+  idTokenPresent: boolean;
+  fragmentKeys: string[];
+}
+
+export function browserUrlCredentialEvidence(value: string): BrowserUrlCredentialEvidence {
+  try {
+    const hash = new URL(value).hash.replace(/^#/, "");
+    const fragment = new URLSearchParams(hash);
+    const authorizationCodePresent = fragment.has("code");
+    const accessTokenPresent = fragment.has("access_token");
+    const refreshTokenPresent = fragment.has("refresh_token");
+    const idTokenPresent = fragment.has("id_token");
+    return {
+      credentialObserved: authorizationCodePresent || accessTokenPresent || refreshTokenPresent || idTokenPresent,
+      authorizationCodePresent,
+      accessTokenPresent,
+      refreshTokenPresent,
+      idTokenPresent,
+      fragmentKeys: [...fragment.keys()].filter((key) => /^(code|access_token|refresh_token|id_token)$/i.test(key)),
+    };
+  } catch {
+    return {
+      credentialObserved: false,
+      authorizationCodePresent: false,
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      idTokenPresent: false,
+      fragmentKeys: [],
+    };
+  }
+}
+
+export function classifyPublicRegistrationBoundary(
+  registrationObserved: boolean,
+  validationAccepted: boolean,
+  statusCode: number | undefined,
+  networkError: string | undefined,
+): GateStatus {
+  if (registrationObserved && validationAccepted) {
+    return "pass";
+  }
+  if (!registrationObserved || statusCode === undefined || networkError || statusCode >= 500 || statusCode < 200 || statusCode >= 600) {
+    return "not-proven";
+  }
+  return "fail";
+}
+
+export function hasUnnegatedEndorsementLanguage(text: string): boolean {
+  const endorsementTerms = /\b(?:verified|endorsed|approved|trusted|recommended|sponsored|official(?:ly)?|partner)\b/gi;
+  for (const match of text.matchAll(endorsementTerms)) {
+    const index = match.index ?? 0;
+    const statementStart = Math.max(
+      text.lastIndexOf(".", index - 1),
+      text.lastIndexOf("!", index - 1),
+      text.lastIndexOf("?", index - 1),
+      text.lastIndexOf(";", index - 1),
+      text.lastIndexOf("\n", index - 1),
+    ) + 1;
+    const localPrefix = text.slice(Math.max(statementStart, index - 48), index);
+    if (!/\b(?:not|never|cannot|can't|doesn't|does not|unverified|untrusted|without)\b[\s\S]{0,30}$/i.test(localPrefix)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function isEvidenceSanitized(serialized: string, secrets: string[] = []): boolean {
@@ -291,6 +376,7 @@ const REQUIRED_GATE_IDS = [
   "authorization-consent-both",
   "consent-denial-both",
   "consent-abandonment-both",
+  "consent-cleanup-both",
   "loopback-both",
   "loopback-request-both",
   "loopback-pkce-both",
@@ -466,12 +552,17 @@ function summarizeResponseBody(text: string, contentType: string | null): Record
 }
 
 function requestBodyFields(body: BodyInit | null | undefined): string[] {
-  if (typeof body !== "string") {
+  const text = typeof body === "string"
+    ? body
+    : body instanceof URLSearchParams
+      ? body.toString()
+      : undefined;
+  if (text === undefined) {
     return body ? ["[non-text body]"] : [];
   }
 
   try {
-    const parsed: unknown = JSON.parse(body);
+    const parsed: unknown = JSON.parse(text);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       return Object.keys(parsed).sort();
     }
@@ -480,20 +571,66 @@ function requestBodyFields(body: BodyInit | null | undefined): string[] {
   }
 
   try {
-    return [...new URLSearchParams(body).keys()].sort();
+    return [...new URLSearchParams(text).keys()].sort();
   } catch {
     return ["[unparsed body]"];
   }
 }
 
+function requestParameterEvidence(body: BodyInit | null | undefined): Pick<
+  RequestEvidence,
+  | "requestClientId"
+  | "requestGrantType"
+  | "requestRedirectUri"
+  | "requestResource"
+  | "requestCodeChallengeMethod"
+  | "requestCodeChallengePresent"
+  | "requestCodePresent"
+  | "requestCodeVerifierPresent"
+  | "requestCodeVerifierHash"
+> {
+  const text = typeof body === "string"
+    ? body
+    : body instanceof URLSearchParams
+      ? body.toString()
+      : undefined;
+  if (text === undefined) {
+    return {};
+  }
+
+  let parameters: URLSearchParams;
+  try {
+    parameters = new URLSearchParams(text);
+  } catch {
+    return {};
+  }
+
+  const codeVerifier = parameters.get("code_verifier");
+  const redirectUri = parameters.get("redirect_uri");
+  const resource = parameters.get("resource");
+  return {
+    ...(parameters.has("client_id") ? { requestClientId: sanitizeText(parameters.get("client_id") ?? "") } : {}),
+    ...(parameters.has("grant_type") ? { requestGrantType: sanitizeText(parameters.get("grant_type") ?? "") } : {}),
+    ...(redirectUri ? { requestRedirectUri: sanitizeUrl(redirectUri) } : {}),
+    ...(resource ? { requestResource: sanitizeUrl(resource) } : {}),
+    ...(parameters.has("code_challenge_method") ? { requestCodeChallengeMethod: sanitizeText(parameters.get("code_challenge_method") ?? "") } : {}),
+    requestCodeChallengePresent: parameters.has("code_challenge"),
+    requestCodePresent: parameters.has("code"),
+    requestCodeVerifierPresent: parameters.has("code_verifier"),
+    ...(codeVerifier ? { requestCodeVerifierHash: createHash("sha256").update(codeVerifier).digest("base64url") } : {}),
+  };
+}
+
 function createEvidenceFetch(requests: RequestEvidence[]) {
-  return async (input: string | URL, init?: RequestInit): Promise<Response> => {
+  return async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const headers = new Headers(init?.headers);
+    const inputUrl = typeof input === "string" || input instanceof URL ? input : input.url;
     const request: RequestEvidence = {
       method: init?.method ?? "GET",
-      url: sanitizeUrl(input),
+      url: sanitizeUrl(inputUrl),
       requestBodyFields: requestBodyFields(init?.body),
       authorizationHeaderPresent: headers.has("authorization"),
+      ...requestParameterEvidence(init?.body),
     };
     requests.push(request);
 
@@ -962,6 +1099,254 @@ function providerFeatureDisabled(requests: RequestEvidence[], providerUrl: strin
   return `Supabase OAuth provider returned HTTP ${status} with error_code=feature_disabled: ${sanitizeText(message)}`;
 }
 
+export function grantClientId(grant: unknown): string | undefined {
+  if (!grant || typeof grant !== "object") {
+    return undefined;
+  }
+
+  const record = grant as Record<string, unknown>;
+  if (typeof record.client_id === "string") {
+    return record.client_id;
+  }
+
+  if (record.client && typeof record.client === "object") {
+    const client = record.client as Record<string, unknown>;
+    return typeof client.id === "string"
+      ? client.id
+      : typeof client.client_id === "string"
+        ? client.client_id
+        : undefined;
+  }
+
+  return undefined;
+}
+
+function grantSummary(grant: unknown): Record<string, unknown> {
+  if (!grant || typeof grant !== "object") {
+    return { present: false };
+  }
+
+  const record = grant as Record<string, unknown>;
+  const client = record.client && typeof record.client === "object"
+    ? record.client as Record<string, unknown>
+    : undefined;
+
+  return {
+    present: true,
+    clientId: grantClientId(grant) ?? "missing",
+    clientName: typeof client?.name === "string"
+      ? sanitizeText(client.name)
+      : typeof client?.client_name === "string"
+        ? sanitizeText(client.client_name)
+        : "missing",
+    scopes: Array.isArray(record.scopes) ? record.scopes.map((scope) => sanitizeText(String(scope))) : [],
+    grantedAt: typeof record.granted_at === "string" ? sanitizeText(record.granted_at) : "missing",
+  };
+}
+
+interface GrantBoundaryObservation {
+  status: "absent" | "present" | "unavailable";
+  detail: string;
+  evidence: Record<string, unknown>;
+  grant?: unknown;
+}
+
+async function createGrantManagementClient(
+  target: McpAccessGrantTarget,
+  tokens: OAuthTokens | undefined,
+  requests: RequestEvidence[],
+): Promise<{ client?: SupabaseClient; error?: string }> {
+  if (!target.anonKey) {
+    return { error: "Supabase anon key was not supplied through an environment variable." };
+  }
+  if (!tokens && (!target.email || !target.password)) {
+    return { error: "Dedicated browser credentials were not supplied for the supported user-facing grant boundary." };
+  }
+
+  const client = createClient(target.supabaseUrl, target.anonKey, {
+    auth: {
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      persistSession: false,
+    },
+    global: { fetch: createEvidenceFetch(requests) },
+  });
+  const authResult = tokens
+    ? await client.auth.setSession({
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token ?? "",
+    })
+    : await client.auth.signInWithPassword({
+      email: target.email as string,
+      password: target.password as string,
+    });
+
+  if (authResult.error) {
+    return { error: `Official Supabase client could not establish the provider session: ${errorDetail(authResult.error)}` };
+  }
+  return { client };
+}
+
+function latestGrantRequest(requests: RequestEvidence[], method: string): RequestEvidence | undefined {
+  return [...requests].reverse().find((request) =>
+    request.method === method && (() => {
+      try {
+        return new URL(request.url).pathname.endsWith("/auth/v1/user/oauth/grants");
+      } catch {
+        return false;
+      }
+    })(),
+  );
+}
+
+async function inspectGrantForClient(
+  target: McpAccessGrantTarget,
+  clientId: string,
+  requests: RequestEvidence[],
+): Promise<GrantBoundaryObservation> {
+  let clientResult: { client?: SupabaseClient; error?: string };
+  try {
+    clientResult = await createGrantManagementClient(target, undefined, requests);
+  } catch (error) {
+    return {
+      status: "unavailable",
+      detail: `The supported user-facing grant client could not be created: ${errorDetail(error)}`,
+      evidence: { grantEndpointObserved: false },
+    };
+  }
+  if (!clientResult.client) {
+    return {
+      status: "unavailable",
+      detail: clientResult.error ?? "Supported user-facing grant listing was unavailable.",
+      evidence: { grantEndpointObserved: false },
+    };
+  }
+
+  try {
+    const grantsResult = await clientResult.client.auth.oauth.listGrants();
+    const grants = grantsResult.data ?? [];
+    const grant = grants.find((candidate) => grantClientId(candidate) === clientId);
+    const grantRequest = latestGrantRequest(requests, "GET");
+    if (grantsResult.error) {
+      return {
+        status: "unavailable",
+        detail: `Official Supabase client grant listing failed: ${errorDetail(grantsResult.error)}`,
+        evidence: {
+          grantEndpointObserved: Boolean(grantRequest),
+          requestStatus: grantRequest?.status ?? "not-observed",
+        },
+      };
+    }
+    return {
+      status: grant ? "present" : "absent",
+      detail: grant
+        ? "The supported user-facing grant list already contains the registered MCP client."
+        : "The supported user-facing grant list contains no grant for the newly registered MCP client.",
+      evidence: {
+        grantEndpointObserved: Boolean(grantRequest),
+        requestStatus: grantRequest?.status ?? "not-observed",
+        grantCount: grants.length,
+        registeredClientIdPresent: clientId.length > 0,
+        grant: grantSummary(grant),
+      },
+      grant,
+    };
+  } catch (error) {
+    return {
+      status: "unavailable",
+      detail: `The supported user-facing grant list could not be classified: ${errorDetail(error)}`,
+      evidence: {
+        grantEndpointObserved: Boolean(latestGrantRequest(requests, "GET")),
+      },
+    };
+  }
+}
+
+async function revokeGrantForClient(
+  target: McpAccessGrantTarget,
+  clientId: string,
+  tokens: OAuthTokens,
+  requests: RequestEvidence[],
+): Promise<GrantBoundaryObservation> {
+  let clientResult: { client?: SupabaseClient; error?: string };
+  try {
+    clientResult = await createGrantManagementClient(target, tokens, requests);
+  } catch (error) {
+    return {
+      status: "unavailable",
+      detail: `The supported user-facing grant client could not be created for cleanup: ${errorDetail(error)}`,
+      evidence: { grantEndpointObserved: false },
+    };
+  }
+  if (!clientResult.client) {
+    return {
+      status: "unavailable",
+      detail: clientResult.error ?? "Supported user-facing grant revocation was unavailable.",
+      evidence: { grantEndpointObserved: false },
+    };
+  }
+
+  try {
+    const grantsResult = await clientResult.client.auth.oauth.listGrants();
+    const grants = grantsResult.data ?? [];
+    const grant = grants.find((candidate) => grantClientId(candidate) === clientId);
+    const listRequest = latestGrantRequest(requests, "GET");
+    if (grantsResult.error) {
+      return {
+        status: "unavailable",
+        detail: `Official Supabase client grant listing failed during cleanup: ${errorDetail(grantsResult.error)}`,
+        evidence: {
+          grantEndpointObserved: Boolean(listRequest),
+          requestStatus: listRequest?.status ?? "not-observed",
+        },
+      };
+    }
+    if (!grant) {
+      return {
+        status: "present",
+        detail: "The successful public-client journey did not leave an identifiable grant in the supported user-facing grant list.",
+        evidence: {
+          grantEndpointObserved: Boolean(listRequest),
+          requestStatus: listRequest?.status ?? "not-observed",
+          grantCount: grants.length,
+          registeredClientIdPresent: clientId.length > 0,
+          grant: grantSummary(grant),
+        },
+      };
+    }
+
+    const revokeResult = await clientResult.client.auth.oauth.revokeGrant({ clientId });
+    const revokeRequest = latestGrantRequest(requests, "DELETE");
+    if (revokeResult.error) {
+      return {
+        status: "present",
+        detail: `Official Supabase client grant revocation failed: ${errorDetail(revokeResult.error)}`,
+        evidence: {
+          grant: grantSummary(grant),
+          requestStatus: revokeRequest?.status ?? "not-observed",
+        },
+      };
+    }
+    return {
+      status: "absent",
+      detail: "The successful public-client journey's grant was identified and revoked through the supported user-facing Supabase boundary.",
+      evidence: {
+        grant: grantSummary(grant),
+        requestStatus: revokeRequest?.status ?? "not-observed",
+        revokeEndpointObserved: Boolean(revokeRequest),
+      },
+    };
+  } catch (error) {
+    return {
+      status: "unavailable",
+      detail: `The supported user-facing grant cleanup could not be classified: ${errorDetail(error)}`,
+      evidence: {
+        grantEndpointObserved: Boolean(latestGrantRequest(requests, "GET")),
+      },
+    };
+  }
+}
+
 async function writeReport(report: CompatibilityReport, testInfo: TestInfo): Promise<boolean> {
   const serialized = `${JSON.stringify(report, null, 2)}\n`;
   const outputPath = testInfo.outputPath("mcp-access-grant-evidence.json");
@@ -1281,12 +1666,10 @@ async function inspectConsentPage(
     ? ""
     : bodyText.slice(Math.max(0, clientNameIndex - 600), clientNameIndex + clientName.length + 900);
   const untrustedDisclaimerVisible = /\b(?:unverified|untrusted|not verified|not endorsed|cannot verify|not approved|not trusted)\b/i.test(clientDisclosureText);
-  const endorsementTerms = /\b(?:verified|endorsed|approved|trusted|recommended|sponsored|official(?:ly)?|partner)\b/i;
-  const negatedEndorsement = /\b(?:not|never|cannot|can't|doesn't|does not|unverified|untrusted|without)\b[\s\S]{0,30}\b(?:verified|endorsed|approved|trusted|recommended|sponsored|official(?:ly)?|partner)\b/i;
-  const clientEndorsementLanguage = endorsementTerms.test(clientDisclosureText) && !negatedEndorsement.test(clientDisclosureText);
+  const clientEndorsementLanguage = hasUnnegatedEndorsementLanguage(clientDisclosureText);
   const providerEndorsementLanguage = bodyText.split(/[.!?]\s+/).some((segment) => {
     const mentionsProviderEndorsement = /\b(?:verified|endorsed|approved|trusted|recommended|sponsored|official(?:ly)?|partner)\b[\s\S]{0,60}\bbetterr\.?me\b|\bbetterr\.?me\b[\s\S]{0,60}\b(?:verified|endorsed|approved|trusted|recommended|sponsored|official(?:ly)?|partner)\b/i.test(segment);
-    return mentionsProviderEndorsement && !negatedEndorsement.test(segment);
+    return mentionsProviderEndorsement && hasUnnegatedEndorsementLanguage(segment);
   });
   const endorsementLanguageVisible = clientEndorsementLanguage || providerEndorsementLanguage;
 
@@ -1375,9 +1758,16 @@ async function registerConsentScenarioClient(
   );
   const registrationObserved = Boolean(registrationRequest);
   const validation = validatePublicClientProfile(clientInformation, host);
+  const registrationStatus = classifyPublicRegistrationBoundary(
+    registrationObserved,
+    Boolean(clientInformation && validation.accepted),
+    registrationRequest?.status,
+    registrationRequest?.networkError,
+  );
   const registrationEvidence = {
     registrationEndpoint: metadata.registration_endpoint ? sanitizeUrl(metadata.registration_endpoint) : "unavailable",
     registrationObserved,
+    registrationStatus,
     registrationRedirectUri,
     requestBodyFields: registrationRequest?.requestBodyFields ?? [],
     clientMetadata: {
@@ -1391,14 +1781,16 @@ async function registerConsentScenarioClient(
     returnedClientId: Boolean(clientInformation?.client_id),
   } satisfies Record<string, unknown>;
 
-  if (!registrationObserved || !validation.accepted || !clientInformation) {
+  if (registrationStatus !== "pass" || !clientInformation) {
     addGate(
       gates,
       `consent-${kind}-${family}`,
-      "fail",
+      registrationStatus,
       registrationError
         ? `Fresh ${kind} consent-client registration failed at the public boundary: ${registrationError}`
-        : `Fresh ${kind} consent-client registration did not return the required public native profile.`,
+        : registrationStatus === "not-proven"
+          ? `Fresh ${kind} consent-client registration was unavailable or ambiguous at the public boundary.`
+          : `Fresh ${kind} consent-client registration did not return the required public native profile.`,
       registrationEvidence,
     );
     return undefined;
@@ -1444,11 +1836,12 @@ async function runConsentRejection(
 
   try {
     await callback.listen();
+    const authorizationState = randomUUID();
     const authorization = await startAuthorization(metadata.issuer, {
       metadata,
       clientInformation,
       redirectUrl: callback.url,
-      state: randomUUID(),
+      state: authorizationState,
       resource: new URL(target.canonicalResource),
     });
     const snapshot = await navigateToConsent(
@@ -1485,15 +1878,19 @@ async function runConsentRejection(
     const callbackResult = await callback.wait(kind === "denial" ? 10_000 : 1_000);
     const callbackReceived = callback.callbackReceived;
     const credentials = tokenEvidenceObserved(requests.slice(requestStart), metadata.token_endpoint);
+    const browserFragmentCredentials = browserUrlCredentialEvidence(page.url());
+    const stateMatches = callbackResult.state === authorizationState;
     const status = classifyAuthorizationOutcome({
       kind,
       callbackReceived,
       authorizationError: callbackResult.oauthError === true,
-      authorizationCodePresent: Boolean(callbackResult.code),
+      stateMatches,
+      authorizationCodePresent: Boolean(callbackResult.code) || browserFragmentCredentials.authorizationCodePresent,
       tokenRequestObserved: credentials.tokenRequestObserved,
-      accessTokenObserved: credentials.accessTokenObserved || Boolean(callbackResult.accessTokenPresent),
-      refreshTokenObserved: credentials.refreshTokenObserved || Boolean(callbackResult.refreshTokenPresent),
-      idTokenObserved: credentials.idTokenObserved || Boolean(callbackResult.idTokenPresent),
+      accessTokenObserved: credentials.accessTokenObserved || Boolean(callbackResult.accessTokenPresent) || browserFragmentCredentials.accessTokenPresent,
+      refreshTokenObserved: credentials.refreshTokenObserved || Boolean(callbackResult.refreshTokenPresent) || browserFragmentCredentials.refreshTokenPresent,
+      idTokenObserved: credentials.idTokenObserved || Boolean(callbackResult.idTokenPresent) || browserFragmentCredentials.idTokenPresent,
+      browserFragmentCredentialObserved: browserFragmentCredentials.credentialObserved,
     });
     addGate(
       gates,
@@ -1511,11 +1908,14 @@ async function runConsentRejection(
         decision: kind,
         callbackReceived,
         observedAuthorizationError: callbackResult.oauthError === true ? callbackResult.error : "none",
-        authorizationCodePresent: Boolean(callbackResult.code),
+        authorizationCodePresent: Boolean(callbackResult.code) || browserFragmentCredentials.authorizationCodePresent,
+        stateMatches,
         tokenRequestObserved: credentials.tokenRequestObserved,
-        accessTokenObserved: credentials.accessTokenObserved || Boolean(callbackResult.accessTokenPresent),
-        refreshTokenObserved: credentials.refreshTokenObserved || Boolean(callbackResult.refreshTokenPresent),
-        idTokenObserved: credentials.idTokenObserved || Boolean(callbackResult.idTokenPresent),
+        accessTokenObserved: credentials.accessTokenObserved || Boolean(callbackResult.accessTokenPresent) || browserFragmentCredentials.accessTokenPresent,
+        refreshTokenObserved: credentials.refreshTokenObserved || Boolean(callbackResult.refreshTokenPresent) || browserFragmentCredentials.refreshTokenPresent,
+        idTokenObserved: credentials.idTokenObserved || Boolean(callbackResult.idTokenPresent) || browserFragmentCredentials.idTokenPresent,
+        browserFragmentCredentialObserved: browserFragmentCredentials.credentialObserved,
+        browserFragmentKeys: browserFragmentCredentials.fragmentKeys,
       },
     );
   } catch (error) {
@@ -1545,6 +1945,7 @@ function addFamilyDownstreamNotProven(
     `authenticated-mcp-operation-${family}`,
     `consent-denial-${family}`,
     `consent-abandonment-${family}`,
+    `consent-cleanup-${family}`,
   ]) {
     if (!gates.some((gate) => gate.id === id)) {
       addGate(gates, id, "not-proven", reason, { reached: false, observedBoundary: "not-reached" });
@@ -1637,18 +2038,27 @@ async function runLoopbackFamily(
   const registrationRequest = requests.slice(registrationStart).find((request) =>
     request.method === "POST" && request.url === sanitizeUrl(metadata.registration_endpoint ?? ""),
   );
+  const registrationStatus = classifyPublicRegistrationBoundary(
+    registrationObserved,
+    Boolean(clientInformation && validation.accepted),
+    registrationRequest?.status,
+    registrationRequest?.networkError,
+  );
   addGate(
     gates,
     `public-client-registration-${family}`,
-    registrationObserved && validation.accepted ? "pass" : "fail",
-    registrationObserved && validation.accepted
+    registrationStatus,
+    registrationStatus === "pass"
       ? "Official MCP SDK registration accepted the authorization-code/code public native profile without a client secret and with a host/path-only loopback redirect."
-    : registrationError
-      ? `The public registration boundary did not return the required public native profile: ${registrationError}`
-      : "The public registration boundary did not return the required public native profile.",
+      : registrationStatus === "not-proven"
+        ? `The public registration boundary was unavailable or ambiguous; the required public native profile was not proven${registrationError ? `: ${registrationError}` : "."}`
+        : registrationError
+          ? `The public registration boundary did not return the required public native profile: ${registrationError}`
+          : "The public registration boundary did not return the required public native profile.",
     {
       registrationEndpoint: metadata.registration_endpoint ? sanitizeUrl(metadata.registration_endpoint) : "unavailable",
       registrationObserved,
+      registrationStatus,
       registrationRedirectUri,
       requestBodyFields: registrationRequest?.requestBodyFields ?? [],
       clientMetadata: {
@@ -1698,6 +2108,7 @@ async function runLoopbackFamily(
   let initialClient: Client | undefined;
   let initialTransport: StreamableHTTPClientTransport | undefined;
   let stopBrowserTokenRequests: (() => void) | undefined;
+  let issuedTokens: OAuthTokens | undefined;
   try {
     const provider = new CompatibilityOAuthProvider(
       loopback.url,
@@ -1838,6 +2249,28 @@ async function runLoopbackFamily(
       return { clientMetadata, clientInformation, canRunConsentRejections };
     }
 
+    const preDecisionGrant = await inspectGrantForClient(target, clientInformation.client_id, requests);
+    if (preDecisionGrant.status !== "absent") {
+      const grantStatus: GateStatus = preDecisionGrant.status === "present" ? "fail" : "not-proven";
+      addGate(
+        gates,
+        `authorization-consent-${family}`,
+        grantStatus,
+        grantStatus === "fail"
+          ? "The supported user-facing grant list already contained this registered MCP client before affirmative consent, so a fresh consent gate was not proven."
+          : "The supported user-facing grant list was unavailable before affirmative consent, so grant absence was not proven.",
+        {
+          explicitConsentControls: snapshot.affirmativeControlVisible && snapshot.denialControlVisible,
+          preDecisionGrantStatus: preDecisionGrant.status,
+          ...preDecisionGrant.evidence,
+        },
+      );
+      addFamilyDownstreamNotProven(gates, family, "The user-facing grant list did not prove grant absence before the affirmative consent decision.");
+      addGate(gates, `loopback-${family}`, "not-proven", "The grant-absence precondition stopped the browser consent journey before the request-time callback was exercised.", loopbackRequestEvidence);
+      addGate(gates, `loopback-pkce-${family}`, "not-proven", "The grant-absence precondition stopped the public-client callback and PKCE exchange.", loopbackRequestEvidence);
+      return { clientMetadata, clientInformation, canRunConsentRejections };
+    }
+
     await approve.click();
     const callback = await loopback.wait(CALLBACK_WAIT_TIMEOUT_MS);
     addGate(
@@ -1892,16 +2325,26 @@ async function runLoopbackFamily(
     }
 
     const tokens = provider.tokens();
+    issuedTokens = tokens;
     const tokenRequest = [...requests].reverse().find((request) =>
       request.method === "POST" && request.url === sanitizeUrl(metadata.token_endpoint),
     );
+    const expectedTokenRedirectUri = sanitizeUrl(requestTimeCallback.callbackUrl);
+    const expectedTokenResource = sanitizeUrl(target.canonicalResource);
+    const tokenRequestClientIdMatches = tokenRequest?.requestClientId === clientInformation.client_id;
+    const tokenRequestRedirectUriMatches = tokenRequest?.requestRedirectUri === expectedTokenRedirectUri;
+    const tokenRequestResourceMatches = tokenRequest?.requestResource === expectedTokenResource;
+    const tokenRequestVerifierMatchesChallenge = tokenRequest?.requestCodeVerifierHash === authorizationQuery.get("code_challenge");
     const tokenRequestIsPublicPkce = Boolean(
       tokenRequest &&
         !tokenRequest.authorizationHeaderPresent &&
-        tokenRequest.requestBodyFields.includes("code") &&
-        tokenRequest.requestBodyFields.includes("code_verifier") &&
-        tokenRequest.requestBodyFields.includes("redirect_uri") &&
-        tokenRequest.requestBodyFields.includes("resource"),
+        tokenRequest.requestGrantType === "authorization_code" &&
+        tokenRequestClientIdMatches &&
+        tokenRequest.requestCodePresent &&
+        tokenRequest.requestCodeVerifierPresent &&
+        tokenRequestRedirectUriMatches &&
+        tokenRequestResourceMatches &&
+        tokenRequestVerifierMatchesChallenge,
     );
     addGate(
       gates,
@@ -1915,6 +2358,15 @@ async function runLoopbackFamily(
         tokenRequestObserved: Boolean(tokenRequest),
         authorizationHeaderPresent: tokenRequest?.authorizationHeaderPresent ?? false,
         requestBodyFields: tokenRequest?.requestBodyFields ?? [],
+        requestGrantType: tokenRequest?.requestGrantType ?? "missing",
+        requestClientIdMatches: tokenRequestClientIdMatches,
+        requestCodePresent: tokenRequest?.requestCodePresent ?? false,
+        requestCodeVerifierPresent: tokenRequest?.requestCodeVerifierPresent ?? false,
+        requestRedirectUri: tokenRequest?.requestRedirectUri ?? "missing",
+        requestRedirectUriMatches: tokenRequestRedirectUriMatches,
+        requestResource: tokenRequest?.requestResource ?? "missing",
+        requestResourceMatches: tokenRequestResourceMatches,
+        requestCodeVerifierMatchesChallenge: tokenRequestVerifierMatchesChallenge,
       },
     );
 
@@ -1980,6 +2432,33 @@ async function runLoopbackFamily(
     await initialTransport?.close().catch(() => undefined);
     await initialClient?.close().catch(() => undefined);
     await loopback.close();
+    if (issuedTokens?.access_token && clientInformation?.client_id) {
+      const cleanup = await revokeGrantForClient(target, clientInformation.client_id, issuedTokens, requests);
+      const cleanupStatus: GateStatus = cleanup.status === "absent"
+        ? "pass"
+        : cleanup.status === "present"
+          ? "fail"
+          : "not-proven";
+      addGate(
+        gates,
+        `consent-cleanup-${family}`,
+        cleanupStatus,
+        cleanupStatus === "pass"
+          ? cleanup.detail
+          : cleanupStatus === "fail"
+            ? cleanup.detail
+            : `Per-family grant cleanup was not proven: ${cleanup.detail}`,
+        cleanup.evidence,
+      );
+    } else if (!gates.some((gate) => gate.id === `consent-cleanup-${family}`)) {
+      addGate(
+        gates,
+        `consent-cleanup-${family}`,
+        "not-proven",
+        "No successful public-client token exchange produced a grant that could be cleaned up through the supported user-facing boundary.",
+        { issuedAccessToken: false, registeredClientIdPresent: Boolean(clientInformation?.client_id) },
+      );
+    }
   }
 
   return { clientMetadata, clientInformation, canRunConsentRejections };
@@ -2233,5 +2712,6 @@ export async function runPublicClientLoopbackConsentCompatibility(
   aggregateFamilyGate(gates, "authenticated-mcp-operation-both", LOOPBACK_HOSTS.map((host) => `authenticated-mcp-operation-${familyName(host)}`), "Both valid delegated tokens must complete a real official-SDK MCP operation.");
   aggregateFamilyGate(gates, "consent-denial-both", LOOPBACK_HOSTS.map((host) => `consent-denial-${familyName(host)}`), "Both explicit denial journeys must return provider authorization errors without credentials.");
   aggregateFamilyGate(gates, "consent-abandonment-both", LOOPBACK_HOSTS.map((host) => `consent-abandonment-${familyName(host)}`), "Both abandoned consent journeys must produce no callback or credentials.");
+  aggregateFamilyGate(gates, "consent-cleanup-both", LOOPBACK_HOSTS.map((host) => `consent-cleanup-${familyName(host)}`), "Both successful public-client journeys must revoke their per-family grant through the supported user-facing boundary.");
   return finishReport(report, gates, testInfo);
 }

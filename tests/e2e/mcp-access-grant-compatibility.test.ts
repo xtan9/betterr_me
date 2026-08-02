@@ -6,8 +6,12 @@ import {
   buildPublicNativeClientMetadata,
   buildRegistrationNegativeCases,
   classifyRegistrationProbe,
+  classifyPublicRegistrationBoundary,
   classifyAuthorizationOutcome,
   classifyConsentPresentation,
+  browserUrlCredentialEvidence,
+  grantClientId,
+  hasUnnegatedEndorsementLanguage,
   isEvidenceSanitized,
   isSupportedLoopbackRegistrationRedirect,
   validatePublicClientProfile,
@@ -119,6 +123,35 @@ describe("MCP Access Grant public-client boundary contracts", () => {
     expect(classifyRegistrationProbe(503, "temporarily_unavailable")).toBe("not-proven");
   });
 
+  it("keeps unavailable valid-client registration distinct from an observed rejection", () => {
+    expect(classifyPublicRegistrationBoundary(true, true, 201, undefined)).toBe("pass");
+    expect(classifyPublicRegistrationBoundary(true, false, 400, undefined)).toBe("fail");
+    expect(classifyPublicRegistrationBoundary(true, false, 503, undefined)).toBe("not-proven");
+    expect(classifyPublicRegistrationBoundary(false, false, undefined, "connect ECONNREFUSED")).toBe("not-proven");
+  });
+
+  it("evaluates endorsement negation per statement", () => {
+    expect(hasUnnegatedEndorsementLanguage("Not verified by BetterR.Me. This is an official partner.")).toBe(true);
+    expect(hasUnnegatedEndorsementLanguage("Not verified by BetterR.Me. This is not an official partner.")).toBe(false);
+    expect(hasUnnegatedEndorsementLanguage("Not verified by BetterR.Me, but this client is an official partner.")).toBe(true);
+  });
+
+  it("treats browser URL fragments as credential evidence", () => {
+    expect(browserUrlCredentialEvidence("http://127.0.0.1:43127/oauth/callback#error=access_denied")).toMatchObject({
+      credentialObserved: false,
+      fragmentKeys: [],
+    });
+    expect(browserUrlCredentialEvidence("http://127.0.0.1:43127/oauth/callback?error=access_denied#access_token=live-token")).toMatchObject({
+      credentialObserved: true,
+      accessTokenPresent: true,
+      fragmentKeys: ["access_token"],
+    });
+  });
+
+  it("uses the official Supabase OAuth grant client identifier shape", () => {
+    expect(grantClientId({ client: { id: "registered-client", name: "MCP Compatibility Client" } })).toBe("registered-client");
+  });
+
   it("requires visible untrusted treatment and a distinct affirmative consent decision", () => {
     expect(classifyConsentPresentation({
       clientNameVisible: true,
@@ -176,6 +209,7 @@ describe("MCP Access Grant public-client boundary contracts", () => {
       kind: "denial",
       callbackReceived: true,
       authorizationError: true,
+      stateMatches: true,
       authorizationCodePresent: false,
       tokenRequestObserved: false,
       accessTokenObserved: false,
@@ -185,6 +219,7 @@ describe("MCP Access Grant public-client boundary contracts", () => {
       kind: "denial",
       callbackReceived: true,
       authorizationError: true,
+      stateMatches: true,
       authorizationCodePresent: true,
       tokenRequestObserved: false,
       accessTokenObserved: false,
@@ -194,6 +229,7 @@ describe("MCP Access Grant public-client boundary contracts", () => {
       kind: "denial",
       callbackReceived: true,
       authorizationError: true,
+      stateMatches: true,
       authorizationCodePresent: false,
       tokenRequestObserved: false,
       accessTokenObserved: false,
@@ -212,6 +248,16 @@ describe("MCP Access Grant public-client boundary contracts", () => {
       accessTokenObserved: false,
       refreshTokenObserved: false,
     })).toBe("pass");
+    expect(classifyAuthorizationOutcome({
+      kind: "denial",
+      callbackReceived: true,
+      authorizationError: true,
+      stateMatches: false,
+      authorizationCodePresent: false,
+      tokenRequestObserved: false,
+      accessTokenObserved: false,
+      refreshTokenObserved: false,
+    })).toBe("fail");
     expect(classifyAuthorizationOutcome({
       kind: "abandonment",
       callbackReceived: true,
