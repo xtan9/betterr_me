@@ -94,4 +94,56 @@ test.describe('Authenticated finance persistence', () => {
       page.getByRole('main').getByText('$35,000', { exact: true }).first(),
     ).toBeVisible();
   });
+
+  test('requires an explicit choice when a newer device Draft meets the committed Plan', async ({ page }) => {
+    await page.goto('/finance/cushion');
+
+    const locationHeading = page.getByRole('heading', { name: 'Where does your household live?' });
+    const startNew = page.getByRole('button', { name: 'Start a new check-up', exact: true });
+    await expect(page.locator('[data-runway-presentation="authenticated"]')).toBeVisible();
+    if (await startNew.isVisible()) {
+      page.once('dialog', (dialog) => void dialog.accept());
+      await startNew.click();
+    }
+    await expect(locationHeading).toBeVisible();
+    await page.getByRole('button', { name: 'United States', exact: true }).click();
+    await page.getByRole('combobox', { name: 'State, province, or region' }).selectOption('CA');
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('button', { name: 'I manage my finances alone' }).click();
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('button', { name: 'Employed', exact: true }).click();
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('button', { name: 'I know take-home pay' }).click();
+    await page.getByRole('textbox', { name: 'Income amount' }).fill('7000');
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('button', { name: 'Skip for now', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Cash available now' }).fill('35000');
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('button', { name: 'Skip for now', exact: true }).click();
+    await page.getByRole('button', { name: 'I already know my totals' }).click();
+    await page.getByRole('textbox', { name: 'Current total monthly spending' }).fill('6000');
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('textbox', { name: 'After interruption' }).fill('6000');
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('button', { name: 'Show my runway' }).click();
+    await page.getByRole('button', { name: 'Save this runway', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Saved', exact: true })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => ({
+      draft: window.localStorage.getItem('betterr.household-runway.interview.v2'),
+      consent: window.localStorage.getItem('betterr.household-runway.interview.device-consent.v1'),
+    }))).toEqual({ draft: null, consent: null });
+
+    await page.getByRole('button', { name: 'Review inputs', exact: true }).click();
+    await expect(page.locator('[data-runway-progress="reviewing"]')).toBeVisible();
+    await page.getByRole('button', { name: 'Remember on this device', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => window.localStorage.getItem('betterr.household-runway.interview.v2'))).not.toBeNull();
+
+    await page.reload();
+    await expect(page.getByTestId('runway-resume-choice')).toBeVisible();
+    await expect(page.getByTestId('runway-resume-draft')).toHaveAttribute('data-recommended', 'true');
+    await expect(page.getByTestId('runway-resume-plan')).toBeVisible();
+    await page.getByTestId('runway-resume-draft').click();
+    await expect(page.locator('[data-runway-progress="reviewing"]')).toBeVisible();
+    await expect.poll(() => page.evaluate(() => window.localStorage.getItem('betterr.household-runway.interview.v2'))).toBeNull();
+  });
 });

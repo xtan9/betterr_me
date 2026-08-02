@@ -152,6 +152,31 @@ export type HouseholdRunwayDraftSynchronizationOperation =
       >;
     };
 
+export type HouseholdRunwayDraftDeviceAction = "remember" | "import" | "clear";
+
+export type HouseholdRunwayDraftDeviceOperation =
+  | { status: "idle" }
+  | {
+      status: "pending";
+      action: HouseholdRunwayDraftDeviceAction;
+      sourceRevision: number;
+      correlationId: string;
+      scope?: "device" | "all";
+    }
+  | {
+      status: "succeeded";
+      action: HouseholdRunwayDraftDeviceAction;
+      sourceRevision: number;
+      correlationId: string;
+    }
+  | {
+      status: "failed";
+      action: HouseholdRunwayDraftDeviceAction;
+      sourceRevision: number;
+      correlationId: string;
+      error: "storage_unavailable" | "stale_result";
+    };
+
 export type HouseholdRunwayPlanPersistenceOperation =
   | { status: "idle" }
   | { status: "dirty"; sourceRevision: number }
@@ -217,6 +242,7 @@ export type HouseholdRunwayAnalyticsOperation =
 
 export interface HouseholdRunwayInterviewOperations {
   draftSynchronization: HouseholdRunwayDraftSynchronizationOperation;
+  deviceDraft: HouseholdRunwayDraftDeviceOperation;
   planPersistence: HouseholdRunwayPlanPersistenceOperation;
   reportDownload: HouseholdRunwayReportDownloadOperation;
   analytics: HouseholdRunwayAnalyticsOperation;
@@ -250,6 +276,7 @@ function hasPlanAdjustment(adjustment: RunwayAdjustments) {
 function defaultInterviewOperations(): HouseholdRunwayInterviewOperations {
   return {
     draftSynchronization: { status: "idle" },
+    deviceDraft: { status: "idle" },
     planPersistence: { status: "idle" },
     reportDownload: { status: "idle" },
     analytics: { status: "idle" },
@@ -265,6 +292,7 @@ function normalizeOperations(
     ...input,
     draftSynchronization:
       input?.draftSynchronization ?? defaults.draftSynchronization,
+    deviceDraft: input?.deviceDraft ?? defaults.deviceDraft,
     planPersistence: input?.planPersistence ?? defaults.planPersistence,
     reportDownload: input?.reportDownload ?? defaults.reportDownload,
     analytics: input?.analytics ?? defaults.analytics,
@@ -385,6 +413,25 @@ export interface HouseholdRunwayLandingRenderModel {
   kind: "landing";
   stage: null;
   location: null;
+}
+
+export type HouseholdRunwayResumeOption = "draft" | "plan";
+
+export interface HouseholdRunwayInterviewResumeChoice {
+  draftStatus: HouseholdRunwayInterviewStatus;
+  draftStage: HouseholdRunwayInterviewStage | null;
+  recommended: HouseholdRunwayResumeOption;
+}
+
+export interface HouseholdRunwayResumeChoiceRenderModel {
+  kind: "resume_choice";
+  stage: null;
+  location: null;
+  committedPlanRevision: number;
+  draftRevision: number;
+  draftStatus: HouseholdRunwayInterviewStatus;
+  draftStage: HouseholdRunwayInterviewStage | null;
+  recommended: HouseholdRunwayResumeOption;
 }
 
 export interface HouseholdRunwayLocationRenderModel {
@@ -569,6 +616,7 @@ export interface HouseholdRunwayGenericStageRenderModel {
 
 export type HouseholdRunwayInterviewRenderModel =
   | HouseholdRunwayLandingRenderModel
+  | HouseholdRunwayResumeChoiceRenderModel
   | HouseholdRunwayLocationRenderModel
   | HouseholdRunwayHouseholdRenderModel
   | HouseholdRunwayEmploymentRenderModel
@@ -588,6 +636,8 @@ interface HouseholdRunwayInterviewStateBase {
   draft: HouseholdRunwayInterviewDraft;
   /** The last explicitly committed Plan, if one exists. */
   committedPlan: HouseholdRunwayPlan | null;
+  /** A durable Draft and committed Plan are both available until a choice is made. */
+  resumeChoice: HouseholdRunwayInterviewResumeChoice | null;
   /** Draft synchronization, Plan persistence, download, and analytics are independent. */
   operations: HouseholdRunwayInterviewOperations;
   validationIssue: HouseholdRunwayValidationIssue | null;
@@ -604,16 +654,22 @@ export interface HouseholdRunwayNotStartedState
   extends HouseholdRunwayInterviewStateBase {
   status: "not_started";
   stage: null;
-  renderModel: HouseholdRunwayLandingRenderModel;
-  render: HouseholdRunwayLandingRenderModel;
+  renderModel: HouseholdRunwayLandingRenderModel | HouseholdRunwayResumeChoiceRenderModel;
+  render: HouseholdRunwayLandingRenderModel | HouseholdRunwayResumeChoiceRenderModel;
 }
 
 export interface HouseholdRunwayCollectingState
   extends HouseholdRunwayInterviewStateBase {
   status: "collecting";
   stage: Exclude<HouseholdRunwayInterviewStage, "result">;
-  renderModel: Exclude<HouseholdRunwayInterviewRenderModel, HouseholdRunwayLandingRenderModel>;
-  render: Exclude<HouseholdRunwayInterviewRenderModel, HouseholdRunwayLandingRenderModel>;
+  renderModel: Exclude<
+    HouseholdRunwayInterviewRenderModel,
+    HouseholdRunwayLandingRenderModel | HouseholdRunwayResumeChoiceRenderModel
+  >;
+  render: Exclude<
+    HouseholdRunwayInterviewRenderModel,
+    HouseholdRunwayLandingRenderModel | HouseholdRunwayResumeChoiceRenderModel
+  >;
 }
 
 export interface HouseholdRunwayReviewingState
@@ -644,6 +700,7 @@ export interface HouseholdRunwayInterviewSnapshot {
   stage: HouseholdRunwayInterviewStage | null;
   draft: Partial<HouseholdRunwayInterviewDraft>;
   committedPlan?: HouseholdRunwayPlan | null;
+  resumeChoice?: HouseholdRunwayInterviewResumeChoice | null;
   operations?: Partial<HouseholdRunwayInterviewOperations>;
   validationIssue: HouseholdRunwayValidationIssue | null;
 }
@@ -740,6 +797,11 @@ export type HouseholdRunwayInterviewCommandInput =
   | { type: "skip" }
   | { type: "exit" }
   | { type: "discard_draft" }
+  | { type: "clear_device_draft" }
+  | { type: "remember_draft" }
+  | { type: "import_draft" }
+  | { type: "resume_draft"; interviewId: string }
+  | { type: "resume_committed_plan" }
   | { type: "synchronize_draft" }
   | {
       type: "draft_synchronization_succeeded";
@@ -748,6 +810,19 @@ export type HouseholdRunwayInterviewCommandInput =
     }
   | {
       type: "draft_synchronization_failed";
+      sourceRevision: number;
+      correlationId: string;
+      error: "storage_unavailable" | "stale_result";
+    }
+  | {
+      type: "draft_device_operation_succeeded";
+      action: HouseholdRunwayDraftDeviceAction;
+      sourceRevision: number;
+      correlationId: string;
+    }
+  | {
+      type: "draft_device_operation_failed";
+      action: HouseholdRunwayDraftDeviceAction;
       sourceRevision: number;
       correlationId: string;
       error: "storage_unavailable" | "stale_result";
@@ -889,6 +964,9 @@ export type HouseholdRunwayInterviewEvent =
         | "draft_synchronization_requested"
         | "draft_synchronized"
         | "draft_synchronization_failed"
+        | "draft_device_operation_requested"
+        | "draft_device_operation_succeeded"
+        | "draft_device_operation_failed"
         | "plan_persistence_requested"
         | "plan_persisted"
         | "plan_persistence_failed"
@@ -900,6 +978,8 @@ export type HouseholdRunwayInterviewEvent =
         | "analytics_failed";
       sourceRevision: number;
       correlationId: string;
+      action?: HouseholdRunwayDraftDeviceAction;
+      scope?: "device" | "all";
       error?: HouseholdRunwayInterviewOperationError;
     })
   | (HouseholdRunwayInterviewCommandMetadata & {
@@ -908,6 +988,12 @@ export type HouseholdRunwayInterviewEvent =
     })
   | (HouseholdRunwayInterviewCommandMetadata & {
       type: "interview_exited" | "draft_discarded";
+    })
+  | (HouseholdRunwayInterviewCommandMetadata & {
+      type: "resume_choice_made";
+      option: HouseholdRunwayResumeOption;
+      sourceRevision?: number;
+      correlationId?: string;
     })
   | (HouseholdRunwayInterviewCommandMetadata & {
       type: "command_ignored";
@@ -935,6 +1021,22 @@ export type HouseholdRunwayInterviewEffect =
   | {
       type: "draft_sync_requested";
       draft: HouseholdRunwayInterviewDraft;
+      sourceRevision: number;
+      correlationId: string;
+    }
+  | {
+      type:
+        | "draft_device_remember_requested"
+        | "draft_device_import_requested";
+      draft: HouseholdRunwayInterviewDraft;
+      status: HouseholdRunwayInterviewStatus;
+      stage: HouseholdRunwayInterviewStage | null;
+      sourceRevision: number;
+      correlationId: string;
+    }
+  | {
+      type: "draft_device_clear_requested";
+      scope: "device" | "all";
       sourceRevision: number;
       correlationId: string;
     }
@@ -1755,6 +1857,7 @@ function snapshotOf(state: HouseholdRunwayInterviewState): HouseholdRunwayInterv
     stage: state.stage,
     draft: state.draft,
     committedPlan: state.committedPlan,
+    resumeChoice: state.resumeChoice,
     operations: state.operations,
     validationIssue: state.validationIssue,
   };
@@ -1817,8 +1920,22 @@ function renderFor(
   draft: HouseholdRunwayInterviewDraft,
   validationIssue: HouseholdRunwayValidationIssue | null,
   reviewProjection: HouseholdRunwayReviewProjection | null,
+  resumeChoice: HouseholdRunwayInterviewResumeChoice | null,
+  committedPlan: HouseholdRunwayPlan | null,
 ): HouseholdRunwayInterviewRenderModel {
   if (status === "not_started" || stage === null) {
+    if (resumeChoice && committedPlan) {
+      return {
+        kind: "resume_choice",
+        stage: null,
+        location: null,
+        committedPlanRevision: committedPlan.revision,
+        draftRevision: draft.revision,
+        draftStatus: resumeChoice.draftStatus,
+        draftStage: resumeChoice.draftStage,
+        recommended: resumeChoice.recommended,
+      };
+    }
     return { kind: "landing", stage: null, location: null };
   }
 
@@ -2071,6 +2188,8 @@ function stateFrom(
     draft,
     validationIssue,
     reviewProjection,
+    snapshot.resumeChoice ?? null,
+    committedPlan,
   );
   const derived = {
     planInputs: reviewProjection?.planInputs ?? null,
@@ -2084,10 +2203,15 @@ function stateFrom(
       draft,
       committedPlan,
       operations,
+      resumeChoice: snapshot.resumeChoice ?? null,
       validationIssue,
       ...derived,
-      renderModel: renderModel as HouseholdRunwayLandingRenderModel,
-      render: renderModel as HouseholdRunwayLandingRenderModel,
+      renderModel: renderModel as
+        | HouseholdRunwayLandingRenderModel
+        | HouseholdRunwayResumeChoiceRenderModel,
+      render: renderModel as
+        | HouseholdRunwayLandingRenderModel
+        | HouseholdRunwayResumeChoiceRenderModel,
     };
   }
   if (status === "reviewing") {
@@ -2098,6 +2222,7 @@ function stateFrom(
       draft,
       committedPlan,
       operations,
+      resumeChoice: snapshot.resumeChoice ?? null,
       validationIssue,
       ...derived,
       renderModel: renderModel as HouseholdRunwayReviewRenderModel,
@@ -2112,6 +2237,7 @@ function stateFrom(
       draft,
       committedPlan,
       operations,
+      resumeChoice: snapshot.resumeChoice ?? null,
       validationIssue,
       ...derived,
       renderModel: renderModel as HouseholdRunwayGenericStageRenderModel,
@@ -2125,15 +2251,16 @@ function stateFrom(
     draft,
     committedPlan,
     operations,
+    resumeChoice: snapshot.resumeChoice ?? null,
     validationIssue,
     ...derived,
     renderModel: renderModel as Exclude<
       HouseholdRunwayInterviewRenderModel,
-      HouseholdRunwayLandingRenderModel
+      HouseholdRunwayLandingRenderModel | HouseholdRunwayResumeChoiceRenderModel
     >,
     render: renderModel as Exclude<
       HouseholdRunwayInterviewRenderModel,
-      HouseholdRunwayLandingRenderModel
+      HouseholdRunwayLandingRenderModel | HouseholdRunwayResumeChoiceRenderModel
     >,
   };
 }
@@ -2165,6 +2292,8 @@ function transition(
       next.committedPlan === undefined
         ? state.committedPlan
         : next.committedPlan,
+    resumeChoice:
+      next.resumeChoice === undefined ? state.resumeChoice : next.resumeChoice,
     operations,
   });
   return {
@@ -2242,6 +2371,7 @@ function startState(
     restarted ? "interview_restarted" : "interview_started",
     { interviewId: command.interviewId },
   );
+  const clearCorrelationId = `${command.commandId}:clear`;
   return transition(
     state,
     {
@@ -2254,6 +2384,7 @@ function startState(
             : "collecting",
       stage,
       draft,
+      resumeChoice: null,
       operations: {
         ...state.operations,
         draftSynchronization: {
@@ -2263,6 +2394,15 @@ function startState(
         planPersistence: restarted
           ? { status: "idle" }
           : state.operations.planPersistence,
+        deviceDraft: restarted
+          ? {
+              status: "pending",
+              action: "clear",
+              sourceRevision: draft.revision,
+              correlationId: clearCorrelationId,
+              scope: "all",
+            }
+          : state.operations.deviceDraft,
       },
       validationIssue: null,
     },
@@ -2270,6 +2410,16 @@ function startState(
     [
       { type: "history", action: "push", destination: "interview" },
       { type: "focus", stage },
+      ...(restarted
+        ? [
+            {
+              type: "draft_device_clear_requested" as const,
+              scope: "all" as const,
+              sourceRevision: draft.revision,
+              correlationId: clearCorrelationId,
+            },
+          ]
+        : []),
     ],
   );
 }
@@ -3206,6 +3356,7 @@ function continueInterview(
   if (issue) {
     const draft = normalizeDraft({
       ...state.draft,
+      revision: state.draft.revision + 1,
       validationIssues: { ...state.draft.validationIssues, [state.stage!]: issue },
     });
     return transition(
@@ -3357,7 +3508,11 @@ function backInterview(
         version: HOUSEHOLD_RUNWAY_INTERVIEW_VERSION,
         status: "not_started",
         stage: null,
-        draft: normalizeDraft({ ...state.draft, pendingCurrencyChange: null }),
+        draft: normalizeDraft({
+          ...state.draft,
+          revision: state.draft.revision + 1,
+          pendingCurrencyChange: null,
+        }),
         validationIssue: null,
       },
       [event(command, "interview_exited", {})],
@@ -3379,6 +3534,7 @@ function backInterview(
       stage: previous,
       draft: normalizeDraft({
         ...state.draft,
+        revision: state.draft.revision + 1,
         validationIssues: { ...state.draft.validationIssues, [state.stage!]: null },
       }),
       validationIssue: null,
@@ -3393,6 +3549,7 @@ export interface HouseholdRunwayInterviewInitialization {
   draft?: Partial<HouseholdRunwayInterviewDraft> | null;
   status?: HouseholdRunwayInterviewStatus;
   stage?: HouseholdRunwayInterviewStage | null;
+  resumeChoice?: HouseholdRunwayInterviewResumeChoice | null;
 }
 
 export function createHouseholdRunwayInterview(
@@ -3428,6 +3585,7 @@ export function createHouseholdRunwayInterview(
     stage,
     draft,
     committedPlan,
+    resumeChoice: options.resumeChoice ?? null,
     operations: defaultInterviewOperations(),
     validationIssue: null,
   });
@@ -3443,6 +3601,324 @@ export function restoreHouseholdRunwayInterview(
           ...supplied,
           version: HOUSEHOLD_RUNWAY_INTERVIEW_VERSION,
         },
+  );
+}
+
+function draftForCommittedPlan(
+  committedPlan: HouseholdRunwayPlan,
+  revision: number,
+): HouseholdRunwayInterviewDraft {
+  const draft = normalizeDraft({
+    revision,
+    answers: committedPlan.inputs,
+    location: {
+      country: committedPlan.inputs.country,
+      region: committedPlan.inputs.region,
+      currency: committedPlan.inputs.currency,
+      proposedCurrency: proposedCurrencyFor(committedPlan.inputs.country),
+      currencySelection: "explicit",
+    },
+  });
+  draft.stageStatus.result = "completed";
+  return draft;
+}
+
+function stableSerialize(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableSerialize(item)).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value as Record<string, unknown>)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableSerialize((value as Record<string, unknown>)[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "undefined";
+}
+
+/**
+ * Compares a working Draft with its committed Plan at the public boundary.
+ * Revision/stage progress is included so an unfinished Draft is never
+ * silently collapsed into the committed result, even when its answers have
+ * not changed yet.
+ */
+export function householdRunwayDraftDiffersFromPlan(
+  draft: HouseholdRunwayInterviewDraft,
+  plan: HouseholdRunwayPlan,
+  status: HouseholdRunwayInterviewStatus = "collecting",
+  stage: HouseholdRunwayInterviewStage | null = null,
+): boolean {
+  const normalized = normalizeHouseholdRunwayDraft(draft);
+  if (!normalized.success) return true;
+  if (stableSerialize(normalized.planInputs) !== stableSerialize(plan.inputs)) {
+    return true;
+  }
+  if (hasPlanAdjustment(draft.planAdjustment)) return true;
+  if (status !== "completed" || stage !== "result") return true;
+  return draft.revision > plan.revision;
+}
+
+function requestedDraftDeviceOperation(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<
+    HouseholdRunwayInterviewCommand,
+    { type: "clear_device_draft" | "remember_draft" | "import_draft" }
+  >,
+  action: HouseholdRunwayDraftDeviceAction,
+  scope?: "device" | "all",
+): HouseholdRunwayInterviewTransition {
+  const sourceRevision = state.draft.revision;
+  const correlationId = command.commandId;
+  const effects: HouseholdRunwayInterviewEffect[] = [];
+  if (action === "clear") {
+    effects.push({
+      type: "draft_device_clear_requested",
+      scope: scope ?? "device",
+      sourceRevision,
+      correlationId,
+    });
+  } else if (action === "remember") {
+    effects.push({
+      type: "draft_device_remember_requested",
+      draft: state.draft,
+      status: state.status,
+      stage: state.stage,
+      sourceRevision,
+      correlationId,
+    });
+  } else {
+    effects.push({
+      type: "draft_device_import_requested",
+      draft: state.draft,
+      status: state.status,
+      stage: state.stage,
+      sourceRevision,
+      correlationId,
+    });
+  }
+  return transition(
+    state,
+    {
+      ...snapshotOf(state),
+      operations: {
+        ...state.operations,
+        deviceDraft: {
+          status: "pending",
+          action,
+          sourceRevision,
+          correlationId,
+          ...(action === "clear" ? { scope: scope ?? "device" } : {}),
+        },
+        ...(action === "import"
+          ? { draftSynchronization: { status: "idle" as const } }
+          : {}),
+      },
+    },
+    [
+      event(command, "draft_device_operation_requested", {
+        action,
+        scope: action === "clear" ? scope ?? "device" : undefined,
+        sourceRevision,
+        correlationId,
+      }),
+    ],
+    effects,
+  );
+}
+
+function completeDraftDeviceOperation(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<
+    HouseholdRunwayInterviewCommand,
+    {
+      type: "draft_device_operation_succeeded" | "draft_device_operation_failed";
+    }
+  >,
+): HouseholdRunwayInterviewTransition {
+  const operation = state.operations.deviceDraft;
+  if (
+    operation.status !== "pending" ||
+    operation.action !== command.action ||
+    operation.sourceRevision !== command.sourceRevision ||
+    operation.correlationId !== command.correlationId
+  ) {
+    return ignored(state, command, "operation_not_pending");
+  }
+  if (state.draft.revision !== command.sourceRevision) {
+    return transition(
+      state,
+      {
+        ...snapshotOf(state),
+        operations: {
+          ...state.operations,
+          deviceDraft: {
+            status: "failed",
+            action: command.action,
+            sourceRevision: command.sourceRevision,
+            correlationId: command.correlationId,
+            error: "stale_result",
+          },
+        },
+      },
+      [
+        event(command, "draft_device_operation_failed", {
+          action: command.action,
+          sourceRevision: command.sourceRevision,
+          correlationId: command.correlationId,
+          error: "stale_result",
+        }),
+      ],
+      [],
+    );
+  }
+  const succeeded = command.type === "draft_device_operation_succeeded";
+  return transition(
+    state,
+    {
+      ...snapshotOf(state),
+      operations: {
+        ...state.operations,
+        deviceDraft: succeeded
+          ? {
+              status: "succeeded",
+              action: command.action,
+              sourceRevision: command.sourceRevision,
+              correlationId: command.correlationId,
+            }
+          : {
+              status: "failed",
+              action: command.action,
+              sourceRevision: command.sourceRevision,
+              correlationId: command.correlationId,
+              error: command.error,
+            },
+      },
+    },
+    [
+      event(
+        command,
+        succeeded
+          ? "draft_device_operation_succeeded"
+          : "draft_device_operation_failed",
+        {
+          action: command.action,
+          sourceRevision: command.sourceRevision,
+          correlationId: command.correlationId,
+          ...(!succeeded ? { error: command.error } : {}),
+        },
+      ),
+    ],
+    [],
+  );
+}
+
+function resumeDraft(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<HouseholdRunwayInterviewCommand, { type: "resume_draft" }>,
+): HouseholdRunwayInterviewTransition {
+  if (!state.resumeChoice || !state.committedPlan) {
+    return ignored(state, command, "invalid_stage");
+  }
+  const choice = state.resumeChoice;
+  const draft = normalizeDraft({
+    ...state.draft,
+    interviewId: command.interviewId,
+  });
+  const status =
+    choice.draftStatus === "completed"
+      ? "completed"
+      : choice.draftStatus === "reviewing"
+        ? "reviewing"
+        : "collecting";
+  const stage =
+    status === "completed"
+      ? "result"
+      : status === "reviewing"
+        ? "review"
+        : status === "collecting" && choice.draftStage && choice.draftStage !== "result"
+          ? choice.draftStage
+          : "location";
+  const sourceRevision = draft.revision;
+  const correlationId = command.commandId;
+  return transition(
+    state,
+    {
+      version: HOUSEHOLD_RUNWAY_INTERVIEW_VERSION,
+      status,
+      stage,
+      draft,
+      committedPlan: state.committedPlan,
+      resumeChoice: null,
+      operations: {
+        ...state.operations,
+        deviceDraft: {
+          status: "pending",
+          action: "import",
+          sourceRevision,
+          correlationId,
+        },
+        draftSynchronization: { status: "idle" },
+      },
+      validationIssue: null,
+    },
+    [
+      event(command, "resume_choice_made", {
+        option: "draft",
+        sourceRevision,
+        correlationId,
+      }),
+    ],
+    [
+      { type: "history", action: "push", destination: "interview" },
+      ...(stage ? [{ type: "focus", stage } as const] : []),
+      {
+        type: "draft_device_import_requested",
+        draft,
+        status,
+        stage,
+        sourceRevision,
+        correlationId,
+      },
+    ],
+  );
+}
+
+function resumeCommittedPlan(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<
+    HouseholdRunwayInterviewCommand,
+    { type: "resume_committed_plan" }
+  >,
+): HouseholdRunwayInterviewTransition {
+  if (!state.resumeChoice || !state.committedPlan) {
+    return ignored(state, command, "invalid_stage");
+  }
+  const draft = draftForCommittedPlan(
+    state.committedPlan,
+    state.draft.revision,
+  );
+  return transition(
+    state,
+    {
+      version: HOUSEHOLD_RUNWAY_INTERVIEW_VERSION,
+      status: "completed",
+      stage: "result",
+      draft,
+      committedPlan: state.committedPlan,
+      resumeChoice: null,
+      operations: {
+        ...state.operations,
+        deviceDraft: { status: "idle" },
+        draftSynchronization: { status: "idle" },
+        planPersistence: { status: "idle" },
+      },
+      validationIssue: null,
+    },
+    [event(command, "resume_choice_made", { option: "plan" })],
+    [
+      { type: "history", action: "replace", destination: "interview" },
+      { type: "focus", stage: "result" },
+    ],
   );
 }
 
@@ -3757,6 +4233,13 @@ function completePlanPersistence(
         // independent draft-sync operation from borrowing the Plan command's
         // correlation ID; there is no remaining local Draft to synchronize.
         draftSynchronization: { status: "idle" },
+        deviceDraft: {
+          status: "pending",
+          action: "clear",
+          sourceRevision: command.sourceRevision,
+          correlationId: `${command.correlationId}:clear`,
+          scope: "all",
+        },
         planPersistence: {
           status: "succeeded",
           sourceRevision: command.sourceRevision,
@@ -3776,7 +4259,15 @@ function completePlanPersistence(
         planRevision,
       }),
     ],
-    [{ type: "focus", stage: "result" }],
+    [
+      { type: "focus", stage: "result" },
+      {
+        type: "draft_device_clear_requested",
+        scope: "all",
+        sourceRevision: command.sourceRevision,
+        correlationId: `${command.correlationId}:clear`,
+      },
+    ],
   );
 }
 
@@ -3960,6 +4451,10 @@ export function dispatchHouseholdRunwayInterview(
       : ignored(state, command, "already_started");
   }
   if (command.type === "start_new") return startState(state, command, true);
+  if (command.type === "resume_draft") return resumeDraft(state, command);
+  if (command.type === "resume_committed_plan") {
+    return resumeCommittedPlan(state, command);
+  }
   if (command.type === "exit") {
     return state.status === "not_started"
       ? ignored(state, command, "already_not_started")
@@ -3967,17 +4462,10 @@ export function dispatchHouseholdRunwayInterview(
   }
   if (command.type === "discard_draft") {
     const committedPlan = state.committedPlan;
+    const sourceRevision = state.draft.revision;
+    const correlationId = command.commandId;
     if (committedPlan) {
-      const draft = normalizeDraft({
-        answers: committedPlan.inputs,
-        location: {
-          country: committedPlan.inputs.country,
-          region: committedPlan.inputs.region,
-          currency: committedPlan.inputs.currency,
-          proposedCurrency: proposedCurrencyFor(committedPlan.inputs.country),
-          currencySelection: "explicit",
-        },
-      });
+      const draft = draftForCommittedPlan(committedPlan, sourceRevision);
       return transition(
         state,
         {
@@ -3986,9 +4474,17 @@ export function dispatchHouseholdRunwayInterview(
           stage: "result",
           draft,
           committedPlan,
+          resumeChoice: null,
           operations: {
             ...state.operations,
             draftSynchronization: { status: "idle" },
+            deviceDraft: {
+              status: "pending",
+              action: "clear",
+              sourceRevision,
+              correlationId,
+              scope: "all",
+            },
             planPersistence: { status: "idle" },
             reportDownload: { status: "idle" },
           },
@@ -3998,6 +4494,12 @@ export function dispatchHouseholdRunwayInterview(
         [
           { type: "history", action: "replace", destination: "interview" },
           { type: "focus", stage: "result" },
+          {
+            type: "draft_device_clear_requested",
+            scope: "all",
+            sourceRevision,
+            correlationId,
+          },
         ],
       );
     }
@@ -4009,16 +4511,32 @@ export function dispatchHouseholdRunwayInterview(
         stage: null,
         draft: normalizeDraft(null),
         committedPlan: null,
+        resumeChoice: null,
         operations: {
           ...state.operations,
           draftSynchronization: { status: "idle" },
+          deviceDraft: {
+            status: "pending",
+            action: "clear",
+            sourceRevision,
+            correlationId,
+            scope: "all",
+          },
           planPersistence: { status: "idle" },
           reportDownload: { status: "idle" },
         },
         validationIssue: null,
       },
       [event(command, "draft_discarded", {})],
-      [{ type: "history", action: "replace", destination: "landing" }],
+      [
+        { type: "history", action: "replace", destination: "landing" },
+        {
+          type: "draft_device_clear_requested",
+          scope: "all",
+          sourceRevision,
+          correlationId,
+        },
+      ],
     );
   }
   if (command.type === "edit_completed_plan") {
@@ -4036,11 +4554,26 @@ export function dispatchHouseholdRunwayInterview(
   if (command.type === "synchronize_draft") {
     return requestDraftSynchronization(state, command);
   }
+  if (command.type === "clear_device_draft") {
+    return requestedDraftDeviceOperation(state, command, "clear", "device");
+  }
+  if (command.type === "remember_draft") {
+    return requestedDraftDeviceOperation(state, command, "remember");
+  }
+  if (command.type === "import_draft") {
+    return requestedDraftDeviceOperation(state, command, "import");
+  }
   if (
     command.type === "draft_synchronization_succeeded" ||
     command.type === "draft_synchronization_failed"
   ) {
     return completeDraftSynchronization(state, command);
+  }
+  if (
+    command.type === "draft_device_operation_succeeded" ||
+    command.type === "draft_device_operation_failed"
+  ) {
+    return completeDraftDeviceOperation(state, command);
   }
   if (command.type === "save_plan" || command.type === "request_plan_persistence") {
     return requestPlanPersistence(state, command, capabilities);

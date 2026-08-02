@@ -1,5 +1,23 @@
 const en = {
   answers: { yes: "Yes", no: "No" },
+  privacy: {
+    local: "Session-only by default. Nothing is saved on this device unless you choose to remember it.",
+    session: "This Draft stays in this session. Choose Remember on this device to keep it for up to 30 days.",
+    expiryDisclosure: "If you choose it, this device copy expires automatically after {days} days.",
+    remember: "Remember on this device",
+    remembered: "Remembered on this device for up to 30 days.",
+    forget: "Remove device copy",
+  },
+  resume: {
+    eyebrow: "Choose what to resume",
+    title: "A saved Plan and a newer Draft are both here",
+    description: "Keep both options available and choose which version should open. Your newer Draft is marked when it is the better starting point.",
+    draft: "Resume Draft",
+    draftDescription: "Continue the unfinished Interview exactly where you left it.",
+    plan: "Use committed Plan",
+    planDescription: "Open the last saved Plan and leave the Draft available for a later choice.",
+    recommended: "Recommended",
+  },
   landing: {
     eyebrow: "A private, 90-second household stress test",
     title: "How long could your household keep going?",
@@ -110,7 +128,7 @@ const en = {
   whatIf: { useIlliquid: "Usable hard-to-withdraw investments", useDeferred: "Usable tax-deferred retirement", useTaxFree: "Usable tax-free-qualified retirement", appliedIncome: "Additional dependable income", expectedFundsHelp: "Preview only. It cannot be applied to the baseline until the amount and arrival are confirmed.", retirementHelp: "Extreme mode uses only the amount you say would actually be available. Consider taxes, penalties, account rules, and timing before entering it." },
   regional: { title: "Local first steps" },
   precision: { complete: "Your core inputs are confirmed. Revisit them whenever income, cash, or commitments change." },
-  save: { downloadError: "The assessment could not be downloaded. Your result was not changed.", authenticationRequired: "Sign in to save this Plan.", adjustmentPending: "Apply or reset the provisional adjustment before saving the Plan.", stale: "This result changed before saving completed. Review it and try again.", draftSyncError: "This Draft could not be saved for this session. Your interview remains usable here." },
+  save: { downloadError: "The assessment could not be downloaded. Your result was not changed.", authenticationRequired: "Sign in to save this Plan.", adjustmentPending: "Apply or reset the provisional adjustment before saving the Plan.", stale: "This result changed before saving completed. Review it and try again.", draftSyncError: "This Draft could not be saved for this session. Your interview remains usable here.", draftRecovery: "A saved Draft was invalid or expired, so it was cleared. You can continue the Interview here." },
   method: { excluded: "Hard-to-withdraw investments, retirement accounts, and home equity are excluded unless you explicitly enter a usable amount in What-if or extreme mode." },
 };
 
