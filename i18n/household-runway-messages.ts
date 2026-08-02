@@ -37,7 +37,7 @@ const en = {
     expenses: { eyebrow: "10 · Monthly commitments", title: "Build the household's required monthly costs", description: "Use guided categories for a useful plan, or enter totals if you already know them." },
   },
   fields: { selectRegion: "Select a state, province, or region" },
-  actions: { clearConfirm: "Clear every answer saved in this browser? This cannot be undone." },
+  actions: { clearConfirm: "Clear every answer saved in this browser? This cannot be undone.", discardDraft: "Discard draft", apply: "Apply", reset: "Reset", download: "Download" },
   validation: { expensesCurrent: "Enter at least one current monthly commitment before continuing.", assessment: "We could not assess these answers. Review them and try again." },
   income: {
     useEstimate: "Use this estimate",
@@ -110,7 +110,7 @@ const en = {
   whatIf: { useIlliquid: "Usable hard-to-withdraw investments", useDeferred: "Usable tax-deferred retirement", useTaxFree: "Usable tax-free-qualified retirement", appliedIncome: "Additional dependable income", expectedFundsHelp: "Preview only. It cannot be applied to the baseline until the amount and arrival are confirmed.", retirementHelp: "Extreme mode uses only the amount you say would actually be available. Consider taxes, penalties, account rules, and timing before entering it." },
   regional: { title: "Local first steps" },
   precision: { complete: "Your core inputs are confirmed. Revisit them whenever income, cash, or commitments change." },
-  save: { downloadError: "The assessment could not be downloaded. Your result was not changed." },
+  save: { downloadError: "The assessment could not be downloaded. Your result was not changed.", authenticationRequired: "Sign in to save this Plan.", adjustmentPending: "Apply or reset the provisional adjustment before saving the Plan.", stale: "This result changed before saving completed. Review it and try again.", draftSyncError: "This draft could not be saved on this device. Your interview remains in this session." },
   method: { excluded: "Hard-to-withdraw investments, retirement accounts, and home equity are excluded unless you explicitly enter a usable amount in What-if or extreme mode." },
 };
 
@@ -137,6 +137,9 @@ const zh = {
   method: { excluded: "难取用投资、退休账户和房屋净值默认不计入；只有在假设分析或极端模式中明确填写可用金额时才会纳入。" },
 };
 
+zh.actions = { ...en.actions, ...zh.actions };
+zh.save = { ...en.save, ...zh.save };
+
 const zhTW = {
   ...zh,
   chart: { ...zh.chart, checkpointTableTitle: "可存取的預測檢查點", checkpointHelp: "對於很長的跑道，這裡顯示選定月份的檢查點；最後一行是預計耗盡月份。" },
@@ -158,6 +161,9 @@ const zhTW = {
   precision: { complete: "核心輸入已確認。收入、現金或固定承諾變化時，請重新檢查。" },
   method: { excluded: "難提領投資、退休帳戶和房屋淨值預設不計入；只有在假設分析或極端模式中明確填寫可用金額時才會納入。" },
 };
+
+zhTW.actions = { ...zh.actions, ...zhTW.actions };
+zhTW.save = { ...zh.save, ...zhTW.save };
 
 export const householdRunwayMessages = {
   en,

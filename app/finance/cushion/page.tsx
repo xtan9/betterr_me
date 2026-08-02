@@ -7,15 +7,6 @@ import {
 import { HouseholdRunway } from "@/components/finance/household-runway";
 import { SidebarShell } from "@/components/layouts/sidebar-shell";
 import { hasEnvVars } from "@/lib/utils";
-import { runwayAdjustmentsSchema } from "@/lib/validations/finance-cushion";
-
-function persistedAdjustments(result: unknown) {
-  if (!result || typeof result !== "object" || !("adjustments" in result)) {
-    return null;
-  }
-  const parsed = runwayAdjustmentsSchema.safeParse(result.adjustments);
-  return parsed.success ? parsed.data : null;
-}
 
 export const metadata: Metadata = {
   title: "Household Runway | BetterR.me",
@@ -36,7 +27,6 @@ export default async function FinanceCushionPage() {
     return (
       <HouseholdRunway
         initialAnswers={null}
-        initialAdjustments={null}
         isAuthenticated={false}
         hasSavedPlan={false}
         initialSnapshots={[]}
@@ -56,7 +46,6 @@ export default async function FinanceCushionPage() {
   const runway = (
     <HouseholdRunway
       initialAnswers={cushion?.answers ?? null}
-      initialAdjustments={persistedAdjustments(cushion?.latest_result)}
       isAuthenticated={Boolean(user)}
       hasSavedPlan={Boolean(cushion?.answers)}
       initialSnapshots={snapshots}
