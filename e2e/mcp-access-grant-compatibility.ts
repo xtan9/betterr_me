@@ -2382,6 +2382,7 @@ export async function runMcpAccessGrantCompatibility(
     const formerAccessProvider = new CompatibilityOAuthProvider(
       undefined,
       report.versions["@modelcontextprotocol/sdk"] ?? "unavailable",
+      target.canonicalResource,
     );
     formerAccessProvider.saveClientInformation(clientInfo);
     formerAccessProvider.saveTokens(secondRefresh.tokens);
