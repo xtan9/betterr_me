@@ -103,7 +103,7 @@ export const OWNERSHIP_REGISTRY = [
   rule("dependency-automation", [/^\.github\/dependabot\.yml$/], { quality: true, smokeTests: CLASSIFIER_TESTS }),
   rule("ci-policy", [/^scripts\/ci\//, /^\.github\/secret-expirations\.json$/], { quality: true, smokeTests: CI_POLICY_TESTS, e2eSpecs: [SPECS.dashboard], e2eSupabase: true }),
   rule("automation", [/^scripts\/(?!ci\/)/], { quality: true, changedTests: true }),
-  rule("configuration", [/^(?:package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|tsconfig\.json|vitest\.config\.ts|eslint\.config\.mjs|next\.config\.ts|playwright\.config\.ts|proxy\.ts|tailwind\.config\.ts|postcss\.config\.mjs|lighthouserc\.js|vercel\.json|stryker\.config\.mjs|components\.json|\.env\.example)$/], { ...fullE2E({ fullTests: true, fullLint: true }), performance: true }),
+  rule("configuration", [/^(?:package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|tsconfig\.json|vitest\.config\.ts|eslint\.config\.mjs|next\.config\.ts|playwright\.config\.ts|playwright\.mcp-access-grant\.config\.ts|proxy\.ts|tailwind\.config\.ts|postcss\.config\.mjs|lighthouserc\.js|vercel\.json|stryker\.config\.mjs|components\.json|\.env\.example)$/], { ...fullE2E({ fullTests: true, fullLint: true }), performance: true }),
   rule("documentation", [/^(?:docs\/|README|CONTEXT\.md|AGENTS\.md|CLAUDE\.md|\.agents\/|\.claude\/|\.planning\/|\.superpowers\/|\.github\/(?:PULL_REQUEST_TEMPLATE|SETUP_SECRETS)|\.git(?:attributes|ignore)$|skills-lock\.json)/], {}),
 ];
 
