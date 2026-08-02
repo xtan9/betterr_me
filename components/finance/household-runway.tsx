@@ -42,7 +42,6 @@ import {
   type RunwayStepId,
 } from "@/lib/finance/cushion";
 import {
-  assessHouseholdRunway,
   type SuccessfulHouseholdRunwayAssessment,
 } from "@/lib/finance/household-runway-assessment";
 import { downloadHouseholdRunwayAssessment } from "@/lib/finance/household-runway-download";
@@ -365,9 +364,7 @@ export function HouseholdRunway({
     const committedPlan = initialAnswers
       ? { revision: initialPlanRevision, inputs: initialAnswers }
       : null;
-    importedDraftRef.current = Boolean(
-      (boundaryDraft || runwayDraft) && !planExistsRef.current,
-    );
+    importedDraftRef.current = Boolean(restoredDraft && !planExistsRef.current);
     let restoredBoundary = createHouseholdRunwayInterview({
       committedPlan,
     });
