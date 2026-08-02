@@ -419,6 +419,7 @@ export interface HouseholdRunwayLandingRenderModel {
   location: null;
   hasDraft: boolean;
   draftCompleted: boolean;
+  resumeStage: HouseholdRunwayInterviewStage | null;
 }
 
 export type HouseholdRunwayResumeOption = "draft" | "plan";
@@ -1942,6 +1943,15 @@ function renderFor(
         draft.interviewId !== null ||
         draft.startedAt !== null,
       draftCompleted: draft.stageStatus.result === "completed",
+      resumeStage:
+        draft.stageStatus.result === "completed"
+          ? "result"
+          : NON_RESULT_STAGES.find(
+                (candidate) =>
+                  isStageApplicable(candidate, draft.answers) &&
+                  draft.stageStatus[candidate] !== "completed" &&
+                  draft.stageStatus[candidate] !== "skipped",
+              ) ?? null,
     };
   }
 
@@ -2340,6 +2350,11 @@ function startState(
   >,
   restarted: boolean,
 ): HouseholdRunwayInterviewTransition {
+  const resumingExistingDraft =
+    !restarted &&
+    (state.draft.revision > 0 ||
+      state.draft.interviewId !== null ||
+      state.draft.startedAt !== null);
   const draft = restarted ? normalizeDraft(null) : normalizeDraft(state.draft);
   const requestedStage = command.stage;
   const canResumeResult =
@@ -2360,9 +2375,15 @@ function startState(
             ))
         ? requestedStage
         : "location";
-  draft.revision = state.draft.revision + 1;
-  draft.interviewId = command.interviewId;
-  draft.startedAt = command.occurredAt;
+  draft.revision = resumingExistingDraft
+    ? state.draft.revision
+    : state.draft.revision + 1;
+  draft.interviewId = resumingExistingDraft
+    ? state.draft.interviewId ?? command.interviewId
+    : command.interviewId;
+  draft.startedAt = resumingExistingDraft
+    ? state.draft.startedAt ?? command.occurredAt
+    : command.occurredAt;
   const startEvent = event(
     command,
     restarted ? "interview_restarted" : "interview_started",

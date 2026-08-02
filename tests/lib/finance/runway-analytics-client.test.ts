@@ -59,5 +59,10 @@ describe("Household Runway analytics browser adapter", () => {
 
     await expect(trackRunwayEvent("skipped", "assets")).resolves.toBe(false);
   });
-});
 
+  it("turns a non-OK analytics response into a local false outcome", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: false } as Response);
+
+    await expect(trackRunwayEvent("completed", "result")).resolves.toBe(false);
+  });
+});

@@ -57,12 +57,3 @@ export type HouseholdRunwayAnalyticsAttributionKey =
 export type HouseholdRunwayAnalyticsAttribution = Partial<
   Record<HouseholdRunwayAnalyticsAttributionKey, string>
 >;
-
-export function isHouseholdRunwayAnalyticsLocale(
-  value: string,
-): value is HouseholdRunwayAnalyticsLocale {
-  return (HOUSEHOLD_RUNWAY_ANALYTICS_LOCALES as readonly string[]).includes(
-    value,
-  );
-}
-

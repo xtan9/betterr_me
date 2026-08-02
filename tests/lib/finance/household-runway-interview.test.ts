@@ -19,6 +19,7 @@ type CommandPayload =
       type: "history_projection_changed";
       destination: "landing" | "interview";
       interviewId?: string;
+      stage?: "location" | "household" | "employment" | "myIncome" | "partnerIncome" | "otherIncome" | "cash" | "assets" | "expenses" | "reductions" | "review" | "result";
     };
 
 const meta = (commandId: string, occurredAt = "2026-08-02T15:00:00.000Z") => ({
@@ -272,5 +273,48 @@ describe("Household Runway Interview boundary", () => {
     expect(returned.effects.some((effect) => effect.type === "history")).toBe(
       false,
     );
+  });
+
+  it("preserves the resumable stage and working revision across URL projection", () => {
+    let state = dispatch(
+      createHouseholdRunwayInterview(),
+      { type: "start", interviewId: "interview-1" },
+      "command-start",
+    ).state;
+    state = dispatch(
+      state,
+      { type: "select_country", country: "US" },
+      "command-country",
+    ).state;
+    state = dispatch(
+      state,
+      { type: "select_region", region: "CA" },
+      "command-region",
+    ).state;
+    state = dispatch(
+      state,
+      { type: "select_currency", currency: "USD" },
+      "command-currency",
+    ).state;
+    state = dispatch(state, { type: "continue" }, "command-continue").state;
+
+    const landed = dispatch(
+      state,
+      { type: "history_projection_changed", destination: "landing" },
+      "command-popstate-landing",
+    );
+    const returned = dispatchHouseholdRunwayInterview(landed.state, {
+      type: "history_projection_changed",
+      destination: "interview",
+      interviewId: "new-browser-id",
+      stage: "household",
+      ...meta("command-popstate-interview", "2026-08-03T15:00:00.000Z"),
+    });
+
+    expect(returned.state.stage).toBe("household");
+    expect(returned.state.draft.revision).toBe(landed.state.draft.revision);
+    expect(returned.state.draft.interviewId).toBe(state.draft.interviewId);
+    expect(returned.state.draft.startedAt).toBe(state.draft.startedAt);
+    expect(returned.effects).toEqual([{ type: "focus", stage: "household" }]);
   });
 });

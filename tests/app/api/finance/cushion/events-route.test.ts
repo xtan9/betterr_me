@@ -110,4 +110,15 @@ describe("amount-free Household Runway analytics", () => {
     }));
     expect(response.status).toBe(429);
   });
+
+  it("turns a database RPC failure into a non-blocking server error", async () => {
+    rpc.mockResolvedValue({ data: null, error: new Error("database offline") });
+    const response = await POST(request({
+      action_id: "74a303ae-1ba3-4ab5-beb9-5317eb94c793",
+      session_id: "cbeb17f5-8687-4ce7-b43a-49e8f15f0c42",
+      event_name: "landing_view",
+    }));
+
+    expect(response.status).toBe(500);
+  });
 });

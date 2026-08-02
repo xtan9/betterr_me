@@ -399,13 +399,21 @@ export function HouseholdRunway({
           : null,
         validationIssue: null,
       });
-      resumeStageRef.current = restoredDraft.stage;
+      resumeStageRef.current =
+        restoredDraft.stage ??
+        (restoredBoundary.renderModel.kind === "landing"
+          ? restoredBoundary.renderModel.resumeStage
+          : null);
     }
     const syncUrlMode = () => {
       const current = interviewStateRef.current;
       if (isAuthenticated) {
         if (current.status === "not_started" && !current.resumeChoice) {
-          const resumeStage = resumableRunwayStep(resumeStageRef.current);
+          const resumeStage =
+            resumableRunwayStep(resumeStageRef.current) ??
+            (current.renderModel.kind === "landing"
+              ? current.renderModel.resumeStage ?? undefined
+              : undefined);
           dispatchInterviewCommand(
             {
               type: "history_projection_changed",
@@ -423,6 +431,10 @@ export function HouseholdRunway({
         href: window.location.href,
         interviewStarted: current.status !== "not_started",
         interviewId: newId("runway-interview"),
+        stage:
+          current.renderModel.kind === "landing"
+            ? current.renderModel.resumeStage ?? undefined
+            : undefined,
       });
       if (command && !(current.resumeChoice && command.destination === "interview")) {
         dispatchInterviewCommand(command, current);
@@ -705,7 +717,10 @@ export function HouseholdRunway({
       ? null
       : draftCompleted
         ? "result"
-        : resumableRunwayStep(resumeStageRef.current);
+        : resumableRunwayStep(resumeStageRef.current) ??
+          (renderModel.kind === "landing"
+            ? renderModel.resumeStage ?? undefined
+            : undefined);
     const interviewId = newId("runway-interview");
     const started = dispatchInterviewCommand(
       resumeStage

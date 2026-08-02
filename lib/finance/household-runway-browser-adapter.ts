@@ -47,7 +47,7 @@ export type HouseholdRunwayBrowserEffectOutcome =
   | {
       type: "focus";
       stage: HouseholdRunwayInterviewStage;
-      outcome: "focused" | "unavailable";
+      outcome: "focused" | "scheduled" | "unavailable";
     };
 
 export type HouseholdRunwayExternalEffect = Exclude<
@@ -77,6 +77,7 @@ export interface HouseholdRunwayHistoryProjectionInput {
   href: string;
   interviewStarted: boolean;
   interviewId: string;
+  stage?: HouseholdRunwayInterviewStage;
 }
 
 export function readHouseholdRunwayBrowserStorage(): HouseholdRunwayBrowserStorageSnapshot {
@@ -96,6 +97,7 @@ export function householdRunwayHistoryProjectionCommand({
   href,
   interviewStarted,
   interviewId,
+  stage,
 }: HouseholdRunwayHistoryProjectionInput):
   | Extract<
       HouseholdRunwayInterviewCommandInput,
@@ -110,6 +112,7 @@ export function householdRunwayHistoryProjectionCommand({
         type: "history_projection_changed",
         destination: "interview",
         interviewId,
+        ...(stage ? { stage } : {}),
       }
     : { type: "history_projection_changed", destination: "landing" };
 }
@@ -173,8 +176,10 @@ function applyFocusEffect(
   }
 
   try {
+    let callbackRan = false;
     let outcome: "focused" | "unavailable" = "unavailable";
     const focus = () => {
+      callbackRan = true;
       const heading = environment.document.getElementById(
         "runway-question-heading",
       );
@@ -184,6 +189,9 @@ function applyFocusEffect(
     };
     if (environment.requestAnimationFrame) {
       environment.requestAnimationFrame(focus);
+      if (!callbackRan) {
+        return { type: "focus", stage: effect.stage, outcome: "scheduled" };
+      }
     } else {
       focus();
     }
