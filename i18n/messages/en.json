@@ -1620,7 +1620,7 @@
   "householdRunway": {
     "currencyChange": { "confirmation": "Changing currency will not reinterpret existing entries. Choose whether to reset entered amounts or retain the cents as entered.", "reset": "Reset entered amounts", "retain": "Retain entered cents" },
     "boundary": { "currencyProposal": "Suggested {currency}; continuing confirms this choice.", "countryRequired": "Choose the country where your household lives to continue.", "regionRequired": "Add your state, province, or region to continue.", "currencyRequired": "Choose a household currency to continue." },
-    "privacy": { "local": "Your draft stays on this device" },
+    "privacy": { "local": "Session-only by default. Nothing is saved on this device unless you choose to remember it.", "session": "This Draft stays in this session. Choose Remember on this device to keep it for up to 30 days.", "remember": "Remember on this device", "remembered": "Remembered on this device for up to 30 days.", "forget": "Remove device copy" },
     "progress": { "remaining": "About {minutes} min left" },
     "steps": {
       "welcome": { "eyebrow": "Welcome", "title": "How much time would your household have if income stopped?", "description": "Household Runway turns the numbers you know today into an explainable interruption plan. No account required." },

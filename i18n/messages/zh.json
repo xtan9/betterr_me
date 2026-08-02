@@ -1620,7 +1620,7 @@
   "householdRunway": {
     "currencyChange": { "confirmation": "更改货币不会重新解释已有金额。请选择清除已填写金额，或保留原样输入的分值。", "reset": "清除已填写金额", "retain": "保留已输入分值" },
     "boundary": { "currencyProposal": "建议使用 {currency}；继续即确认此选择。", "countryRequired": "请选择家庭所在国家后继续。", "regionRequired": "请填写州、省或地区后继续。", "currencyRequired": "请选择家庭货币后继续。" },
-    "privacy": { "local": "草稿仅保存在此设备" },
+    "privacy": { "local": "默认仅保存在本次会话。除非你选择记住，否则不会保存到此设备。", "session": "此 Draft 仅保留在本次会话。选择“在此设备上记住”可保留最多 30 天。", "remember": "在此设备上记住", "remembered": "已记住在此设备上，最多保留 30 天。", "forget": "移除设备副本" },
     "progress": { "remaining": "预计还需 {minutes} 分钟" },
     "steps": {
       "welcome": { "eyebrow": "欢迎", "title": "如果收入中断，你的家庭能撑多久？", "description": "家庭抗风险跑道把你现在知道的数字，变成一份可解释的收入中断计划。无需注册。" },

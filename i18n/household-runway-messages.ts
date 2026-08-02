@@ -9,10 +9,10 @@ const en = {
     viewResult: "View my result",
     startOver: "Start over",
     startNew: "Start a new check-up",
-    startOverConfirm: "Start a new check-up? Your answers saved on this device will be removed.",
+    startOverConfirm: "Start a new check-up? Your session Draft and any remembered device copy will be removed.",
     fast: "Core questions take about 90 seconds",
     noAccount: "No account required",
-    local: "Answers stay in this browser until you choose to save",
+    local: "Answers stay in this session unless you choose to remember them on this device",
     exampleAria: "Illustrative balance curve for thirty thousand dollars covering six thousand dollars per month for five months",
     example: "Illustrative example",
     exampleScenario: "If household income stopped today",
@@ -37,7 +37,7 @@ const en = {
     expenses: { eyebrow: "10 · Monthly commitments", title: "Build the household's required monthly costs", description: "Use guided categories for a useful plan, or enter totals if you already know them." },
   },
   fields: { selectRegion: "Select a state, province, or region" },
-  actions: { clearConfirm: "Clear every answer saved in this browser? This cannot be undone.", discardDraft: "Discard draft", apply: "Apply", reset: "Reset", download: "Download" },
+  actions: { clearConfirm: "Clear this interview and any remembered device copy? This cannot be undone.", discardDraft: "Discard draft", apply: "Apply", reset: "Reset", download: "Download" },
   validation: { expensesCurrent: "Enter at least one current monthly commitment before continuing.", assessment: "We could not assess these answers. Review them and try again." },
   income: {
     useEstimate: "Use this estimate",
@@ -110,7 +110,7 @@ const en = {
   whatIf: { useIlliquid: "Usable hard-to-withdraw investments", useDeferred: "Usable tax-deferred retirement", useTaxFree: "Usable tax-free-qualified retirement", appliedIncome: "Additional dependable income", expectedFundsHelp: "Preview only. It cannot be applied to the baseline until the amount and arrival are confirmed.", retirementHelp: "Extreme mode uses only the amount you say would actually be available. Consider taxes, penalties, account rules, and timing before entering it." },
   regional: { title: "Local first steps" },
   precision: { complete: "Your core inputs are confirmed. Revisit them whenever income, cash, or commitments change." },
-  save: { downloadError: "The assessment could not be downloaded. Your result was not changed.", authenticationRequired: "Sign in to save this Plan.", adjustmentPending: "Apply or reset the provisional adjustment before saving the Plan.", stale: "This result changed before saving completed. Review it and try again.", draftSyncError: "This draft could not be saved on this device. Your interview remains in this session." },
+  save: { downloadError: "The assessment could not be downloaded. Your result was not changed.", authenticationRequired: "Sign in to save this Plan.", adjustmentPending: "Apply or reset the provisional adjustment before saving the Plan.", stale: "This result changed before saving completed. Review it and try again.", draftSyncError: "This Draft could not be saved for this session. Your interview remains usable here." },
   method: { excluded: "Hard-to-withdraw investments, retirement accounts, and home equity are excluded unless you explicitly enter a usable amount in What-if or extreme mode." },
 };
 
