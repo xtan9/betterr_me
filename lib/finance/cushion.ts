@@ -687,16 +687,23 @@ export interface FinanceCushionRecord extends RequiredCushionColumns {
   user_id: string;
   created_at: string;
   updated_at: string;
+  revision?: number;
   answers?: unknown;
   latest_result?: unknown;
+  adjustments?: unknown;
   model_version?: string;
   status?: string;
+  country?: string | null;
+  region?: string | null;
+  currency?: string | null;
+  attribution?: Record<string, string | undefined>;
+  completed_at?: string | null;
 }
 export type FinanceCushionView = Omit<FinanceCushionRecord, "answers"> & {
   answers: HouseholdRunwayAnswers | null;
 };
 export const FINANCE_CUSHION_COLUMNS =
-  "id, user_id, liquid_resources_cents, monthly_essential_expenses_cents, monthly_continuing_income_cents, answers, latest_result, model_version, status, created_at, updated_at";
+  "id, user_id, revision, liquid_resources_cents, monthly_essential_expenses_cents, monthly_continuing_income_cents, answers, latest_result, adjustments, model_version, status, country, region, currency, attribution, completed_at, created_at, updated_at";
 
 function persistedCushionAnswers(
   record: FinanceCushionRecord,
@@ -747,6 +754,10 @@ export function toFinanceCushionView(
 ): FinanceCushionView {
   return {
     ...record,
+    revision:
+      Number.isInteger(record.revision) && record.revision !== undefined
+        ? Math.max(0, record.revision)
+        : 0,
     answers: persistedCushionAnswers(record),
   };
 }

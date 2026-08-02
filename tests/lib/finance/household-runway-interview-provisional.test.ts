@@ -236,6 +236,8 @@ describe("typed operation-local effects", () => {
       correlationId: "save",
       idempotencyKey: "save-key",
       expectedPlanRevision: 7,
+      adjustments: EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT,
+      snapshotTrigger: "updated",
     });
 
     const changed = dispatch(
@@ -279,6 +281,17 @@ describe("typed operation-local effects", () => {
         sourceRevision: requested.state.draft.revision,
         correlationId: "save",
         planRevision: 8,
+        planInputs: validAnswers(),
+        assessment: requested.state.assessment ?? undefined,
+        snapshot: {
+          id: "snapshot-a",
+          trigger: "updated",
+          scenario: "current",
+          months_covered: 5,
+          sustainable: false,
+          model_version: "4.0.0",
+          created_at: occurredAt,
+        },
       },
       "save-result",
       { planPersistence: "available" },
@@ -296,7 +309,43 @@ describe("typed operation-local effects", () => {
       status: "succeeded",
       correlationId: "save",
       planRevision: 8,
+      idempotencyKey: expect.any(String),
+      snapshot: { id: "snapshot-a" },
     });
+  });
+
+  it("reuses the pending commit idempotency key when a failed save is retried", () => {
+    const requested = dispatch(
+      completedPlanState(),
+      { type: "save_plan", idempotencyKey: "save-key" },
+      "save",
+      { planPersistence: "available" },
+    );
+    const failed = dispatch(
+      requested.state,
+      {
+        type: "plan_persistence_failed",
+        sourceRevision: requested.state.draft.revision,
+        correlationId: "save",
+        error: "network",
+      },
+      "save-failed",
+      { planPersistence: "available" },
+    );
+    const retried = dispatch(
+      failed.state,
+      { type: "save_plan" },
+      "save-retry",
+      { planPersistence: "available" },
+    );
+    expect(retried.effects).toContainEqual(
+      expect.objectContaining({
+        type: "plan_persistence_requested",
+        idempotencyKey: "save-key",
+        snapshotTrigger: "updated",
+        expectedPlanRevision: 7,
+      }),
+    );
   });
 
   it("keeps draft sync, report download, and analytics effects independently typed", () => {

@@ -41,6 +41,10 @@ import {
   type RunwaySnapshotSummary,
   type RunwayStepId,
 } from "@/lib/finance/cushion";
+import {
+  assessHouseholdRunway,
+  type SuccessfulHouseholdRunwayAssessment,
+} from "@/lib/finance/household-runway-assessment";
 import { downloadHouseholdRunwayAssessment } from "@/lib/finance/household-runway-download";
 import {
   EXPENSE_ITEM_TYPES,
@@ -103,13 +107,32 @@ const ASSET_KEYS = [
 
 interface HouseholdRunwayProps {
   initialAnswers: HouseholdRunwayAnswers | null;
+  initialPlanRevision?: number;
   isAuthenticated: boolean;
   hasSavedPlan: boolean;
   initialSnapshots: RunwaySnapshotSummary[];
 }
 
-function newId(prefix: string) {
-  return `${prefix}-${typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Date.now()}`;
+function newId(_prefix: string) {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"))
+      .join("")
+      .replace(
+        /^(\w{8})(\w{4})(\w{4})(\w{4})(\w{12})$/,
+        "$1-$2-$3-$4-$5",
+      );
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (token) => {
+    const value = Math.floor(Math.random() * 16);
+    const nibble = token === "x" ? value : (value & 0x3) | 0x8;
+    return nibble.toString(16);
+  });
 }
 
 function householdRunwayInterviewCommand(
@@ -217,6 +240,7 @@ function interviewValidationMessage(
 
 export function HouseholdRunway({
   initialAnswers,
+  initialPlanRevision = 0,
   isAuthenticated,
   hasSavedPlan,
   initialSnapshots,
@@ -226,24 +250,28 @@ export function HouseholdRunway({
   const [hydrated, setHydrated] = useState(false);
   const [hasLocalDraft, setHasLocalDraft] = useState(false);
   const [deviceStorageConsent, setDeviceStorageConsent] = useState(false);
+  const [planExists, setPlanExists] = useState(hasSavedPlan);
   const [snapshots, setSnapshots] = useState(initialSnapshots);
   const [interviewState, setInterviewState] =
     useState<HouseholdRunwayInterviewState>(() =>
       initialAnswers
         ? createHouseholdRunwayInterview({
-            committedPlan: { revision: 0, inputs: initialAnswers },
+            committedPlan: { revision: initialPlanRevision, inputs: initialAnswers },
           })
         : createHouseholdRunwayInterview(),
     );
   const [error, setError] = useState("");
   const landingTracked = useRef(false);
   const resumeStageRef = useRef<RunwayStepId | null>(null);
+  const importedDraftRef = useRef(false);
+  const planExistsRef = useRef(hasSavedPlan);
   const interviewStateRef = useRef(interviewState);
   const externalEffectsRef = useRef(
     new Map<string, HouseholdRunwayInterviewEffect>(),
   );
   const inFlightEffectsRef = useRef(new Set<string>());
   interviewStateRef.current = interviewState;
+  planExistsRef.current = planExists;
   const interviewStarted =
     isAuthenticated || interviewState.status !== "not_started";
   const stepId = (interviewState.stage ?? "location") as RunwayStepId;
@@ -266,7 +294,7 @@ export function HouseholdRunway({
     planOperation.status === "pending"
       ? "saving"
       : planOperation.status === "succeeded" ||
-          (hasSavedPlan && !hasLocalDraft && interviewState.committedPlan !== null)
+          (planExists && !hasLocalDraft && interviewState.committedPlan !== null)
         ? "saved"
         : planOperation.status === "failed"
           ? "failed"
@@ -279,7 +307,8 @@ export function HouseholdRunway({
     planOperation.status === "failed"
       ? planOperation.error === "authentication_required"
         ? t("save.authenticationRequired")
-        : planOperation.error === "stale_result"
+        : planOperation.error === "stale_result" ||
+            planOperation.error === "conflict"
           ? t("save.stale")
           : t("save.error")
       : interviewState.operations.reportDownload.status === "failed"
@@ -297,6 +326,11 @@ export function HouseholdRunway({
   ) => {
     const capabilities: HouseholdRunwayInterviewCapabilities = {
       planPersistence: isAuthenticated ? "available" : "unavailable",
+      snapshotTrigger: planExistsRef.current
+        ? "updated"
+        : importedDraftRef.current
+          ? "imported"
+          : "completed",
     };
     const result = dispatchHouseholdRunwayInterview(
       sourceState,
@@ -329,8 +363,11 @@ export function HouseholdRunway({
       storedDraft.status === "restored" ? storedDraft.state : null;
     setDeviceStorageConsent(hasHouseholdRunwayDeviceStorageConsent());
     const committedPlan = initialAnswers
-      ? { revision: 0, inputs: initialAnswers }
+      ? { revision: initialPlanRevision, inputs: initialAnswers }
       : null;
+    importedDraftRef.current = Boolean(
+      (boundaryDraft || runwayDraft) && !planExistsRef.current,
+    );
     let restoredBoundary = createHouseholdRunwayInterview({
       committedPlan,
     });
@@ -416,7 +453,7 @@ export function HouseholdRunway({
       window.removeEventListener("popstate", syncUrlMode);
       if (hydrationFrame !== null) window.cancelAnimationFrame(hydrationFrame);
     };
-  }, [dispatchInterviewCommand, initialAnswers, isAuthenticated]);
+  }, [dispatchInterviewCommand, initialAnswers, initialPlanRevision, isAuthenticated]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -519,19 +556,28 @@ export function HouseholdRunway({
 
       if (effect.type === "plan_persistence_requested") {
         void fetch("/api/finance/cushion", {
-          method: "PUT",
+          method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             answers: effect.inputs,
-            adjustments: {},
+            adjustments: effect.adjustments,
             status: "completed",
             attribution: runwayAttribution(),
-            create_snapshot: true,
+            idempotency_key: effect.idempotencyKey,
+            expected_revision: effect.expectedPlanRevision ?? 0,
             snapshot_action_id: effect.idempotencyKey,
-            snapshot_trigger: hasSavedPlan ? "updated" : "imported",
+            snapshot_trigger: effect.snapshotTrigger,
           }),
         })
           .then(async (response) => {
+            const payload = (await response.json().catch(() => ({}))) as {
+              current_revision?: number;
+              revision?: number;
+              plan?: { answers?: HouseholdRunwayAnswers };
+              assessment?: SuccessfulHouseholdRunwayAssessment;
+              snapshot?: RunwaySnapshotSummary;
+              snapshots?: RunwaySnapshotSummary[];
+            };
             if (!response.ok) {
               const error =
                 response.status === 401 || response.status === 403
@@ -546,16 +592,25 @@ export function HouseholdRunway({
                   type: "plan_persistence_failed",
                   sourceRevision,
                   correlationId,
+                  ...(typeof payload.current_revision === "number"
+                    ? { currentPlanRevision: payload.current_revision }
+                    : {}),
                   error,
                 },
                 interviewStateRef.current,
               );
               return;
             }
-            const payload = (await response.json()) as {
-              snapshots?: RunwaySnapshotSummary[];
-            };
+            if (
+              !Number.isInteger(payload.revision) ||
+              !payload.plan?.answers ||
+              !payload.assessment
+            ) {
+              throw new Error("Invalid Household Runway commit response");
+            }
             if (payload.snapshots) setSnapshots(payload.snapshots);
+            planExistsRef.current = true;
+            setPlanExists(true);
             const currentPlanOperation =
               interviewStateRef.current.operations.planPersistence;
             const isCurrentPlanPersistence =
@@ -572,6 +627,10 @@ export function HouseholdRunway({
                 type: "plan_persistence_succeeded",
                 sourceRevision,
                 correlationId,
+                planRevision: payload.revision,
+                planInputs: payload.plan.answers,
+                assessment: payload.assessment,
+                ...(payload.snapshot ? { snapshot: payload.snapshot } : {}),
               },
               interviewStateRef.current,
             );
@@ -670,7 +729,6 @@ export function HouseholdRunway({
     });
   }, [
     hasLocalDraft,
-    hasSavedPlan,
     hydrated,
     interviewStarted,
     interviewState,

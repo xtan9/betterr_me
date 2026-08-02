@@ -27,6 +27,7 @@ export default async function FinanceCushionPage() {
     return (
       <HouseholdRunway
         initialAnswers={null}
+        initialPlanRevision={0}
         isAuthenticated={false}
         hasSavedPlan={false}
         initialSnapshots={[]}
@@ -46,6 +47,7 @@ export default async function FinanceCushionPage() {
   const runway = (
     <HouseholdRunway
       initialAnswers={cushion?.answers ?? null}
+      initialPlanRevision={cushion?.revision ?? 0}
       isAuthenticated={Boolean(user)}
       hasSavedPlan={Boolean(cushion?.answers)}
       initialSnapshots={snapshots}

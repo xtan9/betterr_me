@@ -1,15 +1,69 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+
 import {
   FINANCE_CUSHION_COLUMNS,
-  RUNWAY_MODEL_VERSION,
   toFinanceCushionView,
   type FinanceCushionRecord,
   type FinanceCushionView,
+  type RunwayAdjustments,
   type RunwaySnapshotSummary,
+  type HouseholdRunwayAnswers,
 } from "@/lib/finance/cushion";
 import type {
   SuccessfulHouseholdRunwayAssessment,
 } from "@/lib/finance/household-runway-assessment";
+
+export type HouseholdRunwaySnapshotTrigger =
+  | "completed"
+  | "imported"
+  | "updated";
+
+export interface HouseholdRunwayAtomicCommitInput {
+  answers: HouseholdRunwayAnswers;
+  adjustments: RunwayAdjustments;
+  status: "completed";
+  attribution: Record<string, string | undefined>;
+  idempotencyKey: string;
+  expectedRevision: number;
+  snapshotActionId: string;
+  snapshotTrigger: HouseholdRunwaySnapshotTrigger;
+  /** Derived by the server before entering this persistence boundary. */
+  assessment: SuccessfulHouseholdRunwayAssessment;
+}
+
+export type HouseholdRunwayAtomicCommitResult =
+  | {
+      success: true;
+      replayed: boolean;
+      revision: number;
+      plan: FinanceCushionView;
+      assessment: SuccessfulHouseholdRunwayAssessment;
+      snapshot: RunwaySnapshotSummary;
+      snapshots: RunwaySnapshotSummary[];
+    }
+  | {
+      success: false;
+      kind: "stale_revision";
+      expectedRevision: number;
+      currentRevision: number;
+    }
+  | {
+      success: false;
+      kind: "idempotency_conflict";
+    }
+  | {
+      success: false;
+      kind: "invalid_trigger";
+      message: string;
+    };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function integerValue(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) ? value : null;
+}
 
 export async function getFinanceCushion(
   supabase: SupabaseClient,
@@ -24,77 +78,90 @@ export async function getFinanceCushion(
   return data ? toFinanceCushionView(data as FinanceCushionRecord) : null;
 }
 
-export async function saveHouseholdRunwayPlan(
+/**
+ * The only Household Runway Plan write authority. The database function owns
+ * the transaction and derives ownership from auth.uid(); this adapter never
+ * exposes the database client to the Interview boundary.
+ */
+export async function commitHouseholdRunwayPlan(
   supabase: SupabaseClient,
-  userId: string,
-  input: {
-    assessment: SuccessfulHouseholdRunwayAssessment;
-    status: "in_progress" | "completed";
-    attribution: Record<string, string | undefined>;
-  },
-): Promise<FinanceCushionView> {
-  const { answers } = input.assessment;
-  const baselineResult = input.assessment.firstScenario.baseline;
-  const requiredCushionColumns = {
-    liquid_resources_cents: baselineResult.starting_resources_cents,
-    monthly_essential_expenses_cents: Math.max(
-      1,
-      baselineResult.interruption_expenses_cents,
-    ),
-    monthly_continuing_income_cents:
-      baselineResult.continuing_monthly_income_cents,
-  };
-  const { data, error } = await supabase
-    .from("finance_cushions")
-    .upsert(
-      {
-        user_id: userId,
-        ...requiredCushionColumns,
-        answers,
-        latest_result: input.assessment,
-        model_version: RUNWAY_MODEL_VERSION,
-        status: input.status,
-        country: answers.country,
-        region: answers.region,
-        currency: answers.currency,
-        attribution: input.attribution,
-        completed_at:
-          input.status === "completed" ? new Date().toISOString() : null,
-      },
-      { onConflict: "user_id" },
-    )
-    .select(FINANCE_CUSHION_COLUMNS)
-    .single();
-  if (error) throw error;
-  return toFinanceCushionView(data as FinanceCushionRecord);
-}
-
-export async function appendRunwaySnapshot(
-  supabase: SupabaseClient,
-  input: {
-    planId: string;
-    userId: string;
-    actionId: string;
-    trigger: "completed" | "updated" | "imported";
-    assessment: SuccessfulHouseholdRunwayAssessment;
-  },
-) {
-  const baselineResult = input.assessment.firstScenario.baseline;
-  const { error } = await supabase.from("finance_cushion_snapshots").upsert(
+  input: HouseholdRunwayAtomicCommitInput,
+): Promise<HouseholdRunwayAtomicCommitResult> {
+  const { data, error } = await supabase.rpc(
+    "commit_household_runway_plan",
     {
-      plan_id: input.planId,
-      user_id: input.userId,
-      action_id: input.actionId,
-      trigger: input.trigger,
-      scenario: baselineResult.scenario,
-      months_covered: baselineResult.months_covered,
-      sustainable: baselineResult.sustainable,
-      result: input.assessment,
-      model_version: RUNWAY_MODEL_VERSION,
+      p_request: {
+        answers: input.answers,
+        adjustments: input.adjustments,
+        status: input.status,
+        attribution: input.attribution,
+        idempotency_key: input.idempotencyKey,
+        expected_revision: input.expectedRevision,
+        snapshot_action_id: input.snapshotActionId,
+        snapshot_trigger: input.snapshotTrigger,
+        assessment: input.assessment,
+      },
     },
-    { onConflict: "plan_id,action_id", ignoreDuplicates: true },
   );
   if (error) throw error;
+  if (!isRecord(data)) {
+    throw new Error("Household Runway commit returned an invalid outcome");
+  }
+
+  if (data.status === "conflict" && data.type === "stale_revision_conflict") {
+    const currentRevision = integerValue(data.current_revision);
+    const expectedRevision = integerValue(data.expected_revision);
+    if (currentRevision === null || expectedRevision === null) {
+      throw new Error("Household Runway commit returned an invalid conflict");
+    }
+    return {
+      success: false,
+      kind: "stale_revision",
+      currentRevision,
+      expectedRevision,
+    };
+  }
+
+  if (data.status === "conflict" && data.type === "idempotency_conflict") {
+    return { success: false, kind: "idempotency_conflict" };
+  }
+
+  if (data.status === "invalid" && data.type === "invalid_trigger") {
+    return {
+      success: false,
+      kind: "invalid_trigger",
+      message:
+        typeof data.message === "string"
+          ? data.message
+          : "Snapshot trigger does not match the current Plan state",
+    };
+  }
+
+  const revision = integerValue(data.revision);
+  const plan = data.plan;
+  const assessment = data.assessment;
+  const snapshot = data.snapshot;
+  const snapshots = data.snapshots;
+  if (
+    data.status !== "committed" ||
+    revision === null ||
+    !isRecord(plan) ||
+    !isRecord(assessment) ||
+    !isRecord(snapshot) ||
+    !Array.isArray(snapshots)
+  ) {
+    throw new Error("Household Runway commit returned an invalid success");
+  }
+
+  return {
+    success: true,
+    replayed: data.type === "already-applied" || data.replayed === true,
+    revision,
+    plan: toFinanceCushionView(plan as unknown as FinanceCushionRecord),
+    assessment: assessment as SuccessfulHouseholdRunwayAssessment,
+    snapshot: snapshot as unknown as RunwaySnapshotSummary,
+    snapshots: snapshots as unknown as RunwaySnapshotSummary[],
+  };
 }
 
 export async function getRunwaySnapshots(
