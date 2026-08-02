@@ -1,4 +1,10 @@
-# Legacy Profile retirement-gate evidence
+# Legacy Profile retirement-gate evidence (historical #674)
+
+> This document records the compatibility evidence captured for #674 before
+> the contracts were retired by #675. The scanner, routes, helpers, and tests
+> named below are intentionally no longer present. Use
+> [`docs/deployment/legacy-profile-retirement.md`](../deployment/legacy-profile-retirement.md)
+> for the current deployment and rollback runbook.
 
 Issue #674 is a verification ticket. It does not retire or modify the legacy
 Profile endpoints, helpers, columns, or parent issue. The fourteen-day telemetry

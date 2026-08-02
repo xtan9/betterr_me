@@ -1,10 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { log } from "@/lib/logger";
-import type { Profile } from "@/lib/db/types";
 import type { User } from "@supabase/supabase-js";
 
-type AdminProfile = Pick<Profile, "role">;
+type AdminProfile = { role: "user" | "admin" };
 
 interface AdminContext {
   user: User;

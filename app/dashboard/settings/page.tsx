@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { ProfilesDB } from "@/lib/db";
+import { CurrentProfileDB } from "@/lib/db/current-profile";
 import { SettingsContent } from "@/components/settings/settings-content";
 import { composeCurrentProfileResponse } from "@/lib/current-profile";
 import {
@@ -18,8 +18,8 @@ export default async function SettingsPage() {
     redirect("/auth/login");
   }
 
-  const profilesDB = new ProfilesDB(supabase);
-  const projection = await profilesDB.getCurrentProfileProjection(user.id);
+  const currentProfileDB = new CurrentProfileDB(supabase);
+  const projection = await currentProfileDB.getCurrentProfileProjection(user.id);
   const permissions = await authenticatedCookiePermissions(supabase, user.id);
   const initialData = projection
     ? composeCurrentProfileResponse({

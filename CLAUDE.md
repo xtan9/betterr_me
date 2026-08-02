@@ -16,7 +16,7 @@
 | Domain | Route | DB Classes |
 |--------|-------|------------|
 | Dashboard | `app/dashboard` | — |
-| Admin | `app/dashboard/admin` | `ProfilesDB` (role-based access via `lib/auth/admin.ts`) |
+| Admin | `app/dashboard/admin` | `requireAdmin` role projection via `lib/auth/admin.ts` |
 | Habits | `app/habits` | `HabitsDB`, `HabitLogsDB`, `HabitMilestonesDB` |
 | Tasks | `app/tasks` | `TasksDB`, `RecurringTasksDB` |
 | Projects | `app/projects` | `ProjectsDB` |
@@ -25,7 +25,7 @@
 | Money | `app/money` | `TransactionsDB`, `BudgetsDB`, `RecurringBillsDB`, `SavingsGoalsDB`, `NetWorthSnapshotsDB`, `ManualAssetsDB`, `BankConnectionsDB`, `MerchantRulesDB`, `TransactionSplitsDB`, `AccountsMoneyDB` |
 | Calendar | `app/calendar` | `CalendarEventsDB`, `RemindersDB` |
 | Chat | `app/chat` | `ConversationsDB`, `ChatMessagesDB` |
-| Auth | `app/auth` | `ProfilesDB` |
+| Auth | `app/auth` | `ensureProfile` provisioning via `lib/db/ensure-profile.ts` |
 | MCP | `app/mcp` | — |
 
 ## Quick Reference

@@ -31,10 +31,6 @@ vi.mock("swr", () => ({
   },
 }));
 
-// Mock fetch for unrelated child components
-const mockFetch = vi.fn();
-global.fetch = mockFetch;
-
 const mockSetReminderEmail = vi.fn();
 const mockSetPushQuietWindow = vi.fn();
 const mockUseNotifications = vi.hoisted(() => vi.fn());
@@ -89,12 +85,6 @@ describe("NotificationSettings", () => {
       unsubscribe: mockUnsubscribe,
       sendTest: mockSendTest,
     };
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        profile: { preferences: { email_notifications_enabled: true } },
-      }),
-    });
   });
 
   it("renders title and description", () => {

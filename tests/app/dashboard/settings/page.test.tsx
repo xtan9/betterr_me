@@ -11,8 +11,8 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => mocks.supabase),
 }));
 
-vi.mock("@/lib/db", () => ({
-  ProfilesDB: class {
+vi.mock("@/lib/db/current-profile", () => ({
+  CurrentProfileDB: class {
     getCurrentProfileProjection = mocks.getCurrentProfileProjection;
   },
 }));

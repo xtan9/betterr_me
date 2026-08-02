@@ -2,50 +2,6 @@
 // Mirrors the Supabase schema defined across supabase/migrations/
 
 // =============================================================================
-// PROFILES
-// =============================================================================
-
-export type ProfileRole = 'user' | 'admin';
-
-export interface Profile {
-  id: string; // UUID
-  email: string;
-  full_name: string | null;
-  avatar_url: string | null;
-  timezone: string | null;
-  email_notifications_enabled: boolean;
-  role: ProfileRole;
-  preferences: ProfilePreferences;
-  preference_revision: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ProfilePreferences {
-  date_format: string;
-  week_start_day: number;
-  theme: "system" | "light" | "dark";
-  weight_unit: "kg" | "lbs";
-  quiet_hours_start?: string | null;  // HH:MM format
-  quiet_hours_end?: string | null;    // HH:MM format
-  email_notifications_enabled?: boolean;
-}
-
-export type ProfileInsert = Omit<
-  Profile,
-  "id" | "preference_revision" | "created_at" | "updated_at"
-> & {
-  id?: string;
-};
-
-export type ProfileUpdate = Partial<
-  Omit<
-    Profile,
-    "id" | "email" | "preference_revision" | "created_at" | "updated_at"
-  >
->;
-
-// =============================================================================
 // CATEGORIES
 // =============================================================================
 

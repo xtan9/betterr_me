@@ -6,7 +6,7 @@
     "cleanup": "self-cleaning"
   },
   {
-    "path": "preference_commands_compatibility.sql",
+    "path": "profile_retirement.sql",
     "domain": "profile",
     "role": "constrained",
     "cleanup": "self-cleaning"
@@ -18,17 +18,11 @@
     "cleanup": "self-cleaning"
   },
   {
-    "path": "atomic_profile_preference_updates.sql",
-    "domain": "profile",
-    "role": "constrained",
-    "cleanup": "self-cleaning"
-  },
-  {
     "path": "preference_storage_foundation.sql",
     "domain": "profile",
     "role": "admin",
     "cleanup": "transactional",
-    "adminReason": "temporarily reapplies the preference storage migration to legacy rows"
+    "adminReason": "checks current constrained Preference storage invariants"
   },
   {
     "path": "calendar_event_reminder_lifecycle.sql",

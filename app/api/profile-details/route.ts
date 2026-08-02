@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ProfilesDB } from "@/lib/db";
+import { ProfileDetailsDB } from "@/lib/db/profile-details";
 import { validateRequestBody } from "@/lib/validations/api";
 import { profileDetailsCommandSchema } from "@/lib/preferences/commands";
 import { readJson, runPreferenceCommand } from "@/lib/preferences/api";
@@ -17,7 +17,7 @@ export async function PATCH(request: Request) {
       );
       if (!validation.success) return validation.response;
 
-      const result = await new ProfilesDB(auth.client).updateProfileDetails(
+      const result = await new ProfileDetailsDB(auth.client).updateProfileDetails(
         validation.data,
       );
       return NextResponse.json(result);

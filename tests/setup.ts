@@ -2,10 +2,6 @@ import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { isDeepStrictEqual } from 'node:util';
 
-// Retirement verification executes client-facing tests with legacy Profile
-// paths disabled. Retained server compatibility routes are tested directly.
-process.env.TEST_LEGACY_PROFILE_CLIENT_PATHS = 'disabled';
-
 // Silence console noise during tests (API error handlers, etc.)
 // Restore with vi.restoreAllMocks() in individual tests if needed.
 vi.spyOn(console, 'error').mockImplementation(() => {});

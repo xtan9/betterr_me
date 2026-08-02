@@ -17,6 +17,7 @@ concurrency:
 
 permissions:
   contents: read
+  issues: read
 
 jobs:
   migrate:
@@ -46,11 +47,38 @@ jobs:
           migration_files="$(git diff --name-only --no-renames "${MIGRATION_SHA}^" "$MIGRATION_SHA" -- 'supabase/migrations/*.sql')"
           if [[ -n "$migration_files" ]]; then
             echo "required=true" >> "$GITHUB_OUTPUT"
+            if grep -q '20260804000001_retire_legacy_profile_contracts.sql' <<< "$migration_files"; then
+              echo "profile_retirement=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "profile_retirement=false" >> "$GITHUB_OUTPUT"
+            fi
             printf 'Migrations to apply:\n%s\n' "$migration_files"
           else
             echo "required=false" >> "$GITHUB_OUTPUT"
+            echo "profile_retirement=false" >> "$GITHUB_OUTPUT"
             echo "No migration changes; completing the prerequisite without touching production."
           fi
+
+      - name: Require completed Profile retirement gate
+        if: steps.changes.outputs.profile_retirement == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUIRED_GATE_MERGE_SHA: 90d0276d7fa02456095bdbe9bd581c90ff800514
+          REQUIRED_GATE_ISSUE: 674
+        shell: bash
+        run: |
+          set -euo pipefail
+          gate_state="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${REQUIRED_GATE_ISSUE}" --jq '.state')"
+          if [[ "$gate_state" != "closed" ]]; then
+            echo "Profile retirement blocked: issue #${REQUIRED_GATE_ISSUE} is not closed."
+            exit 1
+          fi
+          comparison="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${REQUIRED_GATE_MERGE_SHA}...${MIGRATION_SHA}" --jq '.status')"
+          if [[ "$comparison" != "ahead" && "$comparison" != "identical" ]]; then
+            echo "Profile retirement blocked: ${MIGRATION_SHA} does not include #674 merge ${REQUIRED_GATE_MERGE_SHA}."
+            exit 1
+          fi
+          echo "Profile retirement prerequisite verified: #${REQUIRED_GATE_ISSUE} closed and merge ${REQUIRED_GATE_MERGE_SHA} is an ancestor."
 
       - name: Setup Supabase CLI
         if: steps.changes.outputs.required == 'true'

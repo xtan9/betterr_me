@@ -4,29 +4,6 @@
  */
 
 // ============================================================================
-// Core Types
-// ============================================================================
-
-export interface Profile {
-  id: string; // UUID from auth.users
-  email: string;
-  full_name: string | null;
-  avatar_url: string | null;
-  preferences: UserPreferences;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface UserPreferences {
-  date_format: string;
-  week_start_day: number;
-  theme: 'light' | 'dark' | 'system';
-  notifications: {
-    email: boolean;
-    push: boolean;
-  };
-}
-
 export interface Category {
   id: string;
   user_id: string;
@@ -268,9 +245,6 @@ export interface UserAchievement {
 // ============================================================================
 // Database Row Insert/Update Types
 // ============================================================================
-
-export type InsertProfile = Omit<Profile, 'id' | 'created_at' | 'updated_at'>;
-export type UpdateProfile = Partial<InsertProfile>;
 
 export type InsertCategory = Omit<Category, 'id' | 'created_at' | 'updated_at'>;
 export type UpdateCategory = Partial<InsertCategory>;

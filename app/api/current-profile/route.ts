@@ -4,7 +4,7 @@ import {
   cookieRouteErrorMessage,
 } from "@/lib/auth/authenticated-request";
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
-import { ProfilesDB } from "@/lib/db";
+import { CurrentProfileDB } from "@/lib/db/current-profile";
 import { composeCurrentProfileResponse } from "@/lib/current-profile";
 import { log } from "@/lib/logger";
 
@@ -28,8 +28,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    const profilesDB = new ProfilesDB(auth.client);
-    const projection = await profilesDB.getCurrentProfileProjection(
+    const currentProfileDB = new CurrentProfileDB(auth.client);
+    const projection = await currentProfileDB.getCurrentProfileProjection(
       auth.principal.userId,
     );
 

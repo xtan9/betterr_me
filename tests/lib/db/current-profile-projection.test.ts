@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ProfilesDB } from "@/lib/db/profiles";
+import { CurrentProfileDB } from "@/lib/db/current-profile";
 import { FitnessDB } from "@/lib/db/fitness";
 import { LocalizationDB } from "@/lib/db/localization";
 import { mockSupabaseClient } from "../../setup";
@@ -22,7 +22,9 @@ describe("Profile owner readers and Current Profile projection", () => {
   afterEach(() => restoreMockSupabaseThen());
 
   it("selects only the explicit Current Profile storage projection", async () => {
-    const db = new ProfilesDB(mockSupabaseClient as unknown as SupabaseClient);
+    const db = new CurrentProfileDB(
+      mockSupabaseClient as unknown as SupabaseClient,
+    );
 
     await expect(db.getCurrentProfileProjection("user-123")).resolves.toEqual({
       full_name: "Taylor Example",
