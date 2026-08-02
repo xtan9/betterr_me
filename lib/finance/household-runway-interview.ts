@@ -37,6 +37,10 @@ import {
   assessHouseholdRunway,
   type SuccessfulHouseholdRunwayAssessment,
 } from "@/lib/finance/household-runway-assessment";
+import type {
+  HouseholdRunwayAnalyticsEventKind,
+  HouseholdRunwayAnalyticsStage,
+} from "@/lib/finance/household-runway-analytics";
 import { householdRunwayAnswersSchema } from "@/lib/validations/finance-cushion";
 
 /**
@@ -413,6 +417,9 @@ export interface HouseholdRunwayLandingRenderModel {
   kind: "landing";
   stage: null;
   location: null;
+  hasDraft: boolean;
+  draftCompleted: boolean;
+  resumeStage: HouseholdRunwayInterviewStage | null;
 }
 
 export type HouseholdRunwayResumeOption = "draft" | "plan";
@@ -646,8 +653,6 @@ interface HouseholdRunwayInterviewStateBase {
   /** Assessment is derived from planInputs and never persisted as Interview state. */
   assessment: SuccessfulHouseholdRunwayAssessment | null;
   renderModel: HouseholdRunwayInterviewRenderModel;
-  /** Alias retained for adapters that call the projection simply `render`. */
-  render: HouseholdRunwayInterviewRenderModel;
 }
 
 export interface HouseholdRunwayNotStartedState
@@ -655,7 +660,6 @@ export interface HouseholdRunwayNotStartedState
   status: "not_started";
   stage: null;
   renderModel: HouseholdRunwayLandingRenderModel | HouseholdRunwayResumeChoiceRenderModel;
-  render: HouseholdRunwayLandingRenderModel | HouseholdRunwayResumeChoiceRenderModel;
 }
 
 export interface HouseholdRunwayCollectingState
@@ -666,10 +670,6 @@ export interface HouseholdRunwayCollectingState
     HouseholdRunwayInterviewRenderModel,
     HouseholdRunwayLandingRenderModel | HouseholdRunwayResumeChoiceRenderModel
   >;
-  render: Exclude<
-    HouseholdRunwayInterviewRenderModel,
-    HouseholdRunwayLandingRenderModel | HouseholdRunwayResumeChoiceRenderModel
-  >;
 }
 
 export interface HouseholdRunwayReviewingState
@@ -677,7 +677,6 @@ export interface HouseholdRunwayReviewingState
   status: "reviewing";
   stage: "review";
   renderModel: HouseholdRunwayReviewRenderModel;
-  render: HouseholdRunwayReviewRenderModel;
 }
 
 export interface HouseholdRunwayCompletedState
@@ -685,7 +684,6 @@ export interface HouseholdRunwayCompletedState
   status: "completed";
   stage: "result";
   renderModel: HouseholdRunwayGenericStageRenderModel;
-  render: HouseholdRunwayGenericStageRenderModel;
 }
 
 export type HouseholdRunwayInterviewState =
@@ -802,6 +800,16 @@ export type HouseholdRunwayInterviewCommandInput =
   | { type: "import_draft" }
   | { type: "resume_draft"; interviewId: string }
   | { type: "resume_committed_plan" }
+  | {
+      type: "history_projection_changed";
+      destination: "landing";
+    }
+  | {
+      type: "history_projection_changed";
+      destination: "interview";
+      interviewId: string;
+      stage?: HouseholdRunwayInterviewStage;
+    }
   | { type: "synchronize_draft" }
   | {
       type: "draft_synchronization_succeeded";
@@ -864,14 +872,8 @@ export type HouseholdRunwayInterviewCommandInput =
     }
   | {
       type: "request_analytics";
-      eventName:
-        | "landing_view"
-        | "started"
-        | "skipped"
-        | "completed"
-        | "result_interaction"
-        | "registration_clicked";
-      stage?: string;
+      eventName: HouseholdRunwayAnalyticsEventKind;
+      stage?: HouseholdRunwayAnalyticsStage;
     }
   | {
       type: "analytics_succeeded";
@@ -1021,6 +1023,8 @@ export type HouseholdRunwayInterviewEffect =
   | {
       type: "draft_sync_requested";
       draft: HouseholdRunwayInterviewDraft;
+      status: HouseholdRunwayInterviewStatus;
+      stage: HouseholdRunwayInterviewStage | null;
       sourceRevision: number;
       correlationId: string;
     }
@@ -1059,14 +1063,8 @@ export type HouseholdRunwayInterviewEffect =
     }
   | {
       type: "analytics_requested";
-      eventName:
-        | "landing_view"
-        | "started"
-        | "skipped"
-        | "completed"
-        | "result_interaction"
-        | "registration_clicked";
-      stage?: string;
+      eventName: HouseholdRunwayAnalyticsEventKind;
+      stage?: HouseholdRunwayAnalyticsStage;
       sourceRevision: number;
       correlationId: string;
     };
@@ -1936,7 +1934,25 @@ function renderFor(
         recommended: resumeChoice.recommended,
       };
     }
-    return { kind: "landing", stage: null, location: null };
+    return {
+      kind: "landing",
+      stage: null,
+      location: null,
+      hasDraft:
+        draft.revision > 0 ||
+        draft.interviewId !== null ||
+        draft.startedAt !== null,
+      draftCompleted: draft.stageStatus.result === "completed",
+      resumeStage:
+        draft.stageStatus.result === "completed"
+          ? "result"
+          : NON_RESULT_STAGES.find(
+                (candidate) =>
+                  isStageApplicable(candidate, draft.answers) &&
+                  draft.stageStatus[candidate] !== "completed" &&
+                  draft.stageStatus[candidate] !== "skipped",
+              ) ?? null,
+    };
   }
 
   const availableStages = applicableHouseholdRunwayInterviewStages({
@@ -2209,9 +2225,6 @@ function stateFrom(
       renderModel: renderModel as
         | HouseholdRunwayLandingRenderModel
         | HouseholdRunwayResumeChoiceRenderModel,
-      render: renderModel as
-        | HouseholdRunwayLandingRenderModel
-        | HouseholdRunwayResumeChoiceRenderModel,
     };
   }
   if (status === "reviewing") {
@@ -2226,7 +2239,6 @@ function stateFrom(
       validationIssue,
       ...derived,
       renderModel: renderModel as HouseholdRunwayReviewRenderModel,
-      render: renderModel as HouseholdRunwayReviewRenderModel,
     };
   }
   if (status === "completed") {
@@ -2241,7 +2253,6 @@ function stateFrom(
       validationIssue,
       ...derived,
       renderModel: renderModel as HouseholdRunwayGenericStageRenderModel,
-      render: renderModel as HouseholdRunwayGenericStageRenderModel,
     };
   }
   return {
@@ -2255,10 +2266,6 @@ function stateFrom(
     validationIssue,
     ...derived,
     renderModel: renderModel as Exclude<
-      HouseholdRunwayInterviewRenderModel,
-      HouseholdRunwayLandingRenderModel | HouseholdRunwayResumeChoiceRenderModel
-    >,
-    render: renderModel as Exclude<
       HouseholdRunwayInterviewRenderModel,
       HouseholdRunwayLandingRenderModel | HouseholdRunwayResumeChoiceRenderModel
     >,
@@ -2343,6 +2350,11 @@ function startState(
   >,
   restarted: boolean,
 ): HouseholdRunwayInterviewTransition {
+  const resumingExistingDraft =
+    !restarted &&
+    (state.draft.revision > 0 ||
+      state.draft.interviewId !== null ||
+      state.draft.startedAt !== null);
   const draft = restarted ? normalizeDraft(null) : normalizeDraft(state.draft);
   const requestedStage = command.stage;
   const canResumeResult =
@@ -2363,9 +2375,15 @@ function startState(
             ))
         ? requestedStage
         : "location";
-  draft.revision = state.draft.revision + 1;
-  draft.interviewId = command.interviewId;
-  draft.startedAt = command.occurredAt;
+  draft.revision = resumingExistingDraft
+    ? state.draft.revision
+    : state.draft.revision + 1;
+  draft.interviewId = resumingExistingDraft
+    ? state.draft.interviewId ?? command.interviewId
+    : command.interviewId;
+  draft.startedAt = resumingExistingDraft
+    ? state.draft.startedAt ?? command.occurredAt
+    : command.occurredAt;
   const startEvent = event(
     command,
     restarted ? "interview_restarted" : "interview_started",
@@ -2422,6 +2440,54 @@ function startState(
         : []),
     ],
   );
+}
+
+function projectHistory(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<
+    HouseholdRunwayInterviewCommand,
+    { type: "history_projection_changed" }
+  >,
+): HouseholdRunwayInterviewTransition {
+  if (command.destination === "landing") {
+    if (state.status === "not_started") {
+      return transition(state, snapshotOf(state), [], []);
+    }
+
+    return transition(
+      state,
+      {
+        ...snapshotOf(state),
+        status: "not_started",
+        stage: null,
+        resumeChoice: null,
+        validationIssue: null,
+      },
+      [],
+      [],
+    );
+  }
+
+  if (state.status !== "not_started") {
+    return transition(state, snapshotOf(state), [], []);
+  }
+
+  const started = startState(
+    state,
+    {
+      type: "start",
+      commandId: command.commandId,
+      occurredAt: command.occurredAt,
+      interviewId: command.interviewId,
+      stage: command.stage,
+    },
+    false,
+  );
+
+  return {
+    ...started,
+    effects: started.effects.filter((effect) => effect.type !== "history"),
+  };
 }
 
 function updateDraftAnswers(
@@ -3954,6 +4020,8 @@ function requestDraftSynchronization(
       {
         type: "draft_sync_requested",
         draft: state.draft,
+        status: state.status,
+        stage: state.stage,
         sourceRevision,
         correlationId,
       },
@@ -4445,6 +4513,9 @@ export function dispatchHouseholdRunwayInterview(
   command: HouseholdRunwayInterviewCommand,
   capabilities: HouseholdRunwayInterviewCapabilities = {},
 ): HouseholdRunwayInterviewTransition {
+  if (command.type === "history_projection_changed") {
+    return projectHistory(state, command);
+  }
   if (command.type === "start") {
     return state.status === "not_started"
       ? startState(state, command, false)

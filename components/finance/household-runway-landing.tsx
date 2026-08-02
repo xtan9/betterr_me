@@ -6,9 +6,10 @@ import type { HouseholdRunwayInterviewRenderModel } from "@/lib/finance/househol
 
 interface HouseholdRunwayLandingProps {
   t: (key: string, values?: Record<string, string | number>) => string;
-  renderModel: HouseholdRunwayInterviewRenderModel;
-  hasDraft: boolean;
-  draftCompleted: boolean;
+  renderModel: Extract<
+    HouseholdRunwayInterviewRenderModel,
+    { kind: "landing" }
+  >;
   onPrimary: () => void;
   onStartOver: () => void;
 }
@@ -16,11 +17,10 @@ interface HouseholdRunwayLandingProps {
 export function HouseholdRunwayLanding({
   t,
   renderModel,
-  hasDraft,
-  draftCompleted,
   onPrimary,
   onStartOver,
 }: HouseholdRunwayLandingProps) {
+  const { hasDraft, draftCompleted } = renderModel;
   const primaryKey = !hasDraft
     ? "landing.cta"
     : draftCompleted

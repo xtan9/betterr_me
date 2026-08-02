@@ -86,6 +86,30 @@ test.describe('Authenticated finance persistence', () => {
       page.getByRole('main').getByText('$35,000', { exact: true }).first(),
     ).toBeVisible();
 
+    await page.getByRole('button', { name: 'Review inputs', exact: true }).click();
+    await expect(page.locator('[data-runway-progress="reviewing"]')).toBeVisible();
+    await page.getByRole('button', { name: 'Show my runway', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Save this runway', exact: true })).toBeVisible();
+
+    let forceConflict = true;
+    await page.route('**/api/finance/cushion', async (route) => {
+      if (forceConflict && route.request().method() === 'POST') {
+        forceConflict = false;
+        await route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({ current_revision: 1 }),
+        });
+        return;
+      }
+      await route.continue();
+    });
+    await page.getByRole('button', { name: 'Save this runway', exact: true }).click();
+    await expect(page.getByText('This result changed before saving completed. Review it and try again.', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Save this runway', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Saved', exact: true })).toBeVisible();
+    await page.unroute('**/api/finance/cushion');
+
     await page.reload();
 
     await expect(page.getByRole('button', { name: 'Saved', exact: true })).toBeVisible();

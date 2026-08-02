@@ -24,6 +24,7 @@ test("starts anonymous visitors on the landing page and preserves attribution th
   await page.getByTestId("runway-hero-cta").click();
   await expect(page).toHaveURL(/campaign=e2e.*video=runway.*cta=test.*start=1/);
   await expect(page.getByRole("heading", { name: "Where does your household live?" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("runway-question-heading");
 
   await page.goBack();
   await expect(page.getByRole("heading", { name: "How long could your household keep going?" })).toBeVisible();
@@ -32,6 +33,16 @@ test("starts anonymous visitors on the landing page and preserves attribution th
 });
 
 test("completes the quick interview, edits take-home pay, and previews What-if without changing the baseline", async ({ page }, testInfo) => {
+  const analyticsBodies: Record<string, unknown>[] = [];
+  page.on("request", (request) => {
+    if (
+      request.method() === "POST" &&
+      new URL(request.url()).pathname === "/api/finance/cushion/events"
+    ) {
+      const body = request.postDataJSON();
+      if (body && typeof body === "object") analyticsBodies.push(body as Record<string, unknown>);
+    }
+  });
   await page.goto("/finance/cushion?campaign=e2e&video=runway&cta=test");
   await page.getByTestId("runway-hero-cta").click();
 
@@ -90,6 +101,32 @@ test("completes the quick interview, edits take-home pay, and previews What-if w
   await page.getByRole("button", { name: "Reset" }).click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("6.0 months");
   await expect(page.getByRole("link", { name: "Create account to save" })).toHaveAttribute("href", "/auth/sign-up?next=/finance/cushion");
+
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download", exact: true }).click();
+  await expect((await download).suggestedFilename()).toBe("household-runway-plan.txt");
+  await page.evaluate(() => {
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: () => {
+        throw new Error("downloads disabled");
+      },
+    });
+  });
+  await page.getByRole("button", { name: "Download", exact: true }).click();
+  await expect(page.getByText("The assessment could not be downloaded", { exact: false })).toBeVisible();
+
+  await expect.poll(() => analyticsBodies.length).toBeGreaterThan(0);
+  for (const body of analyticsBodies) {
+    expect(body).not.toHaveProperty("answers");
+    expect(body).not.toHaveProperty("amount");
+    expect(body).not.toHaveProperty("region");
+    expect(JSON.stringify(body)).not.toContain("120000");
+    expect(JSON.stringify(body)).not.toContain("7000");
+    expect(JSON.stringify(body)).not.toContain("5000");
+    expect(JSON.stringify(body)).not.toContain("6000");
+    expect(JSON.stringify(body)).not.toContain("30000");
+  }
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
