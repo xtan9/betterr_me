@@ -152,14 +152,17 @@ describe("legacy Profile retirement gates", () => {
     expect(changedRetainedLegacyProfilePaths()).toEqual([]);
   });
 
-  it("records the fail-closed observation result and runnable evidence", () => {
+  it("records the waiver without claiming the interval was observed", () => {
     const evidence = readFileSync(
       "docs/verification/legacy-profile-retirement-gates.md",
       "utf8",
     ).replaceAll("\r\n", "\n");
 
     expect(evidence).toContain("Issue #674 is a verification ticket");
-    expect(evidence).toContain("Fourteen consecutive complete production days with zero legacy route traffic | NOT VERIFIED");
+    expect(evidence).toContain("Fourteen consecutive complete production days with zero legacy route traffic | WAIVED — NOT OBSERVED");
+    expect(evidence).toContain("https://github.com/xtan9/betterr_me/issues/674#issuecomment-5154136937");
+    expect(evidence).toContain("explicit risk acceptance");
+    expect(evidence).toContain("does not claim that the fourteen-day interval was observed");
     expect(evidence).toContain("node scripts/ci/legacy-profile-retirement-gates.mjs");
     expect(evidence).toContain("pnpm exec vitest run");
     expect(evidence).toContain("pnpm exec playwright test e2e/current-profile-preferences.spec.ts --project=chromium");

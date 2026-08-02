@@ -1,15 +1,17 @@
 # Legacy Profile retirement-gate evidence
 
 Issue #674 is a verification ticket. It does not retire or modify the legacy
-Profile endpoints, helpers, columns, or parent issue. The retirement decision
-remains fail-closed until every gate below has evidence.
+Profile endpoints, helpers, columns, or parent issue. The fourteen-day telemetry
+gate below is explicitly waived as maintainer-accepted residual risk; that
+waiver does not claim the interval was observed. Every remaining gate below
+still requires its own evidence.
 
 ## Gate results
 
 | Gate | Result | Evidence surface |
 | --- | --- | --- |
 | Production callers of retained legacy read/write contracts | PASS | `node scripts/ci/legacy-profile-retirement-gates.mjs` and `tests/scripts/legacy-profile-retirement-gates.test.ts` |
-| Fourteen consecutive complete production days with zero legacy route traffic | NOT VERIFIED | Vercel runtime-log retention did not cover the requested window; see the observation record below |
+| Fourteen consecutive complete production days with zero legacy route traffic | WAIVED — NOT OBSERVED | [Maintainer explicit risk acceptance](https://github.com/xtan9/betterr_me/issues/674#issuecomment-5154136937); Vercel runtime-log retention did not cover the requested window |
 | Approved telemetry fields only | PASS | `validateLegacyTelemetryRecord` and the legacy route tests |
 | Current Profile contract and route suites with legacy client paths disabled | PASS | Focused Vitest command below; `tests/setup.ts` sets `TEST_LEGACY_PROFILE_CLIENT_PATHS=disabled` |
 | Owner commands, revision reconciliation, session isolation, degraded presentation | PASS | Focused Current Profile and Preference suites below |
@@ -82,12 +84,16 @@ days of zero traffic. A separate 24-hour query found no matching legacy log;
 that recent result is useful diagnostic evidence but is not substituted for the
 required fourteen-day window.
 
-Therefore the fourteen-day gate is deliberately recorded as **NOT VERIFIED**.
-The ticket must not claim that legacy Profile retirement is safe until a
-durable production telemetry export or an observability source with at least
-the full fourteen-day retention produces fourteen complete daily zero-count
-records. The requested window and this limitation are also recorded in the
-comment on #674 before the pull request is opened.
+Therefore the fourteen-day gate is deliberately recorded as **WAIVED — NOT
+OBSERVED**, not as a passing observation. On 2026-08-01 the maintainer
+explicitly accepted the residual risk because the application has low user and
+data volume and waived this gate for the retirement decision. This is explicit
+risk acceptance; it does not claim that the fourteen-day interval was observed.
+The waiver does not change the caller scan, approved telemetry-field contract,
+Current Profile journey checks, architecture policy checks, or the requirement
+to leave the retained legacy implementation paths and parent issue unchanged.
+The waiver and the retention limitation are recorded in the [#674 maintainer
+decision comment](https://github.com/xtan9/betterr_me/issues/674#issuecomment-5154136937).
 
 ## Focused verification
 
