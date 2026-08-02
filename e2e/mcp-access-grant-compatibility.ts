@@ -37,6 +37,11 @@ import {
   type DelegatedJwtClaims,
   type DelegatedJwtHeader,
 } from "./mcp-access-grant-policy";
+import {
+  LOOPBACK_HOSTS,
+  runPublicClientLoopbackConsentCompatibility,
+  type LoopbackHost,
+} from "./mcp-access-grant-public-client";
 
 export type GateStatus = "pass" | "fail" | "not-proven";
 
@@ -52,6 +57,7 @@ export interface McpAccessGrantTarget {
   canonicalResource: string;
   supabaseUrl: string;
   expectedAuthorizationServer: string;
+  loopbackHosts: LoopbackHost[];
   anonKey?: string;
   email?: string;
   password?: string;
@@ -107,6 +113,7 @@ interface TargetConfig {
   supabaseUrl?: unknown;
   expectedAuthorizationServer?: unknown;
   anonKeyEnv?: unknown;
+  loopbackHosts?: unknown;
   emailEnv?: unknown;
   passwordEnv?: unknown;
 }
@@ -480,6 +487,14 @@ function parseTarget(raw: TargetConfig, index: number): McpAccessGrantTarget {
   const anonKeyEnv = typeof raw.anonKeyEnv === "string" ? raw.anonKeyEnv : "MCP_SUPABASE_ANON_KEY";
   const emailEnv = typeof raw.emailEnv === "string" ? raw.emailEnv : "MCP_TEST_EMAIL";
   const passwordEnv = typeof raw.passwordEnv === "string" ? raw.passwordEnv : "MCP_TEST_PASSWORD";
+  const configuredLoopbackHosts = Array.isArray(raw.loopbackHosts)
+    ? raw.loopbackHosts
+    : typeof raw.loopbackHosts === "string"
+      ? raw.loopbackHosts.split(",")
+      : [...LOOPBACK_HOSTS];
+  const loopbackHosts = [...new Set(configuredLoopbackHosts.filter(
+    (host): host is LoopbackHost => LOOPBACK_HOSTS.includes(host as LoopbackHost),
+  ))];
 
   return {
     name: typeof raw.name === "string" ? raw.name : `target-${index + 1}`,
@@ -489,6 +504,7 @@ function parseTarget(raw: TargetConfig, index: number): McpAccessGrantTarget {
       typeof raw.expectedAuthorizationServer === "string" && raw.expectedAuthorizationServer.length > 0
         ? raw.expectedAuthorizationServer
         : deriveAuthorizationServer(supabaseUrl),
+    loopbackHosts,
     anonKey: process.env[anonKeyEnv] ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     email: process.env[emailEnv],
     password: process.env[passwordEnv],
@@ -518,6 +534,7 @@ export function loadMcpAccessGrantTargets(): McpAccessGrantTarget[] {
         canonicalResource: process.env.MCP_ACCESS_GRANT_CANONICAL_RESOURCE,
         supabaseUrl: process.env.MCP_SUPABASE_URL,
         expectedAuthorizationServer: process.env.MCP_SUPABASE_AUTH_ISSUER,
+        loopbackHosts: process.env.MCP_ACCESS_GRANT_LOOPBACK_HOSTS,
       },
       0,
     ),
@@ -1651,6 +1668,10 @@ export async function runMcpAccessGrantCompatibility(
     requests: [],
   };
   const gates: CompatibilityGate[] = [];
+
+  const publicClientLayer = await runPublicClientLoopbackConsentCompatibility(target, page, testInfo);
+  report.requests.push(...(publicClientLayer.requests as unknown as RequestEvidence[]));
+  gates.push(...publicClientLayer.gates);
 
   const configured = (() => {
     try {
