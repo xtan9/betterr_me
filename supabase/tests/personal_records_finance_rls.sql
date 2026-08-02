@@ -1165,17 +1165,7 @@ $$;
 -- rows as the fixture's administrative session before exercising the read and
 -- direct-write boundaries below.
 reset role;
-select set_config(
-  'request.jwt.claim.sub',
-  '21000000-0000-0000-0000-000000000001',
-  true
-);
-
-insert into public.finance_cushions (
-  id, user_id, liquid_resources_cents, monthly_essential_expenses_cents,
-  monthly_continuing_income_cents
-)
-values (
+select public.ralph_ci_seed_finance_plan(
   '2a000000-0000-0000-0000-000000000001',
   '21000000-0000-0000-0000-000000000001',
   120000,
@@ -1183,11 +1173,7 @@ values (
   5000
 );
 
-insert into public.finance_cushion_snapshots (
-  id, plan_id, user_id, action_id, trigger, scenario, months_covered,
-  sustainable, result, model_version
-)
-values (
+select public.ralph_ci_seed_finance_snapshot(
   '2b000000-0000-0000-0000-000000000001',
   '2a000000-0000-0000-0000-000000000001',
   '21000000-0000-0000-0000-000000000001',
@@ -1200,11 +1186,7 @@ values (
   '2.0.0'
 );
 
-insert into public.finance_cushions (
-  id, user_id, liquid_resources_cents, monthly_essential_expenses_cents,
-  monthly_continuing_income_cents
-)
-values (
+select public.ralph_ci_seed_finance_plan(
   '2a000000-0000-0000-0000-000000000002',
   '21000000-0000-0000-0000-000000000002',
   60000,
@@ -1212,11 +1194,7 @@ values (
   0
 );
 
-insert into public.finance_cushion_snapshots (
-  id, plan_id, user_id, action_id, trigger, scenario, months_covered,
-  sustainable, result, model_version
-)
-values (
+select public.ralph_ci_seed_finance_snapshot(
   '2b000000-0000-0000-0000-000000000002',
   '2a000000-0000-0000-0000-000000000002',
   '21000000-0000-0000-0000-000000000002',
