@@ -5,40 +5,47 @@ import { useTranslations } from "next-intl";
 import { Download, RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MoneyField } from "@/components/finance/runway-money-field";
-import { BalanceChart, RunwayHistory } from "@/components/finance/household-runway-result-parts";
+import {
+  BalanceChart,
+  RunwayHistory,
+} from "@/components/finance/household-runway-result-parts";
 import {
   RUNWAY_MODEL_VERSION,
   formatCents,
-  type HouseholdRunwayAnswers,
-  type RunwayAdjustments,
-  type RunwayScenario,
   type RunwaySimulation,
   type RunwaySnapshotSummary,
 } from "@/lib/finance/cushion";
-import type { HouseholdRunwayScenarioAssessment } from "@/lib/finance/household-runway-assessment";
+import type {
+  HouseholdRunwayInterviewCommandInput,
+  HouseholdRunwayInterviewRenderModel,
+} from "@/lib/finance/household-runway-interview";
 
-function primarySentence(simulation: RunwaySimulation, t: ReturnType<typeof useTranslations>) {
+function primarySentence(
+  simulation: RunwaySimulation,
+  t: ReturnType<typeof useTranslations>,
+) {
   if (simulation.sustainable) return t("result.sustainable");
-  if (!simulation.depletion_date) return t("result.primaryOver", { months: simulation.months_covered?.toFixed(0) ?? "120" });
-  return t("result.primary", { months: (simulation.months_covered ?? 0).toFixed(1), date: simulation.depletion_date });
+  if (!simulation.depletion_date) {
+    return t("result.primaryOver", {
+      months: simulation.months_covered?.toFixed(0) ?? "120",
+    });
+  }
+  return t("result.primary", {
+    months: (simulation.months_covered ?? 0).toFixed(1),
+    date: simulation.depletion_date,
+  });
 }
+
+type ResultModel = Extract<
+  HouseholdRunwayInterviewRenderModel,
+  { kind: "stage" }
+>;
+
 export function ResultExperience({
   t,
   locale,
-  answers,
-  scenarios,
-  scenario,
-  setScenario,
-  baseline,
-  preview,
-  currentLifestyle,
-  extreme,
-  planAdjustment,
-  onPlanAdjustmentChange,
-  actions,
-  onApply,
-  onReset,
-  onEdit,
+  model,
+  dispatch,
   onStartNew,
   onDiscardDraft,
   onRegistrationClick,
@@ -52,20 +59,8 @@ export function ResultExperience({
 }: {
   t: ReturnType<typeof useTranslations>;
   locale: string;
-  answers: HouseholdRunwayAnswers;
-  scenarios: RunwayScenario[];
-  scenario: RunwayScenario;
-  setScenario: (scenario: RunwayScenario) => void;
-  baseline: RunwaySimulation;
-  preview: RunwaySimulation;
-  currentLifestyle: RunwaySimulation;
-  extreme: RunwaySimulation;
-  planAdjustment: RunwayAdjustments;
-  onPlanAdjustmentChange: (patch: Partial<RunwayAdjustments>) => void;
-  actions: HouseholdRunwayScenarioAssessment["advice"];
-  onApply: () => void;
-  onReset: () => void;
-  onEdit: () => void;
+  model: ResultModel;
+  dispatch: (input: HouseholdRunwayInterviewCommandInput) => unknown;
   onStartNew: () => void;
   onDiscardDraft: () => void;
   onRegistrationClick: () => void;
@@ -77,28 +72,79 @@ export function ResultExperience({
   error: string;
   snapshots: RunwaySnapshotSummary[];
 }) {
+  const answers = model.planInputs;
+  const assessment = model.assessment;
+  if (!answers || !assessment) return null;
+
+  const scenarios = model.availableScenarios.map((item) => item.id);
+  const scenario = model.selectedScenario ?? scenarios[0] ?? "current";
+  const selectedAssessment =
+    assessment.scenarios.find((item) => item.scenario === scenario) ??
+    assessment.firstScenario;
+  const baseline = selectedAssessment.baseline;
+  const preview = selectedAssessment.adjusted;
+  const currentLifestyle = selectedAssessment.comparisons.currentLifestyle;
+  const extreme = selectedAssessment.comparisons.extremeMode;
+  const planAdjustment = model.planAdjustment;
+  const actions = selectedAssessment.advice;
   const hasAdjustment = Object.values(planAdjustment).some((value) => value > 0);
   const delta =
     preview.months_covered !== null && baseline.months_covered !== null
       ? preview.months_covered - baseline.months_covered
       : null;
+
   return (
     <section className="mx-auto max-w-6xl px-5 py-12">
-      <p className="text-xs font-semibold uppercase tracking-[.22em] text-emerald-700">{t("result.eyebrow")}</p>
-      <p className="mt-4 text-slate-500">{t("result.scenarioLead", { scenario: t(`scenarios.${scenario}`) })}</p>
-      <h1 className="mt-2 max-w-5xl font-display text-3xl font-semibold tracking-[-.04em] sm:text-6xl">{primarySentence(preview, t)}</h1>
+      <p className="text-xs font-semibold uppercase tracking-[.22em] text-emerald-700">
+        {t("result.eyebrow")}
+      </p>
+      <p className="mt-4 text-slate-500">
+        {t("result.scenarioLead", { scenario: t(`scenarios.${scenario}`) })}
+      </p>
+      <h1 className="mt-2 max-w-5xl font-display text-3xl font-semibold tracking-[-.04em] sm:text-6xl">
+        {primarySentence(preview, t)}
+      </h1>
       <div className="mt-5 flex flex-wrap items-center gap-3 text-sm">
-        <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">{t(`guidance.${preview.sustainable || (preview.months_covered ?? 0) >= 6 ? "stronger" : (preview.months_covered ?? 0) >= 3 ? "limited" : "urgent"}`)}</span>
-        <span className="text-slate-400">{t(`confidence.${preview.confidence}`)} · {t("result.model", { version: RUNWAY_MODEL_VERSION })}</span>
-        {hasAdjustment && delta !== null ? <span className="font-semibold text-emerald-700">{delta >= 0 ? "+" : ""}{delta.toFixed(1)} {t("whatIf.months")}</span> : null}
+        <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">
+          {t(
+            `guidance.${preview.sustainable || (preview.months_covered ?? 0) >= 6 ? "stronger" : (preview.months_covered ?? 0) >= 3 ? "limited" : "urgent"}`,
+          )}
+        </span>
+        <span className="text-slate-400">
+          {t(`confidence.${preview.confidence}`)} · {t("result.model", { version: RUNWAY_MODEL_VERSION })}
+        </span>
+        {hasAdjustment && delta !== null ? (
+          <span className="font-semibold text-emerald-700">
+            {delta >= 0 ? "+" : ""}
+            {delta.toFixed(1)} {t("whatIf.months")}
+          </span>
+        ) : null}
       </div>
       <div role="tablist" aria-label={t("result.scenarios")} className="mt-8 flex flex-wrap gap-2">
-        {scenarios.map((item) => <button key={item} role="tab" aria-selected={item === scenario} onClick={() => setScenario(item)} className={`rounded-full border px-4 py-2 text-sm font-medium ${item === scenario ? "border-slate-950 bg-slate-950 text-white dark:border-white dark:bg-white dark:text-slate-950" : "bg-white dark:bg-white/5"}`}>{t(`scenarios.${item}`)}</button>)}
+        {scenarios.map((item) => (
+          <button
+            key={item}
+            role="tab"
+            aria-selected={item === scenario}
+            onClick={() => dispatch({ type: "select_scenario", scenario: item })}
+            className={`rounded-full border px-4 py-2 text-sm font-medium ${item === scenario ? "border-slate-950 bg-slate-950 text-white dark:border-white dark:bg-white dark:text-slate-950" : "bg-white dark:bg-white/5"}`}
+          >
+            {t(`scenarios.${item}`)}
+          </button>
+        ))}
       </div>
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.35fr_.65fr]">
         <BalanceChart t={t} locale={locale} currency={answers.currency} simulation={preview} />
         <div className="rounded-3xl border bg-white p-6 dark:bg-white/5">
-          <div className="flex items-center justify-between"><h2 className="text-lg font-semibold">{t("why.title")}</h2><button className="text-xs font-semibold text-emerald-700" onClick={onEdit}>{t("actions.review")}</button></div>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">{t("why.title")}</h2>
+            <button
+              className="text-xs font-semibold text-emerald-700"
+              onClick={() => dispatch({ type: "edit_completed_plan" })}
+            >
+              {t("actions.review")}
+            </button>
+          </div>
           <div className="mt-5 space-y-4 text-sm">
             <ResultLine label={t("why.cash")} value={formatCents(answers.available_cash.cents, locale, answers.currency)} />
             <ResultLine label={t("why.investments")} value={formatCents(answers.assets.liquid_investments.cents, locale, answers.currency)} />
@@ -116,21 +162,24 @@ export function ResultExperience({
         <h2 className="text-xl font-semibold">{t("whatIf.title")}</h2>
         <p className="mt-1 text-sm text-slate-500">{t("whatIf.description")}</p>
         <div className="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-          <MoneyField label={t("whatIf.reduceExpenses")} currency={answers.currency} value={planAdjustment.expense_reduction_cents} onChange={(value) => onPlanAdjustmentChange({ expense_reduction_cents: Math.min(value, baseline.interruption_expenses_cents) })} />
-          <MoneyField label={t("whatIf.addCash")} currency={answers.currency} value={planAdjustment.added_cash_cents} onChange={(value) => onPlanAdjustmentChange({ added_cash_cents: value })} />
-          <MoneyField label={t("whatIf.addIncome")} currency={answers.currency} value={planAdjustment.added_monthly_income_cents} onChange={(value) => onPlanAdjustmentChange({ added_monthly_income_cents: value })} />
-          <MoneyField label={t("whatIf.expectedFunds")} help={t("whatIf.expectedFundsHelp")} currency={answers.currency} value={planAdjustment.expected_unconfirmed_funds_cents} onChange={(value) => onPlanAdjustmentChange({ expected_unconfirmed_funds_cents: value })} />
-          <MoneyField label={t("whatIf.useIlliquid")} currency={answers.currency} value={planAdjustment.usable_illiquid_investments_cents} onChange={(value) => onPlanAdjustmentChange({ usable_illiquid_investments_cents: Math.min(value, answers.assets.illiquid_investments.cents) })} />
+          <MoneyField label={t("whatIf.reduceExpenses")} currency={answers.currency} value={planAdjustment.expense_reduction_cents} onChange={(value) => dispatch({ type: "set_plan_adjustment", patch: { expense_reduction_cents: Math.min(value, baseline.interruption_expenses_cents) } })} />
+          <MoneyField label={t("whatIf.addCash")} currency={answers.currency} value={planAdjustment.added_cash_cents} onChange={(value) => dispatch({ type: "set_plan_adjustment", patch: { added_cash_cents: value } })} />
+          <MoneyField label={t("whatIf.addIncome")} currency={answers.currency} value={planAdjustment.added_monthly_income_cents} onChange={(value) => dispatch({ type: "set_plan_adjustment", patch: { added_monthly_income_cents: value } })} />
+          <MoneyField label={t("whatIf.expectedFunds")} help={t("whatIf.expectedFundsHelp")} currency={answers.currency} value={planAdjustment.expected_unconfirmed_funds_cents} onChange={(value) => dispatch({ type: "set_plan_adjustment", patch: { expected_unconfirmed_funds_cents: value } })} />
+          <MoneyField label={t("whatIf.useIlliquid")} currency={answers.currency} value={planAdjustment.usable_illiquid_investments_cents} onChange={(value) => dispatch({ type: "set_plan_adjustment", patch: { usable_illiquid_investments_cents: Math.min(value, answers.assets.illiquid_investments.cents) } })} />
         </div>
         <details className="mt-5 rounded-2xl border p-4">
           <summary className="cursor-pointer font-semibold">{t("comparison.extreme")}</summary>
           <p className="mt-2 text-xs leading-5 text-slate-500">{t("whatIf.retirementHelp")}</p>
           <div className="mt-4 grid gap-5 md:grid-cols-2">
-            <MoneyField label={t("whatIf.useDeferred")} currency={answers.currency} value={planAdjustment.usable_retirement_tax_deferred_cents} onChange={(value) => onPlanAdjustmentChange({ usable_retirement_tax_deferred_cents: Math.min(value, answers.assets.retirement_tax_deferred.cents) })} />
-            <MoneyField label={t("whatIf.useTaxFree")} currency={answers.currency} value={planAdjustment.usable_retirement_tax_free_cents} onChange={(value) => onPlanAdjustmentChange({ usable_retirement_tax_free_cents: Math.min(value, answers.assets.retirement_tax_free.cents) })} />
+            <MoneyField label={t("whatIf.useDeferred")} currency={answers.currency} value={planAdjustment.usable_retirement_tax_deferred_cents} onChange={(value) => dispatch({ type: "set_plan_adjustment", patch: { usable_retirement_tax_deferred_cents: Math.min(value, answers.assets.retirement_tax_deferred.cents) } })} />
+            <MoneyField label={t("whatIf.useTaxFree")} currency={answers.currency} value={planAdjustment.usable_retirement_tax_free_cents} onChange={(value) => dispatch({ type: "set_plan_adjustment", patch: { usable_retirement_tax_free_cents: Math.min(value, answers.assets.retirement_tax_free.cents) } })} />
           </div>
         </details>
-        <div className="mt-6 flex gap-2"><Button onClick={onApply}>{t("actions.apply")}</Button><Button variant="outline" onClick={onReset}><RefreshCcw />{t("actions.reset")}</Button></div>
+        <div className="mt-6 flex gap-2">
+          <Button onClick={() => dispatch({ type: "apply_plan_adjustment" })}>{t("actions.apply")}</Button>
+          <Button variant="outline" onClick={() => dispatch({ type: "reset_plan_adjustment" })}><RefreshCcw />{t("actions.reset")}</Button>
+        </div>
       </div>
       <div className="mt-6 grid gap-6 md:grid-cols-2">
         <div className="rounded-3xl border bg-white p-6 dark:bg-white/5">
@@ -169,9 +218,7 @@ export function ResultExperience({
           </ul>
         </div>
       </div>
-      {isAuthenticated && snapshots.length > 0 ? (
-        <RunwayHistory t={t} locale={locale} snapshots={snapshots} />
-      ) : null}
+      {isAuthenticated && snapshots.length > 0 ? <RunwayHistory t={t} locale={locale} snapshots={snapshots} /> : null}
       <details className="mt-6 rounded-3xl border bg-white p-6 dark:bg-white/5"><summary className="cursor-pointer font-semibold">{t("method.title")}</summary><p className="mt-4 text-sm leading-6 text-slate-500">{t("method.formula")}</p><p className="mt-2 text-sm leading-6 text-slate-500">{t("method.excluded")}</p><p className="mt-2 text-xs text-slate-400">{t("method.disclaimer")}</p></details>
     </section>
   );

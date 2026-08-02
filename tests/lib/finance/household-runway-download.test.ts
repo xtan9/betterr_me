@@ -154,4 +154,28 @@ describe("household runway downloads", () => {
     expect(click).not.toHaveBeenCalled();
     expect(outcome).toEqual(before);
   });
+
+  it("uses canonical scenario order even when the assessment array is reordered", () => {
+    const outcome = assessHouseholdRunway({
+      answers: validAnswers(),
+      startDate: new Date("2026-07-26T00:00:00.000Z"),
+    });
+    expect(outcome.success).toBe(true);
+    if (!outcome.success) return;
+
+    const reordered = {
+      ...outcome,
+      scenarios: [...outcome.scenarios].reverse(),
+    };
+    const report = createHouseholdRunwayReport(reordered, presentation);
+    const scenarioHeadings = [...report.matchAll(/^Scenario: (.+)$/gm)].map(
+      ([, heading]) => heading,
+    );
+
+    expect(scenarioHeadings).toEqual([
+      "scenario:mine_stops",
+      "scenario:partner_stops",
+      "scenario:both_stop",
+    ]);
+  });
 });

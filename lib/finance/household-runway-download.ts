@@ -55,6 +55,12 @@ const ADJUSTMENT_LINES = [
   ["Usable tax-free retirement", "usable_retirement_tax_free_cents"],
 ] as const;
 
+const REPORT_SCENARIO_ORDER: readonly RunwayScenario[] = [
+  "mine_stops",
+  "partner_stops",
+  "both_stop",
+];
+
 function adviceLines(
   scenario: HouseholdRunwayScenarioAssessment,
   presentation: HouseholdRunwayReportPresentation,
@@ -79,7 +85,8 @@ function adviceLines(
 }
 
 /**
- * Render one successful assessment without recalculating or reordering it.
+ * Render one successful assessment without recalculating it. Scenario and
+ * detail order are presentation contract, not an incidental array order.
  */
 export function createHouseholdRunwayReport(
   assessment: SuccessfulHouseholdRunwayAssessment,
@@ -87,7 +94,13 @@ export function createHouseholdRunwayReport(
 ): string {
   const { answers } = assessment;
   const totals = expenseTotals(answers);
-  const scenarioLines = assessment.scenarios.flatMap((scenario) => [
+  const scenarioLines = [...assessment.scenarios]
+    .sort(
+      (left, right) =>
+        REPORT_SCENARIO_ORDER.indexOf(left.scenario) -
+        REPORT_SCENARIO_ORDER.indexOf(right.scenario),
+    )
+    .flatMap((scenario) => [
     `Scenario: ${presentation.formatScenario(scenario.scenario)}`,
     `Baseline: ${presentation.formatSimulation(scenario.baseline)}`,
     `Current lifestyle: ${presentation.formatSimulation(scenario.comparisons.currentLifestyle)}`,

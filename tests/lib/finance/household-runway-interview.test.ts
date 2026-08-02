@@ -14,7 +14,12 @@ type CommandPayload =
   | { type: "select_currency"; currency: "USD" | "CAD" | "CNY" | "TWD" }
   | { type: "continue" }
   | { type: "exit" }
-  | { type: "discard_draft" };
+  | { type: "discard_draft" }
+  | {
+      type: "history_projection_changed";
+      destination: "landing" | "interview";
+      interviewId?: string;
+    };
 
 const meta = (commandId: string, occurredAt = "2026-08-02T15:00:00.000Z") => ({
   commandId,
@@ -225,5 +230,47 @@ describe("Household Runway Interview boundary", () => {
       currency: null,
       currencyProposal: "CNY",
     });
+  });
+
+  it("has one render projection and treats URL history as a semantic command", () => {
+    const started = dispatch(
+      createHouseholdRunwayInterview(),
+      { type: "start", interviewId: "interview-1" },
+      "command-start",
+    ).state;
+
+    expect("render" in started).toBe(false);
+
+    const landed = dispatch(
+      started,
+      { type: "history_projection_changed", destination: "landing" },
+      "command-popstate-landing",
+    );
+
+    expect(landed.state).toMatchObject({
+      status: "not_started",
+      stage: null,
+      renderModel: { kind: "landing" },
+    });
+    expect(landed.effects).toEqual([]);
+
+    const returned = dispatch(
+      landed.state,
+      {
+        type: "history_projection_changed",
+        destination: "interview",
+        interviewId: "interview-1",
+      },
+      "command-popstate-interview",
+    );
+
+    expect(returned.state.status).toBe("collecting");
+    expect(returned.state.renderModel.kind).toBe("location");
+    expect(returned.effects).toEqual([
+      { type: "focus", stage: "location" },
+    ]);
+    expect(returned.effects.some((effect) => effect.type === "history")).toBe(
+      false,
+    );
   });
 });

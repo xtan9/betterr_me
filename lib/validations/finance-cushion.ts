@@ -5,6 +5,12 @@ import {
   EXPENSE_ITEM_TYPES,
   EXPENSE_ITEM_TYPE_VALUES,
 } from "@/lib/finance/runway-expenses";
+import {
+  HOUSEHOLD_RUNWAY_ANALYTICS_ATTRIBUTION_KEYS,
+  HOUSEHOLD_RUNWAY_ANALYTICS_EVENT_KINDS,
+  HOUSEHOLD_RUNWAY_ANALYTICS_LOCALES,
+  HOUSEHOLD_RUNWAY_ANALYTICS_STAGES,
+} from "@/lib/finance/household-runway-analytics";
 
 export const MAX_CUSHION_AMOUNT_CENTS = 100_000_000_000;
 const cents = z.number().finite().int().min(0).max(MAX_CUSHION_AMOUNT_CENTS);
@@ -233,7 +239,16 @@ const attributionSchema = z
     landing_variant: z.string().max(120).optional(),
     language: z.string().max(20).optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (value) =>
+      Object.keys(value).every((key) =>
+        (HOUSEHOLD_RUNWAY_ANALYTICS_ATTRIBUTION_KEYS as readonly string[]).includes(
+          key,
+        ),
+      ),
+    { message: "Only approved campaign attribution is allowed" },
+  );
 
 export const financeCushionPlanSchema = z
   .object({
@@ -255,16 +270,9 @@ export const financeCushionEventSchema = z
   .object({
     action_id: z.string().uuid(),
     session_id: z.string().uuid(),
-    event_name: z.enum([
-      "landing_view",
-      "started",
-      "skipped",
-      "completed",
-      "result_interaction",
-      "registration_clicked",
-    ]),
-    step_id: z.string().max(64).optional(),
-    locale: z.string().max(16).optional(),
+    event_name: z.enum(HOUSEHOLD_RUNWAY_ANALYTICS_EVENT_KINDS),
+    step_id: z.enum(HOUSEHOLD_RUNWAY_ANALYTICS_STAGES).optional(),
+    locale: z.enum(HOUSEHOLD_RUNWAY_ANALYTICS_LOCALES).optional(),
     attribution: attributionSchema.optional(),
   })
   .strict();
