@@ -1618,6 +1618,7 @@
     "loading": "加载中..."
   },
   "householdRunway": {
+    "boundary": { "currencyProposal": "建议使用 {currency}；继续即确认此选择。", "countryRequired": "请选择家庭所在国家后继续。", "regionRequired": "请填写州、省或地区后继续。", "currencyRequired": "请选择家庭货币后继续。" },
     "privacy": { "local": "草稿仅保存在此设备" },
     "progress": { "remaining": "预计还需 {minutes} 分钟" },
     "steps": {

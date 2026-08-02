@@ -45,7 +45,6 @@ import {
   type RecurringIncomeSource,
   type RecurringIncomeType,
   type RunwayAdjustments,
-  type RunwayCountry,
   type RunwayScenario,
   type RunwaySnapshotSummary,
   type RunwayStepId,
@@ -57,8 +56,11 @@ import {
   type ExpenseItemType,
 } from "@/lib/finance/runway-expenses";
 import {
+  clearHouseholdRunwayInterviewDraft,
   clearRunwayDraft,
+  persistHouseholdRunwayInterviewDraft,
   persistRunwayDraft,
+  readHouseholdRunwayInterviewDraft,
   readRunwayDraft,
 } from "@/lib/finance/runway-draft-client";
 import {
@@ -70,6 +72,16 @@ import {
   normalizeRunwayLocale,
   runwayRegionLabel,
 } from "@/lib/finance/runway-regions";
+import {
+  createHouseholdRunwayInterview,
+  dispatchHouseholdRunwayInterview,
+  restoreHouseholdRunwayInterview,
+  type HouseholdRunwayInterviewCommand,
+  type HouseholdRunwayInterviewCommandInput,
+  type HouseholdRunwayInterviewEffect,
+  type HouseholdRunwayInterviewState,
+  type HouseholdRunwayLocationRenderModel,
+} from "@/lib/finance/household-runway-interview";
 
 const OPTIONAL_STEPS = new Set<RunwayStepId>([
   "otherIncome",
@@ -113,6 +125,59 @@ interface HouseholdRunwayProps {
 
 function newId(prefix: string) {
   return `${prefix}-${typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Date.now()}`;
+}
+
+function householdRunwayInterviewCommand(
+  input: HouseholdRunwayInterviewCommandInput,
+): HouseholdRunwayInterviewCommand {
+  return {
+    ...input,
+    commandId: newId("runway-command"),
+    occurredAt: new Date().toISOString(),
+  } as HouseholdRunwayInterviewCommand;
+}
+
+function applyHouseholdRunwayInterviewEffect(
+  effect: HouseholdRunwayInterviewEffect,
+) {
+  if (typeof window === "undefined") return;
+
+  if (effect.type === "history") {
+    if (effect.action === "back") {
+      window.history.back();
+      return;
+    }
+    const url = new URL(window.location.href);
+    if (effect.destination === "interview") {
+      url.searchParams.set("start", "1");
+    } else {
+      url.searchParams.delete("start");
+    }
+    const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+    if (effect.action === "push") {
+      window.history.pushState({}, "", nextUrl);
+    } else {
+      window.history.replaceState({}, "", nextUrl);
+    }
+    return;
+  }
+
+  const focusHeading = () => {
+    document
+      .getElementById("runway-question-heading")
+      ?.focus({ preventScroll: true });
+  };
+  if (typeof window.requestAnimationFrame === "function") {
+    window.requestAnimationFrame(focusHeading);
+  } else {
+    focusHeading();
+  }
+}
+
+function applyHouseholdRunwayInterviewEffects(
+  effects: readonly HouseholdRunwayInterviewEffect[],
+) {
+  effects.forEach(applyHouseholdRunwayInterviewEffect);
 }
 
 function employmentIncome(
@@ -178,7 +243,10 @@ export function HouseholdRunway({
   const [snapshots, setSnapshots] = useState(initialSnapshots);
   const [planExists, setPlanExists] = useState(hasSavedPlan);
   const [draftSynced, setDraftSynced] = useState(false);
-  const [interviewStarted, setInterviewStarted] = useState(isAuthenticated);
+  const [interviewState, setInterviewState] =
+    useState<HouseholdRunwayInterviewState>(() =>
+      createHouseholdRunwayInterview(),
+    );
   const [error, setError] = useState("");
   const [activeExpenseCategory, setActiveExpenseCategory] =
     useState<ExpenseCategory | null>(null);
@@ -203,12 +271,74 @@ export function HouseholdRunway({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(hasSavedPlan);
   const landingTracked = useRef(false);
+  const interviewStarted =
+    isAuthenticated || interviewState.status !== "not_started";
+  const boundaryLocation =
+    interviewState.renderModel.kind === "location"
+      ? interviewState.renderModel
+      : null;
+  const dispatchInterviewCommand = (
+    input: HouseholdRunwayInterviewCommandInput,
+    sourceState: HouseholdRunwayInterviewState = interviewState,
+  ) => {
+    const result = dispatchHouseholdRunwayInterview(
+      sourceState,
+      householdRunwayInterviewCommand(input),
+    );
+    setInterviewState(result.state);
+    persistHouseholdRunwayInterviewDraft(result.state.draft);
+    const location = result.state.draft.location;
+    if (location.country) {
+      setAnswers((current) => ({
+        ...current,
+        country: location.country!,
+        region: location.region ?? "",
+        ...(location.currency ? { currency: location.currency } : {}),
+      }));
+    }
+    applyHouseholdRunwayInterviewEffects(result.effects);
+    return result;
+  };
 
   useEffect(() => {
     let hydrationFrame: number | null = null;
+    const boundaryDraft = initialAnswers
+      ? null
+      : readHouseholdRunwayInterviewDraft();
+    let restoredBoundary = boundaryDraft
+      ? restoreHouseholdRunwayInterview({
+          version: 1,
+          status: "not_started",
+          stage: null,
+          draft: boundaryDraft,
+          validationIssue: null,
+        })
+      : createHouseholdRunwayInterview();
     const syncUrlMode = () => {
       const started = new URLSearchParams(window.location.search).get("start") === "1";
-      setInterviewStarted(isAuthenticated || started);
+      if (isAuthenticated || started) {
+        const command = householdRunwayInterviewCommand({
+          type: "start",
+          interviewId: newId("runway-interview"),
+        });
+        setInterviewState((current) =>
+          current.status === "not_started"
+            ? dispatchHouseholdRunwayInterview(current, command).state
+            : current,
+        );
+      } else {
+        setInterviewState((current) =>
+          current.status === "not_started"
+            ? current
+            : restoreHouseholdRunwayInterview({
+                version: 1,
+                status: "not_started",
+                stage: null,
+                draft: current.draft,
+                validationIssue: null,
+              }),
+        );
+      }
     };
     const draft = readRunwayDraft();
     if (draft && !initialAnswers) {
@@ -234,8 +364,40 @@ export function HouseholdRunway({
         usable_retirement_tax_free_cents:
           draft.answers.extreme_access.retirement_tax_free_cents,
       }));
+
+      if (!boundaryDraft) {
+        restoredBoundary = restoreHouseholdRunwayInterview({
+          version: 1,
+          status: "not_started",
+          stage: null,
+          draft: {
+            revision: 0,
+            interviewId: null,
+            startedAt: null,
+            location: {
+              country: draft.answers.country,
+              region: draft.answers.region || null,
+              currency: draft.answers.currency,
+              proposedCurrency: currencyForCountry(draft.answers.country),
+              currencySelection: "explicit",
+            },
+          },
+          validationIssue: null,
+        });
+      }
     }
-    syncUrlMode();
+    const started = new URLSearchParams(window.location.search).get("start") === "1";
+    if (isAuthenticated || started) {
+      const command = householdRunwayInterviewCommand({
+        type: "start",
+        interviewId: newId("runway-interview"),
+      });
+      setInterviewState(
+        dispatchHouseholdRunwayInterview(restoredBoundary, command).state,
+      );
+    } else {
+      setInterviewState(restoredBoundary);
+    }
     window.addEventListener("popstate", syncUrlMode);
     if (draft) {
       // Commit restored answers before enabling autosave so a locale reload
@@ -371,12 +533,13 @@ export function HouseholdRunway({
       setDraftSynced(false);
       setAdjustments({ ...EMPTY_ADJUSTMENTS });
       clearRunwayDraft();
+      clearHouseholdRunwayInterviewDraft();
       window.localStorage.removeItem(RUNWAY_IMPORT_ACTION_KEY);
     }
-    const params = new URLSearchParams(window.location.search);
-    params.set("start", "1");
-    window.history.pushState({}, "", `${window.location.pathname}?${params}`);
-    setInterviewStarted(true);
+    dispatchInterviewCommand({
+      type: fresh ? "start_new" : "start",
+      interviewId: newId("runway-interview"),
+    });
     trackRunwayEvent("started", fresh ? "new" : hasLocalDraft ? "resume" : "new");
   };
 
@@ -396,15 +559,18 @@ export function HouseholdRunway({
     setHasLocalDraft(false);
     setAdjustments({ ...EMPTY_ADJUSTMENTS });
     if (!isAuthenticated) {
-      const params = new URLSearchParams(window.location.search);
-      params.delete("start");
-      const query = params.toString();
-      window.history.pushState(
-        {},
-        "",
-        `${window.location.pathname}${query ? `?${query}` : ""}`,
+      dispatchInterviewCommand({ type: "discard_draft" });
+    } else {
+      const resetState = createHouseholdRunwayInterview();
+      const result = dispatchHouseholdRunwayInterview(
+        resetState,
+        householdRunwayInterviewCommand({
+          type: "start_new",
+          interviewId: newId("runway-interview"),
+        }),
       );
-      setInterviewStarted(false);
+      setInterviewState(result.state);
+      persistHouseholdRunwayInterviewDraft(result.state.draft);
     }
   };
 
@@ -428,6 +594,7 @@ export function HouseholdRunway({
   };
 
   const validateStep = () => {
+    if (stepId === "location" && boundaryLocation) return "";
     if (stepId === "location" && !answers.region) return t("validation.region");
     if (
       stepId === "myIncome" &&
@@ -450,6 +617,49 @@ export function HouseholdRunway({
   };
 
   const next = () => {
+    if (stepId === "location" && boundaryLocation) {
+      let currentInterviewState = interviewState;
+      if (
+        boundaryLocation.currency === null &&
+        boundaryLocation.currencyProposal !== null
+      ) {
+        const currencyResult = dispatchInterviewCommand(
+          {
+            type: "select_currency",
+            currency: boundaryLocation.currencyProposal,
+          },
+          currentInterviewState,
+        );
+        currentInterviewState = currencyResult.state;
+      }
+      const result = dispatchInterviewCommand(
+        { type: "continue" },
+        currentInterviewState,
+      );
+      if (result.state.stage === "household") {
+        const location = result.state.draft.location;
+        if (location.country && location.region && location.currency) {
+          setAnswers((current) => ({
+            ...current,
+            country: location.country!,
+            region: location.region!,
+            currency: location.currency!,
+          }));
+          setStepId("household");
+          setError("");
+          return;
+        }
+      }
+      const issueCode = result.state.validationIssue?.code;
+      setError(
+        issueCode === "country_required"
+          ? t("boundary.countryRequired")
+          : issueCode === "currency_required"
+            ? t("boundary.currencyRequired")
+            : t("boundary.regionRequired"),
+      );
+      return;
+    }
     const issue = validateStep();
     if (issue) {
       setError(issue);
@@ -503,6 +713,7 @@ export function HouseholdRunway({
       };
       if (payload.snapshots) setSnapshots(payload.snapshots);
       clearRunwayDraft();
+      clearHouseholdRunwayInterviewDraft();
       setHasLocalDraft(false);
       setDraftSynced(true);
       setPlanExists(true);
@@ -609,6 +820,7 @@ export function HouseholdRunway({
       {showLanding ? (
         <HouseholdRunwayLanding
           t={t}
+          renderModel={interviewState.renderModel}
           hasDraft={hasLocalDraft}
           draftCompleted={completed}
           onPrimary={() => startInterview(false)}
@@ -671,6 +883,8 @@ export function HouseholdRunway({
                 ),
               });
               setActiveExpenseCategory(null);
+            } else if (stepId === "location" && boundaryLocation) {
+              dispatchInterviewCommand({ type: "exit" });
             } else if (stepId === "location" && !isAuthenticated) {
               window.history.back();
             } else {
@@ -689,6 +903,8 @@ export function HouseholdRunway({
             answers={answers}
             update={update}
             updateIncome={updateIncome}
+            locationModel={boundaryLocation}
+            dispatchInterviewCommand={dispatchInterviewCommand}
             activeExpenseCategory={activeExpenseCategory}
             setActiveExpenseCategory={setActiveExpenseCategory}
           />
@@ -830,6 +1046,8 @@ function StepContent({
   answers,
   update,
   updateIncome,
+  locationModel,
+  dispatchInterviewCommand,
   activeExpenseCategory,
   setActiveExpenseCategory,
 }: {
@@ -839,28 +1057,25 @@ function StepContent({
   answers: HouseholdRunwayAnswers;
   update: (patch: Partial<HouseholdRunwayAnswers>) => void;
   updateIncome: (person: "mine" | "partner", patch: Partial<IncomeAnswer>) => void;
+  locationModel: HouseholdRunwayLocationRenderModel | null;
+  dispatchInterviewCommand: (input: HouseholdRunwayInterviewCommandInput) => unknown;
   activeExpenseCategory: ExpenseCategory | null;
   setActiveExpenseCategory: (category: ExpenseCategory | null) => void;
 }) {
   const title = <StepTitle step={step} t={t} />;
   if (step === "location") {
+    if (!locationModel) return title;
     const regionLocale = normalizeRunwayLocale(locale);
     return (
       <>
         {title}
         <div className="mt-7 grid gap-3 sm:grid-cols-2">
-          {(["US", "CA", "CN", "TW"] as RunwayCountry[]).map((country) => (
+          {locationModel.availableCountries.map((country) => (
             <ChoiceCard
               key={country}
-              selected={answers.country === country}
+              selected={locationModel.country === country}
               title={t(`countries.${country}`)}
-              onClick={() =>
-                update({
-                  country,
-                  region: country === answers.country ? answers.region : "",
-                  currency: currencyForCountry(country),
-                })
-              }
+              onClick={() => dispatchInterviewCommand({ type: "select_country", country })}
             />
           ))}
         </div>
@@ -870,11 +1085,20 @@ function StepContent({
             <select
               aria-label={t("fields.region")}
               className="h-12 w-full rounded-xl border bg-transparent px-3"
-              value={answers.region}
-              onChange={(event) => update({ region: event.target.value })}
+              value={locationModel.region ?? ""}
+              disabled={!locationModel.country}
+              onChange={(event) =>
+                dispatchInterviewCommand({
+                  type: "select_region",
+                  region: event.target.value,
+                })
+              }
             >
               <option value="">{t("fields.selectRegion")}</option>
-              {RUNWAY_REGIONS[answers.country].map((region) => (
+              {(locationModel.country
+                ? RUNWAY_REGIONS[locationModel.country]
+                : []
+              ).map((region) => (
                 <option key={region.code} value={region.code}>
                   {region.labels[regionLocale]}
                 </option>
@@ -884,16 +1108,29 @@ function StepContent({
           <label>
             <span className="mb-2 block text-sm font-medium">{t("fields.currency")}</span>
             <select
+              aria-label={t("fields.currency")}
               className="h-12 w-full rounded-xl border bg-transparent px-3"
-              value={answers.currency}
+              disabled={!locationModel.country}
+              value={locationModel.currency ?? locationModel.currencyProposal ?? ""}
               onChange={(event) =>
-                update({ currency: event.target.value as HouseholdRunwayAnswers["currency"] })
+                dispatchInterviewCommand({
+                  type: "select_currency",
+                  currency: event.target.value as HouseholdRunwayAnswers["currency"],
+                })
               }
             >
-              {(["USD", "CAD", "CNY", "TWD"] as const).map((currency) => (
-                <option key={currency}>{currency}</option>
+              <option value="" disabled>
+                {t("fields.currency")}
+              </option>
+              {locationModel.availableCurrencies.map((currency) => (
+                <option key={currency} value={currency}>{currency}</option>
               ))}
             </select>
+            {locationModel.currency === null && locationModel.currencyProposal ? (
+              <p className="mt-2 text-xs text-slate-500">
+                {t("boundary.currencyProposal", { currency: locationModel.currencyProposal })}
+              </p>
+            ) : null}
           </label>
         </div>
       </>
