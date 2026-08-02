@@ -8,7 +8,7 @@ import {
 
 test.describe.configure({ mode: "serial" });
 
-const REQUIRED_ISSUE_767_GATES = [
+const REQUIRED_ISSUE_768_GATES = [
   "refresh-rotation",
   "refresh-replay-containment",
   "grant-identification-revocation",
@@ -21,11 +21,11 @@ for (const target of loadMcpAccessGrantTargets()) {
   test(`MCP Access Grant compatibility: ${target.name}`, async ({ page }, testInfo) => {
     const report = await runMcpAccessGrantCompatibility(target, page, testInfo);
 
-    expect(report.issue).toBe("#767");
+    expect(report.issue).toBe("#768");
     expect(report.gates.length).toBeGreaterThan(0);
     expect(report.gates.map(({ id }) => id)).toEqual(expect.arrayContaining([
       ...REQUIRED_GATE_IDS,
-      ...REQUIRED_ISSUE_767_GATES,
+      ...REQUIRED_ISSUE_768_GATES,
     ]));
     expect(report.gates.every(({ status }) =>
       status === "pass" || status === "fail" || status === "not-proven",

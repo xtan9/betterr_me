@@ -735,7 +735,7 @@ function commandVersion(command: string, args: string[]): string {
   }
 }
 
-async function collectVersions(): Promise<Record<string, string>> {
+async function collectVersions(target: McpAccessGrantTarget): Promise<Record<string, string>> {
   const root = process.cwd();
   const packageJson = await readJsonFile(path.join(root, "package.json"));
   const dependencyNames = [
@@ -753,12 +753,17 @@ async function collectVersions(): Promise<Record<string, string>> {
     versions[dependency] = packageVersion(installed);
   }
 
-  const dockerImages = commandVersion("docker", ["ps", "--format", "{{.Names}}|{{.Image}}"]);
-  const authImage = dockerImages
-    .split(/\r?\n/)
-    .find((line) => line.startsWith("supabase_auth_"))
-    ?.split("|")[1];
-  versions["supabase-auth-provider-image"] = authImage ?? "unavailable";
+  if (isLocalHostname(target.supabaseUrl)) {
+    const dockerImages = commandVersion("docker", ["ps", "--format", "{{.Names}}|{{.Image}}"]).split(/\r?\n/);
+    const authImage = dockerImages
+      .find((line) => line.startsWith("supabase_auth_"))
+      ?.split("|")[1];
+    versions["supabase-auth-provider-image"] = authImage ?? "unavailable";
+    versions["supabase-hosted-provider-version"] = "not-applicable";
+  } else {
+    versions["supabase-auth-provider-image"] = "not-applicable";
+    versions["supabase-hosted-provider-version"] = "not-publicly-exposed";
+  }
 
   const declaredSdk = (packageJson.devDependencies as Record<string, unknown> | undefined)?.["@modelcontextprotocol/sdk"];
   versions["declared-sdk-range"] = typeof declaredSdk === "string" ? declaredSdk : "unavailable";
@@ -1653,7 +1658,7 @@ export async function runMcpAccessGrantCompatibility(
   );
   const startedAt = new Date().toISOString();
   const report: CompatibilityReport = {
-    issue: "#767",
+    issue: "#768",
     outcome: "not-proven",
     startedAt,
     finishedAt: startedAt,
@@ -1663,7 +1668,7 @@ export async function runMcpAccessGrantCompatibility(
       supabaseUrl: sanitizeUrl(target.supabaseUrl),
       expectedAuthorizationServer: sanitizeUrl(target.expectedAuthorizationServer),
     },
-    versions: await collectVersions(),
+    versions: await collectVersions(target),
     gates: [],
     requests: [],
   };
@@ -1704,16 +1709,23 @@ export async function runMcpAccessGrantCompatibility(
     },
   );
 
+  const localProvider = isLocalHostname(target.supabaseUrl);
   const versionsComplete = Object.entries(report.versions)
     .filter(([key]) => key !== "declared-sdk-range")
-    .every(([, value]) => value !== "unavailable");
+    .filter(([key]) => localProvider || key !== "supabase-auth-provider-image")
+    .filter(([key]) => !localProvider || key !== "supabase-hosted-provider-version")
+    .every(([, value]) => value !== "unavailable" && value !== "not-publicly-exposed");
   addGate(
     gates,
     "versions",
     versionsComplete ? "pass" : "not-proven",
     versionsComplete
-      ? "Exact installed SDK, Supabase client, Playwright, MCP handler, CLI, and local provider image versions were recorded."
-      : "One or more relevant installed versions could not be read in this environment.",
+      ? localProvider
+        ? "Exact installed SDK, Supabase client, Playwright, MCP handler, CLI, and local provider image versions were recorded."
+        : "Exact installed SDK, Supabase client, Playwright, MCP handler, and CLI versions were recorded; the hosted provider does not expose an exact server version."
+      : localProvider
+        ? "One or more relevant installed versions could not be read in this environment."
+        : "The hosted provider does not expose an exact server version, so the deployed provider-version gate remains not-proven.",
     report.versions,
   );
 
