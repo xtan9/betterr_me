@@ -2,11 +2,21 @@ import {
   availableScenarios as calculateAvailableScenarios,
   createDefaultRunwayAnswers,
   estimateMonthlyTakeHome,
+  expenseCategoryTotals,
   expenseTotals,
   type EmploymentStatus,
+  type ExpenseCategoryMode,
+  type ExpenseLineItem,
+  type ExpenseMode,
+  type ExpenseCategorySubtotal,
+  type ExtremeAccessAmounts,
   type HouseholdRunwayAnswers,
+  type HousingTenure,
   type IncomeAnswer,
+  type MoneyAnswer,
+  type QuickExpenses,
   type RecurringIncomeSource,
+  type RunwayAssets,
   type RunwayCountry,
   type RunwayCurrency,
   type RunwayScenario,
@@ -14,6 +24,9 @@ import {
 } from "@/lib/finance/cushion";
 import {
   EXPENSE_CATEGORIES,
+  EXPENSE_ITEM_TYPES,
+  isExpenseItemType,
+  type ExpenseItemType,
   type ExpenseCategory,
 } from "@/lib/finance/runway-expenses";
 import { assessHouseholdRunway } from "@/lib/finance/household-runway-assessment";
@@ -68,6 +81,25 @@ const CURRENCY_FOR_COUNTRY: Record<Country, Currency> = {
 const NON_RESULT_STAGES = HOUSEHOLD_RUNWAY_INTERVIEW_STAGE_IDS.filter(
   (stage) => stage !== "result",
 );
+
+export const HOUSEHOLD_RUNWAY_ASSET_KEYS = [
+  "liquid_investments",
+  "illiquid_investments",
+  "home_equity",
+  "retirement_tax_deferred",
+  "retirement_tax_free",
+] as const;
+
+export type HouseholdRunwayAssetKey =
+  (typeof HOUSEHOLD_RUNWAY_ASSET_KEYS)[number];
+
+export interface HouseholdRunwayExpenseCategoryProgress {
+  category: ExpenseCategory;
+  mode: ExpenseCategoryMode | null;
+  currentMonthlyCents: number;
+  interruptionMonthlyCents: number;
+  completed: boolean;
+}
 
 export type HouseholdRunwayInterviewStage =
   (typeof HOUSEHOLD_RUNWAY_INTERVIEW_STAGE_IDS)[number];
@@ -227,9 +259,95 @@ export interface HouseholdRunwayOtherIncomeRenderModel {
   blockingIssue: HouseholdRunwayValidationIssue | null;
 }
 
+export interface HouseholdRunwayCashRenderModel {
+  kind: "cash";
+  stage: "cash";
+  location: {
+    country: RunwayCountry | null;
+    region: string | null;
+    currency: RunwayCurrency | null;
+  };
+  availableCash: MoneyAnswer;
+  availableStages: readonly HouseholdRunwayInterviewStage[];
+  stageStatus: HouseholdRunwayInterviewStageStatus;
+  blockingIssue: HouseholdRunwayValidationIssue | null;
+}
+
+export interface HouseholdRunwayAssetsRenderModel {
+  kind: "assets";
+  stage: "assets";
+  location: {
+    country: RunwayCountry | null;
+    region: string | null;
+    currency: RunwayCurrency | null;
+  };
+  assets: RunwayAssets;
+  extremeAccess: ExtremeAccessAmounts;
+  availableStages: readonly HouseholdRunwayInterviewStage[];
+  stageStatus: HouseholdRunwayInterviewStageStatus;
+  blockingIssue: HouseholdRunwayValidationIssue | null;
+}
+
+export interface HouseholdRunwayExpensesRenderModel {
+  kind: "expenses";
+  stage: "expenses";
+  location: {
+    country: RunwayCountry | null;
+    region: string | null;
+    currency: RunwayCurrency | null;
+  };
+  mode: ExpenseMode;
+  activeCategory: ExpenseCategory | null;
+  housingTenure: HousingTenure;
+  quickExpenses: QuickExpenses;
+  expenseItems: readonly ExpenseLineItem[];
+  categoryModes: Partial<Record<ExpenseCategory, ExpenseCategoryMode>>;
+  categorySubtotals: Partial<Record<ExpenseCategory, ExpenseCategorySubtotal>>;
+  completedCategories: readonly ExpenseCategory[];
+  categories: readonly HouseholdRunwayExpenseCategoryProgress[];
+  totals: { current: number; interruption: number };
+  availableStages: readonly HouseholdRunwayInterviewStage[];
+  stageStatus: HouseholdRunwayInterviewStageStatus;
+  blockingIssue: HouseholdRunwayValidationIssue | null;
+}
+
+export interface HouseholdRunwayReductionsRenderModel {
+  kind: "reductions";
+  stage: "reductions";
+  location: {
+    country: RunwayCountry | null;
+    region: string | null;
+    currency: RunwayCurrency | null;
+  };
+  mode: ExpenseMode;
+  quickExpenses: QuickExpenses;
+  expenseItems: readonly ExpenseLineItem[];
+  categoryModes: Partial<Record<ExpenseCategory, ExpenseCategoryMode>>;
+  categorySubtotals: Partial<Record<ExpenseCategory, ExpenseCategorySubtotal>>;
+  totals: { current: number; interruption: number };
+  availableStages: readonly HouseholdRunwayInterviewStage[];
+  stageStatus: HouseholdRunwayInterviewStageStatus;
+  blockingIssue: HouseholdRunwayValidationIssue | null;
+}
+
+export interface HouseholdRunwayReviewRenderModel {
+  kind: "review";
+  stage: "review";
+  location: {
+    country: RunwayCountry | null;
+    region: string | null;
+    currency: RunwayCurrency | null;
+  };
+  answers: HouseholdRunwayInterviewAnswers;
+  ready: boolean;
+  availableStages: readonly HouseholdRunwayInterviewStage[];
+  stageStatus: HouseholdRunwayInterviewStageStatus;
+  blockingIssue: HouseholdRunwayValidationIssue | null;
+}
+
 export interface HouseholdRunwayGenericStageRenderModel {
   kind: "stage";
-  stage: Exclude<HouseholdRunwayInterviewStage, "location" | "household" | "employment" | "myIncome" | "partnerIncome" | "otherIncome">;
+  stage: "result";
   availableStages: readonly HouseholdRunwayInterviewStage[];
   stageStatus: HouseholdRunwayInterviewStageStatus;
   blockingIssue: HouseholdRunwayValidationIssue | null;
@@ -242,6 +360,11 @@ export type HouseholdRunwayInterviewRenderModel =
   | HouseholdRunwayEmploymentRenderModel
   | HouseholdRunwayIncomeRenderModel
   | HouseholdRunwayOtherIncomeRenderModel
+  | HouseholdRunwayCashRenderModel
+  | HouseholdRunwayAssetsRenderModel
+  | HouseholdRunwayExpensesRenderModel
+  | HouseholdRunwayReductionsRenderModel
+  | HouseholdRunwayReviewRenderModel
   | HouseholdRunwayGenericStageRenderModel;
 
 interface HouseholdRunwayInterviewStateBase {
@@ -275,8 +398,8 @@ export interface HouseholdRunwayReviewingState
   extends HouseholdRunwayInterviewStateBase {
   status: "reviewing";
   stage: "review";
-  renderModel: HouseholdRunwayGenericStageRenderModel;
-  render: HouseholdRunwayGenericStageRenderModel;
+  renderModel: HouseholdRunwayReviewRenderModel;
+  render: HouseholdRunwayReviewRenderModel;
 }
 
 export interface HouseholdRunwayCompletedState
@@ -343,9 +466,44 @@ export type HouseholdRunwayInterviewCommandInput =
       type: "set_other_income_sources";
       sources: readonly RecurringIncomeSource[];
     }
+  | { type: "set_cash"; value: MoneyAnswer }
+  | {
+      type: "set_asset";
+      asset: HouseholdRunwayAssetKey;
+      value: MoneyAnswer;
+    }
+  | { type: "set_expense_mode"; mode: ExpenseMode }
+  | { type: "set_quick_expenses"; patch: Partial<QuickExpenses> }
+  | {
+      type: "set_expense_category_mode";
+      category: ExpenseCategory;
+      mode: ExpenseCategoryMode;
+    }
+  | {
+      type: "set_expense_category_subtotal";
+      category: ExpenseCategory;
+      patch: Partial<ExpenseCategorySubtotal>;
+    }
+  | {
+      type: "set_expense_item";
+      category: ExpenseCategory;
+      itemType: ExpenseItemType;
+      itemId: string;
+      patch: Partial<ExpenseLineItem>;
+    }
+  | { type: "set_housing_tenure"; tenure: HousingTenure }
   | { type: "update_answers"; patch: Partial<HouseholdRunwayAnswers> }
   | { type: "select_scenario"; scenario: RunwayScenario }
   | { type: "set_active_expense_category"; category: ExpenseCategory | null }
+  | { type: "complete_expense_category"; category: ExpenseCategory }
+  | {
+      type: "set_reduction";
+      target:
+        | { kind: "quick" }
+        | { kind: "category"; category: ExpenseCategory }
+        | { kind: "item"; itemId: string };
+      interruptionMonthlyCents: number;
+    }
   | { type: "continue" }
   | { type: "back" }
   | { type: "skip" }
@@ -417,6 +575,10 @@ export type HouseholdRunwayInterviewEvent =
       previousScenario?: RunwayScenario | null;
     })
   | (HouseholdRunwayInterviewCommandMetadata & {
+      type: "expense_category_opened" | "expense_category_completed";
+      category: ExpenseCategory;
+    })
+  | (HouseholdRunwayInterviewCommandMetadata & {
       type: "interview_exited" | "draft_discarded";
     })
   | (HouseholdRunwayInterviewCommandMetadata & {
@@ -429,7 +591,8 @@ export type HouseholdRunwayInterviewEvent =
         | "stage_not_skippable"
         | "no_pending_currency_change"
         | "partner_not_applicable"
-        | "scenario_unavailable";
+        | "scenario_unavailable"
+        | "expense_category_not_open";
     });
 
 export type HouseholdRunwayInterviewEffect =
@@ -468,6 +631,98 @@ function freshIncome(employment: EmploymentStatus = "employed"): IncomeAnswer {
 
 function emptyMoney() {
   return { cents: 0, confidence: "skipped" as const };
+}
+
+function normalizedCents(value: unknown) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.max(0, Math.round(numeric)) : 0;
+}
+
+function isInputConfidence(value: unknown): value is MoneyAnswer["confidence"] {
+  return ["confirmed", "estimated", "needs_review", "skipped"].includes(
+    String(value),
+  );
+}
+
+function normalizeMoney(
+  input: Partial<MoneyAnswer> | null | undefined,
+  fallback: MoneyAnswer = emptyMoney(),
+): MoneyAnswer {
+  return {
+    cents:
+      input?.cents === undefined
+        ? normalizedCents(fallback.cents)
+        : normalizedCents(input.cents),
+    confidence: isInputConfidence(input?.confidence)
+      ? input.confidence
+      : fallback.confidence,
+  };
+}
+
+function normalizeQuickExpenses(
+  input: Partial<QuickExpenses> | null | undefined,
+): QuickExpenses {
+  const current = normalizedCents(input?.current_monthly_cents);
+  const interruption = Math.min(
+    current,
+    normalizedCents(input?.interruption_monthly_cents),
+  );
+  return {
+    current_monthly_cents: current,
+    interruption_monthly_cents: interruption,
+    confidence: isInputConfidence(input?.confidence)
+      ? input.confidence
+      : "skipped",
+  };
+}
+
+function normalizeExpenseSubtotal(
+  input: Partial<ExpenseCategorySubtotal> | null | undefined,
+): ExpenseCategorySubtotal {
+  const current = normalizedCents(input?.current_monthly_cents);
+  return {
+    current_monthly_cents: current,
+    interruption_monthly_cents: Math.min(
+      current,
+      normalizedCents(input?.interruption_monthly_cents),
+    ),
+    confidence: isInputConfidence(input?.confidence)
+      ? input.confidence
+      : "skipped",
+  };
+}
+
+function normalizeExpenseItem(
+  input: Partial<ExpenseLineItem> | null | undefined,
+  fallback: ExpenseLineItem,
+): ExpenseLineItem {
+  const category = EXPENSE_CATEGORIES.includes(
+    input?.category as ExpenseCategory,
+  )
+    ? (input?.category as ExpenseCategory)
+    : fallback.category;
+  const itemType = isExpenseItemType(input?.type)
+    ? input.type
+    : fallback.type;
+  const current = normalizedCents(input?.current_amount_cents);
+  return {
+    ...fallback,
+    ...input,
+    category,
+    type: itemType,
+    current_amount_cents: current,
+    interruption_amount_cents: Math.min(
+      current,
+      normalizedCents(input?.interruption_amount_cents),
+    ),
+    frequency:
+      input?.frequency === "annual" || input?.frequency === "quarterly"
+        ? input.frequency
+        : "monthly",
+    confidence: isInputConfidence(input?.confidence)
+      ? input.confidence
+      : fallback.confidence,
+  };
 }
 
 function freshStageStatus(
@@ -551,14 +806,14 @@ function normalizeIncome(
     employment: isEmploymentStatus(value.employment)
       ? value.employment
       : fallback.employment,
-    monthly_take_home_cents: Number(value.monthly_take_home_cents) || 0,
+    monthly_take_home_cents: normalizedCents(value.monthly_take_home_cents),
     estimated_monthly_take_home_cents:
-      Number(value.estimated_monthly_take_home_cents) || 0,
-    entered_amount_cents: Number(value.entered_amount_cents) || 0,
-    gross_amount_cents: Number(value.gross_amount_cents) || 0,
-    net_amount_cents: Number(value.net_amount_cents) || 0,
+      normalizedCents(value.estimated_monthly_take_home_cents),
+    entered_amount_cents: normalizedCents(value.entered_amount_cents),
+    gross_amount_cents: normalizedCents(value.gross_amount_cents),
+    net_amount_cents: normalizedCents(value.net_amount_cents),
     annual_other_deductions_cents:
-      Number(value.annual_other_deductions_cents) || 0,
+      normalizedCents(value.annual_other_deductions_cents),
   };
 }
 
@@ -578,36 +833,76 @@ function normalizeAnswers(
     mine: normalizeIncome(raw.mine, defaults.mine),
     partner: raw.partner ? normalizeIncome(raw.partner, defaults.mine) : null,
     other_income_sources: Array.isArray(raw.other_income_sources)
-      ? raw.other_income_sources.map((source) => ({ ...source }))
+      ? raw.other_income_sources.map((source) => ({
+          ...source,
+          monthly_cents: normalizedCents(source.monthly_cents),
+          confidence: isInputConfidence(source.confidence)
+            ? source.confidence
+            : "skipped",
+        }))
       : [],
-    available_cash: raw.available_cash
-      ? { ...raw.available_cash }
-      : emptyMoney(),
-    assets: {
-      ...defaults.assets,
-      ...(raw.assets ?? {}),
-    },
+    available_cash: normalizeMoney(raw.available_cash),
+    assets: Object.fromEntries(
+      HOUSEHOLD_RUNWAY_ASSET_KEYS.map((key) => [
+        key,
+        normalizeMoney(raw.assets?.[key], defaults.assets[key]),
+      ]),
+    ) as unknown as RunwayAssets,
     expense_items: Array.isArray(raw.expense_items)
-      ? raw.expense_items.map((item) => ({ ...item }))
+      ? raw.expense_items.map((item) =>
+          normalizeExpenseItem(item, {
+            id: item.id,
+            category: item.category,
+            type: item.type,
+            label: item.label,
+            current_amount_cents: 0,
+            interruption_amount_cents: 0,
+            frequency: "monthly",
+            confidence: "skipped",
+          }),
+        )
       : [],
     completed_expense_categories: Array.isArray(
       raw.completed_expense_categories,
     )
-      ? raw.completed_expense_categories.filter((category): category is ExpenseCategory =>
-          EXPENSE_CATEGORIES.includes(category as ExpenseCategory),
+      ? Array.from(
+          new Set(
+            raw.completed_expense_categories.filter(
+              (category): category is ExpenseCategory =>
+                EXPENSE_CATEGORIES.includes(category as ExpenseCategory),
+            ),
+          ),
         )
       : [],
-    expense_category_modes: { ...(raw.expense_category_modes ?? {}) },
-    expense_category_subtotals: {
-      ...(raw.expense_category_subtotals ?? {}),
-    },
-    quick_expenses: {
-      ...defaults.quick_expenses,
-      ...(raw.quick_expenses ?? {}),
-    },
+    expense_category_modes: Object.fromEntries(
+      Object.entries(raw.expense_category_modes ?? {}).filter(
+        ([category, mode]) =>
+          EXPENSE_CATEGORIES.includes(category as ExpenseCategory) &&
+          (mode === "subtotal" || mode === "itemized"),
+      ),
+    ) as Partial<Record<ExpenseCategory, ExpenseCategoryMode>>,
+    expense_category_subtotals: Object.fromEntries(
+      Object.entries(raw.expense_category_subtotals ?? {})
+        .filter(([category]) =>
+          EXPENSE_CATEGORIES.includes(category as ExpenseCategory),
+        )
+        .map(([category, subtotal]) => [
+          category,
+          normalizeExpenseSubtotal(subtotal),
+        ]),
+    ) as Partial<Record<ExpenseCategory, ExpenseCategorySubtotal>>,
+    quick_expenses: normalizeQuickExpenses(raw.quick_expenses),
     extreme_access: {
       ...defaults.extreme_access,
-      ...(raw.extreme_access ?? {}),
+      illiquid_investments_cents: normalizedCents(
+        raw.extreme_access?.illiquid_investments_cents,
+      ),
+      retirement_tax_deferred_cents: normalizedCents(
+        raw.extreme_access?.retirement_tax_deferred_cents,
+      ),
+      retirement_tax_free_cents: normalizedCents(
+        raw.extreme_access?.retirement_tax_free_cents,
+      ),
     },
   };
 }
@@ -661,6 +956,22 @@ function availableScenarios(
   answers: HouseholdRunwayInterviewAnswers,
 ): ScenarioOption[] {
   return calculateAvailableScenarios(calculationAnswers(answers));
+}
+
+function expenseCategoryProgress(
+  answers: HouseholdRunwayInterviewAnswers,
+): HouseholdRunwayExpenseCategoryProgress[] {
+  const calculation = calculationAnswers(answers);
+  return EXPENSE_CATEGORIES.map((category) => {
+    const totals = expenseCategoryTotals(calculation, category);
+    return {
+      category,
+      mode: answers.expense_category_modes[category] ?? null,
+      currentMonthlyCents: totals.current,
+      interruptionMonthlyCents: totals.interruption,
+      completed: answers.completed_expense_categories.includes(category),
+    };
+  });
 }
 
 function hasMonetaryValue(value: number, confidence?: string) {
@@ -946,6 +1257,16 @@ function blockingIssueFor(
   return stage ? current ?? draft.validationIssues[stage] ?? null : null;
 }
 
+function reviewReadinessIssue(
+  answers: HouseholdRunwayInterviewAnswers,
+): HouseholdRunwayValidationIssue | null {
+  const assessment = assessHouseholdRunway({
+    answers: calculationAnswers(answers),
+    startDate: new Date(answers.updated_at ?? "1970-01-01T00:00:00.000Z"),
+  });
+  return assessment.success ? null : { code: "assessment_required" };
+}
+
 function renderFor(
   status: HouseholdRunwayInterviewStatus,
   stage: HouseholdRunwayInterviewStage | null,
@@ -962,7 +1283,9 @@ function renderFor(
     draft,
   } as HouseholdRunwayInterviewState);
   const stageStatus = draft.stageStatus[stage];
-  const blockingIssue = blockingIssueFor(draft, stage, validationIssue);
+  const blockingIssue =
+    blockingIssueFor(draft, stage, validationIssue) ??
+    (stage === "review" ? reviewReadinessIssue(draft.answers) : null);
 
   if (stage === "location") {
     return {
@@ -1056,6 +1379,104 @@ function renderFor(
     };
   }
 
+  if (stage === "cash") {
+    return {
+      kind: "cash",
+      stage,
+      location: {
+        country: draft.location.country,
+        region: draft.location.region,
+        currency: draft.location.currency,
+      },
+      availableCash: draft.answers.available_cash,
+      availableStages,
+      stageStatus,
+      blockingIssue,
+    };
+  }
+
+  if (stage === "assets") {
+    return {
+      kind: "assets",
+      stage,
+      location: {
+        country: draft.location.country,
+        region: draft.location.region,
+        currency: draft.location.currency,
+      },
+      assets: draft.answers.assets,
+      extremeAccess: draft.answers.extreme_access,
+      availableStages,
+      stageStatus,
+      blockingIssue,
+    };
+  }
+
+  if (stage === "expenses") {
+    const calculation = calculationAnswers(draft.answers);
+    return {
+      kind: "expenses",
+      stage,
+      location: {
+        country: draft.location.country,
+        region: draft.location.region,
+        currency: draft.location.currency,
+      },
+      mode: draft.answers.expense_mode,
+      activeCategory: draft.activeExpenseCategory,
+      housingTenure: draft.answers.housing_tenure,
+      quickExpenses: draft.answers.quick_expenses,
+      expenseItems: draft.answers.expense_items,
+      categoryModes: draft.answers.expense_category_modes,
+      categorySubtotals: draft.answers.expense_category_subtotals,
+      completedCategories: draft.answers.completed_expense_categories,
+      categories: expenseCategoryProgress(draft.answers),
+      totals: expenseTotals(calculation),
+      availableStages,
+      stageStatus,
+      blockingIssue,
+    };
+  }
+
+  if (stage === "reductions") {
+    const calculation = calculationAnswers(draft.answers);
+    return {
+      kind: "reductions",
+      stage,
+      location: {
+        country: draft.location.country,
+        region: draft.location.region,
+        currency: draft.location.currency,
+      },
+      mode: draft.answers.expense_mode,
+      quickExpenses: draft.answers.quick_expenses,
+      expenseItems: draft.answers.expense_items,
+      categoryModes: draft.answers.expense_category_modes,
+      categorySubtotals: draft.answers.expense_category_subtotals,
+      totals: expenseTotals(calculation),
+      availableStages,
+      stageStatus,
+      blockingIssue,
+    };
+  }
+
+  if (stage === "review") {
+    return {
+      kind: "review",
+      stage,
+      location: {
+        country: draft.location.country,
+        region: draft.location.region,
+        currency: draft.location.currency,
+      },
+      answers: draft.answers,
+      ready: blockingIssue === null,
+      availableStages,
+      stageStatus,
+      blockingIssue,
+    };
+  }
+
   return {
     kind: "stage",
     stage,
@@ -1099,8 +1520,8 @@ function stateFrom(
       stage: "review",
       draft,
       validationIssue: snapshot.validationIssue,
-      renderModel: renderModel as HouseholdRunwayGenericStageRenderModel,
-      render: renderModel as HouseholdRunwayGenericStageRenderModel,
+      renderModel: renderModel as HouseholdRunwayReviewRenderModel,
+      render: renderModel as HouseholdRunwayReviewRenderModel,
     };
   }
   if (status === "completed") {
@@ -1238,6 +1659,7 @@ function updateDraftAnswers(
   command: HouseholdRunwayInterviewCommand,
   nextAnswers: HouseholdRunwayInterviewAnswers,
   extraEvents: HouseholdRunwayInterviewEvent[] = [],
+  draftPatch: Partial<HouseholdRunwayInterviewDraft> = {},
 ): HouseholdRunwayInterviewTransition {
   const nextLocation = normalizeLocation({
     ...state.draft.location,
@@ -1249,10 +1671,12 @@ function updateDraftAnswers(
   });
   const draft = normalizeDraft({
     ...state.draft,
+    ...draftPatch,
     revision: state.draft.revision + 1,
     location: nextLocation,
     answers: nextAnswers,
   });
+  invalidateValidationIssues(draft, command);
   const previousAnswers = state.draft.answers;
   const clearedStages: HouseholdRunwayInterviewStage[] = [];
   const cleanupEvents: HouseholdRunwayInterviewEvent[] = [];
@@ -1326,6 +1750,411 @@ function updateDraftAnswers(
     nextStage && nextStage !== state.stage
       ? [{ type: "focus", stage: nextStage }]
       : [],
+  );
+}
+
+function invalidateValidationIssues(
+  draft: HouseholdRunwayInterviewDraft,
+  command: HouseholdRunwayInterviewCommand,
+) {
+  const start = validationStartForCommand(command);
+  if (!start) return;
+  for (const stage of HOUSEHOLD_RUNWAY_INTERVIEW_STAGE_IDS) {
+    if (stageIndex(stage) >= stageIndex(start)) {
+      draft.validationIssues[stage] = null;
+    }
+  }
+}
+
+function validationStartForCommand(
+  command: HouseholdRunwayInterviewCommand,
+): HouseholdRunwayInterviewStage | null {
+  switch (command.type) {
+    case "select_country":
+    case "select_region":
+    case "select_currency":
+    case "request_currency_change":
+    case "reset_currency_entries":
+    case "retain_currency_entries":
+      return "location";
+    case "set_household":
+      return "household";
+    case "set_employment":
+      return "employment";
+    case "set_income":
+      return command.person === "mine" ? "myIncome" : "partnerIncome";
+    case "set_other_income_sources":
+      return "otherIncome";
+    case "set_cash":
+      return "cash";
+    case "set_asset":
+      return "assets";
+    case "set_expense_mode":
+    case "set_quick_expenses":
+    case "set_expense_category_mode":
+    case "set_expense_category_subtotal":
+    case "set_expense_item":
+    case "set_housing_tenure":
+    case "set_active_expense_category":
+    case "complete_expense_category":
+      return "expenses";
+    case "set_reduction":
+      return "reductions";
+    case "update_answers":
+      return "location";
+    default:
+      return null;
+  }
+}
+
+function setCash(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<HouseholdRunwayInterviewCommand, { type: "set_cash" }>,
+) {
+  return updateDraftAnswers(
+    state,
+    command,
+    normalizeAnswers(
+      {
+        ...state.draft.answers,
+        available_cash: normalizeMoney(command.value),
+        updated_at: command.occurredAt,
+      },
+      state.draft.location,
+    ),
+    [],
+    { activeExpenseCategory: null },
+  );
+}
+
+function setAsset(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<HouseholdRunwayInterviewCommand, { type: "set_asset" }>,
+) {
+  return updateDraftAnswers(
+    state,
+    command,
+    normalizeAnswers(
+      {
+        ...state.draft.answers,
+        assets: {
+          ...state.draft.answers.assets,
+          [command.asset]: normalizeMoney(command.value),
+        },
+        updated_at: command.occurredAt,
+      },
+      state.draft.location,
+    ),
+  );
+}
+
+function setExpenseMode(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<HouseholdRunwayInterviewCommand, { type: "set_expense_mode" }>,
+) {
+  return updateDraftAnswers(
+    state,
+    command,
+    normalizeAnswers(
+      {
+        ...state.draft.answers,
+        expense_mode: command.mode,
+        updated_at: command.occurredAt,
+      },
+      state.draft.location,
+    ),
+    [],
+    { activeExpenseCategory: null },
+  );
+}
+
+function setQuickExpenses(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<HouseholdRunwayInterviewCommand, { type: "set_quick_expenses" }>,
+) {
+  const current = state.draft.answers.quick_expenses;
+  const nextPatch = {
+    ...current,
+    ...command.patch,
+    ...(command.patch.current_monthly_cents !== undefined &&
+    command.patch.interruption_monthly_cents === undefined &&
+    current.interruption_monthly_cents === 0
+      ? { interruption_monthly_cents: command.patch.current_monthly_cents }
+      : {}),
+    confidence: command.patch.confidence ?? "confirmed",
+  };
+  return updateDraftAnswers(
+    state,
+    command,
+    normalizeAnswers(
+      {
+        ...state.draft.answers,
+        expense_mode: "quick",
+        quick_expenses: nextPatch,
+        updated_at: command.occurredAt,
+      },
+      state.draft.location,
+    ),
+    [],
+    { activeExpenseCategory: null },
+  );
+}
+
+function setExpenseCategoryMode(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<
+    HouseholdRunwayInterviewCommand,
+    { type: "set_expense_category_mode" }
+  >,
+) {
+  return updateDraftAnswers(
+    state,
+    command,
+    normalizeAnswers(
+      {
+        ...state.draft.answers,
+        expense_category_modes: {
+          ...state.draft.answers.expense_category_modes,
+          [command.category]: command.mode,
+        },
+        updated_at: command.occurredAt,
+      },
+      state.draft.location,
+    ),
+  );
+}
+
+function setExpenseCategorySubtotal(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<
+    HouseholdRunwayInterviewCommand,
+    { type: "set_expense_category_subtotal" }
+  >,
+) {
+  const current =
+    state.draft.answers.expense_category_subtotals[command.category] ??
+    normalizeExpenseSubtotal(null);
+  const nextPatch = {
+    ...current,
+    ...command.patch,
+    ...(command.patch.current_monthly_cents !== undefined &&
+    command.patch.interruption_monthly_cents === undefined &&
+    current.interruption_monthly_cents === 0
+      ? { interruption_monthly_cents: command.patch.current_monthly_cents }
+      : {}),
+    confidence: command.patch.confidence ?? "confirmed",
+  };
+  return updateDraftAnswers(
+    state,
+    command,
+    normalizeAnswers(
+      {
+        ...state.draft.answers,
+        expense_category_modes: {
+          ...state.draft.answers.expense_category_modes,
+          [command.category]: "subtotal",
+        },
+        expense_category_subtotals: {
+          ...state.draft.answers.expense_category_subtotals,
+          [command.category]: nextPatch,
+        },
+        updated_at: command.occurredAt,
+      },
+      state.draft.location,
+    ),
+  );
+}
+
+function setExpenseItem(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<HouseholdRunwayInterviewCommand, { type: "set_expense_item" }>,
+) {
+  if (
+    !(EXPENSE_ITEM_TYPES[command.category] as readonly string[]).includes(
+      command.itemType,
+    )
+  ) {
+    return ignored(state, command, "expense_category_not_open");
+  }
+  const existing = state.draft.answers.expense_items.find(
+    (item) =>
+      item.category === command.category && item.type === command.itemType,
+  );
+  const base: ExpenseLineItem = existing ?? {
+    id: command.itemId,
+    category: command.category,
+    type: command.itemType,
+    current_amount_cents: 0,
+    interruption_amount_cents: 0,
+    frequency: "monthly",
+    confidence: "confirmed",
+  };
+  const rawPatch = {
+    ...base,
+    ...command.patch,
+    id: existing?.id ?? command.itemId,
+    category: command.category,
+    type: command.itemType,
+    ...(existing === undefined &&
+    command.patch.current_amount_cents !== undefined &&
+    command.patch.interruption_amount_cents === undefined
+      ? { interruption_amount_cents: command.patch.current_amount_cents }
+      : {}),
+  };
+  const next = normalizeExpenseItem(rawPatch, base);
+  const expenseItems = existing
+    ? state.draft.answers.expense_items.map((item) =>
+        item.id === existing.id ? next : item,
+      )
+    : [...state.draft.answers.expense_items, next];
+  return updateDraftAnswers(
+    state,
+    command,
+    normalizeAnswers(
+      {
+        ...state.draft.answers,
+        expense_mode: "guided",
+        expense_category_modes: {
+          ...state.draft.answers.expense_category_modes,
+          [command.category]: "itemized",
+        },
+        expense_items: expenseItems,
+        updated_at: command.occurredAt,
+      },
+      state.draft.location,
+    ),
+  );
+}
+
+function setHousingTenure(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<HouseholdRunwayInterviewCommand, { type: "set_housing_tenure" }>,
+) {
+  if (state.draft.answers.housing_tenure === command.tenure) {
+    return updateDraftAnswers(
+      state,
+      command,
+      normalizeAnswers(
+        { ...state.draft.answers, updated_at: command.occurredAt },
+        state.draft.location,
+      ),
+    );
+  }
+  const expenseItems = state.draft.answers.expense_items.filter(
+    (item) => item.category !== "housing",
+  );
+  const categorySubtotals = { ...state.draft.answers.expense_category_subtotals };
+  delete categorySubtotals.housing;
+  const categoryModes = { ...state.draft.answers.expense_category_modes };
+  delete categoryModes.housing;
+  return updateDraftAnswers(
+    state,
+    command,
+    normalizeAnswers(
+      {
+        ...state.draft.answers,
+        housing_tenure: command.tenure,
+        expense_items: expenseItems,
+        expense_category_modes: categoryModes,
+        expense_category_subtotals: categorySubtotals,
+        completed_expense_categories:
+          state.draft.answers.completed_expense_categories.filter(
+            (category) => category !== "housing",
+          ),
+        updated_at: command.occurredAt,
+      },
+      state.draft.location,
+    ),
+    [],
+    {
+      activeExpenseCategory: state.draft.activeExpenseCategory,
+    },
+  );
+}
+
+function setReduction(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<HouseholdRunwayInterviewCommand, { type: "set_reduction" }>,
+) {
+  const cents = normalizedCents(command.interruptionMonthlyCents);
+  const answers = state.draft.answers;
+  if (command.target.kind === "quick") {
+    return updateDraftAnswers(
+      state,
+      command,
+      normalizeAnswers(
+        {
+          ...answers,
+          quick_expenses: {
+            ...answers.quick_expenses,
+            interruption_monthly_cents: Math.min(
+              cents,
+              answers.quick_expenses.current_monthly_cents,
+            ),
+            confidence: "confirmed",
+          },
+          updated_at: command.occurredAt,
+        },
+        state.draft.location,
+      ),
+    );
+  }
+  if (command.target.kind === "category") {
+    const current = answers.expense_category_subtotals[command.target.category];
+    if (!current) return ignored(state, command, "expense_category_not_open");
+    return updateDraftAnswers(
+      state,
+      command,
+      normalizeAnswers(
+        {
+          ...answers,
+          expense_category_subtotals: {
+            ...answers.expense_category_subtotals,
+            [command.target.category]: {
+              ...current,
+              interruption_monthly_cents: Math.min(
+                cents,
+                current.current_monthly_cents,
+              ),
+              confidence: "confirmed",
+            },
+          },
+          updated_at: command.occurredAt,
+        },
+        state.draft.location,
+      ),
+    );
+  }
+  const target = command.target;
+  if (target.kind !== "item") {
+    return ignored(state, command, "expense_category_not_open");
+  }
+  const item = answers.expense_items.find(
+    (candidate) => candidate.id === target.itemId,
+  );
+  if (!item) return ignored(state, command, "expense_category_not_open");
+  return updateDraftAnswers(
+    state,
+    command,
+    normalizeAnswers(
+      {
+        ...answers,
+        expense_items: answers.expense_items.map((candidate) =>
+          candidate.id === item.id
+            ? {
+                ...candidate,
+                interruption_amount_cents: Math.min(
+                  cents,
+                  candidate.current_amount_cents,
+                ),
+                confidence: "confirmed",
+              }
+            : candidate,
+        ),
+        updated_at: command.occurredAt,
+      },
+      state.draft.location,
+    ),
   );
 }
 
@@ -1544,11 +2373,7 @@ function validateStage(
     return { code: "expenses_interruption_required" };
   }
   if (stage === "review") {
-    const assessment = assessHouseholdRunway({
-      answers: calculationAnswers(answers),
-      startDate: new Date(answers.updated_at ?? "1970-01-01T00:00:00.000Z"),
-    });
-    if (!assessment.success) return { code: "assessment_required" };
+    return reviewReadinessIssue(answers);
   }
   return null;
 }
@@ -1594,6 +2419,36 @@ function continueInterview(
           (candidate) => isStageApplicable(candidate, draft.answers),
         ) ?? null;
   if (!next) return ignored(state, command, "invalid_stage");
+  if (next === "review") {
+    const reviewIssue = reviewReadinessIssue(draft.answers);
+    if (reviewIssue) {
+      const blockedDraft = normalizeDraft({
+        ...state.draft,
+        revision: state.draft.revision + 1,
+        validationIssues: {
+          ...state.draft.validationIssues,
+          [currentStage]: reviewIssue,
+        },
+      });
+      return transition(
+        state,
+        {
+          version: HOUSEHOLD_RUNWAY_INTERVIEW_VERSION,
+          status: state.status,
+          stage: currentStage,
+          draft: blockedDraft,
+          validationIssue: reviewIssue,
+        },
+        [
+          event(command, "validation_blocked", {
+            stage: currentStage,
+            issue: reviewIssue,
+          }),
+        ],
+        [],
+      );
+    }
+  }
   const nextStatus = statusForStage(next, state.status);
   if (next === "review") draft.stageStatus.review = "pending";
   if (next === "result") draft.stageStatus.result = "completed";
@@ -1742,6 +2597,11 @@ export function dispatchHouseholdRunwayInterview(
       stageStatus: { ...state.draft.stageStatus, [stage]: "skipped" },
       validationIssues: { ...state.draft.validationIssues, [stage]: null },
     });
+    for (const candidate of HOUSEHOLD_RUNWAY_INTERVIEW_STAGE_IDS) {
+      if (stageIndex(candidate) >= stageIndex(stage)) {
+        draft.validationIssues[candidate] = null;
+      }
+    }
     const next = HOUSEHOLD_RUNWAY_INTERVIEW_STAGE_IDS.slice(stageIndex(stage) + 1).find(
       (candidate) => isStageApplicable(candidate, draft.answers),
     );
@@ -1875,6 +2735,51 @@ export function dispatchHouseholdRunwayInterview(
     );
     return updateDraftAnswers(state, command, answers);
   }
+  if (command.type === "set_cash") {
+    return state.stage === "cash"
+      ? setCash(state, command)
+      : ignored(state, command, "invalid_stage");
+  }
+  if (command.type === "set_asset") {
+    return state.stage === "assets"
+      ? setAsset(state, command)
+      : ignored(state, command, "invalid_stage");
+  }
+  if (command.type === "set_expense_mode") {
+    return state.stage === "expenses"
+      ? setExpenseMode(state, command)
+      : ignored(state, command, "invalid_stage");
+  }
+  if (command.type === "set_quick_expenses") {
+    return state.stage === "expenses"
+      ? setQuickExpenses(state, command)
+      : ignored(state, command, "invalid_stage");
+  }
+  if (command.type === "set_expense_category_mode") {
+    return state.stage === "expenses"
+      ? setExpenseCategoryMode(state, command)
+      : ignored(state, command, "invalid_stage");
+  }
+  if (command.type === "set_expense_category_subtotal") {
+    return state.stage === "expenses"
+      ? setExpenseCategorySubtotal(state, command)
+      : ignored(state, command, "invalid_stage");
+  }
+  if (command.type === "set_expense_item") {
+    return state.stage === "expenses"
+      ? setExpenseItem(state, command)
+      : ignored(state, command, "invalid_stage");
+  }
+  if (command.type === "set_housing_tenure") {
+    return state.stage === "expenses"
+      ? setHousingTenure(state, command)
+      : ignored(state, command, "invalid_stage");
+  }
+  if (command.type === "set_reduction") {
+    return state.stage === "reductions"
+      ? setReduction(state, command)
+      : ignored(state, command, "invalid_stage");
+  }
   if (command.type === "update_answers") {
     const answers = normalizeAnswers(
       { ...state.draft.answers, ...command.patch, updated_at: command.occurredAt },
@@ -1906,6 +2811,9 @@ export function dispatchHouseholdRunwayInterview(
     );
   }
   if (command.type === "set_active_expense_category") {
+    if (state.stage !== "expenses") {
+      return ignored(state, command, "invalid_stage");
+    }
     const draft = normalizeDraft({
       ...state.draft,
       revision: state.draft.revision + 1,
@@ -1920,7 +2828,53 @@ export function dispatchHouseholdRunwayInterview(
         draft,
         validationIssue: null,
       },
+      command.category
+        ? [event(command, "expense_category_opened", { category: command.category })]
+        : [],
       [],
+    );
+  }
+  if (command.type === "complete_expense_category") {
+    if (
+      state.stage !== "expenses" ||
+      state.draft.activeExpenseCategory !== command.category
+    ) {
+      return ignored(state, command, "expense_category_not_open");
+    }
+    const completedCategories = Array.from(
+      new Set([
+        ...state.draft.answers.completed_expense_categories,
+        command.category,
+      ]),
+    );
+    const draft = normalizeDraft({
+      ...state.draft,
+      revision: state.draft.revision + 1,
+      answers: normalizeAnswers(
+        {
+          ...state.draft.answers,
+          completed_expense_categories: completedCategories,
+          updated_at: command.occurredAt,
+        },
+        state.draft.location,
+      ),
+      activeExpenseCategory: null,
+    });
+    invalidateValidationIssues(draft, command);
+    return transition(
+      state,
+      {
+        version: HOUSEHOLD_RUNWAY_INTERVIEW_VERSION,
+        status: state.status,
+        stage: state.stage,
+        draft,
+        validationIssue: null,
+      },
+      [
+        event(command, "expense_category_completed", {
+          category: command.category,
+        }),
+      ],
       [],
     );
   }

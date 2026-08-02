@@ -59,16 +59,21 @@ test("completes the quick interview, edits take-home pay, and previews What-if w
   await page.getByRole("button", { name: "Continue" }).click();
 
   await page.getByRole("button", { name: "Skip for now" }).click();
+  await expect(page.locator('[data-interview-stage="cash"][data-interview-render="cash"]')).toBeVisible();
   await page.getByRole("textbox", { name: "Cash available now" }).fill("30000");
   await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.locator('[data-interview-stage="assets"][data-interview-render="assets"]')).toBeVisible();
   await page.getByRole("button", { name: "Skip for now" }).click();
 
+  await expect(page.locator('[data-interview-stage="expenses"][data-interview-render="expenses"]')).toBeVisible();
   await expect(page.getByRole("button", { name: /Housing/ })).toBeVisible();
   await page.getByRole("button", { name: "I already know my totals" }).click();
   await page.getByRole("textbox", { name: "Current total monthly spending" }).fill("6000");
   await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.locator('[data-interview-stage="reductions"][data-interview-render="reductions"]')).toBeVisible();
   await page.getByRole("textbox", { name: "After interruption" }).fill("6000");
   await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.locator('[data-interview-stage="review"][data-interview-render="review"]')).toBeVisible();
   await page.getByRole("button", { name: "Show my runway" }).click();
 
   await expect(page.getByRole("tab", { name: "My income stops" })).toBeVisible();
