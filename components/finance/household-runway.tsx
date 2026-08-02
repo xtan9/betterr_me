@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import {
+  useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -30,7 +30,6 @@ import {
   expenseTotals,
   formatCents,
   monthlyIncomeTotal,
-  applyExpenseReduction,
   type EmploymentStatus,
   type ExpenseCategory,
   type ExpenseFrequency,
@@ -40,7 +39,6 @@ import {
   type InputConfidence,
   type RecurringIncomeSource,
   type RecurringIncomeType,
-  type RunwayAdjustments,
   type RunwaySnapshotSummary,
   type RunwayStepId,
 } from "@/lib/finance/cushion";
@@ -71,6 +69,7 @@ import {
   createHouseholdRunwayInterview,
   dispatchHouseholdRunwayInterview,
   restoreHouseholdRunwayInterview,
+  type HouseholdRunwayInterviewCapabilities,
   type HouseholdRunwayInterviewCommand,
   type HouseholdRunwayInterviewCommandInput,
   type HouseholdRunwayInterviewEffect,
@@ -88,44 +87,6 @@ const OPTIONAL_STEPS = new Set<RunwayStepId>([
   "otherIncome",
   "assets",
 ]);
-const EMPTY_ADJUSTMENTS: RunwayAdjustments = {
-  expense_reduction_cents: 0,
-  added_cash_cents: 0,
-  added_monthly_income_cents: 0,
-  expected_unconfirmed_funds_cents: 0,
-  usable_illiquid_investments_cents: 0,
-  usable_retirement_tax_deferred_cents: 0,
-  usable_retirement_tax_free_cents: 0,
-};
-const RUNWAY_IMPORT_ACTION_KEY = "betterr.household-runway.import-action";
-
-type DraftSyncOperationState = "pending" | "synchronized";
-type PlanOperationState = "idle" | "dirty" | "saving" | "saved" | "failed";
-
-const PLAN_INPUT_COMMAND_TYPES = new Set<HouseholdRunwayInterviewCommandInput["type"]>([
-  "select_country",
-  "select_region",
-  "select_currency",
-  "request_currency_change",
-  "reset_currency_entries",
-  "retain_currency_entries",
-  "set_household",
-  "set_employment",
-  "set_income",
-  "set_other_income_sources",
-  "set_cash",
-  "set_asset",
-  "set_expense_mode",
-  "set_quick_expenses",
-  "set_expense_category_mode",
-  "set_expense_category_subtotal",
-  "set_expense_item",
-  "set_housing_tenure",
-  "update_answers",
-  "set_reduction",
-  "complete_expense_category",
-]);
-
 const OTHER_INCOME_TYPES: Exclude<RecurringIncomeType, "other">[] = [
   "rental_net",
   "side_business",
@@ -144,7 +105,6 @@ const ASSET_KEYS = [
 
 interface HouseholdRunwayProps {
   initialAnswers: HouseholdRunwayAnswers | null;
-  initialAdjustments: RunwayAdjustments | null;
   isAuthenticated: boolean;
   hasSavedPlan: boolean;
   initialSnapshots: RunwaySnapshotSummary[];
@@ -232,6 +192,15 @@ function interviewDraftFromRunwayAnswers(answers: HouseholdRunwayAnswers) {
       currencySelection: "explicit" as const,
     },
     answers,
+    planAdjustment: {
+      expense_reduction_cents: 0,
+      added_cash_cents: 0,
+      added_monthly_income_cents: 0,
+      expected_unconfirmed_funds_cents: 0,
+      usable_illiquid_investments_cents: 0,
+      usable_retirement_tax_deferred_cents: 0,
+      usable_retirement_tax_free_cents: 0,
+    },
   };
 }
 
@@ -266,6 +235,8 @@ function interviewValidationMessage(
     case "draft_timestamp_required":
     case "plan_input_invalid":
       return t("validation.assessment");
+    case "plan_adjustment_pending":
+      return t("save.adjustmentPending");
     default:
       return "";
   }
@@ -273,187 +244,202 @@ function interviewValidationMessage(
 
 export function HouseholdRunway({
   initialAnswers,
-  initialAdjustments,
   isAuthenticated,
   hasSavedPlan,
   initialSnapshots,
 }: HouseholdRunwayProps) {
   const t = useTranslations("householdRunway");
   const locale = useLocale();
-  const initialAssessment = useMemo(
-    () =>
-      initialAnswers
-        ? assessHouseholdRunway({
-            answers: initialAnswers,
-            adjustments: initialAdjustments ?? undefined,
-          })
-        : null,
-    [initialAdjustments, initialAnswers],
-  );
   const [hydrated, setHydrated] = useState(false);
   const [hasLocalDraft, setHasLocalDraft] = useState(false);
-  const [draftCompleted, setDraftCompleted] = useState(false);
   const [snapshots, setSnapshots] = useState(initialSnapshots);
-  const [planExists, setPlanExists] = useState(hasSavedPlan);
-  const [draftSyncState, setDraftSyncState] =
-    useState<DraftSyncOperationState>("pending");
   const [interviewState, setInterviewState] =
     useState<HouseholdRunwayInterviewState>(() =>
-      createHouseholdRunwayInterview(),
+      initialAnswers
+        ? createHouseholdRunwayInterview({
+            committedPlan: { revision: 0, inputs: initialAnswers },
+          })
+        : createHouseholdRunwayInterview(),
     );
   const [error, setError] = useState("");
-  const [adjustments, setAdjustments] = useState<RunwayAdjustments>(() =>
-    initialAdjustments
-      ? { ...initialAdjustments }
-      : {
-          ...EMPTY_ADJUSTMENTS,
-          usable_illiquid_investments_cents:
-            initialAnswers?.extreme_access.illiquid_investments_cents ?? 0,
-          usable_retirement_tax_deferred_cents:
-            initialAnswers?.extreme_access.retirement_tax_deferred_cents ?? 0,
-          usable_retirement_tax_free_cents:
-            initialAnswers?.extreme_access.retirement_tax_free_cents ?? 0,
-        },
-  );
-  const [planOperationState, setPlanOperationState] =
-    useState<PlanOperationState>(hasSavedPlan ? "saved" : "idle");
   const landingTracked = useRef(false);
   const resumeStageRef = useRef<RunwayStepId | null>(null);
+  const interviewStateRef = useRef(interviewState);
+  const externalEffectsRef = useRef(
+    new Map<string, HouseholdRunwayInterviewEffect>(),
+  );
+  const inFlightEffectsRef = useRef(new Set<string>());
+  interviewStateRef.current = interviewState;
   const interviewStarted =
     isAuthenticated || interviewState.status !== "not_started";
   const stepId = (interviewState.stage ?? "location") as RunwayStepId;
   const activeExpenseCategory = interviewState.draft.activeExpenseCategory;
   const scenario = interviewState.draft.selectedScenario ?? "current";
-  const draftAnswers = useMemo(
-    () => runwayAnswersForPresentation(interviewState.draft.answers),
-    [interviewState.draft.answers],
-  );
+  const draftAnswers = runwayAnswersForPresentation(interviewState.draft.answers);
   const answers = interviewState.planInputs ?? draftAnswers;
-  const draftSynced = draftSyncState === "synchronized";
-  const saving = planOperationState === "saving";
+  const draftCompleted =
+    interviewState.status === "completed" ||
+    (typeof window !== "undefined" && readRunwayDraft()?.completed === true);
+  const draftSyncState =
+    interviewState.operations.draftSynchronization.status === "succeeded"
+      ? "synchronized"
+      : "pending";
+  const planOperation = interviewState.operations.planPersistence;
+  const planOperationState =
+    planOperation.status === "pending"
+      ? "saving"
+      : planOperation.status === "succeeded" ||
+          (hasSavedPlan && !hasLocalDraft && interviewState.committedPlan !== null)
+        ? "saved"
+        : planOperation.status === "failed"
+          ? "failed"
+          : planOperation.status === "dirty"
+            ? "dirty"
+            : "idle";
+  const saving = planOperation.status === "pending";
   const saved = planOperationState === "saved";
+  const operationError =
+    planOperation.status === "failed"
+      ? planOperation.error === "authentication_required"
+        ? t("save.authenticationRequired")
+        : planOperation.error === "stale_result"
+          ? t("save.stale")
+          : t("save.error")
+      : interviewState.operations.reportDownload.status === "failed"
+        ? t("save.downloadError")
+        : "";
   const boundaryLocation =
     interviewState.renderModel.kind === "location"
       ? interviewState.renderModel
       : null;
-  const dispatchInterviewCommand = (
+  const dispatchInterviewCommand = useCallback((
     input: HouseholdRunwayInterviewCommandInput,
-    sourceState: HouseholdRunwayInterviewState = interviewState,
+    sourceState: HouseholdRunwayInterviewState = interviewStateRef.current,
   ) => {
+    const capabilities: HouseholdRunwayInterviewCapabilities = {
+      planPersistence: isAuthenticated ? "available" : "unavailable",
+    };
     const result = dispatchHouseholdRunwayInterview(
       sourceState,
       householdRunwayInterviewCommand(input),
+      capabilities,
     );
+    interviewStateRef.current = result.state;
     setInterviewState(result.state);
-    setDraftCompleted(result.state.status === "completed");
-    persistHouseholdRunwayInterviewDraft(result.state.draft);
     applyHouseholdRunwayInterviewEffects(result.effects);
-    if (result.state.draft.revision !== sourceState.draft.revision) {
-      setDraftSyncState("pending");
-      if (PLAN_INPUT_COMMAND_TYPES.has(input.type)) {
-        setPlanOperationState((current) =>
-          current === "saving" ? current : "dirty",
+    result.effects.forEach((effect) => {
+      if (
+        effect.type === "draft_sync_requested" ||
+        effect.type === "plan_persistence_requested" ||
+        effect.type === "report_download_requested" ||
+        effect.type === "analytics_requested"
+      ) {
+        externalEffectsRef.current.set(
+          `${effect.type}:${effect.sourceRevision}:${effect.correlationId}`,
+          effect,
         );
       }
-    }
+    });
     return result;
-  };
+  }, [isAuthenticated]);
 
   useEffect(() => {
     let hydrationFrame: number | null = null;
-    const boundaryDraft = initialAnswers
-      ? null
-      : readHouseholdRunwayInterviewDraft();
-    let restoredBoundary = boundaryDraft
-      ? restoreHouseholdRunwayInterview({
-          version: 2,
-          status: "not_started",
-          stage: null,
-          draft: boundaryDraft,
-          validationIssue: null,
-        })
-      : createHouseholdRunwayInterview();
-    const syncUrlMode = () => {
-      const started = new URLSearchParams(window.location.search).get("start") === "1";
-      if (isAuthenticated || started) {
-        const command = householdRunwayInterviewCommand({
-          type: "start",
-          interviewId: newId("runway-interview"),
-          stage: resumableRunwayStep(resumeStageRef.current),
-        });
-        setInterviewState((current) =>
-          current.status === "not_started"
-            ? dispatchHouseholdRunwayInterview(current, command).state
-            : current,
-        );
-      } else {
-        setDraftCompleted(readRunwayDraft()?.completed === true);
-        setInterviewState((current) =>
-          current.status === "not_started"
-            ? current
-            : restoreHouseholdRunwayInterview({
-                version: 1,
-                status: "not_started",
-                stage: null,
-                draft: current.draft,
-                validationIssue: null,
-              }),
-        );
-      }
-    };
-    const draft = readRunwayDraft();
-    if (draft && !initialAnswers) {
-      const draftAssessment = assessHouseholdRunway({ answers: draft.answers });
-      const completedDraftIsValid = draft.completed && draftAssessment.success;
-      setDraftCompleted(completedDraftIsValid);
-      resumeStageRef.current =
-        draft.completed && !completedDraftIsValid ? "location" : draft.step_id;
-      setHasLocalDraft(true);
-      setAdjustments((current) => ({
-        ...current,
-        usable_illiquid_investments_cents:
-          draft.answers.extreme_access.illiquid_investments_cents,
-        usable_retirement_tax_deferred_cents:
-          draft.answers.extreme_access.retirement_tax_deferred_cents,
-        usable_retirement_tax_free_cents:
-          draft.answers.extreme_access.retirement_tax_free_cents,
-      }));
-
-      if (!boundaryDraft) {
-        restoredBoundary = restoreHouseholdRunwayInterview({
-          version: 2,
-          status: completedDraftIsValid ? "completed" : "not_started",
-          stage: completedDraftIsValid ? "result" : null,
-          draft: interviewDraftFromRunwayAnswers(draft.answers),
-          validationIssue: null,
-        });
-      }
-    }
-    if (initialAnswers) {
-      setDraftCompleted(initialAssessment?.success === true);
+    const boundaryDraft = readHouseholdRunwayInterviewDraft();
+    const runwayDraft = readRunwayDraft();
+    const committedPlan = initialAnswers
+      ? { revision: 0, inputs: initialAnswers }
+      : null;
+    let restoredBoundary = createHouseholdRunwayInterview({
+      committedPlan,
+    });
+    if (boundaryDraft) {
+      const completed =
+        boundaryDraft.stageStatus?.result === "completed" ||
+        (runwayDraft?.completed === true &&
+          assessHouseholdRunway({ answers: runwayDraft.answers }).success);
       restoredBoundary = restoreHouseholdRunwayInterview({
         version: 2,
-        status: initialAssessment?.success ? "completed" : "not_started",
-        stage: initialAssessment?.success ? "result" : null,
-        draft: interviewDraftFromRunwayAnswers(initialAnswers),
+        status: completed ? "completed" : "not_started",
+        stage: completed ? "result" : null,
+        draft: boundaryDraft,
+        committedPlan,
+        validationIssue: null,
+      });
+    } else if (runwayDraft) {
+      const completed =
+        runwayDraft.completed &&
+        assessHouseholdRunway({ answers: runwayDraft.answers }).success;
+      restoredBoundary = restoreHouseholdRunwayInterview({
+        version: 2,
+        status: completed ? "completed" : "not_started",
+        stage: completed ? "result" : null,
+        draft: interviewDraftFromRunwayAnswers(runwayDraft.answers),
+        committedPlan,
         validationIssue: null,
       });
     }
+    const syncUrlMode = () => {
+      const started = new URLSearchParams(window.location.search).get("start") === "1";
+      if (isAuthenticated || started) {
+        if (interviewStateRef.current.status === "not_started") {
+          const resumeStage = resumableRunwayStep(resumeStageRef.current);
+          dispatchInterviewCommand(
+            resumeStage
+              ? {
+                  type: "start",
+                  interviewId: newId("runway-interview"),
+                  stage: resumeStage,
+                }
+              : {
+                  type: "start",
+                  interviewId: newId("runway-interview"),
+                },
+            interviewStateRef.current,
+          );
+        }
+      } else {
+        if (interviewStateRef.current.status !== "not_started") {
+          const current = interviewStateRef.current;
+          const restored = restoreHouseholdRunwayInterview({
+            version: 2,
+            status: "not_started",
+            stage: null,
+            draft: current.draft,
+            committedPlan: current.committedPlan,
+            validationIssue: null,
+          });
+          interviewStateRef.current = restored;
+          setInterviewState(restored);
+        }
+      }
+    };
+    if (runwayDraft || boundaryDraft) {
+      setHasLocalDraft(true);
+      resumeStageRef.current = runwayDraft?.step_id ?? null;
+    }
     const started = new URLSearchParams(window.location.search).get("start") === "1";
     if ((isAuthenticated || started) && restoredBoundary.status === "not_started") {
-      const command = householdRunwayInterviewCommand({
-        type: "start",
-        interviewId: newId("runway-interview"),
-        stage: resumableRunwayStep(resumeStageRef.current),
-      });
-      setInterviewState(
-        dispatchHouseholdRunwayInterview(restoredBoundary, command).state,
+      const resumeStage = resumableRunwayStep(resumeStageRef.current);
+      dispatchInterviewCommand(
+        resumeStage
+          ? {
+              type: "start",
+              interviewId: newId("runway-interview"),
+              stage: resumeStage,
+            }
+          : {
+              type: "start",
+              interviewId: newId("runway-interview"),
+            },
+        restoredBoundary,
       );
     } else {
+      interviewStateRef.current = restoredBoundary;
       setInterviewState(restoredBoundary);
     }
     window.addEventListener("popstate", syncUrlMode);
-    if (draft) {
+    if (runwayDraft || boundaryDraft) {
       // Commit restored answers before enabling autosave so a locale reload
       // can never overwrite the draft with the component defaults.
       hydrationFrame = window.requestAnimationFrame(() => setHydrated(true));
@@ -464,33 +450,287 @@ export function HouseholdRunway({
       window.removeEventListener("popstate", syncUrlMode);
       if (hydrationFrame !== null) window.cancelAnimationFrame(hydrationFrame);
     };
-  }, [initialAnswers, initialAssessment?.success, isAuthenticated]);
+  }, [dispatchInterviewCommand, initialAnswers, isAuthenticated]);
 
   useEffect(() => {
-    if (draftSynced || !hydrated || (!interviewStarted && !hasLocalDraft)) return;
-    persistRunwayDraft(draftAnswers, stepId, draftCompleted);
-    setHasLocalDraft(true);
-    setDraftSyncState("synchronized");
-  }, [draftAnswers, draftCompleted, draftSynced, hasLocalDraft, hydrated, interviewStarted, stepId]);
+    if (!hydrated) return;
+
+    const requestDraftSync = () => {
+      const current = interviewStateRef.current;
+      if (
+        current.operations.draftSynchronization.status === "dirty" &&
+        (current.status !== "not_started" || hasLocalDraft)
+      ) {
+        dispatchInterviewCommand({ type: "synchronize_draft" }, current);
+      }
+    };
+
+    requestDraftSync();
+    const current = interviewStateRef.current;
+    const operations = current.operations;
+    const pending = [
+      operations.draftSynchronization.status === "pending"
+        ? {
+            type: "draft_sync_requested" as const,
+            sourceRevision: operations.draftSynchronization.sourceRevision,
+            correlationId: operations.draftSynchronization.correlationId,
+          }
+        : null,
+      operations.planPersistence.status === "pending"
+        ? {
+            type: "plan_persistence_requested" as const,
+            sourceRevision: operations.planPersistence.sourceRevision,
+            correlationId: operations.planPersistence.correlationId,
+          }
+        : null,
+      operations.reportDownload.status === "pending"
+        ? {
+            type: "report_download_requested" as const,
+            sourceRevision: operations.reportDownload.sourceRevision,
+            correlationId: operations.reportDownload.correlationId,
+          }
+        : null,
+      operations.analytics.status === "pending"
+        ? {
+            type: "analytics_requested" as const,
+            sourceRevision: operations.analytics.sourceRevision,
+            correlationId: operations.analytics.correlationId,
+          }
+        : null,
+    ].filter((item): item is NonNullable<typeof item> => item !== null);
+
+    pending.forEach(({ type, sourceRevision, correlationId }) => {
+      const key = `${type}:${sourceRevision}:${correlationId}`;
+      const effect = externalEffectsRef.current.get(key);
+      if (!effect || inFlightEffectsRef.current.has(key)) return;
+      inFlightEffectsRef.current.add(key);
+      externalEffectsRef.current.delete(key);
+
+      if (effect.type === "draft_sync_requested") {
+        void Promise.resolve().then(() => {
+          try {
+            const currentDraftSync =
+              interviewStateRef.current.operations.draftSynchronization;
+            if (
+              currentDraftSync.status !== "pending" ||
+              currentDraftSync.sourceRevision !== sourceRevision ||
+              currentDraftSync.correlationId !== correlationId
+            ) {
+              return;
+            }
+            const step = (current.stage ?? "location") as RunwayStepId;
+            persistHouseholdRunwayInterviewDraft(effect.draft);
+            persistRunwayDraft(
+              runwayAnswersForPresentation(effect.draft.answers),
+              step,
+              effect.draft.stageStatus.result === "completed",
+            );
+            setHasLocalDraft(true);
+            dispatchInterviewCommand(
+              {
+                type: "draft_synchronization_succeeded",
+                sourceRevision,
+                correlationId,
+              },
+              interviewStateRef.current,
+            );
+          } catch {
+            dispatchInterviewCommand(
+              {
+                type: "draft_synchronization_failed",
+                sourceRevision,
+                correlationId,
+                error: "storage_unavailable",
+              },
+              interviewStateRef.current,
+            );
+          } finally {
+            inFlightEffectsRef.current.delete(key);
+          }
+        });
+        return;
+      }
+
+      if (effect.type === "plan_persistence_requested") {
+        void fetch("/api/finance/cushion", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            answers: effect.inputs,
+            adjustments: {},
+            status: "completed",
+            attribution: runwayAttribution(),
+            create_snapshot: true,
+            snapshot_action_id: effect.idempotencyKey,
+            snapshot_trigger: hasSavedPlan ? "updated" : "imported",
+          }),
+        })
+          .then(async (response) => {
+            if (!response.ok) {
+              const error =
+                response.status === 401 || response.status === 403
+                  ? "authentication_required"
+                  : response.status === 409
+                    ? "conflict"
+                    : response.status >= 400 && response.status < 500
+                      ? "invalid"
+                      : "network";
+              dispatchInterviewCommand(
+                {
+                  type: "plan_persistence_failed",
+                  sourceRevision,
+                  correlationId,
+                  error,
+                },
+                interviewStateRef.current,
+              );
+              return;
+            }
+            const payload = (await response.json()) as {
+              snapshots?: RunwaySnapshotSummary[];
+            };
+            if (payload.snapshots) setSnapshots(payload.snapshots);
+            clearRunwayDraft();
+            clearHouseholdRunwayInterviewDraft();
+            setHasLocalDraft(false);
+            dispatchInterviewCommand(
+              {
+                type: "plan_persistence_succeeded",
+                sourceRevision,
+                correlationId,
+              },
+              interviewStateRef.current,
+            );
+          })
+          .catch(() => {
+            dispatchInterviewCommand(
+              {
+                type: "plan_persistence_failed",
+                sourceRevision,
+                correlationId,
+                error: "network",
+              },
+              interviewStateRef.current,
+            );
+          })
+          .finally(() => inFlightEffectsRef.current.delete(key));
+        return;
+      }
+
+      if (effect.type === "report_download_requested") {
+        void Promise.resolve().then(() => {
+          const presentationAnswers = runwayAnswersForPresentation(
+            current.draft.answers,
+          );
+          const result = downloadHouseholdRunwayAssessment(effect.assessment, {
+            location: `${presentationAnswers.country} · ${runwayRegionLabel(presentationAnswers.country, presentationAnswers.region, locale) ?? presentationAnswers.region}`,
+            formatMoney: (cents) =>
+              formatCents(cents, locale, presentationAnswers.currency),
+            formatScenario: (itemScenario) => t(`scenarios.${itemScenario}`),
+            formatSimulation: (simulation) =>
+              simulation.sustainable
+                ? t("comparison.sustainable")
+                : `${(simulation.months_covered ?? 0).toFixed(1)} ${t("whatIf.months")}`,
+            formatCashTarget: (months, cents) =>
+              `${t("actionsPlan.cashTarget", { months })}: ${formatCents(cents, locale, presentationAnswers.currency)}`,
+            formatLargestReduction: (category, cents) =>
+              `${t("actionsPlan.largest")}: ${t(`expenseCategories.${category}`)} (${formatCents(cents, locale, presentationAnswers.currency)})`,
+            precisionAdvice:
+              presentationAnswers.expense_mode === "quick"
+                ? t("precision.expenses")
+                : presentationAnswers.mine.take_home_source === "estimated" ||
+                    presentationAnswers.partner?.take_home_source === "estimated"
+                  ? t("precision.takeHome")
+                  : t("precision.complete"),
+          });
+          dispatchInterviewCommand(
+            result.success
+              ? {
+                  type: "report_download_succeeded",
+                  sourceRevision,
+                  correlationId,
+                }
+              : {
+                  type: "report_download_failed",
+                  sourceRevision,
+                  correlationId,
+                  error: "download_failed",
+                },
+            interviewStateRef.current,
+          );
+          inFlightEffectsRef.current.delete(key);
+        });
+        return;
+      }
+
+      if (effect.type === "analytics_requested") {
+        void trackRunwayEvent(effect.eventName, effect.stage)
+          .then((succeeded) => {
+            dispatchInterviewCommand(
+              succeeded
+                ? {
+                    type: "analytics_succeeded",
+                    sourceRevision,
+                    correlationId,
+                  }
+                : {
+                    type: "analytics_failed",
+                    sourceRevision,
+                    correlationId,
+                  },
+              interviewStateRef.current,
+            );
+          })
+          .catch(() => {
+            dispatchInterviewCommand(
+              {
+                type: "analytics_failed",
+                sourceRevision,
+                correlationId,
+              },
+              interviewStateRef.current,
+            );
+          })
+          .finally(() => inFlightEffectsRef.current.delete(key));
+      }
+    });
+  }, [
+    hasLocalDraft,
+    hasSavedPlan,
+    hydrated,
+    interviewStarted,
+    interviewState,
+    locale,
+    t,
+    dispatchInterviewCommand,
+  ]);
 
   useEffect(() => {
     const flushDraft = () => {
-      if (draftSynced || (!interviewStarted && !hasLocalDraft)) return;
-      persistRunwayDraft(draftAnswers, stepId, draftCompleted);
-      setDraftSyncState("synchronized");
+      const current = interviewStateRef.current;
+      if (
+        current.operations.draftSynchronization.status === "dirty" &&
+        (current.status !== "not_started" || hasLocalDraft)
+      ) {
+        dispatchInterviewCommand({ type: "synchronize_draft" }, current);
+      }
     };
     window.addEventListener("betterr:before-locale-change", flushDraft);
     return () =>
       window.removeEventListener("betterr:before-locale-change", flushDraft);
-  }, [draftAnswers, draftCompleted, draftSynced, hasLocalDraft, hydrated, interviewStarted, stepId]);
+  }, [dispatchInterviewCommand, hasLocalDraft]);
 
   const showLanding = hydrated && !isAuthenticated && !interviewStarted;
   useEffect(() => {
     if (showLanding && !landingTracked.current) {
       landingTracked.current = true;
-      trackRunwayEvent("landing_view", "landing");
+      dispatchInterviewCommand({
+        type: "request_analytics",
+        eventName: "landing_view",
+        stage: "landing",
+      });
     }
-  }, [showLanding]);
+  }, [dispatchInterviewCommand, showLanding]);
 
   useEffect(() => {
     if (!hydrated || showLanding || stepId === "result") return;
@@ -498,21 +738,15 @@ export function HouseholdRunway({
     heading?.focus({ preventScroll: true });
   }, [hydrated, showLanding, stepId]);
 
-  const assessment = useMemo(() => {
-    if (stepId !== "review" && stepId !== "result") return null;
-    if (!interviewState.planInputs || !interviewState.assessment) return null;
-    const hasAdjustments = Object.values(adjustments).some((value) => value > 0);
-    return hasAdjustments
-      ? assessHouseholdRunway({
-          answers: interviewState.planInputs,
-          adjustments,
-        })
-      : interviewState.assessment;
-  }, [adjustments, interviewState.assessment, interviewState.planInputs, stepId]);
+  const assessment =
+    stepId === "review" || stepId === "result"
+      ? interviewState.assessment
+      : null;
   const selectedAssessment = assessment?.success
     ? (assessment.scenarios.find((item) => item.scenario === scenario) ??
       assessment.firstScenario)
     : null;
+  const planAdjustment = interviewState.draft.planAdjustment;
 
   const updateIncome = (
     person: "mine" | "partner",
@@ -524,48 +758,50 @@ export function HouseholdRunway({
   const startInterview = (fresh = false) => {
     if (fresh) {
       setHasLocalDraft(false);
-      setDraftSyncState("pending");
-      setDraftCompleted(false);
-      setPlanOperationState("idle");
-      setAdjustments({ ...EMPTY_ADJUSTMENTS });
       resumeStageRef.current = null;
       clearRunwayDraft();
       clearHouseholdRunwayInterviewDraft();
-      window.localStorage.removeItem(RUNWAY_IMPORT_ACTION_KEY);
     }
-    dispatchInterviewCommand({
-      type: fresh ? "start_new" : "start",
-      interviewId: newId("runway-interview"),
-      stage: fresh
-        ? undefined
-        : draftCompleted
-          ? "result"
-          : resumableRunwayStep(resumeStageRef.current),
-    });
+    const resumeStage = fresh
+      ? null
+      : draftCompleted
+        ? "result"
+        : resumableRunwayStep(resumeStageRef.current);
+    const interviewId = newId("runway-interview");
+    if (resumeStage) {
+      dispatchInterviewCommand({
+        type: fresh ? "start_new" : "start",
+        interviewId,
+        stage: resumeStage,
+      });
+    } else {
+      dispatchInterviewCommand({
+        type: fresh ? "start_new" : "start",
+        interviewId,
+      });
+    }
     resumeStageRef.current = null;
-    trackRunwayEvent("started", fresh ? "new" : hasLocalDraft ? "resume" : "new");
+    dispatchInterviewCommand({
+      type: "request_analytics",
+      eventName: "started",
+      stage: fresh ? "new" : hasLocalDraft ? "resume" : "new",
+    });
   };
 
   const confirmStartOver = () => {
     if (window.confirm(t("landing.startOverConfirm"))) startInterview(true);
   };
 
+  const startNewInterview = () => {
+    if (window.confirm(t("landing.startOverConfirm"))) startInterview(true);
+  };
+
   const clearDraft = () => {
     if (!window.confirm(t("actions.clearConfirm"))) return;
     clearRunwayDraft();
-    window.localStorage.removeItem(RUNWAY_IMPORT_ACTION_KEY);
-    setPlanOperationState("idle");
-    setDraftCompleted(false);
     setHasLocalDraft(false);
-    setAdjustments({ ...EMPTY_ADJUSTMENTS });
-    dispatchInterviewCommand(
-      isAuthenticated
-        ? {
-            type: "start_new",
-            interviewId: newId("runway-interview"),
-          }
-        : { type: "discard_draft" },
-    );
+    clearHouseholdRunwayInterviewDraft();
+    dispatchInterviewCommand({ type: "discard_draft" });
   };
 
   const next = () => {
@@ -591,107 +827,43 @@ export function HouseholdRunway({
       setError(
         interviewValidationMessage(t, result.state.validationIssue?.code),
       );
+      if (result.state.stage === "result") {
+        dispatchInterviewCommand({
+          type: "request_analytics",
+          eventName: "completed",
+          stage: stepId,
+        });
+      }
       return;
     }
     const result = dispatchInterviewCommand({ type: "continue" });
     setError(interviewValidationMessage(t, result.state.validationIssue?.code));
     if (result.state.stage === "result") {
-      trackRunwayEvent("completed", stepId);
+      dispatchInterviewCommand({
+        type: "request_analytics",
+        eventName: "completed",
+        stage: stepId,
+      });
     }
   };
 
   const skip = () => {
     const result = dispatchInterviewCommand({ type: "skip" });
     setError(interviewValidationMessage(t, result.state.validationIssue?.code));
-    trackRunwayEvent("skipped", stepId);
-  };
-
-  const savePlan = async () => {
-    if (!isAuthenticated) return;
-    setPlanOperationState("saving");
-    setError("");
-    try {
-      let actionId = window.localStorage.getItem(RUNWAY_IMPORT_ACTION_KEY);
-      if (!actionId) {
-        actionId = crypto.randomUUID();
-        window.localStorage.setItem(RUNWAY_IMPORT_ACTION_KEY, actionId);
-      }
-      const response = await fetch("/api/finance/cushion", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          answers,
-          adjustments,
-          status: "completed",
-          attribution: runwayAttribution(),
-          create_snapshot: true,
-          snapshot_action_id: actionId,
-          snapshot_trigger: planExists ? "updated" : "imported",
-        }),
-      });
-      if (!response.ok) throw new Error("save failed");
-      const payload = (await response.json()) as {
-        snapshots?: RunwaySnapshotSummary[];
-      };
-      if (payload.snapshots) setSnapshots(payload.snapshots);
-      clearRunwayDraft();
-      clearHouseholdRunwayInterviewDraft();
-      setHasLocalDraft(false);
-      setDraftSyncState("synchronized");
-      setPlanExists(true);
-      window.localStorage.removeItem(RUNWAY_IMPORT_ACTION_KEY);
-      setPlanOperationState("saved");
-    } catch {
-      setError(t("save.error"));
-      setPlanOperationState("failed");
-    }
-  };
-
-  const applyWhatIf = () => {
-    const next = {
-      ...answers,
-      available_cash: {
-        cents: answers.available_cash.cents + adjustments.added_cash_cents,
-        confidence: "confirmed" as InputConfidence,
-      },
-      extreme_access: {
-        illiquid_investments_cents:
-          adjustments.usable_illiquid_investments_cents,
-        retirement_tax_deferred_cents:
-          adjustments.usable_retirement_tax_deferred_cents,
-        retirement_tax_free_cents:
-          adjustments.usable_retirement_tax_free_cents,
-      },
-      updated_at: new Date().toISOString(),
-    };
-    if (adjustments.added_monthly_income_cents > 0) {
-      next.other_income_sources = [
-        ...answers.other_income_sources,
-        {
-          id: newId("what-if-income"),
-          type: "other" as const,
-          label: t("whatIf.appliedIncome"),
-          monthly_cents: adjustments.added_monthly_income_cents,
-          confidence: "confirmed" as const,
-        },
-      ];
-    }
-    if (adjustments.expense_reduction_cents > 0) {
-      Object.assign(
-        next,
-        applyExpenseReduction(next, adjustments.expense_reduction_cents),
-      );
-    }
-    dispatchInterviewCommand({ type: "update_answers", patch: next });
-    setAdjustments({
-      ...EMPTY_ADJUSTMENTS,
-      usable_illiquid_investments_cents:
-        adjustments.usable_illiquid_investments_cents,
-      usable_retirement_tax_deferred_cents:
-        adjustments.usable_retirement_tax_deferred_cents,
-      usable_retirement_tax_free_cents:
-        adjustments.usable_retirement_tax_free_cents,
+    dispatchInterviewCommand({
+      type: "request_analytics",
+      eventName: "skipped",
+      stage: stepId,
     });
+  };
+
+  const savePlan = () => {
+    setError("");
+    dispatchInterviewCommand({ type: "save_plan" });
+  };
+
+  const updatePlanAdjustment = (patch: Partial<typeof planAdjustment>) => {
+    dispatchInterviewCommand({ type: "set_plan_adjustment", patch });
   };
 
   const download = () => {
@@ -699,28 +871,8 @@ export function HouseholdRunway({
       setError(t("save.downloadError"));
       return;
     }
-    const result = downloadHouseholdRunwayAssessment(assessment, {
-      location: `${answers.country} · ${runwayRegionLabel(answers.country, answers.region, locale) ?? answers.region}`,
-      formatMoney: (cents) =>
-        formatCents(cents, locale, answers.currency),
-      formatScenario: (itemScenario) => t(`scenarios.${itemScenario}`),
-      formatSimulation: (simulation) =>
-        simulation.sustainable
-          ? t("comparison.sustainable")
-          : `${(simulation.months_covered ?? 0).toFixed(1)} ${t("whatIf.months")}`,
-      formatCashTarget: (months, cents) =>
-        `${t("actionsPlan.cashTarget", { months })}: ${formatCents(cents, locale, answers.currency)}`,
-      formatLargestReduction: (category, cents) =>
-        `${t("actionsPlan.largest")}: ${t(`expenseCategories.${category}`)} (${formatCents(cents, locale, answers.currency)})`,
-      precisionAdvice:
-        answers.expense_mode === "quick"
-          ? t("precision.expenses")
-          : answers.mine.take_home_source === "estimated" ||
-              answers.partner?.take_home_source === "estimated"
-            ? t("precision.takeHome")
-            : t("precision.complete"),
-    });
-    if (!result.success) setError(t("save.downloadError"));
+    dispatchInterviewCommand({ type: "request_report_download" });
+    return;
   };
 
   if (!hydrated) {
@@ -756,36 +908,39 @@ export function HouseholdRunway({
           answers={answers}
           scenarios={assessment.scenarios.map((item) => item.scenario)}
           scenario={scenario}
-          setScenario={(value) => {
-            dispatchInterviewCommand({ type: "select_scenario", scenario: value });
-            trackRunwayEvent("result_interaction", "scenario_switch");
-          }}
+           setScenario={(value) => {
+             dispatchInterviewCommand({ type: "select_scenario", scenario: value });
+             dispatchInterviewCommand({
+               type: "request_analytics",
+               eventName: "result_interaction",
+               stage: "scenario_switch",
+             });
+           }}
           baseline={selectedAssessment.baseline}
           preview={selectedAssessment.adjusted}
           currentLifestyle={selectedAssessment.comparisons.currentLifestyle}
           extreme={selectedAssessment.comparisons.extremeMode}
-          adjustments={adjustments}
-          setAdjustments={setAdjustments}
-          actions={selectedAssessment.advice}
-          onApply={applyWhatIf}
-          onReset={() =>
-            setAdjustments({
-              ...EMPTY_ADJUSTMENTS,
-              usable_illiquid_investments_cents:
-                answers.extreme_access.illiquid_investments_cents,
-              usable_retirement_tax_deferred_cents:
-                answers.extreme_access.retirement_tax_deferred_cents,
-              usable_retirement_tax_free_cents:
-                answers.extreme_access.retirement_tax_free_cents,
-            })
-          }
-          onEdit={() => dispatchInterviewCommand({ type: "back" })}
-          onDownload={download}
+           planAdjustment={planAdjustment}
+           onPlanAdjustmentChange={updatePlanAdjustment}
+           actions={selectedAssessment.advice}
+           onApply={() => dispatchInterviewCommand({ type: "apply_plan_adjustment" })}
+           onReset={() => dispatchInterviewCommand({ type: "reset_plan_adjustment" })}
+           onEdit={() => dispatchInterviewCommand({ type: "back" })}
+           onStartNew={startNewInterview}
+           onDiscardDraft={clearDraft}
+           onRegistrationClick={() =>
+             dispatchInterviewCommand({
+               type: "request_analytics",
+               eventName: "registration_clicked",
+               stage: "result",
+             })
+           }
+           onDownload={download}
           isAuthenticated={isAuthenticated}
           saved={saved}
           saving={saving}
           onSave={savePlan}
-          error={error}
+           error={error || operationError}
           snapshots={snapshots}
         />
       ) : (
@@ -793,7 +948,7 @@ export function HouseholdRunway({
           t={t}
           stepId={stepId}
           renderKind={interviewState.renderModel.kind}
-          error={error}
+           error={error || operationError}
           activeExpenseCategory={activeExpenseCategory}
           onBack={() => {
             setError("");
@@ -927,7 +1082,7 @@ function InterviewShell({
       </div>
       <button
         onClick={onClear}
-        className="mx-auto mt-5 flex items-center gap-2 text-xs text-slate-400 hover:text-slate-700 dark:hover:text-white"
+        className="relative z-[1001] mx-auto mt-5 flex items-center gap-2 text-xs text-slate-400 hover:text-slate-700 dark:hover:text-white"
       >
         <Trash2 className="h-3.5 w-3.5" />
         {t("actions.clear")}

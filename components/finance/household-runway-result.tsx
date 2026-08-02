@@ -6,7 +6,6 @@ import { Download, RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MoneyField } from "@/components/finance/runway-money-field";
 import { BalanceChart, RunwayHistory } from "@/components/finance/household-runway-result-parts";
-import { trackRunwayEvent } from "@/lib/finance/runway-analytics-client";
 import {
   RUNWAY_MODEL_VERSION,
   formatCents,
@@ -34,12 +33,15 @@ export function ResultExperience({
   preview,
   currentLifestyle,
   extreme,
-  adjustments,
-  setAdjustments,
+  planAdjustment,
+  onPlanAdjustmentChange,
   actions,
   onApply,
   onReset,
   onEdit,
+  onStartNew,
+  onDiscardDraft,
+  onRegistrationClick,
   onDownload,
   isAuthenticated,
   saved,
@@ -58,12 +60,15 @@ export function ResultExperience({
   preview: RunwaySimulation;
   currentLifestyle: RunwaySimulation;
   extreme: RunwaySimulation;
-  adjustments: RunwayAdjustments;
-  setAdjustments: (adjustments: RunwayAdjustments) => void;
+  planAdjustment: RunwayAdjustments;
+  onPlanAdjustmentChange: (patch: Partial<RunwayAdjustments>) => void;
   actions: HouseholdRunwayScenarioAssessment["advice"];
   onApply: () => void;
   onReset: () => void;
   onEdit: () => void;
+  onStartNew: () => void;
+  onDiscardDraft: () => void;
+  onRegistrationClick: () => void;
   onDownload: () => void;
   isAuthenticated: boolean;
   saved: boolean;
@@ -72,7 +77,7 @@ export function ResultExperience({
   error: string;
   snapshots: RunwaySnapshotSummary[];
 }) {
-  const hasAdjustment = Object.values(adjustments).some((value) => value > 0);
+  const hasAdjustment = Object.values(planAdjustment).some((value) => value > 0);
   const delta =
     preview.months_covered !== null && baseline.months_covered !== null
       ? preview.months_covered - baseline.months_covered
@@ -111,18 +116,18 @@ export function ResultExperience({
         <h2 className="text-xl font-semibold">{t("whatIf.title")}</h2>
         <p className="mt-1 text-sm text-slate-500">{t("whatIf.description")}</p>
         <div className="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-          <MoneyField label={t("whatIf.reduceExpenses")} currency={answers.currency} value={adjustments.expense_reduction_cents} onChange={(value) => setAdjustments({ ...adjustments, expense_reduction_cents: Math.min(value, baseline.interruption_expenses_cents) })} />
-          <MoneyField label={t("whatIf.addCash")} currency={answers.currency} value={adjustments.added_cash_cents} onChange={(value) => setAdjustments({ ...adjustments, added_cash_cents: value })} />
-          <MoneyField label={t("whatIf.addIncome")} currency={answers.currency} value={adjustments.added_monthly_income_cents} onChange={(value) => setAdjustments({ ...adjustments, added_monthly_income_cents: value })} />
-          <MoneyField label={t("whatIf.expectedFunds")} help={t("whatIf.expectedFundsHelp")} currency={answers.currency} value={adjustments.expected_unconfirmed_funds_cents} onChange={(value) => setAdjustments({ ...adjustments, expected_unconfirmed_funds_cents: value })} />
-          <MoneyField label={t("whatIf.useIlliquid")} currency={answers.currency} value={adjustments.usable_illiquid_investments_cents} onChange={(value) => setAdjustments({ ...adjustments, usable_illiquid_investments_cents: Math.min(value, answers.assets.illiquid_investments.cents) })} />
+          <MoneyField label={t("whatIf.reduceExpenses")} currency={answers.currency} value={planAdjustment.expense_reduction_cents} onChange={(value) => onPlanAdjustmentChange({ expense_reduction_cents: Math.min(value, baseline.interruption_expenses_cents) })} />
+          <MoneyField label={t("whatIf.addCash")} currency={answers.currency} value={planAdjustment.added_cash_cents} onChange={(value) => onPlanAdjustmentChange({ added_cash_cents: value })} />
+          <MoneyField label={t("whatIf.addIncome")} currency={answers.currency} value={planAdjustment.added_monthly_income_cents} onChange={(value) => onPlanAdjustmentChange({ added_monthly_income_cents: value })} />
+          <MoneyField label={t("whatIf.expectedFunds")} help={t("whatIf.expectedFundsHelp")} currency={answers.currency} value={planAdjustment.expected_unconfirmed_funds_cents} onChange={(value) => onPlanAdjustmentChange({ expected_unconfirmed_funds_cents: value })} />
+          <MoneyField label={t("whatIf.useIlliquid")} currency={answers.currency} value={planAdjustment.usable_illiquid_investments_cents} onChange={(value) => onPlanAdjustmentChange({ usable_illiquid_investments_cents: Math.min(value, answers.assets.illiquid_investments.cents) })} />
         </div>
         <details className="mt-5 rounded-2xl border p-4">
           <summary className="cursor-pointer font-semibold">{t("comparison.extreme")}</summary>
           <p className="mt-2 text-xs leading-5 text-slate-500">{t("whatIf.retirementHelp")}</p>
           <div className="mt-4 grid gap-5 md:grid-cols-2">
-            <MoneyField label={t("whatIf.useDeferred")} currency={answers.currency} value={adjustments.usable_retirement_tax_deferred_cents} onChange={(value) => setAdjustments({ ...adjustments, usable_retirement_tax_deferred_cents: Math.min(value, answers.assets.retirement_tax_deferred.cents) })} />
-            <MoneyField label={t("whatIf.useTaxFree")} currency={answers.currency} value={adjustments.usable_retirement_tax_free_cents} onChange={(value) => setAdjustments({ ...adjustments, usable_retirement_tax_free_cents: Math.min(value, answers.assets.retirement_tax_free.cents) })} />
+            <MoneyField label={t("whatIf.useDeferred")} currency={answers.currency} value={planAdjustment.usable_retirement_tax_deferred_cents} onChange={(value) => onPlanAdjustmentChange({ usable_retirement_tax_deferred_cents: Math.min(value, answers.assets.retirement_tax_deferred.cents) })} />
+            <MoneyField label={t("whatIf.useTaxFree")} currency={answers.currency} value={planAdjustment.usable_retirement_tax_free_cents} onChange={(value) => onPlanAdjustmentChange({ usable_retirement_tax_free_cents: Math.min(value, answers.assets.retirement_tax_free.cents) })} />
           </div>
         </details>
         <div className="mt-6 flex gap-2"><Button onClick={onApply}>{t("actions.apply")}</Button><Button variant="outline" onClick={onReset}><RefreshCcw />{t("actions.reset")}</Button></div>
@@ -140,10 +145,14 @@ export function ResultExperience({
           <p className="mt-2 text-sm leading-6 text-slate-500">{t("save.description")}</p>
           <div className="mt-5 flex flex-wrap gap-2">
             <Button variant="outline" onClick={onDownload}><Download />{t("actions.download")}</Button>
-            {isAuthenticated ? <Button onClick={onSave} disabled={saving || saved}>{saved ? t("save.saved") : saving ? t("save.saving") : t("save.button")}</Button> : <Button asChild onClick={() => trackRunwayEvent("registration_clicked", "result")}><Link href="/auth/sign-up?next=/finance/cushion">{t("save.createAccount")}</Link></Button>}
+            {isAuthenticated ? <Button onClick={onSave} disabled={saving || saved}>{saved ? t("save.saved") : saving ? t("save.saving") : t("save.button")}</Button> : <Button asChild><Link href="/auth/sign-up?next=/finance/cushion" onClick={onRegistrationClick}>{t("save.createAccount")}</Link></Button>}
           </div>
           {error ? <p role="alert" className="mt-3 text-sm text-red-600">{error}</p> : null}
         </div>
+      </div>
+      <div className="mt-6 flex flex-wrap justify-center gap-2">
+        <Button variant="outline" onClick={onStartNew}>{t("landing.startNew")}</Button>
+        <Button variant="ghost" onClick={onDiscardDraft}>{t("actions.discardDraft")}</Button>
       </div>
       <div className="mt-6 grid gap-6 md:grid-cols-2">
         <div className="rounded-3xl border bg-white p-6 dark:bg-white/5">

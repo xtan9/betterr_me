@@ -76,7 +76,7 @@ describe("FinanceCushionPage", () => {
     );
   });
 
-  it("hydrates adjustments from the persisted assessment", async () => {
+  it("does not hydrate persisted assessment adjustments into a working overlay", async () => {
     mocks.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
     mocks.getFinanceCushion.mockResolvedValue({
       answers: createDefaultRunwayAnswers(
@@ -90,9 +90,8 @@ describe("FinanceCushionPage", () => {
 
     render(await FinanceCushionPage());
 
-    expect(screen.getByTestId("household-runway")).toHaveAttribute(
+    expect(screen.getByTestId("household-runway")).not.toHaveAttribute(
       "data-adjustments",
-      expect.stringContaining('"added_cash_cents":125000'),
     );
   });
 

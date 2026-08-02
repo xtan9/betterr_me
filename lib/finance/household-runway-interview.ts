@@ -1,5 +1,6 @@
 import {
   availableScenarios as calculateAvailableScenarios,
+  applyExpenseReduction,
   createDefaultRunwayAnswers,
   estimateMonthlyTakeHome,
   expenseCategoryTotals,
@@ -18,6 +19,7 @@ import {
   type QuickExpenses,
   type RecurringIncomeSource,
   type RunwayAssets,
+  type RunwayAdjustments,
   type RunwayCountry,
   type RunwayCurrency,
   type RunwayScenario,
@@ -98,6 +100,173 @@ export const HOUSEHOLD_RUNWAY_ASSET_KEYS = [
 export type HouseholdRunwayAssetKey =
   (typeof HOUSEHOLD_RUNWAY_ASSET_KEYS)[number];
 
+export const EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT: RunwayAdjustments = {
+  expense_reduction_cents: 0,
+  added_cash_cents: 0,
+  added_monthly_income_cents: 0,
+  expected_unconfirmed_funds_cents: 0,
+  usable_illiquid_investments_cents: 0,
+  usable_retirement_tax_deferred_cents: 0,
+  usable_retirement_tax_free_cents: 0,
+};
+
+export type HouseholdRunwayPlanAdjustmentField = keyof RunwayAdjustments;
+
+/** The committed baseline that a working Interview Draft must not mutate. */
+export interface HouseholdRunwayPlan {
+  revision: number;
+  inputs: HouseholdRunwayAnswers;
+}
+
+export type HouseholdRunwayInterviewOperationError =
+  | "authentication_required"
+  | "conflict"
+  | "invalid"
+  | "network"
+  | "stale_result"
+  | "storage_unavailable"
+  | "download_failed"
+  | "analytics_failed";
+
+export type HouseholdRunwayDraftSynchronizationOperation =
+  | { status: "idle" }
+  | { status: "dirty"; sourceRevision: number }
+  | {
+      status: "pending";
+      sourceRevision: number;
+      correlationId: string;
+    }
+  | {
+      status: "succeeded";
+      sourceRevision: number;
+      correlationId: string;
+    }
+  | {
+      status: "failed";
+      sourceRevision: number;
+      correlationId: string;
+      error: Extract<
+        HouseholdRunwayInterviewOperationError,
+        "stale_result" | "storage_unavailable"
+      >;
+    };
+
+export type HouseholdRunwayPlanPersistenceOperation =
+  | { status: "idle" }
+  | { status: "dirty"; sourceRevision: number }
+  | {
+      status: "pending";
+      sourceRevision: number;
+      correlationId: string;
+      expectedPlanRevision: number | null;
+    }
+  | {
+      status: "succeeded";
+      sourceRevision: number;
+      correlationId: string;
+      planRevision: number;
+    }
+  | {
+      status: "failed";
+      sourceRevision: number;
+      correlationId: string;
+      error: Extract<
+        HouseholdRunwayInterviewOperationError,
+        "authentication_required" | "conflict" | "invalid" | "network" | "stale_result"
+      >;
+    };
+
+export type HouseholdRunwayReportDownloadOperation =
+  | { status: "idle" }
+  | { status: "pending"; sourceRevision: number; correlationId: string }
+  | {
+      status: "succeeded";
+      sourceRevision: number;
+      correlationId: string;
+    }
+  | {
+      status: "failed";
+      sourceRevision: number;
+      correlationId: string;
+      error: "download_failed" | "stale_result";
+    };
+
+export type HouseholdRunwayAnalyticsOperation =
+  | { status: "idle" }
+  | { status: "pending"; sourceRevision: number; correlationId: string }
+  | {
+      status: "succeeded";
+      sourceRevision: number;
+      correlationId: string;
+    }
+  | {
+      status: "failed";
+      sourceRevision: number;
+      correlationId: string;
+      error: "analytics_failed" | "stale_result";
+    };
+
+export interface HouseholdRunwayInterviewOperations {
+  draftSynchronization: HouseholdRunwayDraftSynchronizationOperation;
+  planPersistence: HouseholdRunwayPlanPersistenceOperation;
+  reportDownload: HouseholdRunwayReportDownloadOperation;
+  analytics: HouseholdRunwayAnalyticsOperation;
+}
+
+export interface HouseholdRunwayInterviewCapabilities {
+  /** Durable Plan persistence is an injected capability, never auth state. */
+  planPersistence?: "available" | "unavailable";
+}
+
+function emptyPlanAdjustment(): RunwayAdjustments {
+  return { ...EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT };
+}
+
+function normalizePlanAdjustment(
+  input: Partial<RunwayAdjustments> | null | undefined,
+): RunwayAdjustments {
+  const result = emptyPlanAdjustment();
+  for (const field of Object.keys(result) as HouseholdRunwayPlanAdjustmentField[]) {
+    result[field] = normalizedCents(input?.[field]);
+  }
+  return result;
+}
+
+function hasPlanAdjustment(adjustment: RunwayAdjustments) {
+  return Object.values(adjustment).some((value) => value > 0);
+}
+
+function defaultInterviewOperations(): HouseholdRunwayInterviewOperations {
+  return {
+    draftSynchronization: { status: "idle" },
+    planPersistence: { status: "idle" },
+    reportDownload: { status: "idle" },
+    analytics: { status: "idle" },
+  };
+}
+
+function normalizeOperations(
+  input: Partial<HouseholdRunwayInterviewOperations> | null | undefined,
+): HouseholdRunwayInterviewOperations {
+  const defaults = defaultInterviewOperations();
+  return {
+    ...defaults,
+    ...input,
+    draftSynchronization:
+      input?.draftSynchronization ?? defaults.draftSynchronization,
+    planPersistence: input?.planPersistence ?? defaults.planPersistence,
+    reportDownload: input?.reportDownload ?? defaults.reportDownload,
+    analytics: input?.analytics ?? defaults.analytics,
+  };
+}
+
+function normalizeCommittedPlan(
+  input: HouseholdRunwayPlan | null | undefined,
+): HouseholdRunwayPlan | null {
+  if (!input || !Number.isInteger(input.revision) || !input.inputs) return null;
+  return { revision: Math.max(0, input.revision), inputs: input.inputs };
+}
+
 export interface HouseholdRunwayExpenseCategoryProgress {
   category: ExpenseCategory;
   mode: ExpenseCategoryMode | null;
@@ -154,7 +323,8 @@ export type HouseholdRunwayValidationIssueCode =
   | "expenses_interruption_required"
   | "draft_timestamp_required"
   | "plan_input_invalid"
-  | "assessment_required";
+  | "assessment_required"
+  | "plan_adjustment_pending";
 
 export interface HouseholdRunwayValidationIssue {
   code: HouseholdRunwayValidationIssueCode;
@@ -184,6 +354,8 @@ export interface HouseholdRunwayInterviewDraft {
   >;
   selectedScenario: RunwayScenario | null;
   availableScenarios: ScenarioOption[];
+  /** Provisional overlay; it is intentionally not part of Scenario selection. */
+  planAdjustment: RunwayAdjustments;
   pendingCurrencyChange: HouseholdRunwayPendingCurrencyChange | null;
   activeExpenseCategory: ExpenseCategory | null;
 }
@@ -362,6 +534,7 @@ export interface HouseholdRunwayReviewRenderModel {
   assessment: SuccessfulHouseholdRunwayAssessment | null;
   availableScenarios: readonly ScenarioOption[];
   selectedScenario: RunwayScenario | null;
+  planAdjustment: RunwayAdjustments;
   assessmentModelVersion: typeof RUNWAY_MODEL_VERSION | null;
   ready: boolean;
   availableStages: readonly HouseholdRunwayInterviewStage[];
@@ -379,6 +552,7 @@ export interface HouseholdRunwayGenericStageRenderModel {
   assessment: SuccessfulHouseholdRunwayAssessment | null;
   availableScenarios: readonly ScenarioOption[];
   selectedScenario: RunwayScenario | null;
+  planAdjustment: RunwayAdjustments;
   assessmentModelVersion: typeof RUNWAY_MODEL_VERSION | null;
 }
 
@@ -401,6 +575,10 @@ interface HouseholdRunwayInterviewStateBase {
   status: HouseholdRunwayInterviewStatus;
   stage: HouseholdRunwayInterviewStage | null;
   draft: HouseholdRunwayInterviewDraft;
+  /** The last explicitly committed Plan, if one exists. */
+  committedPlan: HouseholdRunwayPlan | null;
+  /** Draft synchronization, Plan persistence, download, and analytics are independent. */
+  operations: HouseholdRunwayInterviewOperations;
   validationIssue: HouseholdRunwayValidationIssue | null;
   /** Complete Plan inputs exist only after a successful review normalization. */
   planInputs: HouseholdRunwayAnswers | null;
@@ -454,6 +632,8 @@ export interface HouseholdRunwayInterviewSnapshot {
   status: HouseholdRunwayInterviewStatus;
   stage: HouseholdRunwayInterviewStage | null;
   draft: Partial<HouseholdRunwayInterviewDraft>;
+  committedPlan?: HouseholdRunwayPlan | null;
+  operations?: Partial<HouseholdRunwayInterviewOperations>;
   validationIssue: HouseholdRunwayValidationIssue | null;
 }
 
@@ -527,6 +707,13 @@ export type HouseholdRunwayInterviewCommandInput =
   | { type: "set_housing_tenure"; tenure: HousingTenure }
   | { type: "update_answers"; patch: Partial<HouseholdRunwayAnswers> }
   | { type: "select_scenario"; scenario: RunwayScenario }
+  | {
+      type: "set_plan_adjustment";
+      patch: Partial<RunwayAdjustments>;
+    }
+  | { type: "reset_plan_adjustment" }
+  | { type: "apply_plan_adjustment" }
+  | { type: "edit_completed_plan" }
   | { type: "set_active_expense_category"; category: ExpenseCategory | null }
   | { type: "complete_expense_category"; category: ExpenseCategory }
   | {
@@ -541,7 +728,71 @@ export type HouseholdRunwayInterviewCommandInput =
   | { type: "back" }
   | { type: "skip" }
   | { type: "exit" }
-  | { type: "discard_draft" };
+  | { type: "discard_draft" }
+  | { type: "synchronize_draft" }
+  | {
+      type: "draft_synchronization_succeeded";
+      sourceRevision: number;
+      correlationId: string;
+    }
+  | {
+      type: "draft_synchronization_failed";
+      sourceRevision: number;
+      correlationId: string;
+      error: "storage_unavailable" | "stale_result";
+    }
+  | {
+      type: "save_plan" | "request_plan_persistence";
+      idempotencyKey?: string;
+    }
+  | {
+      type: "plan_persistence_succeeded";
+      sourceRevision: number;
+      correlationId: string;
+      planRevision?: number;
+    }
+  | {
+      type: "plan_persistence_failed";
+      sourceRevision: number;
+      correlationId: string;
+      error: Extract<
+        HouseholdRunwayInterviewOperationError,
+        "authentication_required" | "conflict" | "invalid" | "network" | "stale_result"
+      >;
+    }
+  | { type: "request_report_download" }
+  | {
+      type: "report_download_succeeded";
+      sourceRevision: number;
+      correlationId: string;
+    }
+  | {
+      type: "report_download_failed";
+      sourceRevision: number;
+      correlationId: string;
+      error: "download_failed" | "stale_result";
+    }
+  | {
+      type: "request_analytics";
+      eventName:
+        | "landing_view"
+        | "started"
+        | "skipped"
+        | "completed"
+        | "result_interaction"
+        | "registration_clicked";
+      stage?: string;
+    }
+  | {
+      type: "analytics_succeeded";
+      sourceRevision: number;
+      correlationId: string;
+    }
+  | {
+      type: "analytics_failed";
+      sourceRevision: number;
+      correlationId: string;
+    };
 
 export type HouseholdRunwayInterviewCommand =
   HouseholdRunwayInterviewCommandMetadata & HouseholdRunwayInterviewCommandInput;
@@ -608,6 +859,35 @@ export type HouseholdRunwayInterviewEvent =
       previousScenario?: RunwayScenario | null;
     })
   | (HouseholdRunwayInterviewCommandMetadata & {
+      type: "plan_adjustment_updated";
+      fields: readonly HouseholdRunwayPlanAdjustmentField[];
+    })
+  | (HouseholdRunwayInterviewCommandMetadata & {
+      type: "plan_adjustment_reset" | "plan_adjustment_applied";
+    })
+  | (HouseholdRunwayInterviewCommandMetadata & {
+      type: "completed_plan_edit_started";
+      planRevision: number | null;
+    })
+  | (HouseholdRunwayInterviewCommandMetadata & {
+      type:
+        | "draft_synchronization_requested"
+        | "draft_synchronized"
+        | "draft_synchronization_failed"
+        | "plan_persistence_requested"
+        | "plan_persisted"
+        | "plan_persistence_failed"
+        | "report_download_requested"
+        | "report_downloaded"
+        | "report_download_failed"
+        | "analytics_requested"
+        | "analytics_recorded"
+        | "analytics_failed";
+      sourceRevision: number;
+      correlationId: string;
+      error?: HouseholdRunwayInterviewOperationError;
+    })
+  | (HouseholdRunwayInterviewCommandMetadata & {
       type: "expense_category_opened" | "expense_category_completed";
       category: ExpenseCategory;
     })
@@ -625,7 +905,9 @@ export type HouseholdRunwayInterviewEvent =
         | "no_pending_currency_change"
         | "partner_not_applicable"
         | "scenario_unavailable"
-        | "expense_category_not_open";
+        | "expense_category_not_open"
+        | "operation_not_pending"
+        | "plan_adjustment_unavailable";
     });
 
 export type HouseholdRunwayInterviewEffect =
@@ -634,7 +916,41 @@ export type HouseholdRunwayInterviewEffect =
       action: "push" | "replace" | "back";
       destination: "landing" | "interview";
     }
-  | { type: "focus"; stage: HouseholdRunwayInterviewStage };
+  | { type: "focus"; stage: HouseholdRunwayInterviewStage }
+  | {
+      type: "draft_sync_requested";
+      draft: HouseholdRunwayInterviewDraft;
+      sourceRevision: number;
+      correlationId: string;
+    }
+  | {
+      type: "plan_persistence_requested";
+      inputs: HouseholdRunwayAnswers;
+      assessment: SuccessfulHouseholdRunwayAssessment;
+      sourceRevision: number;
+      correlationId: string;
+      idempotencyKey: string;
+      expectedPlanRevision: number | null;
+    }
+  | {
+      type: "report_download_requested";
+      assessment: SuccessfulHouseholdRunwayAssessment;
+      sourceRevision: number;
+      correlationId: string;
+    }
+  | {
+      type: "analytics_requested";
+      eventName:
+        | "landing_view"
+        | "started"
+        | "skipped"
+        | "completed"
+        | "result_interaction"
+        | "registration_clicked";
+      stage?: string;
+      sourceRevision: number;
+      correlationId: string;
+    };
 
 export interface HouseholdRunwayInterviewTransition {
   state: HouseholdRunwayInterviewState;
@@ -1400,6 +1716,7 @@ function normalizeDraft(
     validationIssues: { ...(input?.validationIssues ?? {}) },
     selectedScenario,
     availableScenarios: scenarios,
+    planAdjustment: normalizePlanAdjustment(input?.planAdjustment),
     pendingCurrencyChange: input?.pendingCurrencyChange
       ? {
           currency: input.pendingCurrencyChange.currency,
@@ -1420,6 +1737,8 @@ function snapshotOf(state: HouseholdRunwayInterviewState): HouseholdRunwayInterv
     status: state.status,
     stage: state.stage,
     draft: state.draft,
+    committedPlan: state.committedPlan,
+    operations: state.operations,
     validationIssue: state.validationIssue,
   };
 }
@@ -1455,6 +1774,7 @@ function reviewProjectionForDraft(
 
   const assessment = assessHouseholdRunway({
     answers: normalized.planInputs,
+    adjustments: draft.planAdjustment,
     startDate: new Date(normalized.planInputs.updated_at),
   });
   if (!assessment.success) {
@@ -1681,6 +2001,7 @@ function renderFor(
       assessment: reviewProjection?.assessment ?? null,
       availableScenarios: draft.availableScenarios,
       selectedScenario: draft.selectedScenario,
+      planAdjustment: draft.planAdjustment,
       assessmentModelVersion: reviewProjection?.assessment?.modelVersion ?? null,
       ready: blockingIssue === null && reviewProjection?.assessment != null,
       availableStages,
@@ -1699,6 +2020,7 @@ function renderFor(
     assessment: reviewProjection?.assessment ?? null,
     availableScenarios: draft.availableScenarios,
     selectedScenario: draft.selectedScenario,
+    planAdjustment: draft.planAdjustment,
     assessmentModelVersion: reviewProjection?.assessment?.modelVersion ?? null,
   };
 }
@@ -1707,6 +2029,8 @@ function stateFrom(
   snapshot: HouseholdRunwayInterviewSnapshot,
 ): HouseholdRunwayInterviewState {
   const draft = normalizeDraft(snapshot.draft);
+  const committedPlan = normalizeCommittedPlan(snapshot.committedPlan);
+  const operations = normalizeOperations(snapshot.operations);
   const status = snapshot.status;
   const stage =
     status === "not_started"
@@ -1741,6 +2065,8 @@ function stateFrom(
       status,
       stage: null,
       draft,
+      committedPlan,
+      operations,
       validationIssue,
       ...derived,
       renderModel: renderModel as HouseholdRunwayLandingRenderModel,
@@ -1753,6 +2079,8 @@ function stateFrom(
       status,
       stage: "review",
       draft,
+      committedPlan,
+      operations,
       validationIssue,
       ...derived,
       renderModel: renderModel as HouseholdRunwayReviewRenderModel,
@@ -1765,6 +2093,8 @@ function stateFrom(
       status,
       stage: "result",
       draft,
+      committedPlan,
+      operations,
       validationIssue,
       ...derived,
       renderModel: renderModel as HouseholdRunwayGenericStageRenderModel,
@@ -1776,6 +2106,8 @@ function stateFrom(
     status: "collecting",
     stage: stage as Exclude<HouseholdRunwayInterviewStage, "result">,
     draft,
+    committedPlan,
+    operations,
     validationIssue,
     ...derived,
     renderModel: renderModel as Exclude<
@@ -1795,7 +2127,29 @@ function transition(
   events: readonly HouseholdRunwayInterviewEvent[],
   effects: readonly HouseholdRunwayInterviewEffect[],
 ): HouseholdRunwayInterviewTransition {
-  const nextState = stateFrom(next);
+  const nextDraftRevision = next.draft.revision ?? state.draft.revision;
+  const suppliedOperations = next.operations
+    ? normalizeOperations(next.operations)
+    : { ...state.operations };
+  const operations =
+    nextDraftRevision !== state.draft.revision &&
+    next.operations?.draftSynchronization === undefined
+      ? {
+          ...suppliedOperations,
+          draftSynchronization: {
+            status: "dirty" as const,
+            sourceRevision: nextDraftRevision,
+          },
+        }
+      : suppliedOperations;
+  const nextState = stateFrom({
+    ...next,
+    committedPlan:
+      next.committedPlan === undefined
+        ? state.committedPlan
+        : next.committedPlan,
+    operations,
+  });
   return {
     state: nextState,
     nextState,
@@ -1883,6 +2237,16 @@ function startState(
             : "collecting",
       stage,
       draft,
+      operations: {
+        ...state.operations,
+        draftSynchronization: {
+          status: "dirty",
+          sourceRevision: draft.revision,
+        },
+        planPersistence: restarted
+          ? { status: "idle" }
+          : state.operations.planPersistence,
+      },
       validationIssue: null,
     },
     [startEvent],
@@ -1984,6 +2348,17 @@ function updateDraftAnswers(
       status: nextStatus,
       stage: nextStage,
       draft,
+      operations: {
+        ...state.operations,
+        draftSynchronization: {
+          status: "dirty",
+          sourceRevision: draft.revision,
+        },
+        planPersistence: {
+          status: "dirty",
+          sourceRevision: draft.revision,
+        },
+      },
       validationIssue: null,
     },
     events,
@@ -2398,6 +2773,191 @@ function setReduction(
   );
 }
 
+function planAdjustmentFields(
+  patch: Partial<RunwayAdjustments>,
+): HouseholdRunwayPlanAdjustmentField[] {
+  return (Object.keys(EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT) as HouseholdRunwayPlanAdjustmentField[]).filter(
+    (field) => patch[field] !== undefined,
+  );
+}
+
+function applyPlanAdjustmentToAnswers(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<
+    HouseholdRunwayInterviewCommand,
+    { type: "apply_plan_adjustment" }
+  >,
+): HouseholdRunwayInterviewAnswers | null {
+  const planInputs = state.planInputs;
+  if (!planInputs) return null;
+
+  let next: HouseholdRunwayAnswers = planInputs;
+  const adjustment = state.draft.planAdjustment;
+  if (adjustment.expense_reduction_cents > 0) {
+    next = applyExpenseReduction(next, adjustment.expense_reduction_cents);
+  }
+  if (adjustment.added_cash_cents > 0) {
+    next = {
+      ...next,
+      available_cash: {
+        cents: next.available_cash.cents + adjustment.added_cash_cents,
+        confidence: "confirmed",
+      },
+    };
+  }
+  if (adjustment.added_monthly_income_cents > 0) {
+    next = {
+      ...next,
+      other_income_sources: [
+        ...next.other_income_sources,
+        {
+          id: `plan-adjustment-${command.commandId}`.slice(0, 100),
+          type: "other",
+          label: "Applied Plan Adjustment",
+          monthly_cents: adjustment.added_monthly_income_cents,
+          confidence: "confirmed",
+        },
+      ],
+    };
+  }
+  if (
+    adjustment.usable_illiquid_investments_cents > 0 ||
+    adjustment.usable_retirement_tax_deferred_cents > 0 ||
+    adjustment.usable_retirement_tax_free_cents > 0
+  ) {
+    next = {
+      ...next,
+      extreme_access: {
+        illiquid_investments_cents: Math.min(
+          next.assets.illiquid_investments.cents,
+          adjustment.usable_illiquid_investments_cents,
+        ),
+        retirement_tax_deferred_cents: Math.min(
+          next.assets.retirement_tax_deferred.cents,
+          adjustment.usable_retirement_tax_deferred_cents,
+        ),
+        retirement_tax_free_cents: Math.min(
+          next.assets.retirement_tax_free.cents,
+          adjustment.usable_retirement_tax_free_cents,
+        ),
+      },
+    };
+  }
+
+  // Expected unconfirmed funds have no committed Plan input until their
+  // amount and arrival are confirmed. Applying a Plan Adjustment therefore
+  // clears that preview without turning it into a hidden durable fact.
+  return normalizeAnswers(
+    { ...next, updated_at: command.occurredAt },
+    state.draft.location,
+  );
+}
+
+function setPlanAdjustment(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<
+    HouseholdRunwayInterviewCommand,
+    { type: "set_plan_adjustment" }
+  >,
+): HouseholdRunwayInterviewTransition {
+  if (state.status !== "reviewing" && state.status !== "completed") {
+    return ignored(state, command, "plan_adjustment_unavailable");
+  }
+  const fields = planAdjustmentFields(command.patch);
+  const draft = normalizeDraft({
+    ...state.draft,
+    revision: state.draft.revision + 1,
+    planAdjustment: normalizePlanAdjustment({
+      ...state.draft.planAdjustment,
+      ...command.patch,
+    }),
+  });
+  return transition(
+    state,
+    {
+      version: HOUSEHOLD_RUNWAY_INTERVIEW_VERSION,
+      status: state.status,
+      stage: state.stage,
+      draft,
+      validationIssue: null,
+    },
+    [event(command, "plan_adjustment_updated", { fields })],
+    [],
+  );
+}
+
+function resetPlanAdjustment(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<
+    HouseholdRunwayInterviewCommand,
+    { type: "reset_plan_adjustment" }
+  >,
+): HouseholdRunwayInterviewTransition {
+  if (state.status !== "reviewing" && state.status !== "completed") {
+    return ignored(state, command, "plan_adjustment_unavailable");
+  }
+  const draft = normalizeDraft({
+    ...state.draft,
+    revision: state.draft.revision + 1,
+    planAdjustment: emptyPlanAdjustment(),
+  });
+  return transition(
+    state,
+    {
+      version: HOUSEHOLD_RUNWAY_INTERVIEW_VERSION,
+      status: state.status,
+      stage: state.stage,
+      draft,
+      validationIssue: null,
+    },
+    [event(command, "plan_adjustment_reset", {})],
+    [],
+  );
+}
+
+function applyPlanAdjustment(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<
+    HouseholdRunwayInterviewCommand,
+    { type: "apply_plan_adjustment" }
+  >,
+): HouseholdRunwayInterviewTransition {
+  if (state.status !== "reviewing" && state.status !== "completed") {
+    return ignored(state, command, "plan_adjustment_unavailable");
+  }
+  const answers = applyPlanAdjustmentToAnswers(state, command);
+  if (!answers) return ignored(state, command, "plan_adjustment_unavailable");
+  const draft = normalizeDraft({
+    ...state.draft,
+    revision: state.draft.revision + 1,
+    answers,
+    planAdjustment: emptyPlanAdjustment(),
+  });
+  return transition(
+    state,
+    {
+      version: HOUSEHOLD_RUNWAY_INTERVIEW_VERSION,
+      status: state.status,
+      stage: state.stage,
+      draft,
+      operations: {
+        ...state.operations,
+        draftSynchronization: {
+          status: "dirty",
+          sourceRevision: draft.revision,
+        },
+        planPersistence: {
+          status: "dirty",
+          sourceRevision: draft.revision,
+        },
+      },
+      validationIssue: null,
+    },
+    [event(command, "plan_adjustment_applied", {})],
+    [],
+  );
+}
+
 function repairCurrentStage(
   stage: HouseholdRunwayInterviewStage | null,
   answers: HouseholdRunwayInterviewAnswers,
@@ -2717,6 +3277,48 @@ function continueInterview(
   );
 }
 
+function beginCompletedPlanEdit(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<
+    HouseholdRunwayInterviewCommand,
+    { type: "edit_completed_plan" | "back" | "exit" }
+  >,
+): HouseholdRunwayInterviewTransition {
+  if (state.status !== "completed") return ignored(state, command, "invalid_stage");
+  const draft = normalizeDraft({
+    ...state.draft,
+    revision: state.draft.revision + 1,
+    planAdjustment: emptyPlanAdjustment(),
+  });
+  return transition(
+    state,
+    {
+      version: HOUSEHOLD_RUNWAY_INTERVIEW_VERSION,
+      status: "reviewing",
+      stage: "review",
+      draft,
+      operations: {
+        ...state.operations,
+        draftSynchronization: {
+          status: "dirty",
+          sourceRevision: draft.revision,
+        },
+        planPersistence: {
+          status: "dirty",
+          sourceRevision: draft.revision,
+        },
+      },
+      validationIssue: null,
+    },
+    [
+      event(command, "completed_plan_edit_started", {
+        planRevision: state.committedPlan?.revision ?? null,
+      }),
+    ],
+    [{ type: "focus", stage: "review" }],
+  );
+}
+
 function backInterview(
   state: HouseholdRunwayInterviewState,
   command: Extract<HouseholdRunwayInterviewCommand, { type: "back" | "exit" }>,
@@ -2736,18 +3338,7 @@ function backInterview(
     );
   }
   if (state.status === "completed") {
-    return transition(
-      state,
-      {
-        version: HOUSEHOLD_RUNWAY_INTERVIEW_VERSION,
-        status: "reviewing",
-        stage: "review",
-        draft: state.draft,
-        validationIssue: null,
-      },
-      [],
-      [{ type: "focus", stage: "review" }],
-    );
+    return beginCompletedPlanEdit(state, command);
   }
   const previous = state.stage
     ? firstApplicableStageBefore(state.stage, state.draft.answers)
@@ -2770,13 +3361,47 @@ function backInterview(
   );
 }
 
-export function createHouseholdRunwayInterview(): HouseholdRunwayInterviewState {
-  const draft = normalizeDraft(null);
+export interface HouseholdRunwayInterviewInitialization {
+  committedPlan?: HouseholdRunwayPlan | null;
+  draft?: Partial<HouseholdRunwayInterviewDraft> | null;
+  status?: HouseholdRunwayInterviewStatus;
+  stage?: HouseholdRunwayInterviewStage | null;
+}
+
+export function createHouseholdRunwayInterview(
+  initial: HouseholdRunwayPlan | HouseholdRunwayInterviewInitialization | null = null,
+): HouseholdRunwayInterviewState {
+  const options: HouseholdRunwayInterviewInitialization =
+    initial && "inputs" in initial
+      ? { committedPlan: initial }
+      : initial ?? {};
+  const committedPlan = normalizeCommittedPlan(options.committedPlan);
+  const draft = normalizeDraft(
+    options.draft ??
+      (committedPlan
+        ? {
+            answers: committedPlan.inputs,
+            location: {
+              country: committedPlan.inputs.country,
+              region: committedPlan.inputs.region,
+              currency: committedPlan.inputs.currency,
+              proposedCurrency: proposedCurrencyFor(committedPlan.inputs.country),
+              currencySelection: "explicit",
+            },
+          }
+        : null),
+  );
+  const status = options.status ?? (committedPlan ? "completed" : "not_started");
+  const stage =
+    options.stage ??
+    (status === "completed" ? "result" : status === "not_started" ? null : "location");
   return stateFrom({
     version: HOUSEHOLD_RUNWAY_INTERVIEW_VERSION,
-    status: "not_started",
-    stage: null,
+    status,
+    stage,
     draft,
+    committedPlan,
+    operations: defaultInterviewOperations(),
     validationIssue: null,
   });
 }
@@ -2794,9 +3419,476 @@ export function restoreHouseholdRunwayInterview(
   );
 }
 
+function requestDraftSynchronization(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<
+    HouseholdRunwayInterviewCommand,
+    { type: "synchronize_draft" }
+  >,
+): HouseholdRunwayInterviewTransition {
+  const sourceRevision = state.draft.revision;
+  const correlationId = command.commandId;
+  return transition(
+    state,
+    {
+      ...snapshotOf(state),
+      operations: {
+        ...state.operations,
+        draftSynchronization: {
+          status: "pending",
+          sourceRevision,
+          correlationId,
+        },
+      },
+    },
+    [
+      event(command, "draft_synchronization_requested", {
+        sourceRevision,
+        correlationId,
+      }),
+    ],
+    [
+      {
+        type: "draft_sync_requested",
+        draft: state.draft,
+        sourceRevision,
+        correlationId,
+      },
+    ],
+  );
+}
+
+function completeDraftSynchronization(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<
+    HouseholdRunwayInterviewCommand,
+    {
+      type: "draft_synchronization_succeeded" | "draft_synchronization_failed";
+    }
+  >,
+): HouseholdRunwayInterviewTransition {
+  const operation = state.operations.draftSynchronization;
+  if (
+    operation.status !== "pending" ||
+    operation.sourceRevision !== command.sourceRevision ||
+    operation.correlationId !== command.correlationId
+  ) {
+    return ignored(state, command, "operation_not_pending");
+  }
+  const succeeded = command.type === "draft_synchronization_succeeded";
+  return transition(
+    state,
+    {
+      ...snapshotOf(state),
+      operations: {
+        ...state.operations,
+        draftSynchronization: succeeded
+          ? {
+              status: "succeeded",
+              sourceRevision: command.sourceRevision,
+              correlationId: command.correlationId,
+            }
+          : {
+              status: "failed",
+              sourceRevision: command.sourceRevision,
+              correlationId: command.correlationId,
+              error: command.error,
+            },
+      },
+    },
+    [
+      event(
+        command,
+        succeeded ? "draft_synchronized" : "draft_synchronization_failed",
+        {
+          sourceRevision: command.sourceRevision,
+          correlationId: command.correlationId,
+          ...(!succeeded ? { error: command.error } : {}),
+        },
+      ),
+    ],
+    [],
+  );
+}
+
+function requestPlanPersistence(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<
+    HouseholdRunwayInterviewCommand,
+    { type: "save_plan" | "request_plan_persistence" }
+  >,
+  capabilities: HouseholdRunwayInterviewCapabilities,
+): HouseholdRunwayInterviewTransition {
+  if (
+    (state.status !== "reviewing" && state.status !== "completed") ||
+    !state.planInputs ||
+    !state.assessment
+  ) {
+    return ignored(state, command, "invalid_stage");
+  }
+  if (hasPlanAdjustment(state.draft.planAdjustment)) {
+    const issue: HouseholdRunwayValidationIssue = {
+      code: "plan_adjustment_pending",
+      stage: "result",
+    };
+    return transition(
+      state,
+      {
+        ...snapshotOf(state),
+        validationIssue: issue,
+      },
+      [event(command, "validation_blocked", { stage: "result", issue })],
+      [],
+    );
+  }
+
+  const sourceRevision = state.draft.revision;
+  const correlationId = command.commandId;
+  const expectedPlanRevision = state.committedPlan?.revision ?? null;
+  if (capabilities.planPersistence !== "available") {
+    return transition(
+      state,
+      {
+        ...snapshotOf(state),
+        operations: {
+          ...state.operations,
+          planPersistence: {
+            status: "failed",
+            sourceRevision,
+            correlationId,
+            error: "authentication_required",
+          },
+        },
+      },
+      [
+        event(command, "plan_persistence_failed", {
+          sourceRevision,
+          correlationId,
+          error: "authentication_required",
+        }),
+      ],
+      [],
+    );
+  }
+
+  const idempotencyKey = command.idempotencyKey ?? command.commandId;
+  return transition(
+    state,
+    {
+      ...snapshotOf(state),
+      operations: {
+        ...state.operations,
+        planPersistence: {
+          status: "pending",
+          sourceRevision,
+          correlationId,
+          expectedPlanRevision,
+        },
+      },
+    },
+    [
+      event(command, "plan_persistence_requested", {
+        sourceRevision,
+        correlationId,
+      }),
+    ],
+    [
+      {
+        type: "plan_persistence_requested",
+        inputs: state.planInputs,
+        assessment: state.assessment,
+        sourceRevision,
+        correlationId,
+        idempotencyKey,
+        expectedPlanRevision,
+      },
+    ],
+  );
+}
+
+function completePlanPersistence(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<
+    HouseholdRunwayInterviewCommand,
+    { type: "plan_persistence_succeeded" | "plan_persistence_failed" }
+  >,
+): HouseholdRunwayInterviewTransition {
+  const operation = state.operations.planPersistence;
+  if (
+    operation.status !== "pending" ||
+    operation.sourceRevision !== command.sourceRevision ||
+    operation.correlationId !== command.correlationId
+  ) {
+    return ignored(state, command, "operation_not_pending");
+  }
+  if (state.draft.revision !== command.sourceRevision) {
+    return transition(
+      state,
+      {
+        ...snapshotOf(state),
+        operations: {
+          ...state.operations,
+          planPersistence: {
+            status: "failed",
+            sourceRevision: command.sourceRevision,
+            correlationId: command.correlationId,
+            error: "stale_result",
+          },
+        },
+      },
+      [
+        event(command, "plan_persistence_failed", {
+          sourceRevision: command.sourceRevision,
+          correlationId: command.correlationId,
+          error: "stale_result",
+        }),
+      ],
+      [],
+    );
+  }
+  if (command.type === "plan_persistence_failed") {
+    return transition(
+      state,
+      {
+        ...snapshotOf(state),
+        operations: {
+          ...state.operations,
+          planPersistence: {
+            status: "failed",
+            sourceRevision: command.sourceRevision,
+            correlationId: command.correlationId,
+            error: command.error,
+          },
+        },
+      },
+      [
+        event(command, "plan_persistence_failed", {
+          sourceRevision: command.sourceRevision,
+          correlationId: command.correlationId,
+          error: command.error,
+        }),
+      ],
+      [],
+    );
+  }
+
+  const planRevision =
+    command.planRevision ?? (state.committedPlan?.revision ?? 0) + 1;
+  const committedPlan: HouseholdRunwayPlan = {
+    revision: planRevision,
+    inputs: state.planInputs ?? state.draft.answers as HouseholdRunwayAnswers,
+  };
+  const draft = normalizeDraft({
+    ...state.draft,
+    answers: committedPlan.inputs,
+    planAdjustment: emptyPlanAdjustment(),
+  });
+  return transition(
+    state,
+    {
+      version: HOUSEHOLD_RUNWAY_INTERVIEW_VERSION,
+      status: "completed",
+      stage: "result",
+      draft,
+      committedPlan,
+      operations: {
+        ...state.operations,
+        // Explicit Plan persistence consumes the working Draft. Keep the
+        // independent draft-sync operation from borrowing the Plan command's
+        // correlation ID; there is no remaining local Draft to synchronize.
+        draftSynchronization: { status: "idle" },
+        planPersistence: {
+          status: "succeeded",
+          sourceRevision: command.sourceRevision,
+          correlationId: command.correlationId,
+          planRevision,
+        },
+      },
+      validationIssue: null,
+    },
+    [
+      event(command, "plan_persisted", {
+        sourceRevision: command.sourceRevision,
+        correlationId: command.correlationId,
+      }),
+    ],
+    [{ type: "focus", stage: "result" }],
+  );
+}
+
+function requestReportDownload(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<
+    HouseholdRunwayInterviewCommand,
+    { type: "request_report_download" }
+  >,
+): HouseholdRunwayInterviewTransition {
+  if (!state.assessment || state.stage !== "result") {
+    return ignored(state, command, "invalid_stage");
+  }
+  const sourceRevision = state.draft.revision;
+  const correlationId = command.commandId;
+  return transition(
+    state,
+    {
+      ...snapshotOf(state),
+      operations: {
+        ...state.operations,
+        reportDownload: { status: "pending", sourceRevision, correlationId },
+      },
+    },
+    [
+      event(command, "report_download_requested", {
+        sourceRevision,
+        correlationId,
+      }),
+    ],
+    [
+      {
+        type: "report_download_requested",
+        assessment: state.assessment,
+        sourceRevision,
+        correlationId,
+      },
+    ],
+  );
+}
+
+function completeReportDownload(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<
+    HouseholdRunwayInterviewCommand,
+    { type: "report_download_succeeded" | "report_download_failed" }
+  >,
+): HouseholdRunwayInterviewTransition {
+  const operation = state.operations.reportDownload;
+  if (
+    operation.status !== "pending" ||
+    operation.sourceRevision !== command.sourceRevision ||
+    operation.correlationId !== command.correlationId
+  ) {
+    return ignored(state, command, "operation_not_pending");
+  }
+  const succeeded = command.type === "report_download_succeeded";
+  const stale = state.draft.revision !== command.sourceRevision;
+  const error = stale ? "stale_result" : succeeded ? null : command.error;
+  return transition(
+    state,
+    {
+      ...snapshotOf(state),
+      operations: {
+        ...state.operations,
+        reportDownload:
+          error === null
+            ? {
+                status: "succeeded",
+                sourceRevision: command.sourceRevision,
+                correlationId: command.correlationId,
+              }
+            : {
+                status: "failed",
+                sourceRevision: command.sourceRevision,
+                correlationId: command.correlationId,
+                error,
+              },
+      },
+    },
+    [
+      event(
+        command,
+        error === null ? "report_downloaded" : "report_download_failed",
+        {
+          sourceRevision: command.sourceRevision,
+          correlationId: command.correlationId,
+          ...(error ? { error } : {}),
+        },
+      ),
+    ],
+    [],
+  );
+}
+
+function requestAnalytics(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<HouseholdRunwayInterviewCommand, { type: "request_analytics" }>,
+): HouseholdRunwayInterviewTransition {
+  const sourceRevision = state.draft.revision;
+  const correlationId = command.commandId;
+  return transition(
+    state,
+    {
+      ...snapshotOf(state),
+      operations: {
+        ...state.operations,
+        analytics: { status: "pending", sourceRevision, correlationId },
+      },
+    },
+    [
+      event(command, "analytics_requested", { sourceRevision, correlationId }),
+    ],
+    [
+      {
+        type: "analytics_requested",
+        eventName: command.eventName,
+        stage: command.stage,
+        sourceRevision,
+        correlationId,
+      },
+    ],
+  );
+}
+
+function completeAnalytics(
+  state: HouseholdRunwayInterviewState,
+  command: Extract<
+    HouseholdRunwayInterviewCommand,
+    { type: "analytics_succeeded" | "analytics_failed" }
+  >,
+): HouseholdRunwayInterviewTransition {
+  const operation = state.operations.analytics;
+  if (
+    operation.status !== "pending" ||
+    operation.sourceRevision !== command.sourceRevision ||
+    operation.correlationId !== command.correlationId
+  ) {
+    return ignored(state, command, "operation_not_pending");
+  }
+  const succeeded = command.type === "analytics_succeeded";
+  return transition(
+    state,
+    {
+      ...snapshotOf(state),
+      operations: {
+        ...state.operations,
+        analytics: succeeded
+          ? {
+              status: "succeeded",
+              sourceRevision: command.sourceRevision,
+              correlationId: command.correlationId,
+            }
+          : {
+              status: "failed",
+              sourceRevision: command.sourceRevision,
+              correlationId: command.correlationId,
+              error: "analytics_failed",
+            },
+      },
+    },
+    [
+      event(command, succeeded ? "analytics_recorded" : "analytics_failed", {
+        sourceRevision: command.sourceRevision,
+        correlationId: command.correlationId,
+        ...(succeeded ? {} : { error: "analytics_failed" }),
+      }),
+    ],
+    [],
+  );
+}
+
 export function dispatchHouseholdRunwayInterview(
   state: HouseholdRunwayInterviewState,
   command: HouseholdRunwayInterviewCommand,
+  capabilities: HouseholdRunwayInterviewCapabilities = {},
 ): HouseholdRunwayInterviewTransition {
   if (command.type === "start") {
     return state.status === "not_started"
@@ -2810,6 +3902,41 @@ export function dispatchHouseholdRunwayInterview(
       : backInterview(state, command);
   }
   if (command.type === "discard_draft") {
+    const committedPlan = state.committedPlan;
+    if (committedPlan) {
+      const draft = normalizeDraft({
+        answers: committedPlan.inputs,
+        location: {
+          country: committedPlan.inputs.country,
+          region: committedPlan.inputs.region,
+          currency: committedPlan.inputs.currency,
+          proposedCurrency: proposedCurrencyFor(committedPlan.inputs.country),
+          currencySelection: "explicit",
+        },
+      });
+      return transition(
+        state,
+        {
+          version: HOUSEHOLD_RUNWAY_INTERVIEW_VERSION,
+          status: "completed",
+          stage: "result",
+          draft,
+          committedPlan,
+          operations: {
+            ...state.operations,
+            draftSynchronization: { status: "idle" },
+            planPersistence: { status: "idle" },
+            reportDownload: { status: "idle" },
+          },
+          validationIssue: null,
+        },
+        [event(command, "draft_discarded", {})],
+        [
+          { type: "history", action: "replace", destination: "interview" },
+          { type: "focus", stage: "result" },
+        ],
+      );
+    }
     return transition(
       state,
       {
@@ -2817,11 +3944,63 @@ export function dispatchHouseholdRunwayInterview(
         status: "not_started",
         stage: null,
         draft: normalizeDraft(null),
+        committedPlan: null,
+        operations: {
+          ...state.operations,
+          draftSynchronization: { status: "idle" },
+          planPersistence: { status: "idle" },
+          reportDownload: { status: "idle" },
+        },
         validationIssue: null,
       },
       [event(command, "draft_discarded", {})],
       [{ type: "history", action: "replace", destination: "landing" }],
     );
+  }
+  if (command.type === "edit_completed_plan") {
+    return beginCompletedPlanEdit(state, command);
+  }
+  if (command.type === "set_plan_adjustment") {
+    return setPlanAdjustment(state, command);
+  }
+  if (command.type === "reset_plan_adjustment") {
+    return resetPlanAdjustment(state, command);
+  }
+  if (command.type === "apply_plan_adjustment") {
+    return applyPlanAdjustment(state, command);
+  }
+  if (command.type === "synchronize_draft") {
+    return requestDraftSynchronization(state, command);
+  }
+  if (
+    command.type === "draft_synchronization_succeeded" ||
+    command.type === "draft_synchronization_failed"
+  ) {
+    return completeDraftSynchronization(state, command);
+  }
+  if (command.type === "save_plan" || command.type === "request_plan_persistence") {
+    return requestPlanPersistence(state, command, capabilities);
+  }
+  if (
+    command.type === "plan_persistence_succeeded" ||
+    command.type === "plan_persistence_failed"
+  ) {
+    return completePlanPersistence(state, command);
+  }
+  if (command.type === "request_report_download") {
+    return requestReportDownload(state, command);
+  }
+  if (
+    command.type === "report_download_succeeded" ||
+    command.type === "report_download_failed"
+  ) {
+    return completeReportDownload(state, command);
+  }
+  if (command.type === "request_analytics") {
+    return requestAnalytics(state, command);
+  }
+  if (command.type === "analytics_succeeded" || command.type === "analytics_failed") {
+    return completeAnalytics(state, command);
   }
   if (command.type === "back") return backInterview(state, command);
   if (command.type === "continue") return continueInterview(state, command);

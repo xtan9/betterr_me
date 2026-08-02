@@ -84,6 +84,11 @@ test("completes the quick interview, edits take-home pay, and previews What-if w
   await expect(page.getByText("+1.0 months", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Reset" }).click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("5.0 months");
+  await page.getByRole("textbox", { name: "Add accessible cash" }).fill("6000");
+  await page.getByRole("button", { name: "Apply" }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("6.0 months");
+  await page.getByRole("button", { name: "Reset" }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("6.0 months");
   await expect(page.getByRole("link", { name: "Create account to save" })).toHaveAttribute("href", "/auth/sign-up?next=/finance/cushion");
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -98,7 +103,24 @@ test("completes the quick interview, edits take-home pay, and previews What-if w
   await page.goBack();
   await expect(page.getByTestId("runway-hero-cta")).toContainText("View my result");
   await page.getByTestId("runway-hero-cta").click();
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("5.0 months");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("6.0 months");
+  await page.getByRole("button", { name: "Review inputs", exact: true }).click();
+  await expect(page.locator('[data-runway-progress="reviewing"]')).toBeVisible();
+  await expect(page.locator('[data-interview-stage="review"][data-interview-render="review"]')).toBeVisible();
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(page.locator('[data-interview-stage="reductions"][data-interview-render="reductions"]')).toBeVisible();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.locator('[data-interview-stage="review"][data-interview-render="review"]')).toBeVisible();
+  await page.getByRole("button", { name: "Show my runway", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("6.0 months");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Start a new check-up" }).click();
+  await expect(page.getByRole("heading", { name: "Where does your household live?" })).toBeVisible();
+  page.once("dialog", (dialog) => {
+    void dialog.accept();
+  });
+  await page.getByRole("button", { name: "Clear" }).click();
+  await expect(page.getByRole("heading", { name: "How long could your household keep going?" })).toBeVisible();
 });
 
 test("normalizes a shared draft into a reviewable assessment and switches scenarios through the UI boundary", async ({ page }) => {
@@ -163,7 +185,6 @@ test("restores an unconfirmed currency proposal without turning it into input", 
   await page.getByTestId("runway-hero-cta").click();
   await page.getByRole("button", { name: "Canada", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Household currency" })).toHaveValue("CAD");
-
   await page.reload();
 
   await expect(page.getByRole("heading", { name: "Where does your household live?" })).toBeVisible();
