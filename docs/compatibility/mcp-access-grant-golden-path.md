@@ -1,8 +1,11 @@
-# MCP Access Grant compatibility evidence
+# MCP Access Grant compatibility evidence and ownership recommendation
 
-Issues: [#764](https://github.com/xtan9/betterr_me/issues/764),
+Issues: [#763](https://github.com/xtan9/betterr_me/issues/763),
+[#764](https://github.com/xtan9/betterr_me/issues/764),
+[#765](https://github.com/xtan9/betterr_me/issues/765),
 [#766](https://github.com/xtan9/betterr_me/issues/766), and
-[#767](https://github.com/xtan9/betterr_me/issues/767)
+[#767](https://github.com/xtan9/betterr_me/issues/767), with the final
+matrix recorded for [#768](https://github.com/xtan9/betterr_me/issues/768).
 
 This document describes the single parameterized black-box seam, extended from
 the #764 compatibility harness, used to probe a nonproduction BetterR.Me MCP
@@ -40,6 +43,116 @@ local path. The artifact records request methods, endpoint paths, status codes,
 safe metadata fields, gate statuses, and exact installed component versions. It
 does not record passwords, authorization codes, PKCE verifiers, bearer or
 refresh tokens, cookies, service-role keys, or reusable client credentials.
+
+## Issue #768 matrix run — 2026-08-02
+
+The final run used the same Playwright/official MCP SDK contract for both
+targets in one serial invocation. The following target configuration contains
+only public URLs and non-secret setup; a complete browser run may add
+`emailEnv` and `passwordEnv` names that point to credentials held outside the
+repository.
+
+```powershell
+$env:MCP_ACCESS_GRANT_TARGETS = @'
+[
+  {
+    "name": "local-non-production",
+    "canonicalResource": "http://127.0.0.1:3000",
+    "supabaseUrl": "http://127.0.0.1:54321",
+    "expectedAuthorizationServer": "http://127.0.0.1:54321/auth/v1",
+    "loopbackHosts": ["127.0.0.1", "::1"]
+  },
+  {
+    "name": "deployed-non-production",
+    "canonicalResource": "https://www.betterr.me",
+    "supabaseUrl": "https://ugkhvvmjdrshuopgaaje.supabase.co",
+    "expectedAuthorizationServer": "https://ugkhvvmjdrshuopgaaje.supabase.co/auth/v1",
+    "loopbackHosts": ["127.0.0.1", "::1"]
+  }
+]
+'@
+$env:MCP_ACCESS_GRANT_NON_PRODUCTION_ACK = "true"
+$env:MCP_ACCESS_GRANT_HEADLESS = "true"
+pnpm test:e2e:mcp-access-grant
+```
+
+The local BetterR.Me dev server was running at port `3000` against the local
+Supabase services at port `54321`. The deployed target was the non-production
+BetterR.Me deployment currently served at `www.betterr.me`; no production
+configuration, user, grant, client, or key was changed. Both registered
+loopback families were supplied to each target. This environment did not have
+a dedicated browser identity/password or provider client key, so the browser,
+token, refresh, revocation, and cleanup journeys were not attempted after the
+discovery blockers.
+
+| Target | BetterR.Me base / Canonical MCP Resource | Supabase URL / issuer | PRM observed at | Delegated provider discovery | Required non-secret setup |
+| --- | --- | --- | --- | --- | --- |
+| Local non-production | `http://127.0.0.1:3000/` | `http://127.0.0.1:54321/` / `http://127.0.0.1:54321/auth/v1` | HTTP `200`; advertised resource `http://127.0.0.1:3000/`, authorization server `https://betterr.me/` | `http://127.0.0.1:54321/auth/v1/.well-known/oauth-authorization-server` → HTTP `404`, `error_code=feature_disabled`, `OAuth server is disabled` | Local dev server, local Supabase services, IPv4 + IPv6 loopback hosts |
+| Deployed non-production | `https://www.betterr.me/` | `https://ugkhvvmjdrshuopgaaje.supabase.co/` / `https://ugkhvvmjdrshuopgaaje.supabase.co/auth/v1` | HTTP `200`; advertised resource `https://www.betterr.me/`, authorization server `https://www.betterr.me/` | `https://ugkhvvmjdrshuopgaaje.supabase.co/auth/v1/.well-known/oauth-authorization-server` → HTTP `404`, `error_code=feature_disabled`, `OAuth server is disabled` | Public deployed URL, dedicated non-production project reference, non-production acknowledgement, IPv4 + IPv6 loopback hosts |
+
+Both target configurations declared the same host/path-only callback templates:
+`http://127.0.0.1/oauth/callback` and
+`http://[::1]/oauth/callback`. The contract would select an available port at
+authorization-request time; neither request-time callback was reached after
+the discovery failures. The delegated provider's authorization endpoint,
+registration endpoint, token endpoint, and `jwks_uri` are all
+`not-proven`/not observed because the provider discovery document returned
+HTTP `404 feature_disabled`; no endpoint was guessed from documentation.
+
+The machine-readable sanitized artifact is
+[`mcp-access-grant-issue-768-evidence.json`](./mcp-access-grant-issue-768-evidence.json).
+It contains the exact per-target gate IDs and statuses, request status codes,
+safe metadata, and versions only. The test-run artifacts also passed the
+harness sanitization check. No client or grant was created because both runs
+stopped before registration; cleanup is therefore `not-proven`, not passing.
+
+### Matrix result
+
+| Gate family | Local | Deployed | Exact observed evidence |
+| --- | --- | --- | --- |
+| Reproducible non-production configuration | pass | pass | Both targets used explicit URLs, both loopback families, and environment-only credential slots; the run recorded that no provider identity/client key was configured. |
+| Exact relevant versions | pass | not-proven | Local SDK `1.28.0`, Supabase client `2.95.2`, Playwright `1.58.1`, `mcp-handler` `1.1.0`, CLI `2.109.1`, and GoTrue image `ghcr.io/supabase/gotrue:v2.192.0` were captured. The hosted provider exposes no exact server version in the observed public response, so the deployed version gate is not-proven. |
+| Canonical Resource / Protected Resource Metadata delegation | fail | fail | Local PRM selected `https://betterr.me/`; deployed PRM selected `https://www.betterr.me/`. Neither selected its configured Supabase issuer. This is a hard Canonical Resource failure. |
+| Supabase OAuth-server discovery | fail | fail | Both configured provider discovery endpoints returned HTTP `404`, `error_code=feature_disabled`, `OAuth server is disabled`. Beta status is an operational risk; the observed disabled feature is the compatibility failure. |
+| Public registration and registration-negative validation | not-proven | not-proven | IPv4 and IPv6 registration were not reached after discovery failed; no unsupported metadata response was inferred. |
+| IPv4 loopback, request-time port, callback, and S256 PKCE | not-proven | not-proven | Both IPv4 journeys were stopped before registration/authorization; no callback or port result is reported as passing. |
+| IPv6 loopback, request-time port, callback, and S256 PKCE | not-proven | not-proven | Both IPv6 journeys were stopped before registration/authorization; no callback or port result is reported as passing. |
+| Consent, denial, and abandonment safety | not-proven | not-proven | No browser identity was configured and no provider authorization page was reached. |
+| PKCE negatives and exact Resource negative cases | not-proven | not-proven | No provider authorization-code/token boundary was reached. |
+| Local provider-issued JWT/JWKS validation and negative token boundary | not-proven | not-proven | No provider access token, JWKS, or delegated client/grant context was issued or observed. |
+| Real authenticated MCP operation | not-proven | not-proven | No delegated access token was obtained, so `listTools`/`callTool` was not attempted. |
+| Refresh rotation and replay containment | not-proven | not-proven | No provider refresh token was issued. |
+| Grant identification, revocation, post-revocation access/refresh | not-proven | not-proven | No MCP Access Grant was created; no revocation behavior was inferred. |
+| Cleanup | not-proven | not-proven | There was no created client/grant to revoke; the absence of cleanup work is not a cleanup pass. |
+| Sanitized evidence | pass | pass | The artifact contains no password, authorization code, PKCE verifier, bearer/refresh token, cookie, service-role key, client secret, or reusable credential. |
+
+The artifact preserves the lower-level IPv4/IPv6, aggregate, #766, and #767
+gate IDs. Every such downstream gate is `not-proven` for both targets; none is
+reported as passing because the discovery and provider hard gates failed first.
+
+### Ownership recommendation
+
+Do not commission a delegated production-cutover spec from this run. The
+separately scoped custom OAuth Grant Lifecycle decision is blocked by two
+precise, independently observed limitations in both environments:
+
+1. BetterR.Me Protected Resource Metadata does not delegate the exact
+   Canonical MCP Resource to the configured Supabase issuer. It advertises
+   BetterR.Me itself instead.
+2. The configured Supabase OAuth-server discovery endpoint returns
+   `feature_disabled` / `OAuth server is disabled`, so dynamic registration,
+   authorization-code issuance, token exchange, refresh rotation, and grant
+   revocation cannot be proven.
+
+Supabase would own enabling and operating the non-production OAuth server and
+publishing its discovery, registration, authorization, token, JWKS, refresh,
+and grant-management capabilities. BetterR.Me would own the exact Protected
+Resource Metadata delegation, explicit consent/untrusted-client presentation,
+local delegated-JWT policy, and MCP operation authorization. The latter
+responsibilities remain architectural ownership boundaries, not demonstrated
+capabilities in this run. Re-run this unchanged matrix after the provider
+feature and PRM delegation are corrected; only an all-hard-gates pass in both
+targets would justify a later production-cutover spec.
 
 ## Gates
 
@@ -93,9 +206,9 @@ The test itself remains green when the evidence outcome is `blocked` or
 provider gate is conclusively unavailable or credentials are not configured.
 Every downstream gate is recorded rather than silently skipped.
 
-## Evidence recorded for the bounded run
+## Prior #764–#767 local evidence
 
-The most recent local run on 2026-08-02 used `http://127.0.0.1:3000/mcp` as the
+The earlier #764–#767 local run on 2026-08-02 used `http://127.0.0.1:3000/mcp` as the
 Canonical Resource and `http://127.0.0.1:54321/auth/v1` as the expected
 delegated issuer. The sanitized matrix was:
 
