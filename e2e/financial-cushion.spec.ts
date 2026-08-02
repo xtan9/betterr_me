@@ -35,9 +35,11 @@ test("completes the quick interview, edits take-home pay, and previews What-if w
   await page.goto("/finance/cushion?campaign=e2e&video=runway&cta=test");
   await page.getByTestId("runway-hero-cta").click();
 
+  await page.getByRole("button", { name: "United States", exact: true }).click();
   await page.getByRole("combobox", { name: "State, province, or region" }).selectOption("CA");
   const locationContinueY = (await page.getByRole("button", { name: "Continue" }).boundingBox())?.y;
   await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByRole("heading", { name: "Who shares the financial load?" })).toBeVisible();
   const householdContinueY = (await page.getByRole("button", { name: "Continue" }).boundingBox())?.y;
   expect(Math.abs((locationContinueY ?? 0) - (householdContinueY ?? 0))).toBeLessThanOrEqual(2);
   await page.getByRole("button", { name: "Continue" }).click();
@@ -94,6 +96,20 @@ test("completes the quick interview, edits take-home pay, and previews What-if w
   await expect(page.getByRole("heading", { level: 1 })).toContainText("5.0 months");
 });
 
+test("restores an unconfirmed currency proposal without turning it into input", async ({ page }) => {
+  await page.goto("/finance/cushion?campaign=proposal-reload&cta=test");
+  await page.getByTestId("runway-hero-cta").click();
+  await page.getByRole("button", { name: "Canada", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "Household currency" })).toHaveValue("CAD");
+
+  await page.reload();
+
+  await expect(page.getByRole("heading", { name: "Where does your household live?" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Canada", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("combobox", { name: "Household currency" })).toHaveValue("CAD");
+  await expect(page.getByText("Suggested CAD; continuing confirms this choice.")).toBeVisible();
+});
+
 test("switches locale without losing the current step, attribution, or canonical region", async ({ page }) => {
   await page.goto("/finance/cushion?campaign=locale-test&cta=header");
   await page.getByTestId("runway-hero-cta").click();
@@ -128,6 +144,7 @@ test("switches locale without losing the current step, attribution, or canonical
 test("uses guided income, asset, housing, and transportation cards", async ({ page }) => {
   await page.goto("/finance/cushion?campaign=guided-e2e&cta=cards");
   await page.getByTestId("runway-hero-cta").click();
+  await page.getByRole("button", { name: "United States", exact: true }).click();
   await page.getByRole("combobox", { name: "State, province, or region" }).selectOption("CA");
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("button", { name: "Continue" }).click();

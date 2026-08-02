@@ -2,9 +2,11 @@
 
 import { ArrowRight, CalendarClock, Eye, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { HouseholdRunwayInterviewRenderModel } from "@/lib/finance/household-runway-interview";
 
 interface HouseholdRunwayLandingProps {
   t: (key: string, values?: Record<string, string | number>) => string;
+  renderModel: HouseholdRunwayInterviewRenderModel;
   hasDraft: boolean;
   draftCompleted: boolean;
   onPrimary: () => void;
@@ -13,6 +15,7 @@ interface HouseholdRunwayLandingProps {
 
 export function HouseholdRunwayLanding({
   t,
+  renderModel,
   hasDraft,
   draftCompleted,
   onPrimary,
@@ -25,7 +28,7 @@ export function HouseholdRunwayLanding({
       : "landing.resume";
 
   return (
-    <div className="overflow-hidden">
+    <div className="overflow-hidden" data-interview-render={renderModel.kind}>
       <section className="mx-auto grid max-w-6xl gap-12 px-5 py-14 lg:grid-cols-[1.05fr_.95fr] lg:items-center lg:py-20">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[.22em] text-emerald-700 dark:text-emerald-400">
