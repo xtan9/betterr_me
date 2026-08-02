@@ -22,10 +22,12 @@ begin
       )
       and privilege.privilege_type = 'EXECUTE'
       and routine.proname not in (
-        'ralph_ci_create_auth_user',
-        'ralph_ci_delete_auth_profile',
-        'ralph_ci_delete_auth_user',
-        'ralph_ci_open_connection'
+         'ralph_ci_create_auth_user',
+         'ralph_ci_delete_auth_profile',
+         'ralph_ci_delete_auth_user',
+         'ralph_ci_seed_finance_plan',
+         'ralph_ci_seed_finance_snapshot',
+         'ralph_ci_open_connection'
       )
   ) then
     raise exception 'Ralph SQL runner has an unexpected direct public function grant';
