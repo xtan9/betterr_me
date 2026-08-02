@@ -69,9 +69,9 @@ begin
   end if;
 
   if not has_table_privilege('authenticated', 'public.finance_cushions', 'SELECT')
-     or not has_table_privilege('authenticated', 'public.finance_cushions', 'INSERT')
-     or not has_table_privilege('authenticated', 'public.finance_cushions', 'UPDATE') then
-    raise exception 'authenticated privilege missing on finance_cushions';
+     or has_table_privilege('authenticated', 'public.finance_cushions', 'INSERT')
+     or has_table_privilege('authenticated', 'public.finance_cushions', 'UPDATE') then
+    raise exception 'finance_cushion writes must use the atomic authenticated command';
   end if;
 
   if has_table_privilege('authenticated', 'public.finance_cushions', 'DELETE') then
@@ -96,14 +96,14 @@ begin
 
   if has_table_privilege('anon', 'public.finance_cushion_snapshots', 'SELECT')
      or has_table_privilege('anon', 'public.finance_cushion_snapshots', 'INSERT')
+     or has_table_privilege('authenticated', 'public.finance_cushion_snapshots', 'INSERT')
      or has_table_privilege('authenticated', 'public.finance_cushion_snapshots', 'UPDATE')
      or has_table_privilege('authenticated', 'public.finance_cushion_snapshots', 'DELETE') then
     raise exception 'snapshot append-only privileges are incorrect';
   end if;
 
-  if not has_table_privilege('authenticated', 'public.finance_cushion_snapshots', 'SELECT')
-     or not has_table_privilege('authenticated', 'public.finance_cushion_snapshots', 'INSERT') then
-    raise exception 'authenticated snapshot privileges are missing';
+  if not has_table_privilege('authenticated', 'public.finance_cushion_snapshots', 'SELECT') then
+    raise exception 'authenticated snapshot SELECT privilege is missing';
   end if;
 
   if not exists (
@@ -128,14 +128,8 @@ begin
 end
 $$;
 
-set local role authenticated;
-
-select set_config(
-  'request.jwt.claim.sub',
-  '20000000-0000-0000-0000-000000000001',
-  true
-);
-
+-- Seed disposable rows as the fixture's administrative session. Authenticated
+-- callers can read only their own rows; they cannot write these tables directly.
 insert into public.finance_cushions (
   user_id,
   liquid_resources_cents,
@@ -147,12 +141,6 @@ values (
   120000,
   30000,
   0
-);
-
-select set_config(
-  'request.jwt.claim.sub',
-  '20000000-0000-0000-0000-000000000002',
-  true
 );
 
 insert into public.finance_cushions (
@@ -185,7 +173,14 @@ select
 from public.finance_cushions
 where user_id = '20000000-0000-0000-0000-000000000002';
 
--- User B sees and updates B's row.
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  '20000000-0000-0000-0000-000000000002',
+  true
+);
+
+-- User B sees B's row but cannot write the Plan directly.
 do $$
 begin
   if (select count(*) from public.finance_cushions) <> 1
@@ -198,18 +193,15 @@ begin
     raise exception 'user B cannot read only user B cushion';
   end if;
 
-  update public.finance_cushions
-  set liquid_resources_cents = 65000
-  where user_id = '20000000-0000-0000-0000-000000000002';
-
-  if not exists (
-    select 1
-    from public.finance_cushions
-    where user_id = '20000000-0000-0000-0000-000000000002'
-      and liquid_resources_cents = 65000
-  ) then
-    raise exception 'user B cannot update own cushion';
-  end if;
+  begin
+    update public.finance_cushions
+    set liquid_resources_cents = 65000
+    where user_id = '20000000-0000-0000-0000-000000000002';
+    raise exception 'user B directly updated own cushion';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
 end
 $$;
 
@@ -256,14 +248,15 @@ begin
     raise exception 'user A can read user B cushion';
   end if;
 
-  update public.finance_cushions
-  set liquid_resources_cents = 999999
-  where user_id = '20000000-0000-0000-0000-000000000002';
-  get diagnostics affected_rows = row_count;
-
-  if affected_rows <> 0 then
-    raise exception 'user A updated user B cushion';
-  end if;
+  begin
+    update public.finance_cushions
+    set liquid_resources_cents = 999999
+    where user_id = '20000000-0000-0000-0000-000000000002';
+    raise exception 'user A directly updated user B cushion';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
 
   if not exists (
     select 1
@@ -281,22 +274,28 @@ begin
     raise exception 'user A can read user B snapshot';
   end if;
 
-  insert into public.finance_cushion_snapshots (
-    plan_id, user_id, action_id, trigger, scenario, months_covered,
-    sustainable, result, model_version
-  )
-  select
-    id,
-    user_id,
-    '30000000-0000-0000-0000-000000000001',
-    'completed',
-    'current',
-    4,
-    false,
-    '{"months_covered": 4}'::jsonb,
-    '2.0.0'
-  from public.finance_cushions
-  where user_id = '20000000-0000-0000-0000-000000000001';
+  begin
+    insert into public.finance_cushion_snapshots (
+      plan_id, user_id, action_id, trigger, scenario, months_covered,
+      sustainable, result, model_version
+    )
+    select
+      id,
+      user_id,
+      '30000000-0000-0000-0000-000000000001',
+      'completed',
+      'current',
+      4,
+      false,
+      '{"months_covered": 4}'::jsonb,
+      '2.0.0'
+    from public.finance_cushions
+    where user_id = '20000000-0000-0000-0000-000000000001';
+    raise exception 'authenticated Snapshot insert unexpectedly succeeded';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
 end
 $$;
 

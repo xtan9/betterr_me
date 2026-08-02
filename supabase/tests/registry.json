@@ -64,6 +64,12 @@
     "adminReason": "creates disposable auth identities before switching to application roles for RLS assertions"
   },
   {
+    "path": "household_runway_plan_commit.sql",
+    "domain": "finance",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
     "path": "personal_records_finance_rls.sql",
     "domain": "personal-records-finance",
     "role": "constrained",

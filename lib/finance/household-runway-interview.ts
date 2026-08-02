@@ -23,6 +23,7 @@ import {
   type RunwayCountry,
   type RunwayCurrency,
   type RunwayScenario,
+  type RunwaySnapshotSummary,
   type ScenarioOption,
 } from "@/lib/finance/cushion";
 import {
@@ -158,18 +159,26 @@ export type HouseholdRunwayPlanPersistenceOperation =
       status: "pending";
       sourceRevision: number;
       correlationId: string;
-      expectedPlanRevision: number | null;
+      expectedPlanRevision: number;
+      idempotencyKey: string;
+      snapshotTrigger: RunwaySnapshotSummary["trigger"];
     }
   | {
       status: "succeeded";
       sourceRevision: number;
       correlationId: string;
       planRevision: number;
+      idempotencyKey: string;
+      snapshotTrigger: RunwaySnapshotSummary["trigger"];
+      snapshot?: RunwaySnapshotSummary;
     }
   | {
       status: "failed";
       sourceRevision: number;
       correlationId: string;
+      idempotencyKey: string;
+      snapshotTrigger: RunwaySnapshotSummary["trigger"];
+      currentPlanRevision?: number;
       error: Extract<
         HouseholdRunwayInterviewOperationError,
         "authentication_required" | "conflict" | "invalid" | "network" | "stale_result"
@@ -216,6 +225,8 @@ export interface HouseholdRunwayInterviewOperations {
 export interface HouseholdRunwayInterviewCapabilities {
   /** Durable Plan persistence is an injected capability, never auth state. */
   planPersistence?: "available" | "unavailable";
+  /** The authenticated adapter identifies the origin of the first commit. */
+  snapshotTrigger?: RunwaySnapshotSummary["trigger"];
 }
 
 function emptyPlanAdjustment(): RunwayAdjustments {
@@ -750,11 +761,15 @@ export type HouseholdRunwayInterviewCommandInput =
       sourceRevision: number;
       correlationId: string;
       planRevision?: number;
+      planInputs?: HouseholdRunwayAnswers;
+      assessment?: SuccessfulHouseholdRunwayAssessment;
+      snapshot?: RunwaySnapshotSummary;
     }
   | {
       type: "plan_persistence_failed";
       sourceRevision: number;
       correlationId: string;
+      currentPlanRevision?: number;
       error: Extract<
         HouseholdRunwayInterviewOperationError,
         "authentication_required" | "conflict" | "invalid" | "network" | "stale_result"
@@ -930,7 +945,9 @@ export type HouseholdRunwayInterviewEffect =
       sourceRevision: number;
       correlationId: string;
       idempotencyKey: string;
-      expectedPlanRevision: number | null;
+      expectedPlanRevision: number;
+      adjustments: RunwayAdjustments;
+      snapshotTrigger: RunwaySnapshotSummary["trigger"];
     }
   | {
       type: "report_download_requested";
@@ -3554,7 +3571,7 @@ function requestPlanPersistence(
 
   const sourceRevision = state.draft.revision;
   const correlationId = command.commandId;
-  const expectedPlanRevision = state.committedPlan?.revision ?? null;
+  const expectedPlanRevision = state.committedPlan?.revision ?? 0;
   if (capabilities.planPersistence !== "available") {
     return transition(
       state,
@@ -3566,6 +3583,10 @@ function requestPlanPersistence(
             status: "failed",
             sourceRevision,
             correlationId,
+            idempotencyKey: command.idempotencyKey ?? command.commandId,
+            snapshotTrigger:
+              capabilities.snapshotTrigger ??
+              (state.committedPlan ? "updated" : "completed"),
             error: "authentication_required",
           },
         },
@@ -3581,7 +3602,20 @@ function requestPlanPersistence(
     );
   }
 
-  const idempotencyKey = command.idempotencyKey ?? command.commandId;
+  const previousOperation = state.operations.planPersistence;
+  const canRetryPreviousCommit =
+    previousOperation.status !== "idle" &&
+    previousOperation.status !== "dirty" &&
+    previousOperation.sourceRevision === sourceRevision;
+  const idempotencyKey =
+    command.idempotencyKey ??
+    (canRetryPreviousCommit ? previousOperation.idempotencyKey : undefined) ??
+    command.commandId;
+  const snapshotTrigger =
+    canRetryPreviousCommit
+      ? previousOperation.snapshotTrigger
+      : capabilities.snapshotTrigger ??
+        (state.committedPlan ? "updated" : "completed");
   return transition(
     state,
     {
@@ -3593,6 +3627,8 @@ function requestPlanPersistence(
           sourceRevision,
           correlationId,
           expectedPlanRevision,
+          idempotencyKey,
+          snapshotTrigger,
         },
       },
     },
@@ -3611,6 +3647,8 @@ function requestPlanPersistence(
         correlationId,
         idempotencyKey,
         expectedPlanRevision,
+        adjustments: state.draft.planAdjustment,
+        snapshotTrigger,
       },
     ],
   );
@@ -3642,6 +3680,8 @@ function completePlanPersistence(
             status: "failed",
             sourceRevision: command.sourceRevision,
             correlationId: command.correlationId,
+            idempotencyKey: operation.idempotencyKey,
+            snapshotTrigger: operation.snapshotTrigger,
             error: "stale_result",
           },
         },
@@ -3667,6 +3707,11 @@ function completePlanPersistence(
             status: "failed",
             sourceRevision: command.sourceRevision,
             correlationId: command.correlationId,
+            idempotencyKey: operation.idempotencyKey,
+            snapshotTrigger: operation.snapshotTrigger,
+            ...(command.currentPlanRevision !== undefined
+              ? { currentPlanRevision: command.currentPlanRevision }
+              : {}),
             error: command.error,
           },
         },
@@ -3684,9 +3729,14 @@ function completePlanPersistence(
 
   const planRevision =
     command.planRevision ?? (state.committedPlan?.revision ?? 0) + 1;
+  const committedInputs = command.planInputs ?? state.planInputs;
+  const committedAssessment = command.assessment ?? state.assessment;
+  if (!committedInputs || !committedAssessment) {
+    return ignored(state, command, "invalid_stage");
+  }
   const committedPlan: HouseholdRunwayPlan = {
     revision: planRevision,
-    inputs: state.planInputs ?? state.draft.answers as HouseholdRunwayAnswers,
+    inputs: committedInputs,
   };
   const draft = normalizeDraft({
     ...state.draft,
@@ -3712,6 +3762,9 @@ function completePlanPersistence(
           sourceRevision: command.sourceRevision,
           correlationId: command.correlationId,
           planRevision,
+          idempotencyKey: operation.idempotencyKey,
+          snapshotTrigger: operation.snapshotTrigger,
+          ...(command.snapshot ? { snapshot: command.snapshot } : {}),
         },
       },
       validationIssue: null,
@@ -3720,6 +3773,7 @@ function completePlanPersistence(
       event(command, "plan_persisted", {
         sourceRevision: command.sourceRevision,
         correlationId: command.correlationId,
+        planRevision,
       }),
     ],
     [{ type: "focus", stage: "result" }],

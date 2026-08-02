@@ -270,6 +270,85 @@ revoke all on function public.ralph_ci_create_auth_user(uuid, text) from public;
 grant execute on function public.ralph_ci_create_auth_user(uuid, text)
   to ralph_ci_test;
 
+create or replace function public.ralph_ci_seed_finance_plan(
+  plan_id uuid,
+  owner_id uuid,
+  liquid_resources bigint,
+  monthly_essential_expenses bigint,
+  monthly_continuing_income bigint
+)
+returns void
+language sql
+security definer
+set search_path = pg_catalog, public
+as $function$
+  insert into public.finance_cushions (
+    id,
+    user_id,
+    liquid_resources_cents,
+    monthly_essential_expenses_cents,
+    monthly_continuing_income_cents
+  ) values (
+    plan_id,
+    owner_id,
+    liquid_resources,
+    monthly_essential_expenses,
+    monthly_continuing_income
+  );
+$function$;
+revoke all on function public.ralph_ci_seed_finance_plan(uuid, uuid, bigint, bigint, bigint)
+  from public;
+grant execute on function public.ralph_ci_seed_finance_plan(uuid, uuid, bigint, bigint, bigint)
+  to ralph_ci_test;
+
+create or replace function public.ralph_ci_seed_finance_snapshot(
+  snapshot_id uuid,
+  plan_id uuid,
+  owner_id uuid,
+  action_id uuid,
+  snapshot_trigger text,
+  scenario_name text,
+  covered_months numeric,
+  is_sustainable boolean,
+  snapshot_result jsonb,
+  snapshot_model_version text
+)
+returns void
+language sql
+security definer
+set search_path = pg_catalog, public
+as $function$
+  insert into public.finance_cushion_snapshots (
+    id,
+    plan_id,
+    user_id,
+    action_id,
+    trigger,
+    scenario,
+    months_covered,
+    sustainable,
+    result,
+    model_version
+  ) values (
+    snapshot_id,
+    plan_id,
+    owner_id,
+    action_id,
+    snapshot_trigger,
+    scenario_name,
+    covered_months,
+    is_sustainable,
+    snapshot_result,
+    snapshot_model_version
+  );
+$function$;
+revoke all on function public.ralph_ci_seed_finance_snapshot(
+  uuid, uuid, uuid, uuid, text, text, numeric, boolean, jsonb, text
+) from public;
+grant execute on function public.ralph_ci_seed_finance_snapshot(
+  uuid, uuid, uuid, uuid, text, text, numeric, boolean, jsonb, text
+) to ralph_ci_test;
+
 create or replace function public.ralph_ci_delete_auth_profile(
   test_user_id uuid
 )

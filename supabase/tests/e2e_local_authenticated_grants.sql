@@ -46,11 +46,11 @@ do $$
 begin
   if to_regclass('public.finance_cushions') is not null then
     revoke all on table public.finance_cushions from authenticated;
-    grant select, insert, update on table public.finance_cushions to authenticated;
+    grant select on table public.finance_cushions to authenticated;
   end if;
   if to_regclass('public.finance_cushion_snapshots') is not null then
     revoke all on table public.finance_cushion_snapshots from authenticated;
-    grant select, insert on table public.finance_cushion_snapshots to authenticated;
+    grant select on table public.finance_cushion_snapshots to authenticated;
   end if;
 end
 $$;

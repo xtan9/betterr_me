@@ -190,6 +190,22 @@ const runwayAdjustmentCents = z
   .min(0)
   .max(MAX_CUSHION_AMOUNT_CENTS);
 
+const runwayAdjustmentShape = {
+  expense_reduction_cents: runwayAdjustmentCents,
+  added_cash_cents: runwayAdjustmentCents,
+  added_monthly_income_cents: runwayAdjustmentCents,
+  expected_unconfirmed_funds_cents: runwayAdjustmentCents,
+  usable_illiquid_investments_cents: runwayAdjustmentCents,
+  usable_retirement_tax_deferred_cents: runwayAdjustmentCents,
+  usable_retirement_tax_free_cents: runwayAdjustmentCents,
+};
+
+/** The complete, normalized overlay accepted by the authenticated commit. */
+export const completeRunwayAdjustmentsSchema = z
+  .object(runwayAdjustmentShape)
+  .strict();
+
+/** The calculation boundary may still accept an omitted overlay as all zeroes. */
 export const runwayAdjustmentsSchema = z
   .object({
     expense_reduction_cents: runwayAdjustmentCents.default(0),
@@ -200,7 +216,8 @@ export const runwayAdjustmentsSchema = z
     usable_retirement_tax_deferred_cents: runwayAdjustmentCents.default(0),
     usable_retirement_tax_free_cents: runwayAdjustmentCents.default(0),
   })
-  .strict();
+  .strict()
+  .default({});
 
 export const householdRunwayAssessmentInputSchema = z.object({
   answers: householdRunwayAnswersSchema,
@@ -221,26 +238,18 @@ const attributionSchema = z
 export const financeCushionPlanSchema = z
   .object({
     answers: householdRunwayAnswersSchema,
-    adjustments: runwayAdjustmentsSchema.default({}),
-    status: z.enum(["in_progress", "completed"]),
+    adjustments: completeRunwayAdjustmentsSchema,
+    status: z.literal("completed"),
     attribution: attributionSchema.default({}),
-    create_snapshot: z.boolean().default(false),
-    snapshot_action_id: z.string().uuid().optional(),
-    snapshot_trigger: z.enum(["completed", "updated", "imported"]).optional(),
+    idempotency_key: z.string().uuid(),
+    expected_revision: z.number().finite().int().min(0),
+    snapshot_action_id: z.string().uuid(),
+    snapshot_trigger: z.enum(["completed", "updated", "imported"]),
   })
-  .strict()
-  .superRefine((value, context) => {
-    if (
-      value.create_snapshot &&
-      (!value.snapshot_action_id || !value.snapshot_trigger)
-    ) {
-      context.addIssue({
-        code: "custom",
-        message: "Snapshot id and trigger are required",
-        path: ["snapshot_action_id"],
-      });
-    }
-  });
+  .strict();
+
+/** Canonical authenticated Household Runway Plan/Snapshot commit payload. */
+export const financeCushionCommitSchema = financeCushionPlanSchema;
 
 export const financeCushionEventSchema = z
   .object({
@@ -261,3 +270,6 @@ export const financeCushionEventSchema = z
   .strict();
 
 export type FinanceCushionPlanInput = z.input<typeof financeCushionPlanSchema>;
+export type FinanceCushionCommitInput = z.output<
+  typeof financeCushionCommitSchema
+>;

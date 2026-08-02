@@ -54,13 +54,32 @@ test.describe('Authenticated finance persistence', () => {
 
     await expect(page.getByRole('button', { name: 'Save this runway' })).toBeVisible();
     const saveResponsePromise = page.waitForResponse((response) => (
-      response.request().method() === 'PUT'
+      response.request().method() === 'POST'
       && new URL(response.url()).pathname === '/api/finance/cushion'
     ));
     await page.getByRole('button', { name: 'Save this runway' }).click();
 
     const saveResponse = await saveResponsePromise;
     expect(saveResponse.status(), await saveResponse.text()).toBe(200);
+    const commitBody = saveResponse.request().postDataJSON();
+    expect(commitBody).toMatchObject({
+      status: 'completed',
+      expected_revision: 0,
+      snapshot_trigger: 'completed',
+    });
+    expect(commitBody.idempotency_key).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    expect(commitBody.snapshot_action_id).toBe(commitBody.idempotency_key);
+    expect(commitBody.adjustments).toEqual({
+      expense_reduction_cents: 0,
+      added_cash_cents: 0,
+      added_monthly_income_cents: 0,
+      expected_unconfirmed_funds_cents: 0,
+      usable_illiquid_investments_cents: 0,
+      usable_retirement_tax_deferred_cents: 0,
+      usable_retirement_tax_free_cents: 0,
+    });
     await expect(page.getByRole('button', { name: 'Saved', exact: true })).toBeVisible();
     await expect(page.getByText('Cash available now', { exact: true })).toBeVisible();
     await expect(

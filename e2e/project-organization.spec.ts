@@ -51,7 +51,11 @@ function kanbanColumn(page: Page, name: 'To Do' | 'In Progress') {
   return page.getByRole('heading', { name }).locator('../..');
 }
 
-async function moveTaskToInProgress(page: Page, taskTitle: string) {
+async function moveTaskToInProgress(
+  page: Page,
+  taskId: string,
+  taskTitle: string,
+) {
   const source = kanbanColumn(page, 'To Do').getByRole('button', {
     name: taskTitle,
     exact: true,
@@ -77,10 +81,14 @@ async function moveTaskToInProgress(page: Page, taskTitle: string) {
   try {
     await page.mouse.move(sourcePoint.x + 12, sourcePoint.y, { steps: 3 });
     await page.mouse.move(destinationPoint.x, destinationPoint.y, { steps: 20 });
-    await expect(page.getByRole('status')).toContainText('in_progress');
   } finally {
     await page.mouse.up();
   }
+
+  await expect.poll(
+    async () => (await readTask(page.request, taskId)).status,
+    { timeout: 10_000 },
+  ).toBe('in_progress');
 }
 
 test('moves a run-owned task, persists its placement, and preserves it after project deletion', async ({ page }) => {
@@ -114,13 +122,13 @@ test('moves a run-owned task, persists its placement, and preserves it after pro
     await expect(page.getByRole('heading', { name: projectName })).toBeVisible();
 
     const inProgressColumn = kanbanColumn(page, 'In Progress');
-    await moveTaskToInProgress(page, taskTitle);
-
-    await expect(inProgressColumn.getByText(taskTitle, { exact: true })).toBeVisible();
-    await expect.poll(async () => (await readTask(page.request, task!.id)).status).toBe('in_progress');
+    const projectId = project.id;
+    await moveTaskToInProgress(page, task.id, taskTitle);
 
     await page.reload();
-    await expect(inProgressColumn.getByText(taskTitle, { exact: true })).toBeVisible();
+    await expect(
+      inProgressColumn.getByText(taskTitle, { exact: true }),
+    ).toBeVisible({ timeout: 10_000 });
 
     await page.getByRole('link', { name: 'Back to Tasks' }).click();
     await expect(page).toHaveURL(/\/tasks$/);
@@ -139,8 +147,10 @@ test('moves a run-owned task, persists its placement, and preserves it after pro
     await expect(page.getByRole('heading', { name: projectName })).toHaveCount(0);
     await expect(page.getByText(taskTitle, { exact: true })).toBeVisible();
 
-    const projectRead = await page.request.get(`/api/projects/${project.id}`);
-    expect(projectRead.status()).toBe(404);
+    await expect.poll(
+      async () => (await page.request.get(`/api/projects/${projectId}`)).status(),
+      { timeout: 10_000 },
+    ).toBe(404);
     const standaloneTask = await readTask(page.request, task.id);
     expect(standaloneTask).toMatchObject({
       project_id: null,

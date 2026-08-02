@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-import { createDefaultRunwayAnswers, simulateHouseholdRunway, toFinanceCushionView } from "@/lib/finance/cushion";
-import { GET, PUT } from "@/app/api/finance/cushion/route";
-import { appendRunwaySnapshot, getFinanceCushion, getRunwaySnapshots, saveHouseholdRunwayPlan } from "@/lib/finance/repository";
+import {
+  createDefaultRunwayAnswers,
+  toFinanceCushionView,
+} from "@/lib/finance/cushion";
+import { assessHouseholdRunway } from "@/lib/finance/household-runway-assessment";
+import { GET, POST } from "@/app/api/finance/cushion/route";
+import { commitHouseholdRunwayPlan, getFinanceCushion, getRunwaySnapshots } from "@/lib/finance/repository";
 
 const { mockAuthenticateRequest } = vi.hoisted(() => ({
   mockAuthenticateRequest: vi.fn(),
@@ -14,26 +18,85 @@ vi.mock("@/lib/auth/authenticated-request", () => ({
     error.status === 401 ? "Unauthorized" : error.error,
 }));
 
-vi.mock("@/lib/finance/repository", () => ({ appendRunwaySnapshot: vi.fn(), getFinanceCushion: vi.fn(), getRunwaySnapshots: vi.fn(), saveHouseholdRunwayPlan: vi.fn() }));
+vi.mock("@/lib/finance/repository", () => ({
+  commitHouseholdRunwayPlan: vi.fn(),
+  getFinanceCushion: vi.fn(),
+  getRunwaySnapshots: vi.fn(),
+}));
 
 const user = { id: "user-a" };
 const mockSupabase = {};
+const idempotencyKey = "74a303ae-1ba3-4ab5-beb9-5317eb94c790";
 
 function validAnswers() {
-  const answers = createDefaultRunwayAnswers(new Date("2026-07-26T00:00:00.000Z"));
+  const answers = createDefaultRunwayAnswers(
+    new Date("2026-07-26T00:00:00.000Z"),
+  );
   answers.region = "CA";
-  answers.mine = { ...answers.mine, employment: "unemployed", entered_as: "net", take_home_source: "user_confirmed", confidence: "confirmed" };
+  answers.mine = {
+    ...answers.mine,
+    employment: "unemployed",
+    entered_as: "net",
+    take_home_source: "user_confirmed",
+    confidence: "confirmed",
+  };
   answers.available_cash = { cents: 3_000_000, confidence: "confirmed" };
   answers.expense_mode = "quick";
-  answers.quick_expenses = { current_monthly_cents: 600_000, interruption_monthly_cents: 600_000, confidence: "confirmed" };
+  answers.quick_expenses = {
+    current_monthly_cents: 600_000,
+    interruption_monthly_cents: 600_000,
+    confidence: "confirmed",
+  };
   return answers;
 }
 
 const answers = validAnswers();
-const result = simulateHouseholdRunway(answers, "current", undefined, new Date("2026-07-26"));
-const savedCushion = toFinanceCushionView({ id: "cushion-a", user_id: user.id, liquid_resources_cents: result.starting_resources_cents, monthly_essential_expenses_cents: result.interruption_expenses_cents, monthly_continuing_income_cents: result.continuing_monthly_income_cents, answers, latest_result: result, model_version: "4.0.0", status: "completed", created_at: "2026-07-26T00:00:00.000Z", updated_at: "2026-07-26T00:00:00.000Z" });
+const adjustments = {
+  expense_reduction_cents: 0,
+  added_cash_cents: 125_000,
+  added_monthly_income_cents: 0,
+  expected_unconfirmed_funds_cents: 0,
+  usable_illiquid_investments_cents: 0,
+  usable_retirement_tax_deferred_cents: 0,
+  usable_retirement_tax_free_cents: 0,
+};
+const assessment = assessHouseholdRunway({ answers, adjustments });
+if (!assessment.success) throw new Error("test assessment should be valid");
+const baseline = assessment.firstScenario.baseline;
+const savedCushion = toFinanceCushionView({
+  id: "cushion-a",
+  user_id: user.id,
+  revision: 1,
+  liquid_resources_cents: baseline.starting_resources_cents,
+  monthly_essential_expenses_cents: baseline.interruption_expenses_cents,
+  monthly_continuing_income_cents: baseline.continuing_monthly_income_cents,
+  answers,
+  adjustments,
+  latest_result: assessment,
+  model_version: "4.0.0",
+  status: "completed",
+  created_at: "2026-07-26T00:00:00.000Z",
+  updated_at: "2026-07-26T00:00:00.000Z",
+});
+const savedSnapshot = {
+  id: "snapshot-a",
+  trigger: "completed" as const,
+  scenario: "current" as const,
+  months_covered: 5,
+  sustainable: false,
+  model_version: "4.0.0",
+  created_at: "2026-07-26T00:00:00.000Z",
+};
 
-describe("/api/finance/cushion", () => {
+function request(body: unknown) {
+  return new NextRequest("http://localhost:3000/api/finance/cushion/commit", {
+    method: "POST",
+    body: JSON.stringify(body),
+    headers: { "content-type": "application/json" },
+  });
+}
+
+describe("/api/finance/cushion/commit", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAuthenticateRequest.mockResolvedValue({
@@ -42,64 +105,168 @@ describe("/api/finance/cushion", () => {
       client: mockSupabase,
     });
     vi.mocked(getRunwaySnapshots).mockResolvedValue([]);
+    vi.mocked(commitHouseholdRunwayPlan).mockResolvedValue({
+      success: true,
+      replayed: false,
+      revision: 1,
+      plan: savedCushion,
+      assessment,
+      snapshot: savedSnapshot,
+      snapshots: [savedSnapshot],
+    });
   });
 
-  it("requires authentication", async () => {
+  it("requires authenticated cookie access for the public commit boundary", async () => {
     mockAuthenticateRequest.mockResolvedValueOnce({
       ok: false,
       error: "Unauthorized",
       status: 401,
     });
-    expect((await GET(new NextRequest("http://localhost:3000/api/finance/cushion"))).status).toBe(401);
+    expect((await POST(request({}))).status).toBe(401);
+    expect(commitHouseholdRunwayPlan).not.toHaveBeenCalled();
   });
 
-  it("reads the current plan and history for its owner", async () => {
-    vi.mocked(getFinanceCushion).mockResolvedValue(savedCushion);
-    vi.mocked(getRunwaySnapshots).mockResolvedValue([{ id: "snapshot-a", trigger: "imported", scenario: "current", months_covered: 5, sustainable: false, model_version: "4.0.0", created_at: "2026-07-26T00:00:00.000Z" }]);
-    const response = await GET(new NextRequest("http://localhost:3000/api/finance/cushion"));
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({ snapshots: [{ id: "snapshot-a" }] });
-    expect(getFinanceCushion).toHaveBeenCalledWith(mockSupabase, user.id);
-    expect(getRunwaySnapshots).toHaveBeenCalledWith(mockSupabase, user.id);
-  });
+  it("strictly validates complete normalized inputs and derives the assessment on the server", async () => {
+    const response = await POST(
+      request({
+        answers,
+        adjustments,
+        status: "completed",
+        attribution: { campaign: "youtube" },
+        idempotency_key: idempotencyKey,
+        expected_revision: 0,
+        snapshot_action_id: idempotencyKey,
+        snapshot_trigger: "completed",
+        unexpected: true,
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(commitHouseholdRunwayPlan).not.toHaveBeenCalled();
 
-  it("saves one complete server assessment and creates an idempotent snapshot from it", async () => {
-    vi.mocked(saveHouseholdRunwayPlan).mockResolvedValue(savedCushion);
-    const request = new NextRequest("http://localhost:3000/api/finance/cushion", { method: "PUT", body: JSON.stringify({ answers, adjustments: { added_cash_cents: 125_000 }, status: "completed", attribution: { campaign: "youtube" }, create_snapshot: true, snapshot_action_id: "74a303ae-1ba3-4ab5-beb9-5317eb94c790", snapshot_trigger: "imported" }), headers: { "content-type": "application/json" } });
-    const response = await PUT(request);
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({ snapshots: [] });
-    expect(saveHouseholdRunwayPlan).toHaveBeenCalledWith(
+    const validResponse = await POST(
+      request({
+        answers,
+        adjustments,
+        status: "completed",
+        attribution: { campaign: "youtube" },
+        idempotency_key: idempotencyKey,
+        expected_revision: 0,
+        snapshot_action_id: idempotencyKey,
+        snapshot_trigger: "completed",
+      }),
+    );
+    expect(validResponse.status).toBe(200);
+    await expect(validResponse.json()).resolves.toMatchObject({
+      status: "committed",
+      revision: 1,
+      plan: { revision: 1 },
+      assessment: { success: true, modelVersion: "4.0.0" },
+      snapshot: { trigger: "completed" },
+    });
+    expect(commitHouseholdRunwayPlan).toHaveBeenCalledWith(
       mockSupabase,
-      user.id,
       expect.objectContaining({
+        expectedRevision: 0,
+        idempotencyKey,
+        snapshotActionId: idempotencyKey,
+        snapshotTrigger: "completed",
+        adjustments,
         assessment: expect.objectContaining({
           success: true,
           answers,
-          adjustments: expect.objectContaining({ added_cash_cents: 125_000 }),
-          firstScenario: expect.objectContaining({
-            baseline: expect.objectContaining({ months_covered: 5 }),
-          }),
-          scenarios: [
-            expect.objectContaining({ scenario: "current" }),
-          ],
+          adjustments,
+          scenarios: expect.any(Array),
         }),
-      }),
-    );
-    expect(appendRunwaySnapshot).toHaveBeenCalledWith(
-      mockSupabase,
-      expect.objectContaining({
-        planId: "cushion-a",
-        userId: user.id,
-        assessment: expect.objectContaining({ success: true }),
       }),
     );
   });
 
-  it("rejects negative values and retirement usable amounts above balances", async () => {
-    const invalid = { ...answers, extreme_access: { ...answers.extreme_access, retirement_tax_free_cents: 1 } };
-    const request = new NextRequest("http://localhost:3000/api/finance/cushion", { method: "PUT", body: JSON.stringify({ answers: invalid, status: "completed" }), headers: { "content-type": "application/json" } });
-    expect((await PUT(request)).status).toBe(400);
-    expect(saveHouseholdRunwayPlan).not.toHaveBeenCalled();
+  it("returns typed stale conflicts and preserves the persistence boundary", async () => {
+    vi.mocked(commitHouseholdRunwayPlan).mockResolvedValueOnce({
+      success: false,
+      kind: "stale_revision",
+      expectedRevision: 0,
+      currentRevision: 4,
+    });
+    const response = await POST(
+      request({
+        answers,
+        adjustments,
+        status: "completed",
+        idempotency_key: idempotencyKey,
+        expected_revision: 0,
+        snapshot_action_id: idempotencyKey,
+        snapshot_trigger: "completed",
+      }),
+    );
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      type: "stale_revision_conflict",
+      error: "Household Runway Plan revision is stale",
+      expected_revision: 0,
+      current_revision: 4,
+    });
+  });
+
+  it("rejects an adjustment that is normalized but outside the assessment limits", async () => {
+    const invalidAdjustments = {
+      ...adjustments,
+      expense_reduction_cents: 600_001,
+    };
+    const response = await POST(
+      request({
+        answers,
+        adjustments: invalidAdjustments,
+        status: "completed",
+        idempotency_key: idempotencyKey,
+        expected_revision: 0,
+        snapshot_action_id: idempotencyKey,
+        snapshot_trigger: "completed",
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(commitHouseholdRunwayPlan).not.toHaveBeenCalled();
+  });
+
+  it("returns an authoritative idempotent replay", async () => {
+    vi.mocked(commitHouseholdRunwayPlan).mockResolvedValueOnce({
+      success: true,
+      replayed: true,
+      revision: 1,
+      plan: savedCushion,
+      assessment,
+      snapshot: savedSnapshot,
+      snapshots: [savedSnapshot],
+    });
+    const response = await POST(
+      request({
+        answers,
+        adjustments,
+        status: "completed",
+        idempotency_key: idempotencyKey,
+        expected_revision: 0,
+        snapshot_action_id: idempotencyKey,
+        snapshot_trigger: "completed",
+      }),
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      status: "already-applied",
+      revision: 1,
+      snapshots: [{ id: "snapshot-a" }],
+    });
+  });
+
+  it("keeps the legacy GET read boundary owner-authenticated", async () => {
+    vi.mocked(getFinanceCushion).mockResolvedValue(savedCushion);
+    vi.mocked(getRunwaySnapshots).mockResolvedValue([savedSnapshot]);
+    const response = await GET(
+      new NextRequest("http://localhost:3000/api/finance/cushion"),
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      cushion: { revision: 1 },
+      snapshots: [{ id: "snapshot-a" }],
+    });
   });
 });

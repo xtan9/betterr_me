@@ -2,12 +2,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { assessHouseholdRunway } from "@/lib/finance/household-runway-assessment";
 import {
-  appendRunwaySnapshot,
+  commitHouseholdRunwayPlan,
   getFinanceCushion,
   getRunwaySnapshots,
-  saveHouseholdRunwayPlan,
 } from "@/lib/finance/repository";
-import type { FinanceCushionPlanInput } from "@/lib/validations/finance-cushion";
+import type {
+  FinanceCushionCommitInput,
+} from "@/lib/validations/finance-cushion";
 
 export function createHouseholdRunwayService(client: SupabaseClient) {
   return {
@@ -19,33 +20,25 @@ export function createHouseholdRunwayService(client: SupabaseClient) {
       return { cushion, snapshots };
     },
 
-    async save(userId: string, input: FinanceCushionPlanInput) {
+    async commit(input: FinanceCushionCommitInput) {
       const assessment = assessHouseholdRunway({
         answers: input.answers,
         adjustments: input.adjustments,
+        startDate: new Date(input.answers.updated_at),
       });
       if (!assessment.success) return assessment;
 
-      const cushion = await saveHouseholdRunwayPlan(client, userId, {
-        assessment,
+      return commitHouseholdRunwayPlan(client, {
+        answers: input.answers,
+        adjustments: input.adjustments,
         status: input.status,
-        attribution: input.attribution ?? {},
+        attribution: input.attribution,
+        idempotencyKey: input.idempotency_key,
+        expectedRevision: input.expected_revision,
+        snapshotActionId: input.snapshot_action_id,
+        snapshotTrigger: input.snapshot_trigger,
+        assessment,
       });
-      if (
-        input.create_snapshot &&
-        input.snapshot_action_id &&
-        input.snapshot_trigger
-      ) {
-        await appendRunwaySnapshot(client, {
-          planId: cushion.id,
-          userId,
-          actionId: input.snapshot_action_id,
-          trigger: input.snapshot_trigger,
-          assessment,
-        });
-      }
-      const snapshots = await getRunwaySnapshots(client, userId);
-      return { success: true as const, cushion, snapshots, assessment };
     },
   };
 }

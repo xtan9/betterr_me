@@ -352,35 +352,6 @@ values (
   9
 );
 
-insert into public.finance_cushions (
-  id, user_id, liquid_resources_cents, monthly_essential_expenses_cents,
-  monthly_continuing_income_cents
-)
-values (
-  '2a000000-0000-0000-0000-000000000002',
-  '21000000-0000-0000-0000-000000000002',
-  60000,
-  30000,
-  0
-);
-
-insert into public.finance_cushion_snapshots (
-  id, plan_id, user_id, action_id, trigger, scenario, months_covered,
-  sustainable, result, model_version
-)
-values (
-  '2b000000-0000-0000-0000-000000000002',
-  '2a000000-0000-0000-0000-000000000002',
-  '21000000-0000-0000-0000-000000000002',
-  '2c000000-0000-0000-0000-000000000002',
-  'completed',
-  'current',
-  2,
-  false,
-  '{"months_covered":2}'::jsonb,
-  '2.0.0'
-);
-
 -- Journal: owner A can read and mutate only A's rows, while the duplicate
 -- date and duplicate link assertions prove the relevant integrity rules.
 set local role authenticated;
@@ -1189,21 +1160,12 @@ begin
 end
 $$;
 
--- Finance: plans are owner-readable and owner-updatable; snapshots are
--- owner-readable and append-only. Cross-owner writes are followed by state
--- checks, and the unique constraints are asserted at the database seam.
-set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub',
-  '21000000-0000-0000-0000-000000000001',
-  true
-);
-
-insert into public.finance_cushions (
-  id, user_id, liquid_resources_cents, monthly_essential_expenses_cents,
-  monthly_continuing_income_cents
-)
-values (
+-- Finance: Plans and Snapshots are owner-readable, while all authenticated
+-- writes enter through the atomic Household Runway command. Seed the legacy
+-- rows as the fixture's administrative session before exercising the read and
+-- direct-write boundaries below.
+reset role;
+select public.ralph_ci_seed_finance_plan(
   '2a000000-0000-0000-0000-000000000001',
   '21000000-0000-0000-0000-000000000001',
   120000,
@@ -1211,11 +1173,7 @@ values (
   5000
 );
 
-insert into public.finance_cushion_snapshots (
-  id, plan_id, user_id, action_id, trigger, scenario, months_covered,
-  sustainable, result, model_version
-)
-values (
+select public.ralph_ci_seed_finance_snapshot(
   '2b000000-0000-0000-0000-000000000001',
   '2a000000-0000-0000-0000-000000000001',
   '21000000-0000-0000-0000-000000000001',
@@ -1228,9 +1186,35 @@ values (
   '2.0.0'
 );
 
+select public.ralph_ci_seed_finance_plan(
+  '2a000000-0000-0000-0000-000000000002',
+  '21000000-0000-0000-0000-000000000002',
+  60000,
+  30000,
+  0
+);
+
+select public.ralph_ci_seed_finance_snapshot(
+  '2b000000-0000-0000-0000-000000000002',
+  '2a000000-0000-0000-0000-000000000002',
+  '21000000-0000-0000-0000-000000000002',
+  '2c000000-0000-0000-0000-000000000002',
+  'completed',
+  'current',
+  2,
+  false,
+  '{"months_covered":2}'::jsonb,
+  '2.0.0'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  '21000000-0000-0000-0000-000000000001',
+  true
+);
+
 do $$
-declare
-  affected_rows integer;
 begin
   if (select count(*) from public.finance_cushions) <> 1
      or not exists (
@@ -1244,47 +1228,29 @@ begin
     raise exception 'finance owner A cannot read own snapshot';
   end if;
 
-  update public.finance_cushions
-  set liquid_resources_cents = 125000
-  where id = '2a000000-0000-0000-0000-000000000001';
-  get diagnostics affected_rows = row_count;
-  if affected_rows <> 1 or not exists (
-    select 1 from public.finance_cushions
-    where id = '2a000000-0000-0000-0000-000000000001'
-      and liquid_resources_cents = 125000
-  ) then
-    raise exception 'finance owner A update did not persist';
-  end if;
-
-  insert into public.finance_cushion_snapshots (
-    plan_id, user_id, action_id, trigger, scenario, months_covered,
-    sustainable, result, model_version
-  ) values (
-    '2a000000-0000-0000-0000-000000000001',
-    '21000000-0000-0000-0000-000000000001',
-    '2c000000-0000-0000-0000-000000000003',
-    'updated',
-    'current',
-    5,
-    true,
-    '{"months_covered":5}'::jsonb,
-    '2.0.0'
-  );
-  if (select count(*) from public.finance_cushion_snapshots) <> 2 then
-    raise exception 'finance owner A cannot append own snapshot';
-  end if;
 end
 $$;
 
 select pg_temp.expect_sqlstate(
+  $sql$update public.finance_cushions set liquid_resources_cents = 125000 where id = '2a000000-0000-0000-0000-000000000001'$sql$,
+  '42501',
+  'finance owner A direct Plan update privilege leaked'
+);
+select pg_temp.expect_sqlstate(
+  $sql$insert into public.finance_cushion_snapshots (plan_id, user_id, action_id, trigger, scenario, months_covered, sustainable, result, model_version) values ('2a000000-0000-0000-0000-000000000001', '21000000-0000-0000-0000-000000000001', '2c000000-0000-0000-0000-000000000003', 'updated', 'current', 5, true, '{"months_covered":5}'::jsonb, '2.0.0')$sql$,
+  '42501',
+  'finance owner A direct Snapshot insert privilege leaked'
+);
+
+select pg_temp.expect_sqlstate(
   $sql$insert into public.finance_cushions (user_id, liquid_resources_cents, monthly_essential_expenses_cents) values ('21000000-0000-0000-0000-000000000001', 1, 1)$sql$,
-  '23505',
-  'finance accepted a second plan for one owner'
+  '42501',
+  'finance direct Plan insert privilege leaked'
 );
 select pg_temp.expect_sqlstate(
   $sql$insert into public.finance_cushion_snapshots (plan_id, user_id, action_id, trigger, scenario, sustainable, result, model_version) values ('2a000000-0000-0000-0000-000000000001', '21000000-0000-0000-0000-000000000001', '2c000000-0000-0000-0000-000000000001', 'updated', 'duplicate', true, '{}'::jsonb, '2.0.0')$sql$,
-  '23505',
-  'finance accepted a duplicate snapshot action'
+  '42501',
+  'finance direct Snapshot insert privilege leaked'
 );
 select pg_temp.expect_sqlstate(
   $sql$update public.finance_cushion_snapshots set scenario = 'tampered' where id = '2b000000-0000-0000-0000-000000000001'$sql$,
@@ -1311,9 +1277,10 @@ begin
 end
 $$;
 
-select pg_temp.expect_no_rows(
+select pg_temp.expect_sqlstate(
   $sql$update public.finance_cushions set liquid_resources_cents = 999999 where user_id = '21000000-0000-0000-0000-000000000002'$sql$,
-  'finance owner A updated owner B plan'
+  '42501',
+  'finance owner A direct owner-B Plan update privilege leaked'
 );
 select pg_temp.expect_sqlstate(
   $sql$insert into public.finance_cushions (user_id, liquid_resources_cents, monthly_essential_expenses_cents) values ('21000000-0000-0000-0000-000000000002', 1, 1)$sql$,
@@ -1350,28 +1317,25 @@ select set_config(
   true
 );
 do $$
-declare
-  affected_rows integer;
 begin
   if (select count(*) from public.finance_cushions) <> 1
      or (select count(*) from public.finance_cushion_snapshots) <> 1 then
     raise exception 'finance owner B cannot read own data';
-  end if;
-  update public.finance_cushions
-  set liquid_resources_cents = 65000
-  where user_id = '21000000-0000-0000-0000-000000000002';
-  get diagnostics affected_rows = row_count;
-  if affected_rows <> 1 then
-    raise exception 'finance owner B cannot update own plan';
   end if;
   if exists (select 1 from public.finance_cushions where user_id = '21000000-0000-0000-0000-000000000001') then
     raise exception 'finance owner B can read owner A plan';
   end if;
 end
 $$;
-select pg_temp.expect_no_rows(
+select pg_temp.expect_sqlstate(
+  $sql$update public.finance_cushions set liquid_resources_cents = 65000 where user_id = '21000000-0000-0000-0000-000000000002'$sql$,
+  '42501',
+  'finance owner B direct Plan update privilege leaked'
+);
+select pg_temp.expect_sqlstate(
   $sql$update public.finance_cushions set liquid_resources_cents = 999999 where user_id = '21000000-0000-0000-0000-000000000001'$sql$,
-  'finance owner B updated owner A plan'
+  '42501',
+  'finance owner B direct owner-A Plan update privilege leaked'
 );
 select pg_temp.expect_sqlstate(
   $sql$insert into public.finance_cushions (user_id, liquid_resources_cents, monthly_essential_expenses_cents) values ('21000000-0000-0000-0000-000000000001', 1, 1)$sql$,
@@ -1400,8 +1364,8 @@ select set_config(
 );
 do $$
 begin
-  if (select liquid_resources_cents from public.finance_cushions) <> 125000
-     or (select count(*) from public.finance_cushion_snapshots) <> 2
+  if (select liquid_resources_cents from public.finance_cushions) <> 120000
+     or (select count(*) from public.finance_cushion_snapshots) <> 1
      or exists (select 1 from public.finance_cushion_snapshots where scenario = 'anonymous') then
     raise exception 'anonymous finance writes changed owner A state';
   end if;
@@ -1414,7 +1378,7 @@ select set_config(
 );
 do $$
 begin
-  if (select liquid_resources_cents from public.finance_cushions) <> 65000
+  if (select liquid_resources_cents from public.finance_cushions) <> 60000
      or (select count(*) from public.finance_cushion_snapshots) <> 1
      or exists (select 1 from public.finance_cushion_snapshots where scenario = 'anonymous') then
     raise exception 'anonymous finance writes changed owner B state';

@@ -6,7 +6,7 @@ import {
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { createHouseholdRunwayService } from "@/lib/finance/household-runway-service";
 import { validateRequestBody } from "@/lib/validations/api";
-import { financeCushionPlanSchema } from "@/lib/validations/finance-cushion";
+import { financeCushionCommitSchema } from "@/lib/validations/finance-cushion";
 import { log } from "@/lib/logger";
 
 const READ_REQUEST_POLICY = {
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function PUT(request: NextRequest) {
+async function commit(request: NextRequest) {
   try {
     const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
     if (!auth.ok) {
@@ -53,28 +53,62 @@ export async function PUT(request: NextRequest) {
     }
     const validation = validateRequestBody(
       await request.json(),
-      financeCushionPlanSchema,
+      financeCushionCommitSchema,
     );
     if (!validation.success) return validation.response;
-    const result = await createHouseholdRunwayService(auth.client).save(
-      auth.principal.userId,
-      validation.data,
-    );
+    const result = await createHouseholdRunwayService(auth.client).commit({
+      ...validation.data,
+      attribution: validation.data.attribution ?? {},
+    });
     if (!result.success) {
+      if ("validationIssues" in result) {
+        return NextResponse.json(
+          {
+            type: "validation_error",
+            error: "Invalid household runway commit",
+            issues: result.validationIssues,
+          },
+          { status: 400 },
+        );
+      }
+      if (result.kind === "stale_revision") {
+        return NextResponse.json(
+          {
+            type: "stale_revision_conflict",
+            error: "Household Runway Plan revision is stale",
+            expected_revision: result.expectedRevision,
+            current_revision: result.currentRevision,
+          },
+          { status: 409 },
+        );
+      }
+      if (result.kind === "idempotency_conflict") {
+        return NextResponse.json(
+          {
+            type: "idempotency_conflict",
+            error: "Idempotency key was reused for a different commit",
+          },
+          { status: 409 },
+        );
+      }
       return NextResponse.json(
         {
-          error: "Invalid household runway assessment",
-          issues: result.validationIssues,
+          type: "invalid_snapshot_trigger",
+          error: result.message,
         },
         { status: 400 },
       );
     }
     return NextResponse.json({
-      cushion: result.cushion,
+      status: result.replayed ? "already-applied" : "committed",
+      revision: result.revision,
+      plan: result.plan,
+      assessment: result.assessment,
+      snapshot: result.snapshot,
       snapshots: result.snapshots,
     });
   } catch (error) {
-    log.error("[household-runway] PUT failed", error);
+    log.error("[household-runway] commit failed", error);
     return NextResponse.json(
       { error: "Failed to save runway" },
       { status: 500 },
@@ -82,4 +116,5 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-export const POST = PUT;
+export const PUT = commit;
+export const POST = commit;

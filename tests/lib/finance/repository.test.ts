@@ -1,13 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  createDefaultRunwayAnswers,
+  toFinanceCushionView,
+  type FinanceCushionView,
+} from "@/lib/finance/cushion";
 import { assessHouseholdRunway } from "@/lib/finance/household-runway-assessment";
 import {
-  appendRunwaySnapshot,
-  saveHouseholdRunwayPlan,
+  commitHouseholdRunwayPlan,
+  type HouseholdRunwayAtomicCommitInput,
 } from "@/lib/finance/repository";
-import { createDefaultRunwayAnswers } from "@/lib/finance/cushion";
 
-function assessment() {
+function input(): HouseholdRunwayAtomicCommitInput {
   const answers = createDefaultRunwayAnswers(
     new Date("2026-07-26T00:00:00.000Z"),
   );
@@ -26,71 +30,156 @@ function assessment() {
     interruption_monthly_cents: 600_000,
     confidence: "confirmed",
   };
-  const outcome = assessHouseholdRunway({ answers });
-  if (!outcome.success) throw new Error("test assessment should be valid");
-  return outcome;
+  const assessment = assessHouseholdRunway({ answers });
+  if (!assessment.success) throw new Error("test assessment should be valid");
+  return {
+    answers,
+    adjustments: {
+      expense_reduction_cents: 0,
+      added_cash_cents: 125_000,
+      added_monthly_income_cents: 0,
+      expected_unconfirmed_funds_cents: 0,
+      usable_illiquid_investments_cents: 0,
+      usable_retirement_tax_deferred_cents: 0,
+      usable_retirement_tax_free_cents: 0,
+    },
+    status: "completed",
+    attribution: { campaign: "youtube" },
+    idempotencyKey: "74a303ae-1ba3-4ab5-beb9-5317eb94c790",
+    expectedRevision: 0,
+    snapshotActionId: "74a303ae-1ba3-4ab5-beb9-5317eb94c790",
+    snapshotTrigger: "completed",
+    assessment,
+  };
 }
 
-describe("household runway repository", () => {
-  it("persists the complete assessment as the latest saved result", async () => {
-    const outcome = assessment();
-    const baseline = outcome.firstScenario.baseline;
-    const upsert = vi.fn().mockReturnValue({
-      select: () => ({
-        single: async () => ({
-          data: {
-            id: "plan-a",
-            user_id: "user-a",
-            liquid_resources_cents: baseline.starting_resources_cents,
-            monthly_essential_expenses_cents:
-              baseline.interruption_expenses_cents,
-            monthly_continuing_income_cents:
-              baseline.continuing_monthly_income_cents,
-            answers: outcome.answers,
-            latest_result: outcome,
-            model_version: "4.0.0",
-            status: "completed",
-            created_at: "2026-07-26T00:00:00.000Z",
-            updated_at: "2026-07-26T00:00:00.000Z",
-          },
-          error: null,
+function plan(inputValue: HouseholdRunwayAtomicCommitInput): FinanceCushionView {
+  const baseline = inputValue.assessment.firstScenario.baseline;
+  return toFinanceCushionView({
+    id: "plan-a",
+    user_id: "user-a",
+    revision: 1,
+    liquid_resources_cents: baseline.starting_resources_cents,
+    monthly_essential_expenses_cents: baseline.interruption_expenses_cents,
+    monthly_continuing_income_cents:
+      baseline.continuing_monthly_income_cents,
+    answers: inputValue.answers,
+    adjustments: inputValue.adjustments,
+    latest_result: inputValue.assessment,
+    model_version: inputValue.assessment.modelVersion,
+    status: "completed",
+    created_at: "2026-07-26T00:00:00.000Z",
+    updated_at: "2026-07-26T00:00:00.000Z",
+  });
+}
+
+function snapshot() {
+  return {
+    id: "snapshot-a",
+    trigger: "completed" as const,
+    scenario: "current" as const,
+    months_covered: 5,
+    sustainable: false,
+    model_version: "4.0.0",
+    created_at: "2026-07-26T00:00:00.000Z",
+  };
+}
+
+describe("household runway atomic repository boundary", () => {
+  it("calls one authenticated RPC with the complete server assessment", async () => {
+    const commit = input();
+    const rpc = vi.fn().mockResolvedValue({
+      data: {
+        status: "committed",
+        type: "success",
+        revision: 1,
+        replayed: false,
+        plan: plan(commit),
+        assessment: commit.assessment,
+        snapshot: snapshot(),
+        snapshots: [snapshot()],
+      },
+      error: null,
+    });
+    const supabase = { rpc } as unknown as SupabaseClient;
+
+    const result = await commitHouseholdRunwayPlan(supabase, commit);
+
+    expect(result).toMatchObject({
+      success: true,
+      replayed: false,
+      revision: 1,
+      snapshot: { id: "snapshot-a", trigger: "completed" },
+    });
+    expect(rpc).toHaveBeenCalledWith(
+      "commit_household_runway_plan",
+      expect.objectContaining({
+        p_request: expect.objectContaining({
+          answers: commit.answers,
+          adjustments: commit.adjustments,
+          idempotency_key: commit.idempotencyKey,
+          expected_revision: 0,
+          snapshot_action_id: commit.snapshotActionId,
+          snapshot_trigger: "completed",
+          assessment: commit.assessment,
         }),
       }),
-    });
-    const supabase = {
-      from: vi.fn(() => ({ upsert })),
-    } as unknown as SupabaseClient;
-
-    await saveHouseholdRunwayPlan(supabase, "user-a", {
-      assessment: outcome,
-      status: "completed",
-      attribution: {},
-    });
-
-    expect(upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ latest_result: outcome }),
-      { onConflict: "user_id" },
     );
   });
 
-  it("persists the complete assessment in snapshots", async () => {
-    const outcome = assessment();
-    const upsert = vi.fn().mockResolvedValue({ error: null });
-    const supabase = {
-      from: vi.fn(() => ({ upsert })),
-    } as unknown as SupabaseClient;
+  it("maps typed stale revision and idempotency conflicts without fallback writes", async () => {
+    const commit = input();
+    const staleRpc = vi.fn().mockResolvedValue({
+      data: {
+        status: "conflict",
+        type: "stale_revision_conflict",
+        expected_revision: 0,
+        current_revision: 4,
+      },
+      error: null,
+    });
+    const staleClient = { rpc: staleRpc, from: vi.fn() } as unknown as SupabaseClient;
+    await expect(commitHouseholdRunwayPlan(staleClient, commit)).resolves.toEqual({
+      success: false,
+      kind: "stale_revision",
+      expectedRevision: 0,
+      currentRevision: 4,
+    });
+    expect(staleClient.from).not.toHaveBeenCalled();
 
-    await appendRunwaySnapshot(supabase, {
-      planId: "plan-a",
-      userId: "user-a",
-      actionId: "action-a",
-      trigger: "updated",
-      assessment: outcome,
+    const idempotencyRpc = vi.fn().mockResolvedValue({
+      data: { status: "conflict", type: "idempotency_conflict" },
+      error: null,
+    });
+    await expect(
+      commitHouseholdRunwayPlan(
+        { rpc: idempotencyRpc } as unknown as SupabaseClient,
+        commit,
+      ),
+    ).resolves.toEqual({ success: false, kind: "idempotency_conflict" });
+  });
+
+  it("returns an already-applied RPC outcome as the authoritative replay", async () => {
+    const commit = input();
+    const rpc = vi.fn().mockResolvedValue({
+      data: {
+        status: "committed",
+        type: "already-applied",
+        revision: 1,
+        replayed: true,
+        plan: plan(commit),
+        assessment: commit.assessment,
+        snapshot: snapshot(),
+        snapshots: [snapshot()],
+      },
+      error: null,
     });
 
-    expect(upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ result: outcome }),
-      { onConflict: "plan_id,action_id", ignoreDuplicates: true },
-    );
+    await expect(
+      commitHouseholdRunwayPlan(
+        { rpc } as unknown as SupabaseClient,
+        commit,
+      ),
+    ).resolves.toMatchObject({ success: true, replayed: true, revision: 1 });
   });
 });
