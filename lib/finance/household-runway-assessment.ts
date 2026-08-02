@@ -5,6 +5,7 @@ import {
   highestLeverageActions,
   simulateHouseholdRunway,
   withCurrentLifestyleExpenses,
+  RUNWAY_MODEL_VERSION,
   type RunwayAdjustments,
   type RunwaySimulation,
 } from "@/lib/finance/cushion";
@@ -39,6 +40,7 @@ export interface HouseholdRunwayAssessmentValidationIssue {
 export type HouseholdRunwayAssessmentOutcome =
   | {
       success: true;
+      modelVersion: typeof RUNWAY_MODEL_VERSION;
       answers: z.output<typeof householdRunwayAnswersSchema>;
       adjustments: RunwayAdjustments;
       firstScenario: HouseholdRunwayScenarioAssessment;
@@ -158,6 +160,7 @@ export function assessHouseholdRunway(
   });
   return {
     success: true,
+    modelVersion: RUNWAY_MODEL_VERSION,
     answers,
     adjustments,
     firstScenario: scenarios[0],
