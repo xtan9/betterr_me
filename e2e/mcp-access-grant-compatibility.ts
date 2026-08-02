@@ -9,6 +9,7 @@ import type { Page, TestInfo } from "@playwright/test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import {
   discoverOAuthServerInfo,
+  refreshAuthorization,
   type OAuthClientProvider,
   type OAuthDiscoveryState,
   UnauthorizedError,
@@ -23,6 +24,8 @@ import type {
   OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { decodeProtectedHeader, importJWK, jwtVerify } from "jose";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createRemoteJWKSet, decodeJwt } from "jose";
 
 import {
   evaluateDelegatedJwtPolicy,
@@ -49,6 +52,7 @@ export interface McpAccessGrantTarget {
   canonicalResource: string;
   supabaseUrl: string;
   expectedAuthorizationServer: string;
+  anonKey?: string;
   email?: string;
   password?: string;
 }
@@ -102,6 +106,7 @@ interface TargetConfig {
   canonicalResource?: unknown;
   supabaseUrl?: unknown;
   expectedAuthorizationServer?: unknown;
+  anonKeyEnv?: unknown;
   emailEnv?: unknown;
   passwordEnv?: unknown;
 }
@@ -117,6 +122,12 @@ export const REQUIRED_GATE_IDS = [
   "delegated-token-validation",
   "delegated-token-negative-boundary",
   "authenticated-mcp-operation",
+  "refresh-rotation",
+  "refresh-replay-containment",
+  "grant-identification-revocation",
+  "post-revocation-refresh",
+  "post-revocation-access",
+  "cleanup",
   "reproducible-configuration",
   "sanitized-evidence",
   "versions",
@@ -125,23 +136,43 @@ export const REQUIRED_GATE_IDS = [
 const SAFE_RESPONSE_KEYS = new Set([
   "authorization_endpoint",
   "authorization_servers",
+  "access_token",
   "code_challenge_methods_supported",
+  "client",
+  "client_id",
+  "client_name",
+  "client_type",
+  "created_at",
   "error",
   "error_code",
+  "error_description",
   "grant_types_supported",
+  "grant_types",
+  "granted_at",
   "issuer",
   "jwks_uri",
+  "logo_uri",
   "msg",
+  "registration_type",
   "registration_endpoint",
   "resource",
+  "redirect_uris",
   "response_types_supported",
+  "response_types",
   "scopes_supported",
+  "scopes",
+  "scope",
   "token_endpoint",
   "token_endpoint_auth_methods_supported",
+  "token_type",
+  "updated_at",
+  "expires_in",
 ]);
 
 const SENSITIVE_ENV_NAMES = [
   "MCP_TEST_PASSWORD",
+  "MCP_SUPABASE_ANON_KEY",
+  "SUPABASE_ANON_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
   "API_KEY_HMAC_SECRET",
@@ -181,6 +212,8 @@ function sanitizeText(value: string): string {
 
   return sanitized
     .replace(/(access_token|refresh_token|client_secret|code_verifier|password|authorization)=([^&\s]+)/gi, "$1=[REDACTED]")
+    .replace(/("(?:access_token|refresh_token|client_secret|code_verifier|password|authorization)"\s*:\s*")[^"]*(")/gi, "$1[REDACTED]$2")
+    .replace(/((?:access_token|refresh_token|client_secret|code_verifier|password|authorization)\s*[:=]\s*)([^&,\s}\]]+)/gi, "$1[REDACTED]")
     .replace(/Bearer\s+[^\s]+/gi, "Bearer [REDACTED]")
     .replace(/\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, "[JWT REDACTED]");
 }
@@ -335,15 +368,26 @@ function responseCredentialFields(
   return [...fields].sort();
 }
 
-function createEvidenceFetch(requests: RequestEvidence[]) {
-  return async (input: string | URL, init?: RequestInit): Promise<Response> => {
-    const headers = new Headers(init?.headers);
+type EvidenceFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+function requestInputUrl(input: RequestInfo | URL): string | URL {
+  if (typeof input === "string" || input instanceof URL) {
+    return input;
+  }
+
+  return input.url;
+}
+
+function createEvidenceFetch(requests: RequestEvidence[]): EvidenceFetch {
+  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const requestObject = typeof Request !== "undefined" && input instanceof Request ? input : undefined;
+    const headers = new Headers(init?.headers ?? requestObject?.headers);
     const bodyMetadata = requestBodyMetadata(init?.body);
     const parameters = bodyMetadata.parameters;
     const codeVerifier = parameters?.get("code_verifier");
     const request: RequestEvidence = {
-      method: init?.method ?? "GET",
-      url: sanitizeUrl(input),
+      method: init?.method ?? requestObject?.method ?? "GET",
+      url: sanitizeUrl(requestInputUrl(input)),
       requestBodyFields: bodyMetadata.fields,
       authorizationHeaderPresent: headers.has("authorization"),
       ...(parameters?.has("client_id") && { requestClientIdPresent: true }),
@@ -433,6 +477,7 @@ function deriveAuthorizationServer(supabaseUrl: string): string {
 
 function parseTarget(raw: TargetConfig, index: number): McpAccessGrantTarget {
   const supabaseUrl = typeof raw.supabaseUrl === "string" ? raw.supabaseUrl : "";
+  const anonKeyEnv = typeof raw.anonKeyEnv === "string" ? raw.anonKeyEnv : "MCP_SUPABASE_ANON_KEY";
   const emailEnv = typeof raw.emailEnv === "string" ? raw.emailEnv : "MCP_TEST_EMAIL";
   const passwordEnv = typeof raw.passwordEnv === "string" ? raw.passwordEnv : "MCP_TEST_PASSWORD";
 
@@ -444,6 +489,7 @@ function parseTarget(raw: TargetConfig, index: number): McpAccessGrantTarget {
       typeof raw.expectedAuthorizationServer === "string" && raw.expectedAuthorizationServer.length > 0
         ? raw.expectedAuthorizationServer
         : deriveAuthorizationServer(supabaseUrl),
+    anonKey: process.env[anonKeyEnv] ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     email: process.env[emailEnv],
     password: process.env[passwordEnv],
   };
@@ -571,19 +617,19 @@ class CompatibilityOAuthProvider implements OAuthClientProvider {
   private discovery?: OAuthDiscoveryState;
 
   constructor(
-    private readonly callbackUrl: string,
+    private readonly callbackUrl: string | undefined,
     private readonly sdkVersion: string,
     private readonly canonicalResource: string,
   ) {}
 
-  get redirectUrl(): string {
+  get redirectUrl(): string | undefined {
     return this.callbackUrl;
   }
 
   get clientMetadata(): OAuthClientMetadata {
     return {
       client_name: "BetterR.Me MCP Access Grant Compatibility Client",
-      redirect_uris: [this.callbackUrl],
+      redirect_uris: this.callbackUrl ? [this.callbackUrl] : [],
       grant_types: ["authorization_code"],
       response_types: ["code"],
       token_endpoint_auth_method: "none",
@@ -740,6 +786,281 @@ function providerFeatureDisabled(requests: RequestEvidence[], providerUrl: strin
   const status = disabled.status ?? "unknown status";
   const message = typeof disabled.responseBody?.msg === "string" ? disabled.responseBody.msg : "OAuth server feature disabled";
   return `Supabase OAuth provider returned HTTP ${status} with error_code=feature_disabled: ${sanitizeText(message)}`;
+}
+
+interface RefreshAttempt {
+  tokens?: OAuthTokens;
+  request?: RequestEvidence;
+  error?: unknown;
+}
+
+interface McpOperationResult {
+  status: "authorized" | "rejected" | "not-proven";
+  detail: string;
+  evidence?: Record<string, unknown>;
+}
+
+function lastRequestForEndpoint(
+  requests: RequestEvidence[],
+  startIndex: number,
+  endpoint: string | undefined,
+): RequestEvidence | undefined {
+  if (!endpoint) {
+    return undefined;
+  }
+
+  const sanitizedEndpoint = sanitizeUrl(endpoint);
+  for (let index = requests.length - 1; index >= startIndex; index -= 1) {
+    const request = requests[index];
+    if (request.method === "POST" && request.url === sanitizedEndpoint) {
+      return request;
+    }
+  }
+
+  return undefined;
+}
+
+function responseHasField(request: RequestEvidence | undefined, field: string): boolean {
+  return Boolean(request?.responseBody && Object.prototype.hasOwnProperty.call(request.responseBody, field));
+}
+
+function responseField(request: RequestEvidence | undefined, field: string): unknown {
+  return request?.responseBody?.[field];
+}
+
+function tokenSummary(tokens: OAuthTokens | undefined): Record<string, unknown> {
+  if (!tokens) {
+    return {
+      accessTokenPresent: false,
+      refreshTokenPresent: false,
+      tokenType: "missing",
+      expiresIn: "missing",
+      scope: "missing",
+    };
+  }
+
+  return {
+    accessTokenPresent: Boolean(tokens.access_token),
+    refreshTokenPresent: Boolean(tokens.refresh_token),
+    tokenType: tokens.token_type ?? "missing",
+    expiresIn: tokens.expires_in ?? "missing",
+    scope: tokens.scope ?? "missing",
+  };
+}
+
+function tokenReplacementEvidence(
+  previous: OAuthTokens,
+  attempt: RefreshAttempt,
+): Record<string, unknown> {
+  const next = attempt.tokens;
+  return {
+    previous: tokenSummary(previous),
+    replacement: tokenSummary(next),
+    providerReturnedAccessToken: responseHasField(attempt.request, "access_token"),
+    providerReturnedRefreshToken: responseHasField(attempt.request, "refresh_token"),
+    accessTokenChanged: Boolean(next?.access_token && next.access_token !== previous.access_token),
+    refreshTokenChanged: Boolean(next?.refresh_token && next.refresh_token !== previous.refresh_token),
+    tokenEndpointStatus: attempt.request?.status ?? "not-observed",
+    requestBodyFields: attempt.request?.requestBodyFields ?? [],
+    authorizationHeaderPresent: attempt.request?.authorizationHeaderPresent ?? false,
+  };
+}
+
+function refreshAttemptEvidence(attempt: RefreshAttempt): Record<string, unknown> {
+  return {
+    succeeded: Boolean(attempt.tokens),
+    tokenSummary: tokenSummary(attempt.tokens),
+    tokenEndpointStatus: attempt.request?.status ?? "not-observed",
+    providerReturnedAccessToken: responseHasField(attempt.request, "access_token"),
+    providerReturnedRefreshToken: responseHasField(attempt.request, "refresh_token"),
+    error: responseField(attempt.request, "error") ?? "none",
+    errorCode: responseField(attempt.request, "error_code") ?? "none",
+    errorDescription: responseField(attempt.request, "error_description") ?? responseField(attempt.request, "msg") ?? "none",
+    requestBodyFields: attempt.request?.requestBodyFields ?? [],
+    authorizationHeaderPresent: attempt.request?.authorizationHeaderPresent ?? false,
+    errorDetail: attempt.error ? errorDetail(attempt.error) : "none",
+  };
+}
+
+async function refreshWithOfficialClient(options: {
+  authorizationServerUrl: string;
+  metadata: AuthorizationServerMetadata;
+  clientInformation: OAuthClientInformationMixed;
+  refreshToken: string;
+  resource: URL;
+  addClientAuthentication?: OAuthClientProvider["addClientAuthentication"];
+  fetchFn: EvidenceFetch;
+  requests: RequestEvidence[];
+}): Promise<RefreshAttempt> {
+  const startIndex = options.requests.length;
+  try {
+    const tokens = await refreshAuthorization(options.authorizationServerUrl, {
+      metadata: options.metadata,
+      clientInformation: options.clientInformation,
+      refreshToken: options.refreshToken,
+      resource: options.resource,
+      addClientAuthentication: options.addClientAuthentication,
+      fetchFn: options.fetchFn,
+    });
+
+    return {
+      tokens,
+      request: lastRequestForEndpoint(options.requests, startIndex, options.metadata.token_endpoint),
+    };
+  } catch (error) {
+    return {
+      error,
+      request: lastRequestForEndpoint(options.requests, startIndex, options.metadata.token_endpoint),
+    };
+  }
+}
+
+function grantClientId(grant: unknown): string | undefined {
+  if (!grant || typeof grant !== "object") {
+    return undefined;
+  }
+
+  const record = grant as Record<string, unknown>;
+  if (typeof record.client_id === "string") {
+    return record.client_id;
+  }
+
+  if (record.client && typeof record.client === "object") {
+    const client = record.client as Record<string, unknown>;
+    return typeof client.client_id === "string" ? client.client_id : undefined;
+  }
+
+  return undefined;
+}
+
+function grantSummary(grant: unknown): Record<string, unknown> {
+  if (!grant || typeof grant !== "object") {
+    return { present: false };
+  }
+
+  const record = grant as Record<string, unknown>;
+  const client = record.client && typeof record.client === "object"
+    ? record.client as Record<string, unknown>
+    : undefined;
+
+  return {
+    present: true,
+    clientId: grantClientId(grant) ?? "missing",
+    clientName: typeof client?.client_name === "string" ? sanitizeText(client.client_name) : "missing",
+    scopes: Array.isArray(record.scopes) ? record.scopes.map((scope) => sanitizeText(String(scope))) : [],
+    grantedAt: typeof record.granted_at === "string" ? sanitizeText(record.granted_at) : "missing",
+  };
+}
+
+function accessTokenLifetimeEvidence(tokens: OAuthTokens): Record<string, unknown> {
+  try {
+    const payload = decodeJwt(tokens.access_token);
+    const now = Math.floor(Date.now() / 1000);
+    const issuedAt = typeof payload.iat === "number" ? payload.iat : undefined;
+    const expiresAt = typeof payload.exp === "number" ? payload.exp : undefined;
+    return {
+      accessTokenHasIssuedAt: issuedAt !== undefined,
+      accessTokenHasExpiry: expiresAt !== undefined,
+      documentedLifetimeSeconds: tokens.expires_in ?? (issuedAt !== undefined && expiresAt !== undefined ? expiresAt - issuedAt : "unavailable"),
+      secondsRemaining: expiresAt !== undefined ? expiresAt - now : "unavailable",
+      withinDocumentedLifetime: expiresAt !== undefined && expiresAt > now,
+    };
+  } catch {
+    return {
+      accessTokenHasIssuedAt: false,
+      accessTokenHasExpiry: false,
+      documentedLifetimeSeconds: tokens.expires_in ?? "unavailable",
+      secondsRemaining: "unavailable",
+      withinDocumentedLifetime: false,
+    };
+  }
+}
+
+async function runMcpOperation(
+  target: McpAccessGrantTarget,
+  provider: CompatibilityOAuthProvider,
+  fetchFn: EvidenceFetch,
+  requests: RequestEvidence[],
+): Promise<McpOperationResult> {
+  const startIndex = requests.length;
+  const client = new Client({ name: "betterr-me-mcp-access-grant-compatibility", version: "1.0.0" });
+  const transport = new StreamableHTTPClientTransport(new URL(target.canonicalResource), {
+    authProvider: provider,
+    fetch: fetchFn,
+  });
+
+  try {
+    await client.connect(transport);
+    const listed = await client.listTools();
+    const tool = listed.tools.find((candidate) => candidate.name === "getProjects") ?? listed.tools[0];
+    if (!tool) {
+      return {
+        status: "not-proven",
+        detail: "Authenticated MCP session returned no callable tools.",
+      };
+    }
+
+    const result = await client.callTool({ name: tool.name, arguments: {} });
+    if (result.isError) {
+      return {
+        status: "not-proven",
+        detail: `Official MCP client callTool(${tool.name}) returned an MCP error rather than a successful operation.`,
+        evidence: { tool: tool.name, resultIsError: true },
+      };
+    }
+
+    return {
+      status: "authorized",
+      detail: `Official MCP client completed listTools and callTool(${tool.name}).`,
+      evidence: { tool: tool.name, resultIsError: false },
+    };
+  } catch (error) {
+    const requestStatuses = requests
+      .slice(startIndex)
+      .map((request) => request.status)
+      .filter((status): status is number => typeof status === "number");
+    const rejected = requestStatuses.includes(401) || requests
+      .slice(startIndex)
+      .some((request) => request.responseBody?.error === "invalid_token");
+
+    return {
+      status: rejected ? "rejected" : "not-proven",
+      detail: rejected
+        ? `MCP access was rejected by the protected resource: ${errorDetail(error)}`
+        : `MCP operation could not be classified at the public boundary: ${errorDetail(error)}`,
+      evidence: { requestStatuses },
+    };
+  } finally {
+    await transport.close().catch(() => undefined);
+    await client.close().catch(() => undefined);
+  }
+}
+
+async function createGrantManagementClient(
+  target: McpAccessGrantTarget,
+  tokens: OAuthTokens,
+  fetchFn: EvidenceFetch,
+): Promise<{ client?: SupabaseClient; error?: string }> {
+  if (!target.anonKey) {
+    return { error: "Supabase anon key was not supplied through an environment variable." };
+  }
+
+  const client = createClient(target.supabaseUrl, target.anonKey, {
+    auth: {
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      persistSession: false,
+    },
+    global: { fetch: fetchFn },
+  });
+  const { error } = await client.auth.setSession({
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token ?? "",
+  });
+
+  return error
+    ? { error: `Official Supabase client could not establish the provider session: ${errorDetail(error)}` }
+    : { client };
 }
 
 async function writeReport(report: CompatibilityReport, testInfo: TestInfo): Promise<boolean> {
@@ -1310,12 +1631,12 @@ export async function runMcpAccessGrantCompatibility(
   page: Page,
   testInfo: TestInfo,
 ): Promise<CompatibilityReport> {
-  activeTargetSecrets = [target.email, target.password].filter(
+  activeTargetSecrets = [target.email, target.password, target.anonKey].filter(
     (secret): secret is string => Boolean(secret),
   );
   const startedAt = new Date().toISOString();
   const report: CompatibilityReport = {
-    issue: "#766",
+    issue: "#767",
     outcome: "not-proven",
     startedAt,
     finishedAt: startedAt,
@@ -1355,6 +1676,7 @@ export async function runMcpAccessGrantCompatibility(
       : "Canonical Resource, Supabase URL, and expected authorization-server issuer must be configured as URLs.",
     {
       hasProviderCredentials: Boolean(target.email && target.password),
+      hasProviderClientKey: Boolean(target.anonKey),
       canonicalResource: sanitizeUrl(target.canonicalResource),
       supabaseUrl: sanitizeUrl(target.supabaseUrl),
       expectedAuthorizationServer: sanitizeUrl(target.expectedAuthorizationServer),
@@ -1810,6 +2132,292 @@ export async function runMcpAccessGrantCompatibility(
       await operationTransport.close().catch(() => undefined);
       await operationClient.close().catch(() => undefined);
     }
+
+    if (!tokens.refresh_token) {
+      addGate(
+        gates,
+        "refresh-rotation",
+        "not-proven",
+        "Provider token exchange did not return a refresh token, so rotation and the Refresh Token Family could not be exercised.",
+        { initialTokens: tokenSummary(tokens) },
+      );
+      return finishReport(report, gates, testInfo);
+    }
+
+    const refreshOptions = {
+      authorizationServerUrl: metadata.issuer,
+      metadata,
+      clientInformation: clientInfo,
+      resource: new URL(target.canonicalResource),
+      fetchFn,
+      requests: fetchRequests,
+    };
+    const firstRefresh = await refreshWithOfficialClient({
+      ...refreshOptions,
+      refreshToken: tokens.refresh_token,
+    });
+    const firstReplacement = tokenReplacementEvidence(tokens, firstRefresh);
+    const firstRotationProven = Boolean(
+      firstRefresh.tokens &&
+        firstReplacement.providerReturnedAccessToken &&
+        firstReplacement.providerReturnedRefreshToken &&
+        firstReplacement.accessTokenChanged &&
+        firstReplacement.refreshTokenChanged,
+    );
+
+    if (!firstRotationProven || !firstRefresh.tokens) {
+      addGate(
+        gates,
+        "refresh-rotation",
+        firstRefresh.tokens ? "fail" : firstRefresh.request ? "fail" : "not-proven",
+        firstRefresh.tokens
+          ? "Provider returned refresh credentials without replacing both the access and refresh credentials."
+          : `The official MCP SDK refresh request did not return replacement credentials: ${errorDetail(firstRefresh.error)}`,
+        firstReplacement,
+      );
+      return finishReport(report, gates, testInfo);
+    }
+
+    provider.saveTokens(firstRefresh.tokens);
+    if (!firstRefresh.tokens.refresh_token) {
+      addGate(gates, "refresh-rotation", "fail", "Provider returned an access-token replacement without a usable refresh-token replacement.", firstReplacement);
+      return finishReport(report, gates, testInfo);
+    }
+
+    const secondRefresh = await refreshWithOfficialClient({
+      ...refreshOptions,
+      refreshToken: firstRefresh.tokens.refresh_token,
+    });
+    const secondReplacement = tokenReplacementEvidence(firstRefresh.tokens, secondRefresh);
+    const secondRotationProven = Boolean(
+      secondRefresh.tokens &&
+        secondReplacement.providerReturnedAccessToken &&
+        secondReplacement.providerReturnedRefreshToken &&
+        secondReplacement.accessTokenChanged &&
+        secondReplacement.refreshTokenChanged,
+    );
+    if (!secondRotationProven || !secondRefresh.tokens?.refresh_token) {
+      addGate(
+        gates,
+        "refresh-rotation",
+        secondRefresh.tokens ? "fail" : secondRefresh.request ? "fail" : "not-proven",
+        secondRefresh.tokens
+          ? "The second Refresh Token Family descendant did not receive a complete credential replacement."
+          : `The official MCP SDK could not issue the second Refresh Token Family descendant: ${errorDetail(secondRefresh.error)}`,
+        { firstReplacement, secondReplacement },
+      );
+      return finishReport(report, gates, testInfo);
+    }
+
+    provider.saveTokens(secondRefresh.tokens);
+    const replacementOperation = await runMcpOperation(target, provider, fetchFn, fetchRequests);
+    addGate(
+      gates,
+      "authenticated-mcp-operation",
+      replacementOperation.status === "authorized"
+        ? "pass"
+        : replacementOperation.status === "rejected"
+          ? "fail"
+          : "not-proven",
+      replacementOperation.status === "authorized"
+        ? "The official MCP client replaced its stored credentials and completed a real MCP operation with the replacement access token."
+        : `Replacement access-token operation was not proven: ${replacementOperation.detail}`,
+      {
+        ...replacementOperation.evidence,
+        replacementCredentialsStored: true,
+      },
+    );
+    addGate(
+      gates,
+      "refresh-rotation",
+      "pass",
+      "The official MCP SDK completed two single-use refreshes; each provider response replaced both credentials, and the client stored the latest replacement.",
+      {
+        initial: tokenSummary(tokens),
+        firstDescendant: tokenSummary(firstRefresh.tokens),
+        secondDescendant: tokenSummary(secondRefresh.tokens),
+        firstReplacement,
+        secondReplacement,
+        replacementOperation: replacementOperation.status,
+      },
+    );
+
+    const familyAttempts = [
+      {
+        label: "consumed-root",
+        refreshToken: tokens.refresh_token,
+      },
+      {
+        label: "consumed-descendant-1",
+        refreshToken: firstRefresh.tokens.refresh_token,
+      },
+      {
+        label: "active-descendant-2",
+        refreshToken: secondRefresh.tokens.refresh_token,
+      },
+    ];
+    const familyResults: Record<string, Record<string, unknown>> = {};
+    const familyStatuses: Array<"rejected" | "succeeded" | "not-proven"> = [];
+    for (const familyAttempt of familyAttempts) {
+      const result = await refreshWithOfficialClient({
+        ...refreshOptions,
+        refreshToken: familyAttempt.refreshToken,
+      });
+      const status = result.tokens
+        ? "succeeded"
+        : ((result.request?.status && result.request.status >= 400 && result.request.status < 500) || responseField(result.request, "error"))
+          ? "rejected"
+          : "not-proven";
+      familyStatuses.push(status);
+      familyResults[familyAttempt.label] = {
+        status,
+        ...refreshAttemptEvidence(result),
+      };
+    }
+    const rootReplayStatus = familyStatuses[0];
+    const familyContainmentProven = familyStatuses.every((status) => status === "rejected");
+    addGate(
+      gates,
+      "refresh-replay-containment",
+      familyContainmentProven ? "pass" : familyStatuses.includes("succeeded") ? "fail" : "not-proven",
+      familyContainmentProven
+        ? "Replay of the consumed root refresh token was rejected, and every issued descendant in the active Refresh Token Family was also rejected."
+        : familyStatuses.includes("succeeded")
+          ? "Replay or descendant refresh unexpectedly produced replacement credentials; provider family containment is not effective."
+          : "The provider did not return enough classified responses to prove Refresh Token Family containment.",
+      {
+        rootReplayDetected: rootReplayStatus === "rejected",
+        everyIssuedDescendantRejected: familyContainmentProven,
+        familyMemberCountExercised: familyAttempts.length,
+        familyResults,
+      },
+    );
+
+    const grantClientResult = await createGrantManagementClient(target, secondRefresh.tokens, fetchFn);
+    if (!grantClientResult.client) {
+      addGate(gates, "grant-identification-revocation", "not-proven", grantClientResult.error ?? "User-facing grant-management client was unavailable.");
+      addGate(gates, "post-revocation-refresh", "not-proven", "Grant revocation was not exercised because the supported user-facing grant-management client was unavailable.");
+      addGate(gates, "post-revocation-access", "not-proven", "Grant revocation was not exercised because the supported user-facing grant-management client was unavailable.");
+      addGate(gates, "cleanup", "not-proven", "No grant could be identified for cleanup; provider cleanup is not proven in this environment.");
+      return finishReport(report, gates, testInfo);
+    }
+
+    const grantClient = grantClientResult.client;
+    let grantClientIdToRevoke: string | undefined;
+    let grantRevoked = false;
+    let relevantGrant: unknown;
+    try {
+      const grantsResult = await grantClient.auth.oauth.listGrants();
+      const grants = grantsResult.data ?? [];
+      relevantGrant = grants.find((grant) => grantClientId(grant) === clientInfo.client_id);
+      const grantsRequest = [...fetchRequests].reverse().find(
+        (request) => request.method === "GET" && request.url.endsWith("/auth/v1/user/oauth/grants"),
+      );
+      const grantIdentified = Boolean(relevantGrant && grantClientId(relevantGrant));
+      grantClientIdToRevoke = grantIdentified ? grantClientId(relevantGrant) : undefined;
+
+      if (grantsResult.error) {
+        addGate(gates, "grant-identification-revocation", "fail", `Official Supabase client grant listing failed: ${errorDetail(grantsResult.error)}`, {
+          requestStatus: grantsRequest?.status ?? "not-observed",
+          grantEndpointObserved: Boolean(grantsRequest),
+        });
+      } else if (!grantIdentified) {
+        addGate(gates, "grant-identification-revocation", "fail", "The dedicated user could not identify the grant created for the registered MCP client.", {
+          requestStatus: grantsRequest?.status ?? "not-observed",
+          grantEndpointObserved: Boolean(grantsRequest),
+          grantCount: grants.length,
+          registeredClientIdPresent: Boolean(clientInfo.client_id),
+        });
+      } else {
+        const revokeResult = await grantClient.auth.oauth.revokeGrant({ clientId: grantClientIdToRevoke as string });
+        const revokeRequest = [...fetchRequests].reverse().find(
+        (request) => request.method === "DELETE" && request.url.includes("/auth/v1/user/oauth/grants"),
+        );
+        if (revokeResult.error) {
+          addGate(gates, "grant-identification-revocation", "fail", `Official Supabase client grant revocation failed: ${errorDetail(revokeResult.error)}`, {
+            grant: grantSummary(relevantGrant),
+            requestStatus: revokeRequest?.status ?? "not-observed",
+          });
+        } else {
+          grantRevoked = true;
+          addGate(gates, "grant-identification-revocation", "pass", "The dedicated user identified the registered MCP client through Supabase's user-facing grant list and revoked that grant through the official client API.", {
+            grant: grantSummary(relevantGrant),
+            requestStatus: revokeRequest?.status ?? "not-observed",
+            revokeEndpointObserved: Boolean(revokeRequest),
+          });
+        }
+      }
+    } catch (error) {
+      addGate(gates, "grant-identification-revocation", "not-proven", `The supported Supabase grant-management boundary could not be classified: ${errorDetail(error)}`);
+    }
+
+    if (!grantRevoked) {
+      addGate(gates, "post-revocation-refresh", "not-proven", "Post-revocation refresh behavior was not exercised because the relevant grant was not revoked.");
+      addGate(gates, "post-revocation-access", "not-proven", "Post-revocation access behavior was not exercised because the relevant grant was not revoked.");
+      addGate(gates, "cleanup", "not-proven", "The relevant grant was not revoked; provider cleanup remains unproven and must be handled by the dedicated test environment.");
+      return finishReport(report, gates, testInfo);
+    }
+
+    const postRevocationRefresh = await refreshWithOfficialClient({
+      ...refreshOptions,
+      refreshToken: secondRefresh.tokens.refresh_token,
+    });
+    const postRefreshStatus = postRevocationRefresh.tokens
+      ? "fail"
+      : ((postRevocationRefresh.request?.status && postRevocationRefresh.request.status >= 400 && postRevocationRefresh.request.status < 500) || responseField(postRevocationRefresh.request, "error"))
+        ? "pass"
+        : "not-proven";
+    addGate(
+      gates,
+      "post-revocation-refresh",
+      postRefreshStatus,
+      postRefreshStatus === "pass"
+        ? "The refresh path produced no replacement credentials after the user-facing grant was revoked."
+        : postRefreshStatus === "fail"
+          ? "The provider issued replacement credentials after the user-facing grant was revoked; effective authority remains."
+          : "The provider did not return a classifiable response to the post-revocation refresh attempt.",
+      refreshAttemptEvidence(postRevocationRefresh),
+    );
+
+    const formerAccessProvider = new CompatibilityOAuthProvider(
+      undefined,
+      report.versions["@modelcontextprotocol/sdk"] ?? "unavailable",
+    );
+    formerAccessProvider.saveClientInformation(clientInfo);
+    formerAccessProvider.saveTokens(secondRefresh.tokens);
+    const postRevocationOperation = await runMcpOperation(target, formerAccessProvider, fetchFn, fetchRequests);
+    const lifetime = accessTokenLifetimeEvidence(secondRefresh.tokens);
+    const postAccessStatus = postRevocationOperation.status === "rejected"
+      ? "pass"
+      : postRevocationOperation.status === "authorized" && lifetime.accessTokenHasExpiry && lifetime.withinDocumentedLifetime
+        ? "pass"
+        : postRevocationOperation.status === "authorized" && lifetime.accessTokenHasExpiry
+          ? "fail"
+          : "not-proven";
+    addGate(
+      gates,
+      "post-revocation-access",
+      postAccessStatus,
+      postAccessStatus === "pass" && postRevocationOperation.status === "rejected"
+        ? "The former access path was rejected after grant revocation."
+        : postAccessStatus === "pass"
+          ? "The former access token remained effective only within its provider-documented lifetime; this observed stateless-access window is recorded for the gate decision."
+          : postAccessStatus === "fail"
+            ? "The former access token remained effective beyond a provider-documented lifetime after grant revocation."
+            : `The former access path could not be classified: ${postRevocationOperation.detail}`,
+      {
+        ...postRevocationOperation.evidence,
+        operationStatus: postRevocationOperation.status,
+        ...lifetime,
+      },
+    );
+    addGate(
+      gates,
+      "cleanup",
+      grantRevoked ? "pass" : "not-proven",
+      "The grant created for this run was revoked through the supported user-facing Supabase boundary; dynamic client-registration cleanup is not exposed to this public client and is intentionally not emulated.",
+      { grantIdentified: Boolean(grantClientIdToRevoke), grantRevoked },
+    );
   } catch (error) {
     addGate(gates, "authorization-consent", "fail", `Browser authorization flow failed: ${errorDetail(error)}`);
     if (error instanceof UnauthorizedError) {
