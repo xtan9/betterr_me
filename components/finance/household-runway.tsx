@@ -45,7 +45,6 @@ import {
   type RecurringIncomeSource,
   type RecurringIncomeType,
   type RunwayAdjustments,
-  type RunwayScenario,
   type RunwaySnapshotSummary,
   type RunwayStepId,
 } from "@/lib/finance/cushion";
@@ -79,6 +78,8 @@ import {
   type HouseholdRunwayInterviewCommand,
   type HouseholdRunwayInterviewCommandInput,
   type HouseholdRunwayInterviewEffect,
+  type HouseholdRunwayInterviewAnswers,
+  type HouseholdRunwayInterviewRenderModel,
   type HouseholdRunwayInterviewState,
   type HouseholdRunwayLocationRenderModel,
 } from "@/lib/finance/household-runway-interview";
@@ -180,34 +181,66 @@ function applyHouseholdRunwayInterviewEffects(
   effects.forEach(applyHouseholdRunwayInterviewEffect);
 }
 
-function employmentIncome(
-  status: EmploymentStatus,
-  existing?: IncomeAnswer,
-): IncomeAnswer {
-  const notWorking = status === "unemployed" || status === "not_working";
+function projectInterviewAnswers(
+  current: HouseholdRunwayAnswers,
+  interviewAnswers: HouseholdRunwayInterviewAnswers,
+): HouseholdRunwayAnswers {
   return {
-    employment: status,
-    monthly_take_home_cents: notWorking
-      ? 0
-      : (existing?.monthly_take_home_cents ?? 0),
-    estimated_monthly_take_home_cents: notWorking
-      ? 0
-      : (existing?.estimated_monthly_take_home_cents ?? 0),
-    entered_amount_cents: notWorking
-      ? 0
-      : (existing?.entered_amount_cents ?? 0),
-    entered_period: existing?.entered_period ?? "annual",
-    entered_as: existing?.entered_as ?? "gross",
-    gross_amount_cents: existing?.gross_amount_cents ?? 0,
-    gross_period: existing?.gross_period ?? "annual",
-    net_amount_cents: existing?.net_amount_cents ?? 0,
-    net_period: existing?.net_period ?? "monthly",
-    tax_filing_status: existing?.tax_filing_status ?? "single",
-    annual_other_deductions_cents: existing?.annual_other_deductions_cents ?? 0,
-    take_home_source: existing?.take_home_source ?? "estimated",
-    confidence: notWorking ? "confirmed" : (existing?.confidence ?? "estimated"),
-    estimate_rule_version: existing?.estimate_rule_version,
+    ...current,
+    ...interviewAnswers,
+    country: interviewAnswers.country ?? current.country,
+    region: interviewAnswers.region ?? current.region,
+    currency: interviewAnswers.currency ?? current.currency,
+    updated_at: interviewAnswers.updated_at ?? current.updated_at,
+  } as HouseholdRunwayAnswers;
+}
+
+function interviewDraftFromRunwayAnswers(answers: HouseholdRunwayAnswers) {
+  return {
+    revision: 0,
+    interviewId: null,
+    startedAt: null,
+    location: {
+      country: answers.country,
+      region: answers.region || null,
+      currency: answers.currency,
+      proposedCurrency: currencyForCountry(answers.country),
+      currencySelection: "explicit" as const,
+    },
+    answers,
   };
+}
+
+function resumableRunwayStep(
+  stage: RunwayStepId | null,
+): RunwayStepId | undefined {
+  return stage ?? undefined;
+}
+
+function interviewValidationMessage(
+  t: ReturnType<typeof useTranslations>,
+  code: string | undefined,
+) {
+  switch (code) {
+    case "country_required":
+      return t("boundary.countryRequired");
+    case "region_required":
+      return t("boundary.regionRequired");
+    case "currency_required":
+      return t("boundary.currencyRequired");
+    case "currency_change_confirmation_required":
+      return t("currencyChange.confirmation");
+    case "income_required":
+      return t("validation.income");
+    case "expenses_current_required":
+      return t("validation.expensesCurrent");
+    case "expenses_interruption_required":
+      return t("validation.expenses");
+    case "assessment_required":
+      return t("validation.assessment");
+    default:
+      return "";
+  }
 }
 
 export function HouseholdRunway({
@@ -232,12 +265,6 @@ export function HouseholdRunway({
   const [answers, setAnswers] = useState<HouseholdRunwayAnswers>(
     () => initialAnswers ?? createDefaultRunwayAnswers(),
   );
-  const [stepId, setStepId] = useState<RunwayStepId>(
-    initialAssessment?.success ? "result" : "location",
-  );
-  const [completed, setCompleted] = useState(
-    Boolean(initialAssessment?.success),
-  );
   const [hydrated, setHydrated] = useState(false);
   const [hasLocalDraft, setHasLocalDraft] = useState(false);
   const [snapshots, setSnapshots] = useState(initialSnapshots);
@@ -248,13 +275,6 @@ export function HouseholdRunway({
       createHouseholdRunwayInterview(),
     );
   const [error, setError] = useState("");
-  const [activeExpenseCategory, setActiveExpenseCategory] =
-    useState<ExpenseCategory | null>(null);
-  const [scenario, setScenario] = useState<RunwayScenario>(() =>
-    initialAssessment?.success
-      ? initialAssessment.firstScenario.scenario
-      : "mine_stops",
-  );
   const [adjustments, setAdjustments] = useState<RunwayAdjustments>(() =>
     initialAdjustments
       ? { ...initialAdjustments }
@@ -271,8 +291,15 @@ export function HouseholdRunway({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(hasSavedPlan);
   const landingTracked = useRef(false);
+  const resumeStageRef = useRef<RunwayStepId | null>(null);
   const interviewStarted =
     isAuthenticated || interviewState.status !== "not_started";
+  const stepId = (interviewState.stage ?? "location") as RunwayStepId;
+  const completed =
+    interviewState.status === "completed" ||
+    interviewState.draft.stageStatus.result === "completed";
+  const activeExpenseCategory = interviewState.draft.activeExpenseCategory;
+  const scenario = interviewState.draft.selectedScenario ?? "current";
   const boundaryLocation =
     interviewState.renderModel.kind === "location"
       ? interviewState.renderModel
@@ -287,15 +314,9 @@ export function HouseholdRunway({
     );
     setInterviewState(result.state);
     persistHouseholdRunwayInterviewDraft(result.state.draft);
-    const location = result.state.draft.location;
-    if (location.country) {
-      setAnswers((current) => ({
-        ...current,
-        country: location.country!,
-        region: location.region ?? "",
-        ...(location.currency ? { currency: location.currency } : {}),
-      }));
-    }
+    setAnswers((current) =>
+      projectInterviewAnswers(current, result.state.draft.answers),
+    );
     applyHouseholdRunwayInterviewEffects(result.effects);
     return result;
   };
@@ -307,7 +328,7 @@ export function HouseholdRunway({
       : readHouseholdRunwayInterviewDraft();
     let restoredBoundary = boundaryDraft
       ? restoreHouseholdRunwayInterview({
-          version: 1,
+          version: 2,
           status: "not_started",
           stage: null,
           draft: boundaryDraft,
@@ -320,6 +341,7 @@ export function HouseholdRunway({
         const command = householdRunwayInterviewCommand({
           type: "start",
           interviewId: newId("runway-interview"),
+          stage: resumableRunwayStep(resumeStageRef.current),
         });
         setInterviewState((current) =>
           current.status === "not_started"
@@ -345,15 +367,8 @@ export function HouseholdRunway({
       const draftAssessment = assessHouseholdRunway({ answers: draft.answers });
       const completedDraftIsValid = draft.completed && draftAssessment.success;
       setAnswers(draft.answers);
-      setStepId(
-        draft.completed && !completedDraftIsValid ? "location" : draft.step_id,
-      );
-      setCompleted(completedDraftIsValid);
-      setScenario(
-        draftAssessment.success
-          ? draftAssessment.firstScenario.scenario
-          : "mine_stops",
-      );
+      resumeStageRef.current =
+        draft.completed && !completedDraftIsValid ? "location" : draft.step_id;
       setHasLocalDraft(true);
       setAdjustments((current) => ({
         ...current,
@@ -367,30 +382,29 @@ export function HouseholdRunway({
 
       if (!boundaryDraft) {
         restoredBoundary = restoreHouseholdRunwayInterview({
-          version: 1,
-          status: "not_started",
-          stage: null,
-          draft: {
-            revision: 0,
-            interviewId: null,
-            startedAt: null,
-            location: {
-              country: draft.answers.country,
-              region: draft.answers.region || null,
-              currency: draft.answers.currency,
-              proposedCurrency: currencyForCountry(draft.answers.country),
-              currencySelection: "explicit",
-            },
-          },
+          version: 2,
+          status: completedDraftIsValid ? "completed" : "not_started",
+          stage: completedDraftIsValid ? "result" : null,
+          draft: interviewDraftFromRunwayAnswers(draft.answers),
           validationIssue: null,
         });
       }
     }
+    if (initialAnswers) {
+      restoredBoundary = restoreHouseholdRunwayInterview({
+        version: 2,
+        status: initialAssessment?.success ? "completed" : "not_started",
+        stage: initialAssessment?.success ? "result" : null,
+        draft: interviewDraftFromRunwayAnswers(initialAnswers),
+        validationIssue: null,
+      });
+    }
     const started = new URLSearchParams(window.location.search).get("start") === "1";
-    if (isAuthenticated || started) {
+    if ((isAuthenticated || started) && restoredBoundary.status === "not_started") {
       const command = householdRunwayInterviewCommand({
         type: "start",
         interviewId: newId("runway-interview"),
+        stage: resumableRunwayStep(resumeStageRef.current),
       });
       setInterviewState(
         dispatchHouseholdRunwayInterview(restoredBoundary, command).state,
@@ -410,7 +424,7 @@ export function HouseholdRunway({
       window.removeEventListener("popstate", syncUrlMode);
       if (hydrationFrame !== null) window.cancelAnimationFrame(hydrationFrame);
     };
-  }, [initialAnswers, isAuthenticated]);
+  }, [initialAnswers, initialAssessment?.success, isAuthenticated]);
 
   useEffect(() => {
     if (draftSynced || !hydrated || (!interviewStarted && !hasLocalDraft)) return;
@@ -457,17 +471,7 @@ export function HouseholdRunway({
   const update = (patch: Partial<HouseholdRunwayAnswers>) => {
     setSaved(false);
     setDraftSynced(false);
-    setAnswers((current) => {
-      const next = {
-        ...current,
-        ...patch,
-        updated_at: new Date().toISOString(),
-      };
-      if (typeof window !== "undefined" && interviewStarted) {
-        persistRunwayDraft(next, stepId, completed);
-      }
-      return next;
-    });
+    return dispatchInterviewCommand({ type: "update_answers", patch });
   };
 
   const updateIncome = (
@@ -476,62 +480,17 @@ export function HouseholdRunway({
   ) => {
     setSaved(false);
     setDraftSynced(false);
-    setAnswers((current) => {
-      const base =
-        person === "mine"
-          ? current.mine
-          : (current.partner ?? employmentIncome("employed"));
-      const next = { ...base, ...patch };
-      next.entered_amount_cents = next.entered_as === "gross" ? next.gross_amount_cents : next.net_amount_cents;
-      next.entered_period = next.entered_as === "gross" ? next.gross_period : next.net_period;
-      if (next.entered_as === "gross" && next.gross_amount_cents > 0) {
-        const estimate = estimateMonthlyTakeHome({
-          country: current.country,
-          region: current.region,
-          amountCents: next.gross_amount_cents,
-          period: next.gross_period,
-          filingStatus: next.tax_filing_status,
-          selfEmployed: next.employment === "self_employed",
-          annualOtherDeductionsCents: next.annual_other_deductions_cents,
-        });
-        next.estimated_monthly_take_home_cents = estimate.monthly_take_home_cents;
-        next.estimate_rule_version = estimate.rule_version;
-        if (patch.take_home_source !== "user_confirmed" && patch.monthly_take_home_cents === undefined) {
-          next.monthly_take_home_cents = estimate.monthly_take_home_cents;
-          next.take_home_source = "estimated";
-          next.confidence = "estimated";
-        }
-      } else if (next.entered_as === "net") {
-        next.monthly_take_home_cents =
-          next.net_period === "annual"
-            ? Math.round(next.net_amount_cents / 12)
-            : next.net_amount_cents;
-        next.estimated_monthly_take_home_cents = 0;
-        next.take_home_source = "user_confirmed";
-        next.confidence = "confirmed";
-        delete next.estimate_rule_version;
-      }
-      const updated = {
-        ...current,
-        [person]: next,
-        updated_at: new Date().toISOString(),
-      };
-      if (typeof window !== "undefined" && interviewStarted) {
-        persistRunwayDraft(updated, stepId, completed);
-      }
-      return updated;
-    });
+    return dispatchInterviewCommand({ type: "set_income", person, patch });
   };
 
   const startInterview = (fresh = false) => {
     if (fresh) {
       const reset = createDefaultRunwayAnswers();
       setAnswers(reset);
-      setStepId("location");
-      setCompleted(false);
       setHasLocalDraft(false);
       setDraftSynced(false);
       setAdjustments({ ...EMPTY_ADJUSTMENTS });
+      resumeStageRef.current = null;
       clearRunwayDraft();
       clearHouseholdRunwayInterviewDraft();
       window.localStorage.removeItem(RUNWAY_IMPORT_ACTION_KEY);
@@ -539,7 +498,13 @@ export function HouseholdRunway({
     dispatchInterviewCommand({
       type: fresh ? "start_new" : "start",
       interviewId: newId("runway-interview"),
+      stage: fresh
+        ? undefined
+        : completed
+          ? "result"
+          : resumableRunwayStep(resumeStageRef.current),
     });
+    resumeStageRef.current = null;
     trackRunwayEvent("started", fresh ? "new" : hasLocalDraft ? "resume" : "new");
   };
 
@@ -553,67 +518,17 @@ export function HouseholdRunway({
     window.localStorage.removeItem(RUNWAY_IMPORT_ACTION_KEY);
     const reset = createDefaultRunwayAnswers();
     setAnswers(reset);
-    setStepId("location");
-    setCompleted(false);
     setSaved(false);
     setHasLocalDraft(false);
     setAdjustments({ ...EMPTY_ADJUSTMENTS });
-    if (!isAuthenticated) {
-      dispatchInterviewCommand({ type: "discard_draft" });
-    } else {
-      const resetState = createHouseholdRunwayInterview();
-      const result = dispatchHouseholdRunwayInterview(
-        resetState,
-        householdRunwayInterviewCommand({
-          type: "start_new",
-          interviewId: newId("runway-interview"),
-        }),
-      );
-      setInterviewState(result.state);
-      persistHouseholdRunwayInterviewDraft(result.state.draft);
-    }
-  };
-
-  const adjacentStep = (current: RunwayStepId, direction: 1 | -1) => {
-    let index = RUNWAY_STEP_IDS.indexOf(current) + direction;
-    while (index > 0 && index < RUNWAY_STEP_IDS.length - 1) {
-      const candidate = RUNWAY_STEP_IDS[index];
-      const skipMine =
-        candidate === "myIncome" &&
-        ["unemployed", "not_working"].includes(answers.mine.employment);
-      const skipPartner =
-        candidate === "partnerIncome" &&
-        (!answers.partner ||
-          ["unemployed", "not_working"].includes(answers.partner.employment));
-      if (!skipMine && !skipPartner) break;
-      index += direction;
-    }
-    return RUNWAY_STEP_IDS[
-      Math.max(0, Math.min(RUNWAY_STEP_IDS.length - 1, index))
-    ];
-  };
-
-  const validateStep = () => {
-    if (stepId === "location" && boundaryLocation) return "";
-    if (stepId === "location" && !answers.region) return t("validation.region");
-    if (
-      stepId === "myIncome" &&
-      ["employed", "self_employed"].includes(answers.mine.employment) &&
-      answers.mine.monthly_take_home_cents <= 0
-    )
-      return t("validation.income");
-    if (
-      stepId === "partnerIncome" &&
-      answers.partner &&
-      ["employed", "self_employed"].includes(answers.partner.employment) &&
-      answers.partner.monthly_take_home_cents <= 0
-    )
-      return t("validation.income");
-    if (stepId === "expenses" && expenseTotals(answers).current <= 0)
-      return t("validation.expensesCurrent");
-    if (stepId === "reductions" && expenseTotals(answers).interruption <= 0)
-      return t("validation.expenses");
-    return "";
+    dispatchInterviewCommand(
+      isAuthenticated
+        ? {
+            type: "start_new",
+            interviewId: newId("runway-interview"),
+          }
+        : { type: "discard_draft" },
+    );
   };
 
   const next = () => {
@@ -636,52 +551,22 @@ export function HouseholdRunway({
         { type: "continue" },
         currentInterviewState,
       );
-      if (result.state.stage === "household") {
-        const location = result.state.draft.location;
-        if (location.country && location.region && location.currency) {
-          setAnswers((current) => ({
-            ...current,
-            country: location.country!,
-            region: location.region!,
-            currency: location.currency!,
-          }));
-          setStepId("household");
-          setError("");
-          return;
-        }
-      }
-      const issueCode = result.state.validationIssue?.code;
       setError(
-        issueCode === "country_required"
-          ? t("boundary.countryRequired")
-          : issueCode === "currency_required"
-            ? t("boundary.currencyRequired")
-            : t("boundary.regionRequired"),
+        interviewValidationMessage(t, result.state.validationIssue?.code),
       );
       return;
     }
-    const issue = validateStep();
-    if (issue) {
-      setError(issue);
-      return;
-    }
-    setError("");
-    if (stepId === "review") {
-      if (!assessment?.success) {
-        setError(t("validation.assessment"));
-        return;
-      }
-      setCompleted(true);
-      setScenario(assessment.firstScenario.scenario);
+    const result = dispatchInterviewCommand({ type: "continue" });
+    setError(interviewValidationMessage(t, result.state.validationIssue?.code));
+    if (result.state.stage === "result") {
       trackRunwayEvent("completed", stepId);
     }
-    setStepId(adjacentStep(stepId, 1));
   };
 
   const skip = () => {
-    setError("");
+    const result = dispatchInterviewCommand({ type: "skip" });
+    setError(interviewValidationMessage(t, result.state.validationIssue?.code));
     trackRunwayEvent("skipped", stepId);
-    setStepId(adjacentStep(stepId, 1));
   };
 
   const savePlan = async () => {
@@ -834,7 +719,7 @@ export function HouseholdRunway({
           scenarios={assessment.scenarios.map((item) => item.scenario)}
           scenario={scenario}
           setScenario={(value) => {
-            setScenario(value);
+            dispatchInterviewCommand({ type: "select_scenario", scenario: value });
             trackRunwayEvent("result_interaction", "scenario_switch");
           }}
           baseline={selectedAssessment.baseline}
@@ -856,7 +741,7 @@ export function HouseholdRunway({
                 answers.extreme_access.retirement_tax_free_cents,
             })
           }
-          onEdit={() => setStepId("review")}
+          onEdit={() => dispatchInterviewCommand({ type: "back" })}
           onDownload={download}
           isAuthenticated={isAuthenticated}
           saved={saved}
@@ -874,7 +759,7 @@ export function HouseholdRunway({
           onBack={() => {
             setError("");
             if (activeExpenseCategory) {
-              update({
+              const result = update({
                 completed_expense_categories: Array.from(
                   new Set([
                     ...answers.completed_expense_categories,
@@ -882,13 +767,14 @@ export function HouseholdRunway({
                   ]),
                 ),
               });
-              setActiveExpenseCategory(null);
-            } else if (stepId === "location" && boundaryLocation) {
-              dispatchInterviewCommand({ type: "exit" });
-            } else if (stepId === "location" && !isAuthenticated) {
-              window.history.back();
+              dispatchInterviewCommand(
+                { type: "set_active_expense_category", category: null },
+                result.state,
+              );
             } else {
-              setStepId(adjacentStep(stepId, -1));
+              dispatchInterviewCommand({
+                type: stepId === "location" ? "exit" : "back",
+              });
             }
           }}
           onSkip={OPTIONAL_STEPS.has(stepId) ? skip : undefined}
@@ -904,9 +790,9 @@ export function HouseholdRunway({
             update={update}
             updateIncome={updateIncome}
             locationModel={boundaryLocation}
+            renderModel={interviewState.renderModel}
             dispatchInterviewCommand={dispatchInterviewCommand}
             activeExpenseCategory={activeExpenseCategory}
-            setActiveExpenseCategory={setActiveExpenseCategory}
           />
         </InterviewShell>
       )}
@@ -1047,9 +933,9 @@ function StepContent({
   update,
   updateIncome,
   locationModel,
+  renderModel,
   dispatchInterviewCommand,
   activeExpenseCategory,
-  setActiveExpenseCategory,
 }: {
   step: RunwayStepId;
   t: ReturnType<typeof useTranslations>;
@@ -1058,11 +944,18 @@ function StepContent({
   update: (patch: Partial<HouseholdRunwayAnswers>) => void;
   updateIncome: (person: "mine" | "partner", patch: Partial<IncomeAnswer>) => void;
   locationModel: HouseholdRunwayLocationRenderModel | null;
+  renderModel: HouseholdRunwayInterviewRenderModel;
   dispatchInterviewCommand: (input: HouseholdRunwayInterviewCommandInput) => unknown;
   activeExpenseCategory: ExpenseCategory | null;
-  setActiveExpenseCategory: (category: ExpenseCategory | null) => void;
 }) {
   const title = <StepTitle step={step} t={t} />;
+  const householdModel = renderModel.kind === "household" ? renderModel : null;
+  const employmentModel = renderModel.kind === "employment" ? renderModel : null;
+  const incomeModel =
+    renderModel.kind === "myIncome" || renderModel.kind === "partnerIncome"
+      ? renderModel
+      : null;
+  const otherIncomeModel = renderModel.kind === "otherIncome" ? renderModel : null;
   if (step === "location") {
     if (!locationModel) return title;
     const regionLocale = normalizeRunwayLocale(locale);
@@ -1133,89 +1026,169 @@ function StepContent({
             ) : null}
           </label>
         </div>
+        {locationModel.pendingCurrencyChange ? (
+          <div role="alert" className="mt-5 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-400/40 dark:bg-amber-500/10 dark:text-amber-100">
+            <p>{t("currencyChange.confirmation")}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                onClick={() =>
+                  dispatchInterviewCommand({ type: "reset_currency_entries" })
+                }
+              >
+                {t("currencyChange.reset")}
+              </Button>
+              <Button
+                onClick={() =>
+                  dispatchInterviewCommand({ type: "retain_currency_entries" })
+                }
+              >
+                {t("currencyChange.retain")}
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </>
     );
   }
-  if (step === "household")
+  if (step === "household") {
+    if (!householdModel) return title;
     return (
       <>
         {title}
         <div className="mt-7 grid gap-3 sm:grid-cols-2">
           <ChoiceCard
-            selected={!answers.shares_finances}
+            selected={!householdModel.sharesFinances}
             title={t("household.solo")}
-            onClick={() => update({ shares_finances: false, partner: null })}
+            onClick={() =>
+              dispatchInterviewCommand({
+                type: "set_household",
+                sharesFinances: false,
+                hasChildren: householdModel.hasChildren,
+                hasSupportObligations: householdModel.hasSupportObligations,
+              })
+            }
           />
           <ChoiceCard
-            selected={answers.shares_finances}
+            selected={householdModel.sharesFinances}
             title={t("household.shared")}
             description={t("household.sharedHelp")}
             onClick={() =>
-              update({
-                shares_finances: true,
-                partner: answers.partner ?? employmentIncome("employed"),
+              dispatchInterviewCommand({
+                type: "set_household",
+                sharesFinances: true,
+                hasChildren: householdModel.hasChildren,
+                hasSupportObligations: householdModel.hasSupportObligations,
               })
             }
           />
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           <CheckCard
-            checked={answers.has_children}
+            checked={householdModel.hasChildren}
             label={t("household.children")}
-            onChange={(checked) => update({ has_children: checked })}
+            onChange={(checked) =>
+              dispatchInterviewCommand({
+                type: "set_household",
+                sharesFinances: householdModel.sharesFinances,
+                hasChildren: checked,
+                hasSupportObligations: householdModel.hasSupportObligations,
+              })
+            }
           />
           <CheckCard
-            checked={answers.has_support_obligations}
+            checked={householdModel.hasSupportObligations}
             label={t("household.support")}
-            onChange={(checked) => update({ has_support_obligations: checked })}
+            onChange={(checked) =>
+              dispatchInterviewCommand({
+                type: "set_household",
+                sharesFinances: householdModel.sharesFinances,
+                hasChildren: householdModel.hasChildren,
+                hasSupportObligations: checked,
+              })
+            }
           />
         </div>
       </>
     );
-  if (step === "employment")
+  }
+  if (step === "employment") {
+    if (!employmentModel) return title;
     return (
       <>
         {title}
         <EmploymentPicker
           t={t}
           label={t("employment.me")}
-          value={answers.mine.employment}
-          onChange={(employment) => update({ mine: employmentIncome(employment, answers.mine) })}
+          value={employmentModel.mine}
+          onChange={(employment) =>
+            dispatchInterviewCommand({
+              type: "set_employment",
+              person: "mine",
+              employment,
+            })
+          }
         />
-        {answers.shares_finances && answers.partner ? (
+        {employmentModel.sharesFinances && employmentModel.partner ? (
           <EmploymentPicker
             t={t}
             label={t("employment.partner")}
-            value={answers.partner.employment}
+            value={employmentModel.partner}
             onChange={(employment) =>
-              update({ partner: employmentIncome(employment, answers.partner ?? undefined) })
+              dispatchInterviewCommand({
+                type: "set_employment",
+                person: "partner",
+                employment,
+              })
             }
           />
         ) : null}
       </>
     );
-  if (step === "myIncome")
+  }
+  if (step === "myIncome") {
+    if (!incomeModel || incomeModel.person !== "mine") return title;
     return (
       <>
         {title}
-        <IncomeEditor t={t} locale={locale} answers={answers} income={answers.mine} onChange={(patch) => updateIncome("mine", patch)} />
+        <IncomeEditor
+          t={t}
+          locale={locale}
+          location={incomeModel.location}
+          income={incomeModel.income}
+          onChange={(patch) => updateIncome("mine", patch)}
+        />
       </>
     );
-  if (step === "partnerIncome")
+  }
+  if (step === "partnerIncome") {
+    if (!incomeModel || incomeModel.person !== "partner") return title;
     return (
       <>
         {title}
-        {answers.partner ? (
-          <IncomeEditor t={t} locale={locale} answers={answers} income={answers.partner} onChange={(patch) => updateIncome("partner", patch)} />
-        ) : (
-          <InfoBox>{t("income.noPartner")}</InfoBox>
-        )}
+        <IncomeEditor
+          t={t}
+          locale={locale}
+          location={incomeModel.location}
+          income={incomeModel.income}
+          onChange={(patch) => updateIncome("partner", patch)}
+        />
       </>
     );
-  if (step === "otherIncome")
+  }
+  if (step === "otherIncome") {
+    if (!otherIncomeModel) return title;
     return (
-      <OtherIncomeStep title={title} t={t} locale={locale} answers={answers} update={update} />
+      <OtherIncomeStep
+        title={title}
+        t={t}
+        locale={locale}
+        currency={otherIncomeModel.location.currency}
+        sources={otherIncomeModel.sources}
+        dispatchInterviewCommand={dispatchInterviewCommand}
+      />
     );
+  }
   if (step === "cash")
     return (
       <>
@@ -1237,7 +1210,19 @@ function StepContent({
     return activeExpenseCategory ? (
       <ExpenseCategoryEditor category={activeExpenseCategory} t={t} answers={answers} update={update} />
     ) : (
-      <ExpenseHub title={title} t={t} locale={locale} answers={answers} update={update} onOpen={setActiveExpenseCategory} />
+      <ExpenseHub
+        title={title}
+        t={t}
+        locale={locale}
+        answers={answers}
+        update={update}
+        onOpen={(category) =>
+          dispatchInterviewCommand({
+            type: "set_active_expense_category",
+            category,
+          })
+        }
+      />
     );
   if (step === "reductions")
     return <ReductionStep title={title} t={t} locale={locale} answers={answers} update={update} />;
@@ -1250,27 +1235,43 @@ function OtherIncomeStep({
   title,
   t,
   locale,
-  answers,
-  update,
+  currency,
+  sources,
+  dispatchInterviewCommand,
 }: {
   title: ReactNode;
   t: ReturnType<typeof useTranslations>;
   locale: string;
-  answers: HouseholdRunwayAnswers;
-  update: (patch: Partial<HouseholdRunwayAnswers>) => void;
+  currency: HouseholdRunwayAnswers["currency"] | null;
+  sources: readonly RecurringIncomeSource[];
+  dispatchInterviewCommand: (input: HouseholdRunwayInterviewCommandInput) => unknown;
 }) {
-  const setSource = (type: RecurringIncomeType, enabled: boolean) => {
-    const existing = answers.other_income_sources.find((source) => source.type === type);
-    update({
-      other_income_sources: enabled
-        ? existing
-          ? answers.other_income_sources
-          : [...answers.other_income_sources, { id: newId(type), type, monthly_cents: 0, confidence: "confirmed" }]
-        : answers.other_income_sources.filter((source) => source.id !== existing?.id),
+  const sendSources = (nextSources: readonly RecurringIncomeSource[]) =>
+    dispatchInterviewCommand({
+      type: "set_other_income_sources",
+      sources: nextSources,
     });
+  const setSource = (type: RecurringIncomeType, enabled: boolean) => {
+    const existing = sources.find((source) => source.type === type);
+    sendSources(
+      enabled
+        ? existing
+          ? sources
+          : [
+              ...sources,
+              { id: newId(type), type, monthly_cents: 0, confidence: "confirmed" },
+            ]
+        : sources.filter((source) => source.id !== existing?.id),
+    );
   };
   const updateSource = (id: string, patch: Partial<RecurringIncomeSource>) =>
-    update({ other_income_sources: answers.other_income_sources.map((source) => source.id === id ? { ...source, ...patch } : source) });
+    sendSources(
+      sources.map((source) =>
+        source.id === id ? { ...source, ...patch } : source,
+      ),
+    );
+  const total = sources.reduce((sum, source) => sum + source.monthly_cents, 0);
+  const displayCurrency = currency ?? "USD";
   return (
     <>
       {title}
@@ -1279,14 +1280,14 @@ function OtherIncomeStep({
       </p>
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         {OTHER_INCOME_TYPES.map((type) => {
-          const source = answers.other_income_sources.find((item) => item.type === type);
+          const source = sources.find((item) => item.type === type);
           return (
             <ToggleMoneyCard
               key={type}
               title={t(`otherIncome.types.${type}`)}
               description={t(`otherIncome.help.${type}`)}
               enabled={Boolean(source)}
-              currency={answers.currency}
+              currency={displayCurrency}
               value={source?.monthly_cents ?? 0}
               onEnabled={(enabled) => setSource(type, enabled)}
               onChange={(value) => source && updateSource(source.id, { monthly_cents: value, confidence: "confirmed" })}
@@ -1295,24 +1296,24 @@ function OtherIncomeStep({
         })}
       </div>
       <div className="mt-5 space-y-3">
-        {answers.other_income_sources.filter((source) => source.type === "other").map((source) => (
+        {sources.filter((source) => source.type === "other").map((source) => (
           <div key={source.id} className="grid gap-3 rounded-2xl border p-4 sm:grid-cols-[1fr_1fr_auto]">
             <label>
               <span className="mb-1 block text-xs text-slate-500">{t("otherIncome.customLabel")}</span>
               <input className="h-11 w-full rounded-xl border bg-transparent px-3" value={source.label ?? ""} onChange={(event) => updateSource(source.id, { label: event.target.value })} />
             </label>
-            <MoneyField label={t("otherIncome.monthlyAmount")} currency={answers.currency} value={source.monthly_cents} onChange={(value) => updateSource(source.id, { monthly_cents: value, confidence: "confirmed" })} />
-            <Button variant="ghost" size="icon" aria-label={t("otherIncome.remove")} onClick={() => update({ other_income_sources: answers.other_income_sources.filter((item) => item.id !== source.id) })}>
+            <MoneyField label={t("otherIncome.monthlyAmount")} currency={displayCurrency} value={source.monthly_cents} onChange={(value) => updateSource(source.id, { monthly_cents: value, confidence: "confirmed" })} />
+            <Button variant="ghost" size="icon" aria-label={t("otherIncome.remove")} onClick={() => sendSources(sources.filter((item) => item.id !== source.id))}>
               <Trash2 />
             </Button>
           </div>
         ))}
-        <Button variant="outline" onClick={() => update({ other_income_sources: [...answers.other_income_sources, { id: newId("other-income"), type: "other", label: "", monthly_cents: 0, confidence: "confirmed" }] })}>
+        <Button variant="outline" onClick={() => sendSources([...sources, { id: newId("other-income"), type: "other", label: "", monthly_cents: 0, confidence: "confirmed" }])}>
           <Plus />
           {t("otherIncome.addOther")}
         </Button>
       </div>
-      <p className="mt-6 font-medium">{t("otherIncome.total", { amount: formatCents(monthlyIncomeTotal(answers), locale, answers.currency) })}</p>
+      <p className="mt-6 font-medium">{t("otherIncome.total", { amount: formatCents(total, locale, displayCurrency) })}</p>
     </>
   );
 }
@@ -1574,13 +1575,17 @@ function ReviewStep({
 function IncomeEditor({
   t,
   locale,
-  answers,
+  location,
   income,
   onChange,
 }: {
   t: ReturnType<typeof useTranslations>;
   locale: string;
-  answers: HouseholdRunwayAnswers;
+  location: {
+    country: HouseholdRunwayAnswers["country"] | null;
+    region: HouseholdRunwayAnswers["region"] | null;
+    currency: HouseholdRunwayAnswers["currency"] | null;
+  };
   income: IncomeAnswer;
   onChange: (patch: Partial<IncomeAnswer>) => void;
 }) {
@@ -1588,8 +1593,9 @@ function IncomeEditor({
     return <InfoBox>{t("income.notAsked")}</InfoBox>;
   const estimate =
     income.entered_as === "gross" && income.gross_amount_cents > 0
-      ? estimateMonthlyTakeHome({ country: answers.country, region: answers.region, amountCents: income.gross_amount_cents, period: income.gross_period, filingStatus: income.tax_filing_status, selfEmployed: income.employment === "self_employed", annualOtherDeductionsCents: income.annual_other_deductions_cents })
+      ? estimateMonthlyTakeHome({ country: location.country ?? "US", region: location.region ?? "", amountCents: income.gross_amount_cents, period: income.gross_period, filingStatus: income.tax_filing_status, selfEmployed: income.employment === "self_employed", annualOtherDeductionsCents: income.annual_other_deductions_cents })
       : null;
+  const currency = location.currency ?? "USD";
   return (
     <div className="mt-7">
       <div className="mb-5 grid gap-3 sm:grid-cols-2">
@@ -1597,7 +1603,7 @@ function IncomeEditor({
         <ChoiceCard selected={income.entered_as === "net"} title={t("income.net")} onClick={() => income.entered_as !== "net" && onChange({ entered_as: "net", take_home_source: "user_confirmed", confidence: "confirmed" })} />
       </div>
       <div className="grid gap-5 sm:grid-cols-2">
-        <MoneyField label={t("income.amount")} currency={answers.currency} value={income.entered_as === "gross" ? income.gross_amount_cents : income.net_amount_cents} onChange={(value) => onChange(income.entered_as === "gross" ? { gross_amount_cents: value, take_home_source: "estimated" } : { net_amount_cents: value, take_home_source: "user_confirmed" })} />
+        <MoneyField label={t("income.amount")} currency={currency} value={income.entered_as === "gross" ? income.gross_amount_cents : income.net_amount_cents} onChange={(value) => onChange(income.entered_as === "gross" ? { gross_amount_cents: value, take_home_source: "estimated" } : { net_amount_cents: value, take_home_source: "user_confirmed" })} />
         <label>
           <span className="mb-2 block text-sm font-medium">{t("income.period")}</span>
           <select className="h-12 w-full rounded-xl border bg-transparent px-3" value={income.entered_as === "gross" ? income.gross_period : income.net_period} onChange={(event) => onChange(income.entered_as === "gross" ? { gross_period: event.target.value as IncomeAnswer["gross_period"], take_home_source: "estimated" } : { net_period: event.target.value as IncomeAnswer["net_period"], take_home_source: "user_confirmed" })}>
@@ -1609,30 +1615,30 @@ function IncomeEditor({
       {estimate ? (
         <div className="mt-5 rounded-2xl bg-emerald-50 p-5 dark:bg-emerald-500/10">
           <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">{t("income.estimate")}</p>
-          <p className="mt-2 text-2xl font-semibold">{formatCents(estimate.monthly_take_home_cents, locale, answers.currency)} <span className="text-sm font-normal">/ {t("income.month")}</span></p>
+          <p className="mt-2 text-2xl font-semibold">{formatCents(estimate.monthly_take_home_cents, locale, currency)} <span className="text-sm font-normal">/ {t("income.month")}</span></p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Button size="sm" variant={income.take_home_source === "estimated" ? "default" : "outline"} onClick={() => onChange({ monthly_take_home_cents: estimate.monthly_take_home_cents, estimated_monthly_take_home_cents: estimate.monthly_take_home_cents, take_home_source: "estimated", confidence: "estimated", estimate_rule_version: estimate.rule_version })}>{t("income.useEstimate")}</Button>
             <Button size="sm" variant={income.take_home_source === "user_confirmed" ? "default" : "outline"} onClick={() => onChange({ take_home_source: "user_confirmed", confidence: "confirmed", monthly_take_home_cents: income.monthly_take_home_cents || estimate.monthly_take_home_cents })}>{t("income.enterActual")}</Button>
           </div>
           {income.take_home_source === "user_confirmed" ? (
             <div className="mt-4 max-w-sm">
-              <MoneyField label={t("income.actualMonthly")} currency={answers.currency} value={income.monthly_take_home_cents} onChange={(value) => onChange({ monthly_take_home_cents: value, take_home_source: "user_confirmed", confidence: "confirmed" })} />
+              <MoneyField label={t("income.actualMonthly")} currency={currency} value={income.monthly_take_home_cents} onChange={(value) => onChange({ monthly_take_home_cents: value, take_home_source: "user_confirmed", confidence: "confirmed" })} />
             </div>
           ) : null}
           <details className="mt-5 rounded-xl border border-emerald-200 p-3 text-sm dark:border-emerald-500/20">
             <summary className="cursor-pointer font-semibold">{t("income.howCalculated")}</summary>
             <dl className="mt-3 grid grid-cols-[1fr_auto] gap-2 text-slate-600 dark:text-slate-300">
-              <dt>{t("income.enteredGross")}</dt><dd>{formatCents(income.entered_amount_cents, locale, answers.currency)} · {t(`income.${income.entered_period}`)}</dd>
-              <dt>{t("income.annualGross")}</dt><dd>{formatCents(estimate.annual_gross_cents, locale, answers.currency)}</dd>
-              <dt>{t("income.monthlyGross")}</dt><dd>{formatCents(estimate.monthly_gross_cents, locale, answers.currency)}</dd>
-              <dt>{t("income.federalTax")}</dt><dd>{formatCents(estimate.annual_federal_income_tax_cents, locale, answers.currency)}</dd>
-              <dt>{t("income.stateTax")}</dt><dd>{formatCents(estimate.annual_state_income_tax_cents, locale, answers.currency)}</dd>
-              <dt>{t("income.socialSecurity")}</dt><dd>{formatCents(estimate.annual_social_security_cents, locale, answers.currency)}</dd>
-              <dt>{t("income.medicare")}</dt><dd>{formatCents(estimate.annual_medicare_cents, locale, answers.currency)}</dd>
-              <dt>{t("income.monthlyDeductions")}</dt><dd>{formatCents(estimate.monthly_estimated_deductions_cents, locale, answers.currency)}</dd>
+              <dt>{t("income.enteredGross")}</dt><dd>{formatCents(income.entered_amount_cents, locale, currency)} · {t(`income.${income.entered_period}`)}</dd>
+              <dt>{t("income.annualGross")}</dt><dd>{formatCents(estimate.annual_gross_cents, locale, currency)}</dd>
+              <dt>{t("income.monthlyGross")}</dt><dd>{formatCents(estimate.monthly_gross_cents, locale, currency)}</dd>
+              <dt>{t("income.federalTax")}</dt><dd>{formatCents(estimate.annual_federal_income_tax_cents, locale, currency)}</dd>
+              <dt>{t("income.stateTax")}</dt><dd>{formatCents(estimate.annual_state_income_tax_cents, locale, currency)}</dd>
+              <dt>{t("income.socialSecurity")}</dt><dd>{formatCents(estimate.annual_social_security_cents, locale, currency)}</dd>
+              <dt>{t("income.medicare")}</dt><dd>{formatCents(estimate.annual_medicare_cents, locale, currency)}</dd>
+              <dt>{t("income.monthlyDeductions")}</dt><dd>{formatCents(estimate.monthly_estimated_deductions_cents, locale, currency)}</dd>
               <dt>{t("income.ruleVersion", { version: estimate.rule_version })}</dt><dd>{estimate.federal_rule_version}</dd>
             </dl>
-            {answers.country === "US" ? <div className="mt-4 grid gap-3 sm:grid-cols-2"><label><span className="mb-2 block text-xs font-medium">{t("income.filingStatus")}</span><select className="h-10 w-full rounded-lg border bg-transparent px-2" value={income.tax_filing_status} onChange={(event) => onChange({ tax_filing_status: event.target.value as IncomeAnswer["tax_filing_status"], take_home_source: "estimated" })}>{(["single", "married_joint", "married_separate", "head_household"] as const).map((status) => <option key={status} value={status}>{t(`income.filingStatuses.${status}`)}</option>)}</select></label><MoneyField label={t("income.otherDeductions")} currency={answers.currency} value={income.annual_other_deductions_cents} onChange={(value) => onChange({ annual_other_deductions_cents: value, take_home_source: "estimated" })} /></div> : null}
+            {location.country === "US" ? <div className="mt-4 grid gap-3 sm:grid-cols-2"><label><span className="mb-2 block text-xs font-medium">{t("income.filingStatus")}</span><select className="h-10 w-full rounded-lg border bg-transparent px-2" value={income.tax_filing_status} onChange={(event) => onChange({ tax_filing_status: event.target.value as IncomeAnswer["tax_filing_status"], take_home_source: "estimated" })}>{(["single", "married_joint", "married_separate", "head_household"] as const).map((status) => <option key={status} value={status}>{t(`income.filingStatuses.${status}`)}</option>)}</select></label><MoneyField label={t("income.otherDeductions")} currency={currency} value={income.annual_other_deductions_cents} onChange={(value) => onChange({ annual_other_deductions_cents: value, take_home_source: "estimated" })} /></div> : null}
             <p className="mt-3 text-xs text-slate-500">{t("income.estimateDisclaimer")}</p>
           </details>
         </div>
