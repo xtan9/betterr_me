@@ -25,7 +25,7 @@ import type {
 } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { createRemoteJWKSet, decodeJwt } from "jose";
+import { decodeJwt } from "jose";
 
 import {
   evaluateDelegatedJwtPolicy,
