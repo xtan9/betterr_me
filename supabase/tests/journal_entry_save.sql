@@ -1,5 +1,5 @@
 -- Run after `supabase db reset --local` against the local instance.
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Exercises the Journal save RPC at the database seam: create, retry/update,
 -- date uniqueness, ownership masking, explicit-ID conflicts, atomic failure,
 -- and concurrent date saves.
@@ -27,13 +27,13 @@ reset role;
 do $$
 begin
   begin
-    perform public.ralph_ci_delete_auth_user(
+    perform public.sql_fixture_delete_auth_user(
       '64800000-0000-4000-8000-000000000001'
     );
   exception when others then null;
   end;
   begin
-    perform public.ralph_ci_delete_auth_user(
+    perform public.sql_fixture_delete_auth_user(
       '64800000-0000-4000-8000-000000000002'
     );
   exception when others then null;
@@ -41,11 +41,11 @@ begin
 end
 $$;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '64800000-0000-4000-8000-000000000001',
   'journal-save-owner@example.test'
 );
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '64800000-0000-4000-8000-000000000002',
   'journal-save-other@example.test'
 );
@@ -196,8 +196,8 @@ $$;
 -- and the insert-then-lock path must yield one created row and one update of
 -- that same row.
 reset role;
-select public.ralph_ci_open_connection('journal-save-a');
-select public.ralph_ci_open_connection('journal-save-b');
+select public.sql_fixture_open_connection('journal-save-a');
+select public.sql_fixture_open_connection('journal-save-b');
 select pg_advisory_lock(64864801);
 select extensions.dblink_send_query(
   'journal-save-a',
@@ -303,9 +303,9 @@ where user_id in (
   '64800000-0000-4000-8000-000000000002'
 );
 reset role;
-select public.ralph_ci_delete_auth_user(
+select public.sql_fixture_delete_auth_user(
   '64800000-0000-4000-8000-000000000001'
 );
-select public.ralph_ci_delete_auth_user(
+select public.sql_fixture_delete_auth_user(
   '64800000-0000-4000-8000-000000000002'
 );

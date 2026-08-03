@@ -1,9 +1,9 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Verifies the post-retirement database contract: no row-shaped compatibility
 -- envelopes, a private generic merger, a narrow service command, and preserved
 -- unknown/dormant Preference storage.
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '67500000-0000-0000-0000-000000000001',
   'profile-retirement@example.test'
 );
@@ -157,6 +157,6 @@ begin
 end
 $$;
 
-select public.ralph_ci_delete_auth_user(
+select public.sql_fixture_delete_auth_user(
   '67500000-0000-0000-0000-000000000001'
 );

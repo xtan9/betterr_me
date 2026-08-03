@@ -1,13 +1,13 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Exercise the recurring task lifecycle through its single authenticated RPC.
 -- Every assertion runs in one transaction and the fixture rolls it back.
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '65900000-0000-0000-0000-000000000001',
   'recurring-lifecycle@example.test'
 );
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '65900000-0000-0000-0000-000000000002',
   'recurring-lifecycle-other@example.test'
 );

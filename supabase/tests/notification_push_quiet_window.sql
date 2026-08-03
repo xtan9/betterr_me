@@ -1,8 +1,8 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Covers the Notifications Push Quiet Window command, local-time invariants,
 -- User Time Zone gating, revision semantics, and degraded legacy storage.
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '67200000-0000-0000-0000-000000000001',
   'push-quiet-window@example.test'
 );
@@ -120,6 +120,6 @@ end
 $$;
 
 reset role;
-select public.ralph_ci_delete_auth_user(
+select public.sql_fixture_delete_auth_user(
   '67200000-0000-0000-0000-000000000001'
 );

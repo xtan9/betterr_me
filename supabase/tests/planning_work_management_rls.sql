@@ -1,4 +1,4 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Prove planning and work-management ownership at the PostgreSQL RLS seam.
 -- The runner's narrow administrative setup helper creates the disposable
 -- identities; application claims run through the constrained or anonymous role.
@@ -11,7 +11,7 @@
 do $concurrency_preflight$
 begin
   begin
-    perform public.ralph_ci_delete_auth_user(
+    perform public.sql_fixture_delete_auth_user(
       '57800000-0000-0000-0000-000000009001'
     );
   exception when others then
@@ -22,11 +22,11 @@ $concurrency_preflight$;
 
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '57800000-0000-0000-0000-000000000001',
   'planning-owner@example.test'
 );
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '57800000-0000-0000-0000-000000000002',
   'planning-other@example.test'
 );
@@ -372,7 +372,7 @@ begin
     raise exception 'owner Habit reminder seed outcome was incorrect: %', outcome;
   end if;
   perform set_config(
-    'ralph.planning_owner_habit_reminder_id',
+    'sql_fixture.planning_owner_habit_reminder_id',
     outcome->'reminders'->0->>'id',
     false
   );
@@ -427,7 +427,7 @@ begin
     raise exception 'other Habit reminder seed outcome was incorrect: %', outcome;
   end if;
   perform set_config(
-    'ralph.planning_other_habit_reminder_id',
+    'sql_fixture.planning_other_habit_reminder_id',
     outcome->'reminders'->0->>'id',
     false
   );
@@ -469,7 +469,7 @@ select public.update_calendar_event_with_reminders(
 );
 reset role;
 
-create function pg_temp.ralph_578_expect_sqlstate(
+create function pg_temp.sql_fixture_578_expect_sqlstate(
   statement text,
   expected_state text,
   failure_message text
@@ -502,7 +502,7 @@ begin
 end
 $$;
 
-create function pg_temp.ralph_578_expect_zero_changes(
+create function pg_temp.sql_fixture_578_expect_zero_changes(
   statement text,
   failure_message text
 )
@@ -520,7 +520,7 @@ begin
 end
 $$;
 
-create function pg_temp.ralph_578_expect_hidden(
+create function pg_temp.sql_fixture_578_expect_hidden(
   statement text,
   failure_message text
 )
@@ -706,23 +706,23 @@ begin
 end
 $block$;
 
-create temp table ralph_578_trigger_probe (
+create temp table sql_fixture_578_trigger_probe (
   id integer primary key,
   updated_at timestamptz not null
 );
-create trigger ralph_578_trigger_probe_updated_at
-before update on ralph_578_trigger_probe
+create trigger sql_fixture_578_trigger_probe_updated_at
+before update on sql_fixture_578_trigger_probe
 for each row execute function public.update_updated_at_column();
-insert into ralph_578_trigger_probe (id, updated_at)
+insert into sql_fixture_578_trigger_probe (id, updated_at)
 values (1, timestamptz '2000-01-01 00:00:00+00');
-update ralph_578_trigger_probe
+update sql_fixture_578_trigger_probe
 set id = id
 where id = 1;
 do $block$
 begin
-  if (select updated_at from ralph_578_trigger_probe where id = 1)
+  if (select updated_at from sql_fixture_578_trigger_probe where id = 1)
       is not distinct from timestamptz '2000-01-01 00:00:00+00'
-     or (select updated_at from ralph_578_trigger_probe where id = 1)
+     or (select updated_at from sql_fixture_578_trigger_probe where id = 1)
       <> transaction_timestamp() then
     raise exception 'updated_at trigger did not change the probe row';
   end if;
@@ -770,7 +770,7 @@ begin
   ) then
     raise exception 'task owner update did not persist';
   end if;
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$update public.tasks set user_id = '57800000-0000-0000-0000-000000000002' where id = '57800000-0000-0000-0000-000000000203'$$,
     '42501',
     'task ownership transfer'
@@ -800,7 +800,7 @@ begin
   ) then
     raise exception 'project owner update did not persist';
   end if;
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$update public.projects set user_id = '57800000-0000-0000-0000-000000000002' where id = '57800000-0000-0000-0000-000000000103'$$,
     '42501',
     'project ownership transfer'
@@ -811,34 +811,34 @@ begin
     raise exception 'project owner delete did not persist';
   end if;
 
-  perform pg_temp.ralph_578_expect_zero_changes(
+  perform pg_temp.sql_fixture_578_expect_zero_changes(
     $$update public.tasks set title = 'cross-user task write' where id = '57800000-0000-0000-0000-000000000202'$$,
     'non-owner task update'
   );
-  perform pg_temp.ralph_578_expect_zero_changes(
+  perform pg_temp.sql_fixture_578_expect_zero_changes(
     $$delete from public.tasks where id = '57800000-0000-0000-0000-000000000202'$$,
     'non-owner task delete'
   );
-  perform pg_temp.ralph_578_expect_zero_changes(
+  perform pg_temp.sql_fixture_578_expect_zero_changes(
     $$update public.projects set name = 'cross-user project write' where id = '57800000-0000-0000-0000-000000000102'$$,
     'non-owner project update'
   );
-  perform pg_temp.ralph_578_expect_zero_changes(
+  perform pg_temp.sql_fixture_578_expect_zero_changes(
     $$delete from public.projects where id = '57800000-0000-0000-0000-000000000102'$$,
     'non-owner project delete'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.tasks (id, user_id, title, section) values ('57800000-0000-0000-0000-000000000204', '57800000-0000-0000-0000-000000000002', 'cross-user task insert', 'work')$$,
     '42501',
     'non-owner task insert'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.projects (id, user_id, name, section, color) values ('57800000-0000-0000-0000-000000000104', '57800000-0000-0000-0000-000000000002', 'cross-user project insert', 'work', 'red')$$,
     '42501',
     'non-owner project insert'
   );
   -- A valid owner identity still cannot bypass a table constraint.
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.tasks (id, user_id, title, section, priority) values ('57800000-0000-0000-0000-000000000205', '57800000-0000-0000-0000-000000000001', 'invalid priority', 'personal', 4)$$,
     '23514',
     'task priority constraint'
@@ -985,7 +985,7 @@ begin
   ) then
     raise exception 'habit owner update did not persist';
   end if;
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$update public.habits set user_id = '57800000-0000-0000-0000-000000000002' where id = '57800000-0000-0000-0000-000000000403'$$,
     '42501',
     'habit ownership transfer'
@@ -1009,7 +1009,7 @@ begin
   ) then
     raise exception 'habit-log owner update did not persist';
   end if;
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$update public.habit_logs set user_id = '57800000-0000-0000-0000-000000000002' where id = '57800000-0000-0000-0000-000000000503'$$,
     '42501',
     'habit-log ownership transfer'
@@ -1032,7 +1032,7 @@ begin
   ) then
     raise exception 'habit-milestone owner update did not persist';
   end if;
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$update public.habit_milestones set user_id = '57800000-0000-0000-0000-000000000002' where id = '57800000-0000-0000-0000-000000000603'$$,
     '42501',
     'habit-milestone ownership transfer'
@@ -1061,7 +1061,7 @@ begin
   ) then
     raise exception 'habit-graduation owner update did not persist';
   end if;
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$update public.habit_graduations set user_id = '57800000-0000-0000-0000-000000000002' where id = '57800000-0000-0000-0000-000000000703'$$,
     '42501',
     'habit-graduation ownership transfer'
@@ -1126,61 +1126,61 @@ begin
     raise exception 'habit-graduation owner delete did not persist';
   end if;
 
-  perform pg_temp.ralph_578_expect_zero_changes(
+  perform pg_temp.sql_fixture_578_expect_zero_changes(
     $$update public.habits set name = 'cross-user habit write' where id = '57800000-0000-0000-0000-000000000402'$$,
     'non-owner habit update'
   );
-  perform pg_temp.ralph_578_expect_zero_changes(
+  perform pg_temp.sql_fixture_578_expect_zero_changes(
     $$delete from public.habits where id = '57800000-0000-0000-0000-000000000402'$$,
     'non-owner habit delete'
   );
-  perform pg_temp.ralph_578_expect_zero_changes(
+  perform pg_temp.sql_fixture_578_expect_zero_changes(
     $$update public.habit_logs set completed = false where id = '57800000-0000-0000-0000-000000000502'$$,
     'non-owner habit-log update'
   );
-  perform pg_temp.ralph_578_expect_zero_changes(
+  perform pg_temp.sql_fixture_578_expect_zero_changes(
     $$delete from public.habit_logs where id = '57800000-0000-0000-0000-000000000502'$$,
     'non-owner habit-log delete'
   );
-  perform pg_temp.ralph_578_expect_zero_changes(
+  perform pg_temp.sql_fixture_578_expect_zero_changes(
     $$update public.habit_milestones set milestone = 99 where id = '57800000-0000-0000-0000-000000000602'$$,
     'non-owner habit-milestone update'
   );
-  perform pg_temp.ralph_578_expect_zero_changes(
+  perform pg_temp.sql_fixture_578_expect_zero_changes(
     $$delete from public.habit_milestones where id = '57800000-0000-0000-0000-000000000602'$$,
     'non-owner habit-milestone delete'
   );
-  perform pg_temp.ralph_578_expect_zero_changes(
+  perform pg_temp.sql_fixture_578_expect_zero_changes(
     $$update public.habit_graduations set graduated_streak = 99 where id = '57800000-0000-0000-0000-000000000702'$$,
     'non-owner habit-graduation update'
   );
-  perform pg_temp.ralph_578_expect_zero_changes(
+  perform pg_temp.sql_fixture_578_expect_zero_changes(
     $$delete from public.habit_graduations where id = '57800000-0000-0000-0000-000000000702'$$,
     'non-owner habit-graduation delete'
   );
 
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.habits (id, user_id, name, frequency) values ('57800000-0000-0000-0000-000000000404', '57800000-0000-0000-0000-000000000002', 'cross-user habit insert', '{"type":"daily"}')$$,
     '42501',
     'non-owner habit insert'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.habit_logs (id, habit_id, user_id, logged_date) values ('57800000-0000-0000-0000-000000000504', '57800000-0000-0000-0000-000000000402', '57800000-0000-0000-0000-000000000002', '2026-08-04')$$,
     '42501',
     'non-owner habit-log insert'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.habit_milestones (id, habit_id, user_id, milestone) values ('57800000-0000-0000-0000-000000000604', '57800000-0000-0000-0000-000000000402', '57800000-0000-0000-0000-000000000002', 21)$$,
     '42501',
     'non-owner habit-milestone insert'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.habit_graduations (id, habit_id, user_id, graduated_at, graduated_streak) values ('57800000-0000-0000-0000-000000000704', '57800000-0000-0000-0000-000000000402', '57800000-0000-0000-0000-000000000002', '2026-08-04 00:00:00+00', 21)$$,
     '42501',
     'non-owner habit-graduation insert'
   );
 
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.habit_logs (id, habit_id, user_id, logged_date, completed) values ('57800000-0000-0000-0000-000000000505', '57800000-0000-0000-0000-000000000401', '57800000-0000-0000-0000-000000000001', '2026-08-03', true)$$,
     '23505',
     'habit-log unique constraint'
@@ -1315,7 +1315,7 @@ begin
     raise exception 'second-user habit visibility is incorrect';
   end if;
 
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$select public.set_habit_completion_atomically('57800000-0000-0000-0000-000000000401', '57800000-0000-0000-0000-000000000001', '2026-08-06', true, '2026-08-06')$$,
     'P0001',
     'non-owner habit completion'
@@ -1435,22 +1435,22 @@ begin
   ) then
     raise exception 'owner reminder default update did not persist';
   end if;
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$update public.reminder_defaults set user_id = '57800000-0000-0000-0000-000000000002' where id = '57800000-0000-0000-0000-000000001003'$$,
     '42501',
     'reminder-default ownership transfer'
   );
   delete from public.reminder_defaults where id = '57800000-0000-0000-0000-000000001003';
 
-  perform pg_temp.ralph_578_expect_zero_changes(
+  perform pg_temp.sql_fixture_578_expect_zero_changes(
     $$update public.reminder_defaults set relative_minutes = 99 where id = '57800000-0000-0000-0000-000000001002'$$,
     'non-owner reminder-default update'
   );
-  perform pg_temp.ralph_578_expect_zero_changes(
+  perform pg_temp.sql_fixture_578_expect_zero_changes(
     $$delete from public.reminder_defaults where id = '57800000-0000-0000-0000-000000001002'$$,
     'non-owner reminder-default delete'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.reminder_defaults (id, user_id, source_type, relative_minutes, channels) values ('57800000-0000-0000-0000-000000001004', '57800000-0000-0000-0000-000000000002', 'task', 15, '{push}')$$,
     '42501',
     'non-owner reminder-default insert'
@@ -1496,22 +1496,22 @@ $block$;
 set local role authenticated;
 do $reminder_defaults_acl$
 begin
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$select count(*) from public.reminder_defaults where id = '57800000-0000-0000-0000-000000001001'$$,
     '42501',
     'authenticated reminder-default read privilege'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.reminder_defaults (id, user_id, source_type, relative_minutes, channels) values ('57800000-0000-0000-0000-000000001007', '57800000-0000-0000-0000-000000000001', 'task', 15, '{push}')$$,
     '42501',
     'authenticated reminder-default insert privilege'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$update public.reminder_defaults set relative_minutes = 99 where id = '57800000-0000-0000-0000-000000001001'$$,
     '42501',
     'authenticated reminder-default update privilege'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$delete from public.reminder_defaults where id = '57800000-0000-0000-0000-000000001001'$$,
     '42501',
     'authenticated reminder-default delete privilege'
@@ -1533,22 +1533,22 @@ select set_config(
 set local role authenticated;
 do $push_acl$
 begin
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$select count(*) from public.push_subscriptions where id = '57800000-0000-0000-0000-000000001101'$$,
     '42501',
     'authenticated push-subscription read privilege'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.push_subscriptions (id, user_id, endpoint, p256dh, auth) values ('57800000-0000-0000-0000-000000001107', '57800000-0000-0000-0000-000000000001', 'https://push.example.test/authenticated-acl', 'authenticated-acl-p256dh', 'authenticated-acl-auth')$$,
     '42501',
     'authenticated push-subscription insert privilege'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$update public.push_subscriptions set user_agent = 'authenticated-acl-update' where id = '57800000-0000-0000-0000-000000001101'$$,
     '42501',
     'authenticated push-subscription update privilege'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$delete from public.push_subscriptions where id = '57800000-0000-0000-0000-000000001101'$$,
     '42501',
     'authenticated push-subscription delete privilege'
@@ -1586,7 +1586,7 @@ begin
   ) then
     raise exception 'push-subscription owner update did not persist';
   end if;
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$update public.push_subscriptions set user_id = '57800000-0000-0000-0000-000000000002' where id = '57800000-0000-0000-0000-000000001103'$$,
     '42501',
     'push-subscription ownership transfer'
@@ -1597,20 +1597,20 @@ begin
     raise exception 'push-subscription owner delete did not persist';
   end if;
 
-  perform pg_temp.ralph_578_expect_zero_changes(
+  perform pg_temp.sql_fixture_578_expect_zero_changes(
     $$update public.push_subscriptions set user_agent = 'cross-user push update' where id = '57800000-0000-0000-0000-000000001102'$$,
     'non-owner push-subscription update'
   );
-  perform pg_temp.ralph_578_expect_zero_changes(
+  perform pg_temp.sql_fixture_578_expect_zero_changes(
     $$delete from public.push_subscriptions where id = '57800000-0000-0000-0000-000000001102'$$,
     'non-owner push-subscription delete'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.push_subscriptions (id, user_id, endpoint, p256dh, auth) values ('57800000-0000-0000-0000-000000001104', '57800000-0000-0000-0000-000000000002', 'https://push.example.test/cross-user', 'cross-user-p256dh', 'cross-user-auth')$$,
     '42501',
     'non-owner push-subscription insert'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.push_subscriptions (id, user_id, endpoint, p256dh, auth) values ('57800000-0000-0000-0000-000000001107', '57800000-0000-0000-0000-000000000001', 'https://push.example.test/planning-owner', 'duplicate-endpoint-p256dh', 'duplicate-endpoint-auth')$$,
     '23505',
     'push-subscription endpoint uniqueness constraint'
@@ -1642,7 +1642,7 @@ begin
      or (select count(*) from public.reminders where user_id = '57800000-0000-0000-0000-000000000001') <> 2
      or exists (
        select 1 from public.reminders
-       where id = current_setting('ralph.planning_other_habit_reminder_id')::uuid
+       where id = current_setting('sql_fixture.planning_other_habit_reminder_id')::uuid
      ) then
     raise exception 'calendar owner visibility is incorrect';
   end if;
@@ -1669,27 +1669,27 @@ begin
     raise exception 'owner calendar reminder transition did not persist: %', transitioned_reminder;
   end if;
 
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$update public.calendar_events set title = 'direct calendar update denied' where id = '57800000-0000-0000-0000-000000000801'$$,
     '42501',
     'authenticated direct calendar update privilege'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$delete from public.calendar_events where id = '57800000-0000-0000-0000-000000000801'$$,
     '42501',
     'authenticated direct calendar delete privilege'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.reminders (id, user_id, source_type, source_id, reminder_type, absolute_time, channels, fire_at) values ('57800000-0000-0000-0000-000000000908', '57800000-0000-0000-0000-000000000001', 'calendar_event', '57800000-0000-0000-0000-000000000801', 'absolute', '2026-08-04 08:40:00+00', '{push}', '2026-08-04 08:40:00+00')$$,
     '42501',
     'authenticated direct calendar reminder insert privilege'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     format('update public.reminders set status = ''failed'' where id = %L', calendar_reminder_id),
     '42501',
     'authenticated direct calendar reminder update'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     format('delete from public.reminders where id = %L', calendar_reminder_id),
     '42501',
     'authenticated direct calendar reminder delete'
@@ -1744,23 +1744,23 @@ begin
     raise exception 'calendar owner delete left a reminder behind';
   end if;
 
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.reminders (id, user_id, source_type, source_id, reminder_type, channels, fire_at) values ('57800000-0000-0000-0000-000000000907', '57800000-0000-0000-0000-000000000001', 'habit', '57800000-0000-0000-0000-000000000401', 'absolute', array['push'], '2026-08-04 08:55:00+00')$$,
     '42501',
     'authenticated direct Habit Reminder Configuration insert privilege'
   );
 
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.calendar_events (id, user_id, title, start_date, end_date) values ('57800000-0000-0000-0000-000000000804', '57800000-0000-0000-0000-000000000002', 'cross-user calendar insert', '2026-08-05', '2026-08-05')$$,
     '42501',
     'non-owner calendar insert'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$select public.create_calendar_event_with_reminder('57800000-0000-0000-0000-000000000002', '{"title":"cross-user lifecycle create","start_date":"2026-08-05","end_date":"2026-08-05"}'::jsonb, '[{"reminder_type":"absolute","absolute_time":"2026-08-05T08:00:00Z","channels":["push"]}]'::jsonb)$$,
     'P0001',
     'non-owner calendar lifecycle create'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$select public.update_calendar_event_with_reminders('57800000-0000-0000-0000-000000000001', '57800000-0000-0000-0000-000000000802', '{"title":"cross-user calendar update"}'::jsonb, '[]'::jsonb)$$,
     'P0002',
     'non-owner calendar update'
@@ -1776,28 +1776,28 @@ begin
   ) then
     raise exception 'non-owner calendar delete changed state: %', delete_outcome;
   end if;
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$select public.update_calendar_event_with_reminders('57800000-0000-0000-0000-000000000002', '57800000-0000-0000-0000-000000000802', '{"title":"spoofed calendar update"}'::jsonb, '[]'::jsonb)$$,
     'P0001',
     'calendar owner spoof'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     format(
       'update public.reminders set status = ''failed'' where id = %L',
-      current_setting('ralph.planning_other_habit_reminder_id')::uuid
+      current_setting('sql_fixture.planning_other_habit_reminder_id')::uuid
     ),
     '42501',
     'non-owner reminder update'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     format(
       'delete from public.reminders where id = %L',
-      current_setting('ralph.planning_other_habit_reminder_id')::uuid
+      current_setting('sql_fixture.planning_other_habit_reminder_id')::uuid
     ),
     '42501',
     'non-owner reminder delete'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.reminders (id, user_id, source_type, source_id, reminder_type, relative_minutes, channels, fire_at) values ('57800000-0000-0000-0000-000000000904', '57800000-0000-0000-0000-000000000002', 'habit', '57800000-0000-0000-0000-000000000402', 'relative', 5, '{push}', '2026-08-04 10:35:00+00')$$,
     '42501',
     'non-owner reminder insert'
@@ -1860,7 +1860,7 @@ begin
     where id in ('57800000-0000-0000-0000-000000000803', '57800000-0000-0000-0000-000000000804')
   ) or not exists (
     select 1 from public.reminders
-    where id = current_setting('ralph.planning_other_habit_reminder_id')::uuid
+    where id = current_setting('sql_fixture.planning_other_habit_reminder_id')::uuid
       and status = 'pending'
   ) or not exists (
     select 1 from public.reminder_defaults
@@ -1936,7 +1936,7 @@ begin
      or (select count(*) from public.reminders where user_id = '57800000-0000-0000-0000-000000000002') <> 2
      or exists (
        select 1 from public.reminders
-       where id = current_setting('ralph.planning_owner_habit_reminder_id')::uuid
+       where id = current_setting('sql_fixture.planning_owner_habit_reminder_id')::uuid
      ) then
     raise exception 'second-user calendar visibility is incorrect';
   end if;
@@ -2026,7 +2026,7 @@ begin
      or exists (select 1 from public.calendar_events where id = '57800000-0000-0000-0000-000000000801')
      or exists (
        select 1 from public.reminders
-       where id = current_setting('ralph.planning_owner_habit_reminder_id')::uuid
+       where id = current_setting('sql_fixture.planning_owner_habit_reminder_id')::uuid
      )
      or exists (select 1 from public.reminder_defaults where id = '57800000-0000-0000-0000-000000001001')
      or exists (select 1 from public.push_subscriptions where id = '57800000-0000-0000-0000-000000001101') then
@@ -2044,228 +2044,228 @@ select set_config('request.jwt.claims', '', true);
 
 do $block$
 begin
-  perform pg_temp.ralph_578_expect_hidden(
+  perform pg_temp.sql_fixture_578_expect_hidden(
     $$select count(*) from public.tasks where id = '57800000-0000-0000-0000-000000000201'$$,
     'anonymous task read'
   );
-  perform pg_temp.ralph_578_expect_hidden(
+  perform pg_temp.sql_fixture_578_expect_hidden(
     $$select count(*) from public.projects where id = '57800000-0000-0000-0000-000000000101'$$,
     'anonymous project read'
   );
-  perform pg_temp.ralph_578_expect_hidden(
+  perform pg_temp.sql_fixture_578_expect_hidden(
     $$select count(*) from public.habits where id = '57800000-0000-0000-0000-000000000401'$$,
     'anonymous habit read'
   );
-  perform pg_temp.ralph_578_expect_hidden(
+  perform pg_temp.sql_fixture_578_expect_hidden(
     $$select count(*) from public.habit_logs where id = '57800000-0000-0000-0000-000000000501'$$,
     'anonymous habit-log read'
   );
-  perform pg_temp.ralph_578_expect_hidden(
+  perform pg_temp.sql_fixture_578_expect_hidden(
     $$select count(*) from public.habit_milestones where id = '57800000-0000-0000-0000-000000000601'$$,
     'anonymous habit-milestone read'
   );
-  perform pg_temp.ralph_578_expect_hidden(
+  perform pg_temp.sql_fixture_578_expect_hidden(
     $$select count(*) from public.habit_graduations where id = '57800000-0000-0000-0000-000000000701'$$,
     'anonymous habit-graduation read'
   );
-  perform pg_temp.ralph_578_expect_hidden(
+  perform pg_temp.sql_fixture_578_expect_hidden(
     $$select count(*) from public.calendar_events where id = '57800000-0000-0000-0000-000000000801'$$,
     'anonymous calendar read'
   );
-  perform pg_temp.ralph_578_expect_hidden(
-    $$select count(*) from public.reminders where id = current_setting('ralph.planning_owner_habit_reminder_id')::uuid$$,
+  perform pg_temp.sql_fixture_578_expect_hidden(
+    $$select count(*) from public.reminders where id = current_setting('sql_fixture.planning_owner_habit_reminder_id')::uuid$$,
     'anonymous reminder read'
   );
-  perform pg_temp.ralph_578_expect_hidden(
+  perform pg_temp.sql_fixture_578_expect_hidden(
     $$select count(*) from public.reminder_defaults where id = '57800000-0000-0000-0000-000000001001'$$,
     'anonymous reminder-default read'
   );
-  perform pg_temp.ralph_578_expect_hidden(
+  perform pg_temp.sql_fixture_578_expect_hidden(
     $$select count(*) from public.push_subscriptions where id = '57800000-0000-0000-0000-000000001101'$$,
     'anonymous push-subscription read'
   );
 
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.tasks (id, user_id, title, section) values ('57800000-0000-0000-0000-000000000206', '57800000-0000-0000-0000-000000000001', 'anonymous task insert', 'personal')$$,
     '42501',
     'anonymous task insert'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$update public.tasks set title = 'anonymous task update' where id = '57800000-0000-0000-0000-000000000201'$$,
     '42501',
     'anonymous task update'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$delete from public.tasks where id = '57800000-0000-0000-0000-000000000201'$$,
     '42501',
     'anonymous task delete'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.projects (id, user_id, name, section, color) values ('57800000-0000-0000-0000-000000000106', '57800000-0000-0000-0000-000000000001', 'anonymous project insert', 'personal', 'red')$$,
     '42501',
     'anonymous project insert'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$update public.projects set name = 'anonymous project update' where id = '57800000-0000-0000-0000-000000000101'$$,
     '42501',
     'anonymous project update'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$delete from public.projects where id = '57800000-0000-0000-0000-000000000101'$$,
     '42501',
     'anonymous project delete'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.habits (id, user_id, name, frequency) values ('57800000-0000-0000-0000-000000000406', '57800000-0000-0000-0000-000000000001', 'anonymous habit insert', '{"type":"daily"}')$$,
     '42501',
     'anonymous habit insert'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$update public.habits set name = 'anonymous habit update' where id = '57800000-0000-0000-0000-000000000401'$$,
     '42501',
     'anonymous habit update'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$delete from public.habits where id = '57800000-0000-0000-0000-000000000401'$$,
     '42501',
     'anonymous habit delete'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$select public.set_habit_completion_atomically('57800000-0000-0000-0000-000000000401', '57800000-0000-0000-0000-000000000001', '2026-08-06', true, '2026-08-06')$$,
     '42501',
     'anonymous habit completion'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.habit_logs (id, habit_id, user_id, logged_date) values ('57800000-0000-0000-0000-000000000506', '57800000-0000-0000-0000-000000000401', '57800000-0000-0000-0000-000000000001', '2026-08-05')$$,
     '42501',
     'anonymous habit-log insert'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$update public.habit_logs set completed = false where id = '57800000-0000-0000-0000-000000000501'$$,
     '42501',
     'anonymous habit-log update'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$delete from public.habit_logs where id = '57800000-0000-0000-0000-000000000501'$$,
     '42501',
     'anonymous habit-log delete'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.habit_milestones (id, habit_id, user_id, milestone) values ('57800000-0000-0000-0000-000000000606', '57800000-0000-0000-0000-000000000401', '57800000-0000-0000-0000-000000000001', 21)$$,
     '42501',
     'anonymous habit-milestone insert'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$update public.habit_milestones set milestone = 30 where id = '57800000-0000-0000-0000-000000000601'$$,
     '42501',
     'anonymous habit-milestone update'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$delete from public.habit_milestones where id = '57800000-0000-0000-0000-000000000601'$$,
     '42501',
     'anonymous habit-milestone delete'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$update public.habit_graduations set graduated_streak = 30 where id = '57800000-0000-0000-0000-000000000701'$$,
     '42501',
     'anonymous habit-graduation update'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$delete from public.habit_graduations where id = '57800000-0000-0000-0000-000000000701'$$,
     '42501',
     'anonymous habit-graduation delete'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.habit_graduations (id, habit_id, user_id, graduated_at, graduated_streak) values ('57800000-0000-0000-0000-000000000706', '57800000-0000-0000-0000-000000000401', '57800000-0000-0000-0000-000000000001', '2026-08-05 00:00:00+00', 21)$$,
     '42501',
     'anonymous habit-graduation insert'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.calendar_events (id, user_id, title, start_date, end_date) values ('57800000-0000-0000-0000-000000000806', '57800000-0000-0000-0000-000000000001', 'anonymous calendar insert', '2026-08-05', '2026-08-05')$$,
     '42501',
     'anonymous calendar insert'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$update public.calendar_events set title = 'anonymous calendar update' where id = '57800000-0000-0000-0000-000000000801'$$,
     '42501',
     'anonymous calendar update'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$delete from public.calendar_events where id = '57800000-0000-0000-0000-000000000801'$$,
     '42501',
     'anonymous calendar delete'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.reminders (id, user_id, source_type, source_id, reminder_type, relative_minutes, channels, fire_at) values ('57800000-0000-0000-0000-000000000906', '57800000-0000-0000-0000-000000000001', 'habit', '57800000-0000-0000-0000-000000000401', 'relative', 5, '{push}', '2026-08-04 08:55:00+00')$$,
     '42501',
     'anonymous reminder insert'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     format(
       'update public.reminders set status = ''failed'' where id = %L',
-      current_setting('ralph.planning_owner_habit_reminder_id')::uuid
+      current_setting('sql_fixture.planning_owner_habit_reminder_id')::uuid
     ),
     '42501',
     'anonymous reminder update'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     format(
       'delete from public.reminders where id = %L',
-      current_setting('ralph.planning_owner_habit_reminder_id')::uuid
+      current_setting('sql_fixture.planning_owner_habit_reminder_id')::uuid
     ),
     '42501',
     'anonymous reminder delete'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.reminder_defaults (id, user_id, source_type, relative_minutes, channels) values ('57800000-0000-0000-0000-000000001006', '57800000-0000-0000-0000-000000000001', 'habit', 15, '{push}')$$,
     '42501',
     'anonymous reminder-default insert'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$update public.reminder_defaults set relative_minutes = 60 where id = '57800000-0000-0000-0000-000000001001'$$,
     '42501',
     'anonymous reminder-default update'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$delete from public.reminder_defaults where id = '57800000-0000-0000-0000-000000001001'$$,
     '42501',
     'anonymous reminder-default delete'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$insert into public.push_subscriptions (id, user_id, endpoint, p256dh, auth) values ('57800000-0000-0000-0000-000000001106', '57800000-0000-0000-0000-000000000001', 'https://push.example.test/anonymous', 'anonymous-p256dh', 'anonymous-auth')$$,
     '42501',
     'anonymous push-subscription insert'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$update public.push_subscriptions set user_agent = 'anonymous-update' where id = '57800000-0000-0000-0000-000000001101'$$,
     '42501',
     'anonymous push-subscription update'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$delete from public.push_subscriptions where id = '57800000-0000-0000-0000-000000001101'$$,
     '42501',
     'anonymous push-subscription delete'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     format(
       'select public.transition_calendar_event_reminder(%L, %L, ''snoozed'', null, null)',
       '57800000-0000-0000-0000-000000000001'::uuid,
-      current_setting('ralph.planning_owner_habit_reminder_id')::uuid
+      current_setting('sql_fixture.planning_owner_habit_reminder_id')::uuid
     ),
     '42501',
     'anonymous calendar reminder transition'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$select public.create_calendar_event_with_reminder('57800000-0000-0000-0000-000000000001', '{"title":"anonymous lifecycle create","start_date":"2026-08-05","end_date":"2026-08-05"}'::jsonb, '[{"reminder_type":"absolute","absolute_time":"2026-08-05T08:00:00Z","channels":["push"]}]'::jsonb)$$,
     '42501',
     'anonymous calendar lifecycle create'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$select public.update_calendar_event_with_reminders('57800000-0000-0000-0000-000000000001', '57800000-0000-0000-0000-000000000801', '{"title":"anonymous lifecycle update"}'::jsonb, '[]'::jsonb)$$,
     '42501',
     'anonymous calendar lifecycle update'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
+  perform pg_temp.sql_fixture_578_expect_sqlstate(
     $$select public.delete_calendar_event_with_reminders('57800000-0000-0000-0000-000000000001', '57800000-0000-0000-0000-000000000801')$$,
     '42501',
     'anonymous calendar lifecycle delete'
@@ -2311,7 +2311,7 @@ begin
       and graduated_streak = 30
   ) or not exists (
     select 1 from public.reminders
-    where id = current_setting('ralph.planning_owner_habit_reminder_id')::uuid
+    where id = current_setting('sql_fixture.planning_owner_habit_reminder_id')::uuid
       and status = 'pending'
   ) or not exists (
     select 1 from public.reminder_defaults
@@ -2369,7 +2369,7 @@ begin
      or not exists (select 1 from public.calendar_events where id = '57800000-0000-0000-0000-000000000802' and title = 'Other calendar event')
      or not exists (
        select 1 from public.reminders
-       where id = current_setting('ralph.planning_other_habit_reminder_id')::uuid
+       where id = current_setting('sql_fixture.planning_other_habit_reminder_id')::uuid
          and status = 'pending'
      )
      or not exists (select 1 from public.reminder_defaults where id = '57800000-0000-0000-0000-000000001002' and relative_minutes = 45)
@@ -2404,14 +2404,14 @@ declare
   advisory_lock_held boolean := false;
 begin
   begin
-    perform public.ralph_ci_open_connection('planning-concurrency-setup');
+    perform public.sql_fixture_open_connection('planning-concurrency-setup');
     perform extensions.dblink_send_query(
       'planning-concurrency-setup',
       $query$
         do $setup$
         begin
           execute 'reset role';
-          perform public.ralph_ci_create_auth_user(
+          perform public.sql_fixture_create_auth_user(
             '57800000-0000-0000-0000-000000009001',
             'planning-concurrency@example.test'
           );
@@ -2438,8 +2438,8 @@ begin
       as result(status text);
     perform extensions.dblink_disconnect('planning-concurrency-setup');
 
-    perform public.ralph_ci_open_connection('planning-concurrency-a');
-    perform public.ralph_ci_open_connection('planning-concurrency-b');
+    perform public.sql_fixture_open_connection('planning-concurrency-a');
+    perform public.sql_fixture_open_connection('planning-concurrency-b');
     perform pg_advisory_lock(578000578);
     advisory_lock_held := true;
     perform extensions.dblink_send_query(
@@ -2532,14 +2532,14 @@ begin
         outcome_b;
     end if;
 
-    perform public.ralph_ci_open_connection('planning-concurrency-cleanup');
+    perform public.sql_fixture_open_connection('planning-concurrency-cleanup');
     perform extensions.dblink_send_query(
       'planning-concurrency-cleanup',
       $query$
         do $cleanup$
         begin
           execute 'reset role';
-          perform public.ralph_ci_delete_auth_user(
+          perform public.sql_fixture_delete_auth_user(
             '57800000-0000-0000-0000-000000009001'
           );
         end
@@ -2599,14 +2599,14 @@ begin
         null;
       end;
       begin
-        perform public.ralph_ci_open_connection('planning-concurrency-emergency-cleanup');
+        perform public.sql_fixture_open_connection('planning-concurrency-emergency-cleanup');
         perform extensions.dblink_send_query(
           'planning-concurrency-emergency-cleanup',
           $query$
             do $cleanup$
             begin
               execute 'reset role';
-              perform public.ralph_ci_delete_auth_user(
+              perform public.sql_fixture_delete_auth_user(
                 '57800000-0000-0000-0000-000000009001'
               );
             end

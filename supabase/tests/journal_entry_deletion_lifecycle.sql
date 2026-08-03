@@ -1,5 +1,5 @@
 -- Run after `supabase db reset --local` against the local instance.
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Exercises owned, missing, repeated, cross-owner, and rollback-safe Journal
 -- entry deletion through the public RPC, including dependent-link cleanup.
 
@@ -22,13 +22,13 @@ where user_id = '65000000-0000-4000-8000-000000000002';
 do $$
 begin
   begin
-    perform public.ralph_ci_delete_auth_user(
+    perform public.sql_fixture_delete_auth_user(
       '65000000-0000-4000-8000-000000000001'
     );
   exception when others then null;
   end;
   begin
-    perform public.ralph_ci_delete_auth_user(
+    perform public.sql_fixture_delete_auth_user(
       '65000000-0000-4000-8000-000000000002'
     );
   exception when others then null;
@@ -36,11 +36,11 @@ begin
 end
 $$;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '65000000-0000-4000-8000-000000000001',
   'journal-deletion-owner@example.test'
 );
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '65000000-0000-4000-8000-000000000002',
   'journal-deletion-other@example.test'
 );
@@ -347,10 +347,10 @@ where user_id = '65000000-0000-4000-8000-000000000002';
 
 do $$
 begin
-  perform public.ralph_ci_delete_auth_user(
+  perform public.sql_fixture_delete_auth_user(
     '65000000-0000-4000-8000-000000000001'
   );
-  perform public.ralph_ci_delete_auth_user(
+  perform public.sql_fixture_delete_auth_user(
     '65000000-0000-4000-8000-000000000002'
   );
 end

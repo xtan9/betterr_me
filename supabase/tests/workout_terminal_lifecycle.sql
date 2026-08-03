@@ -1,5 +1,5 @@
 -- Run after `supabase db reset --local` against the local instance.
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Exercises every terminal transition outcome through the constrained RPC
 -- boundary, including explicit ownership, controlled time, idempotency, and
 -- transaction rollback of completion metadata.
@@ -24,13 +24,13 @@ reset role;
 do $$
 begin
   begin
-    perform public.ralph_ci_delete_auth_user(
+    perform public.sql_fixture_delete_auth_user(
       '64700000-0000-0000-0000-000000000001'
     );
   exception when others then null;
   end;
   begin
-    perform public.ralph_ci_delete_auth_user(
+    perform public.sql_fixture_delete_auth_user(
       '64700000-0000-0000-0000-000000000002'
     );
   exception when others then null;
@@ -40,11 +40,11 @@ $$;
 
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '64700000-0000-0000-0000-000000000001',
   'workout-terminal-owner@example.test'
 );
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '64700000-0000-0000-0000-000000000002',
   'workout-terminal-other@example.test'
 );
@@ -326,10 +326,10 @@ select set_config(
 delete from public.workouts
 where user_id = '64700000-0000-0000-0000-000000000002';
 reset role;
-select public.ralph_ci_delete_auth_user(
+select public.sql_fixture_delete_auth_user(
   '64700000-0000-0000-0000-000000000001'
 );
-select public.ralph_ci_delete_auth_user(
+select public.sql_fixture_delete_auth_user(
   '64700000-0000-0000-0000-000000000002'
 );
 commit;

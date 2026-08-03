@@ -1,5 +1,5 @@
 -- Run after `supabase db reset --local` against the local instance.
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- This fixture uses the constrained runner's administrative setup helper,
 -- exercises the application roles, and rolls everything back so no synthetic
 -- identities or rows remain.
@@ -53,11 +53,11 @@ begin
 end;
 $$;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '21000000-0000-0000-0000-000000000001',
   'personal-records-a@example.test'
 );
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '21000000-0000-0000-0000-000000000002',
   'personal-records-b@example.test'
 );
@@ -1165,7 +1165,7 @@ $$;
 -- rows as the fixture's administrative session before exercising the read and
 -- direct-write boundaries below.
 reset role;
-select public.ralph_ci_seed_finance_plan(
+select public.sql_fixture_seed_finance_plan(
   '2a000000-0000-0000-0000-000000000001',
   '21000000-0000-0000-0000-000000000001',
   120000,
@@ -1173,7 +1173,7 @@ select public.ralph_ci_seed_finance_plan(
   5000
 );
 
-select public.ralph_ci_seed_finance_snapshot(
+select public.sql_fixture_seed_finance_snapshot(
   '2b000000-0000-0000-0000-000000000001',
   '2a000000-0000-0000-0000-000000000001',
   '21000000-0000-0000-0000-000000000001',
@@ -1186,7 +1186,7 @@ select public.ralph_ci_seed_finance_snapshot(
   '2.0.0'
 );
 
-select public.ralph_ci_seed_finance_plan(
+select public.sql_fixture_seed_finance_plan(
   '2a000000-0000-0000-0000-000000000002',
   '21000000-0000-0000-0000-000000000002',
   60000,
@@ -1194,7 +1194,7 @@ select public.ralph_ci_seed_finance_plan(
   0
 );
 
-select public.ralph_ci_seed_finance_snapshot(
+select public.sql_fixture_seed_finance_snapshot(
   '2b000000-0000-0000-0000-000000000002',
   '2a000000-0000-0000-0000-000000000002',
   '21000000-0000-0000-0000-000000000002',

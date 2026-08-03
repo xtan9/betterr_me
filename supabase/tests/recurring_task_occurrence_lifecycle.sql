@@ -1,13 +1,13 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Proves explicit completion, reopening, and intentional skipping preserve
 -- occurrence lineage while atomically updating the ordinary task projection.
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '68100000-0000-0000-0000-000000000001',
   'recurring-occurrence-lifecycle@example.test'
 );
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '68100000-0000-0000-0000-000000000002',
   'recurring-occurrence-lifecycle-other@example.test'
 );

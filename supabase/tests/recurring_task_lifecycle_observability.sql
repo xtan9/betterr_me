@@ -1,13 +1,13 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Exercises lifecycle signals, per-Series coverage retry, and authorization
 -- around the narrow service-role prewarming boundary.
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '69000000-0000-0000-0000-000000000001',
   'recurring-observability-owner@example.test'
 );
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '69000000-0000-0000-0000-000000000002',
   'recurring-observability-other@example.test'
 );

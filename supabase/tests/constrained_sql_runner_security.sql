@@ -1,4 +1,4 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Verifies the disposable SQL runner retains only its narrow bootstrap seams.
 
 begin;
@@ -6,7 +6,7 @@ begin;
 do $block$
 begin
   if has_schema_privilege(current_user, 'auth', 'usage') then
-    raise exception 'Ralph SQL runner unexpectedly has auth schema usage';
+    raise exception 'Constrained SQL fixture runner unexpectedly has auth schema usage';
   end if;
 
   if exists (
@@ -22,25 +22,25 @@ begin
       )
       and privilege.privilege_type = 'EXECUTE'
       and routine.proname not in (
-         'ralph_ci_create_auth_user',
-         'ralph_ci_delete_auth_profile',
-         'ralph_ci_delete_auth_user',
-         'ralph_ci_seed_finance_plan',
-         'ralph_ci_seed_finance_snapshot',
-         'ralph_ci_open_connection'
+         'sql_fixture_create_auth_user',
+         'sql_fixture_delete_auth_profile',
+         'sql_fixture_delete_auth_user',
+         'sql_fixture_seed_finance_plan',
+         'sql_fixture_seed_finance_snapshot',
+         'sql_fixture_open_connection'
       )
   ) then
-    raise exception 'Ralph SQL runner has an unexpected direct public function grant';
+    raise exception 'Constrained SQL fixture runner has an unexpected direct public function grant';
   end if;
 end
 $block$;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '00000000-0000-0000-0000-000000000901',
-  'ralph-runner-security@example.test'
+  'sql-fixture-runner-security@example.test'
 );
 
-select public.ralph_ci_delete_auth_profile(
+select public.sql_fixture_delete_auth_profile(
   '00000000-0000-0000-0000-000000000901'
 );
 

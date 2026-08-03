@@ -199,7 +199,7 @@
     "adminReason": "opens independent sessions and manages disposable auth rows for concurrency assertions"
   },
   {
-    "path": "ralph_ci_runner_security.sql",
+    "path": "constrained_sql_runner_security.sql",
     "domain": "runner",
     "role": "constrained",
     "cleanup": "transactional"

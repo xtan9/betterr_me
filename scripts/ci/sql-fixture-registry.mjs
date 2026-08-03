@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { ralphSqlFixtureViolations } from "./ralph-sql-policy.mjs";
+import { constrainedSqlFixtureViolations } from "./constrained-sql-policy.mjs";
 
 const REGISTRY_PATH = path.join("supabase", "tests", "registry.json");
 const REGISTRY_DISPLAY_PATH = "supabase/tests/registry.json";
@@ -143,7 +143,7 @@ export function validateSqlFixtureRegistry(root, registry) {
       }
     }
     if (entry.role === "constrained") {
-      for (const violation of ralphSqlFixtureViolations(sql)) {
+      for (const violation of constrainedSqlFixtureViolations(sql)) {
         violations.push(`${fixtureLocation}: constrained-role policy: ${violation}`);
       }
     }

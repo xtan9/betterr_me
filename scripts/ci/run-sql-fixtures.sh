@@ -83,8 +83,8 @@ capture_database_outcome() {
 }
 
 if printf '%s\n' "${plan[@]}" | grep -q $'\tconstrained\t'; then
-  RALPH_SQL_TEST_DATABASE_URL="$database_url" \
-    bash scripts/ci/run-ralph-sql-tests.sh --bootstrap-only
+  CONSTRAINED_SQL_FIXTURE_DATABASE_URL="$database_url" \
+    bash scripts/ci/run-constrained-sql-fixtures.sh --bootstrap-only
 fi
 
 for item in "${plan[@]}"; do
@@ -97,8 +97,8 @@ for item in "${plan[@]}"; do
   echo "Running SQL fixture: $fixture_path (domain=$domain role=$role cleanup=$cleanup)"
   set +e
   if [[ "$role" == "constrained" ]]; then
-    RALPH_SQL_TEST_DATABASE_URL="$database_url" \
-      bash scripts/ci/run-ralph-sql-tests.sh --skip-bootstrap --fixture "$fixture_path" \
+    CONSTRAINED_SQL_FIXTURE_DATABASE_URL="$database_url" \
+      bash scripts/ci/run-constrained-sql-fixtures.sh --skip-bootstrap --fixture "$fixture_path" \
       2>&1 | tee "$result_directory/output.log"
   else
     env -i PATH="$safe_path" HOME="$safe_home" LANG=C \

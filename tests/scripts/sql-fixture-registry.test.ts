@@ -161,7 +161,7 @@ describe("SQL fixture registry", () => {
       ],
       {
         "passing.sql":
-          "-- ralph-ci: true\nbegin;\nselect 1;\nrollback;\n",
+          "-- constrained-sql-fixture: true\nbegin;\nselect 1;\nrollback;\n",
       },
     );
 
@@ -180,7 +180,7 @@ describe("SQL fixture registry", () => {
         },
       ],
       {
-        "leaking.sql": "-- ralph-ci: true\nbegin;\ninsert into x values (1);\ncommit;\n",
+        "leaking.sql": "-- constrained-sql-fixture: true\nbegin;\ninsert into x values (1);\ncommit;\n",
       },
     );
 
@@ -304,11 +304,11 @@ describe("SQL fixture registry", () => {
         },
       ],
       {
-        "duplicate.sql": "-- ralph-ci: true\nselect 1;\n",
+        "duplicate.sql": "-- constrained-sql-fixture: true\nselect 1;\n",
         "support.sql": "select 1;\n",
         "acceptance.sql": "select 1;\n",
         "admin.sql": "select 1;\n",
-        "constrained.sql": "-- ralph-ci: true\ncreate role temporary_runner;\n",
+        "constrained.sql": "-- constrained-sql-fixture: true\ncreate role temporary_runner;\n",
       },
     );
 
@@ -349,7 +349,7 @@ describe("SQL fixture registry", () => {
           cleanup: "self-cleaning",
         },
       ],
-      { "passing.sql": "-- ralph-ci: true\nselect 1;\n" },
+      { "passing.sql": "-- constrained-sql-fixture: true\nselect 1;\n" },
     );
 
     expect(runRegistryCli(["--validate", "--root", root])).toMatchObject({

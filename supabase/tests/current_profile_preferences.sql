@@ -1,10 +1,10 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Exercises Current Profile storage defaults, owner commands, revision
 -- semantics, subject scoping, and database-enforced Preference invariants.
 -- Direct storage assertions use the constrained runner role; owner commands
 -- intentionally switch to the production authenticated role.
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '63400000-0000-0000-0000-000000000001',
   'current-profile@example.test'
 );
@@ -176,6 +176,6 @@ begin
 end
 $$;
 
-select public.ralph_ci_delete_auth_user(
+select public.sql_fixture_delete_auth_user(
   '63400000-0000-0000-0000-000000000001'
 );
