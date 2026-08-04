@@ -661,6 +661,45 @@ describe("Household Runway Interview Runtime", () => {
     });
   });
 
+  it("lets authenticated Plan bootstrap replace or clear a stale initial Plan", async () => {
+    const source = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "source",
+    });
+    source.start();
+    driveToReview(source);
+    source.send({ type: "continue" });
+    const inputs = source.getSnapshot().derived.planInputs as
+      | HouseholdRunwayInterviewRuntimePlanResult["planInputs"]
+      | null;
+    if (!inputs) throw new Error("expected Plan inputs");
+
+    const scheduled: (() => void)[] = [];
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      initialPlan: { revision: 1, inputs },
+      schedule: (task) => scheduled.push(task),
+      restorePlan: async () => ({
+        plan: { revision: 4, inputs },
+        snapshots: [],
+      }),
+    });
+    runtime.start();
+    await settle(scheduled);
+    expect(runtime.getSnapshot().plan.revision).toBe(4);
+
+    const cleared = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-2",
+      initialPlan: { revision: 1, inputs },
+      restorePlan: async () => ({ plan: null, snapshots: [] }),
+    });
+    cleared.start();
+    await settle([]);
+    expect(cleared.getSnapshot().plan).toEqual({ exists: false, revision: null });
+  });
+
   it("publishes a successful Plan save with authoritative Plan and Assessment history", async () => {
     const scheduled: (() => void)[] = [];
     const history = {
@@ -744,6 +783,24 @@ describe("Household Runway Interview Runtime", () => {
       },
       draft: { current: true },
     });
+  });
+
+  it("publishes a typed unavailable outcome when Plan persistence is not supplied", async () => {
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+    });
+    runtime.start();
+    driveToReview(runtime);
+    runtime.send({ type: "continue" });
+    runtime.send({ type: "save_plan" });
+    await settle([]);
+
+    expect(runtime.getSnapshot().operations.planPersistence).toEqual({
+      status: "failed",
+      error: "capability_unavailable",
+    });
+    expect(runtime.getSnapshot().draft.current).toBe(true);
   });
 
   it("maps thrown Plan persistence failures to a typed recoverable issue", async () => {

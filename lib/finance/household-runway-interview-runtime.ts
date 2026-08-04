@@ -578,9 +578,14 @@ function directPlanFrom(value: unknown): HouseholdRunwayPlan | null | undefined 
 }
 
 function isPlanPersistenceFailure(
-  value: HouseholdRunwayInterviewRuntimePlanOutcome,
+  value: unknown,
 ): value is HouseholdRunwayInterviewRuntimePlanFailure {
-  return "success" in value && value.success === false;
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "success" in value &&
+      value.success === false,
+  );
 }
 
 function draftFactsFor(
@@ -661,6 +666,7 @@ export function createHouseholdRunwayInterviewRuntime(
   let confirmation: HouseholdRunwayInterviewRuntimeConfirmation = { status: "idle" };
   let pendingConfirmationIntent: HouseholdRunwayInterviewIntent | null = null;
   let pendingConfirmationId: string | null = null;
+  let planBootstrapResolved = false;
   let restoredDraft: RuntimeStoredDraft | null = null;
   let restoredStartStage: HouseholdRunwayInterviewStage | undefined;
   let draftSyncScheduled = false;
@@ -741,6 +747,9 @@ export function createHouseholdRunwayInterviewRuntime(
     }
 
     const directRestoredPlan = directPlanFrom(restored.plan);
+    if (restored.plan !== undefined || restored.committedPlan !== undefined) {
+      planBootstrapResolved = true;
+    }
     const restoredPlan =
       restored.plan?.status === "restored"
         ? restored.plan.plan
@@ -752,7 +761,11 @@ export function createHouseholdRunwayInterviewRuntime(
     if (restored.plan?.status === "rejected") {
       runtimeIssues = [...runtimeIssues, { code: "plan_recovery" }];
     }
-    if (restoredPlan !== undefined) committedPlan = restoredPlan;
+    if (restored.plan?.status === "missing") {
+      committedPlan = null;
+    } else if (restoredPlan !== undefined) {
+      committedPlan = restoredPlan;
+    }
     const restoredHistory =
       restored.plan?.status === "restored"
         ? restored.plan.snapshots
@@ -769,6 +782,7 @@ export function createHouseholdRunwayInterviewRuntime(
   };
 
   const applyPlanRestoration = (payload: unknown, failed: boolean) => {
+    planBootstrapResolved = true;
     if (failed) {
       runtimeIssues = [...runtimeIssues, { code: "plan_recovery" }];
       return;
@@ -846,7 +860,7 @@ export function createHouseholdRunwayInterviewRuntime(
               ? "result"
               : restoredDraft.state.stage ?? undefined;
       }
-    } else if (committedPlan && state.committedPlan === null) {
+    } else if (planBootstrapResolved) {
       state = createHouseholdRunwayInterview(committedPlan);
     }
     if (state.status === "not_started" && !state.resumeChoice) {
@@ -1141,6 +1155,25 @@ export function createHouseholdRunwayInterviewRuntime(
             );
             return;
           }
+          if (
+            !value ||
+            typeof value !== "object" ||
+            typeof value.planRevision !== "number" ||
+            !value.planInputs ||
+            typeof value.planInputs !== "object" ||
+            !value.assessment ||
+            typeof value.assessment !== "object"
+          ) {
+            enqueueOutcome(() =>
+              outcomeCommand(createId, now, {
+                type: "plan_persistence_failed",
+                sourceRevision: effect.sourceRevision,
+                correlationId: effect.correlationId,
+                error: "exception",
+              }),
+            );
+            return;
+          }
           const successfulValue = value as HouseholdRunwayInterviewRuntimePlanResult;
           enqueueOutcome(() =>
             outcomeCommand(createId, now, {
@@ -1384,7 +1417,10 @@ export function createHouseholdRunwayInterviewRuntime(
     try {
       const previousState = state;
       const result = dispatchHouseholdRunwayInterview(previousState, command, {
-        planPersistence: options.persistPlan ? "available" : "unavailable",
+        // Capability absence is surfaced by the Runtime effect boundary as a
+        // typed unavailable outcome; authentication failures come back from
+        // an injected persistence capability.
+        planPersistence: "available",
         snapshotTrigger: state.committedPlan ? "updated" : "completed",
       });
       state = result.state;
