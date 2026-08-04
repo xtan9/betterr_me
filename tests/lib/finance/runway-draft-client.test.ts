@@ -14,7 +14,7 @@ import {
   readHouseholdRunwayDeviceDraft,
   readHouseholdRunwayDraft,
   rememberHouseholdRunwayDraft,
-} from "@/lib/finance/runway-draft-client";
+} from "@/lib/finance/internal/runway-draft-client";
 
 const now = new Date("2026-08-02T00:00:00.000Z");
 

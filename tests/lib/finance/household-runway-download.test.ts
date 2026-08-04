@@ -4,7 +4,7 @@ import {
   createHouseholdRunwayReport,
   downloadHouseholdRunwayAssessment,
   type HouseholdRunwayReportPresentation,
-} from "@/lib/finance/household-runway-download";
+} from "@/lib/finance/internal/household-runway-download";
 import {
   createDefaultRunwayAnswers,
   type HouseholdRunwayAnswers,

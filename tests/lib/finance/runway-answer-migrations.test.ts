@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { migrateRunwayAnswers } from "@/lib/finance/runway-answer-migrations";
+import { migrateRunwayAnswers } from "@/lib/finance/internal/runway-answer-migrations";
 
 const legacyIncome = {
   employment: "unemployed",

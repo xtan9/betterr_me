@@ -2,27 +2,15 @@ import {
   RUNWAY_MODEL_VERSION,
   expenseTotals,
   monthlyIncomeTotal,
-  type ExpenseCategory,
   type RunwayScenario,
-  type RunwaySimulation,
 } from "@/lib/finance/cushion";
 import type {
   HouseholdRunwayScenarioAssessment,
   SuccessfulHouseholdRunwayAssessment,
 } from "@/lib/finance/household-runway-assessment";
+import type { HouseholdRunwayReportPresentation } from "@/lib/finance/household-runway-interview-runtime";
 
-export interface HouseholdRunwayReportPresentation {
-  location: string;
-  formatMoney: (cents: number) => string;
-  formatScenario: (scenario: RunwayScenario) => string;
-  formatSimulation: (simulation: RunwaySimulation) => string;
-  formatCashTarget: (months: number, cents: number) => string;
-  formatLargestReduction: (
-    category: ExpenseCategory,
-    cents: number,
-  ) => string;
-  precisionAdvice: string;
-}
+export type { HouseholdRunwayReportPresentation } from "@/lib/finance/household-runway-interview-runtime";
 
 interface HouseholdRunwayDownloadEnvironment {
   createBlob: (content: string) => Blob;

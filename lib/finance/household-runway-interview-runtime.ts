@@ -2,6 +2,9 @@ import type {
   HouseholdRunwayAnswers,
   RunwayAdjustments,
   RunwaySnapshotSummary,
+  ExpenseCategory,
+  RunwayScenario,
+  RunwaySimulation,
 } from "@/lib/finance/cushion";
 import type { RunwayLocale } from "@/lib/finance/runway-regions";
 import type {
@@ -30,7 +33,20 @@ import {
   registerHouseholdRunwayRuntimeEnvironment,
   unregisterHouseholdRunwayRuntimeEnvironment,
   type HouseholdRunwayInterviewRuntimeEnvironmentMessage,
-} from "@/lib/finance/household-runway-runtime-environment";
+} from "@/lib/finance/internal/household-runway-runtime-environment";
+
+/** User-facing retention policy; storage/version details remain internal. */
+export const HOUSEHOLD_RUNWAY_DRAFT_RETENTION_DAYS = 30;
+
+export interface HouseholdRunwayReportPresentation {
+  location: string;
+  formatMoney: (cents: number) => string;
+  formatScenario: (scenario: RunwayScenario) => string;
+  formatSimulation: (simulation: RunwaySimulation) => string;
+  formatCashTarget: (months: number, cents: number) => string;
+  formatLargestReduction: (category: ExpenseCategory, cents: number) => string;
+  precisionAdvice: string;
+}
 
 export type HouseholdRunwayInterviewRuntimeIssueCode =
   | "country_required"

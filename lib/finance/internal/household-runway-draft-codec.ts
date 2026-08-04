@@ -8,7 +8,7 @@ import {
   EXPENSE_CATEGORIES,
   type ExpenseCategory,
 } from "@/lib/finance/runway-expenses";
-import { migrateRunwayAnswers } from "@/lib/finance/runway-answer-migrations";
+import { migrateRunwayAnswers } from "@/lib/finance/internal/runway-answer-migrations";
 import { runwayAdjustmentsSchema } from "@/lib/validations/finance-cushion";
 import {
   HOUSEHOLD_RUNWAY_INTERVIEW_STAGE_IDS,

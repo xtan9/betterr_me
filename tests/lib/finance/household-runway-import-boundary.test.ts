@@ -8,8 +8,6 @@ const supportedOrInternalFiles = new Set([
   "lib/finance/household-runway-browser-adapter.ts",
   "lib/finance/household-runway-interview-runtime.ts",
   "lib/finance/household-runway-react-adapter.ts",
-  "lib/finance/household-runway-runtime-environment.ts",
-  "lib/finance/runway-draft-client.ts",
 ]);
 
 describe("Household Runway Runtime import boundary", () => {
@@ -26,6 +24,18 @@ describe("Household Runway Runtime import boundary", () => {
     expect(
       existsSync(resolve(root, "lib/finance/internal/household-runway-draft-codec.ts")),
     ).toBe(true);
+    expect(
+      existsSync(resolve(root, "lib/finance/internal/runway-answer-migrations.ts")),
+    ).toBe(true);
+    expect(
+      existsSync(resolve(root, "lib/finance/internal/runway-draft-client.ts")),
+    ).toBe(true);
+    expect(
+      existsSync(resolve(root, "lib/finance/internal/household-runway-download.ts")),
+    ).toBe(true);
+    expect(
+      existsSync(resolve(root, "lib/finance/internal/household-runway-runtime-environment.ts")),
+    ).toBe(true);
   });
 
   it("keeps production callers on the Runtime or supported adapters", () => {
@@ -38,6 +48,21 @@ describe("Household Runway Runtime import boundary", () => {
         const relative = file.slice(root.length + 1).replaceAll("\\", "/");
         if (supportedOrInternalFiles.has(relative)) continue;
         if (legacyImport.test(readFileSync(file, "utf8"))) violations.push(relative);
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it("keeps app and components away from internal protocol imports", () => {
+    const internalImport = /@\/lib\/finance\/internal\//;
+    const violations: string[] = [];
+
+    for (const directory of ["app", "components"]) {
+      for (const file of walk(resolve(root, directory))) {
+        if (internalImport.test(readFileSync(file, "utf8"))) {
+          violations.push(file.slice(root.length + 1).replaceAll("\\", "/"));
+        }
       }
     }
 
