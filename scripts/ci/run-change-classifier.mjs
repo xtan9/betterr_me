@@ -31,6 +31,12 @@ function emergencyBroadClassification(error) {
       e2eSpecs: "Full Chromium coverage supersedes individual Chromium spec selection.",
     },
     fallback: true,
+    previewPolicy: {
+      action: "skip",
+      reason: "Change classification failed; preview policy requires manual review.",
+      changedFiles: [],
+      runtimeFiles: [],
+    },
   };
 }
 

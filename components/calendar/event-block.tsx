@@ -1,7 +1,7 @@
 import { memo } from "react";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
-import type { DomainCalendarEvent, FeedDomain } from "@/lib/calendar/feed-types";
-import { DOMAIN_COLORS } from "@/lib/calendar/feed-types";
+import type { CalendarDisplayEvent, CalendarLayer } from "@/lib/calendar/overlay-adapter";
+import { CALENDAR_LAYER_COLORS } from "@/lib/calendar/overlay-adapter";
 
 interface EventBlockProps {
   event: ExpandedCalendarEvent;
@@ -33,23 +33,23 @@ export const EventBlock = memo(function EventBlock({
   width,
   onClick,
 }: EventBlockProps) {
-  const domainEvent = event as DomainCalendarEvent;
-  const domain = domainEvent._domain as FeedDomain | undefined;
-  const isCompleted = domainEvent._completed;
+  const overlayEvent = event as CalendarDisplayEvent;
+  const layer = overlayEvent._layer as CalendarLayer | undefined;
+  const isCompleted = overlayEvent._completed;
 
   const hasCustomColor = !!event.color;
-  const hasDomainColor = domain && domain !== "events" && DOMAIN_COLORS[domain];
+  const hasLayerColor = layer && layer !== "events" && CALENDAR_LAYER_COLORS[layer];
   const isShort = height < 30;
 
   const bgStyle = hasCustomColor
     ? { backgroundColor: `${event.color}20` }
-    : hasDomainColor
-      ? { backgroundColor: `hsl(var(${DOMAIN_COLORS[domain!].muted}))` }
+    : hasLayerColor
+      ? { backgroundColor: `hsl(var(${CALENDAR_LAYER_COLORS[layer!].muted}))` }
       : {};
   const borderStyle = hasCustomColor && event.color
     ? { borderLeftColor: event.color }
-    : hasDomainColor
-      ? { borderLeftColor: `hsl(var(${DOMAIN_COLORS[domain!].main}))` }
+    : hasLayerColor
+      ? { borderLeftColor: `hsl(var(${CALENDAR_LAYER_COLORS[layer!].main}))` }
       : {};
 
   return (
@@ -60,7 +60,7 @@ export const EventBlock = memo(function EventBlock({
         border-l-2 overflow-hidden
         text-caption text-left cursor-pointer
         hover:opacity-80 transition-opacity
-        ${hasCustomColor || hasDomainColor ? "" : "bg-[hsl(var(--calendar-event-muted))] border-l-[hsl(var(--calendar-event))]"}
+        ${hasCustomColor || hasLayerColor ? "" : "bg-[hsl(var(--calendar-event-muted))] border-l-[hsl(var(--calendar-event))]"}
         ${isCompleted ? "line-through opacity-60" : ""}
       `}
       style={{

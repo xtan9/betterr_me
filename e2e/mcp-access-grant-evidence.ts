@@ -1,7 +1,6 @@
 import {
   evaluateDelegatedJwtPolicy,
   isExactCanonicalResource,
-  matchesS256CodeChallenge,
   publicBoundaryRejects,
   selectDelegatedSigningJwk,
   type DelegatedJwk,
@@ -115,8 +114,7 @@ export interface PublicBoundaryObservation extends BaseObservation {
 
 export interface PkceObservation extends BaseObservation {
   readonly kind: "pkce";
-  readonly verifier?: string;
-  readonly challenge?: string;
+  readonly verifierMatchesChallenge?: boolean;
   readonly method?: string;
 }
 
@@ -144,6 +142,7 @@ export interface FinalizeEvidenceInput {
   readonly target: CompatibilityReportTarget;
   readonly requiredGateIds: readonly string[];
   readonly observations: readonly EvidenceObservation[];
+  readonly artifactWriteSucceeded?: boolean;
 }
 
 export interface SanitizedValue {
@@ -185,6 +184,24 @@ const SAFE_KEYS = new Set([
   "supportedRedirects", "supportedResponseTypes", "tokenEndpoint", "tokenEndpointAuthMethodsSupported", "tokenType",
   "untrustedDisclaimerVisible", "valid", "version", "versions", "reached", "checks", "keyIdPresent", "timeBoundsValid",
   "issuerMatches", "subjectPresent", "audienceMatches", "clientContextMatches", "grantContextMatches", "resourceContextMatches",
+  "access_token", "refresh_token", "id_token", "client_secret", "code_verifier", "password", "cookie", "authorization", "code",
+  "client_uri", "logo_uri", "software_id", "software_version", "error_code", "error_description", "grant_types_supported",
+  "response_types_supported", "token_endpoint_auth_method", "token_endpoint_auth_methods_supported", "registration_endpoint",
+  "redirect_uris", "authorization_endpoint", "jwks_uri", "token_endpoint", "updated_at", "msg", "client_type", "created_at",
+  "scopes_supported", "scope", "logoUri", "clientUri", "softwareId", "softwareVersion", "requestTimeCallbackUrl",
+  "hasProviderCredentials", "hasProviderClientKey", "resourceMetadataUrl", "authorizationServerCount",
+  "registrationObserved", "registeredTokenEndpointAuthMethod", "registeredGrantTypes", "registeredResponseTypes",
+  "registeredRedirectUris", "tokenRequestObserved", "grantType", "redirectUri", "resourceMatchesCanonical",
+  "codeVerifierMatchesChallenge", "jwksFetched", "jwksStatus", "jwksKeyMatched", "signatureAlgorithm",
+  "localVerification", "providerValidationRoundTrip", "operationResourceMatches", "operationUrl", "resultIsError",
+  "tool", "replacementCredentialsStored", "initialTokens", "firstReplacement", "secondReplacement", "replacementOperation",
+  "previous", "replacement", "providerReturnedAccessToken", "providerReturnedRefreshToken", "accessTokenChanged",
+  "refreshTokenChanged", "tokenEndpointStatus", "succeeded", "tokenSummary", "errorDetail", "requestStatuses",
+  "rootReplayDetected", "everyIssuedDescendantRejected", "familyMemberCountExercised", "familyResults", "grantCount",
+  "registeredClientIdPresent", "grant", "grantRevoked", "grantIdentified", "revokeEndpointObserved", "requestStatus",
+  "accessTokenHasIssuedAt", "accessTokenHasExpiry", "documentedLifetimeSeconds", "secondsRemaining", "withinDocumentedLifetime",
+  "operationStatus", "accessTokenLifetime", "cases", "id", "responseType", "callbackHost", "callbackPath",
+  "tokenRequestObserved", "initial", "firstDescendant", "secondDescendant", "familyResults", "grantRevoked",
 ]);
 const SENSITIVE_KEY = /^(?:access_token|refresh_token|id_token|client_secret|code_verifier|password|cookie|authorization|secret|token|code)$/i;
 const SENSITIVE_TEXT = /(access_token|refresh_token|id_token|client_secret|code_verifier|password|cookie|authorization|secret|token|code)\s*[:=]/i;
@@ -223,6 +240,22 @@ function redactText(value: string, secrets: readonly string[]): { value: string;
   return { value: result.slice(0, MAX_DIAGNOSTIC_LENGTH), secretLeak };
 }
 
+function sanitizeVersionMap(value: unknown, context: EvidenceRunContext, depth: number): SanitizedValue {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return sanitizeValue(value, context, depth + 1);
+  }
+  const result: Record<string, unknown> = {};
+  let secretLeak = false;
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(0, MAX_OBJECT_KEYS)) {
+    const sanitized = sanitizeValue(item, context, depth + 1);
+    result[key] = sanitized.value;
+    secretLeak ||= sanitized.secretLeak;
+  }
+  return { value: result, secretLeak };
+}
+
 function sanitizeValue(value: unknown, context: EvidenceRunContext, depth = 0): SanitizedValue {
   if (depth > MAX_DEPTH) return { value: "[REDACTED: depth limit]", secretLeak: false };
   if (typeof value === "string") {
@@ -240,13 +273,20 @@ function sanitizeValue(value: unknown, context: EvidenceRunContext, depth = 0): 
     let secretLeak = false;
     const result: Record<string, unknown> = {};
     for (const [key, item] of entries.slice(0, MAX_OBJECT_KEYS)) {
+      if (key === "versions") {
+        const versions = sanitizeVersionMap(item, context, depth);
+        result[key] = versions.value;
+        secretLeak ||= versions.secretLeak;
+        continue;
+      }
       const keyIsSensitive = SENSITIVE_KEY.test(key);
       const itemResult = sanitizeValue(item, context, depth + 1);
       const alreadyRedacted = typeof itemResult.value === "string" && /^\[(?:REDACTED|JWT REDACTED)/.test(itemResult.value);
       secretLeak ||= itemResult.secretLeak;
       if (keyIsSensitive && !alreadyRedacted) secretLeak = true;
-      result[key] = SAFE_KEYS.has(key) || !keyIsSensitive ? itemResult.value : "[REDACTED]";
-      if (!SAFE_KEYS.has(key) && !keyIsSensitive) result[key] = "[REDACTED: unexpected field]";
+      result[key] = keyIsSensitive
+        ? alreadyRedacted ? itemResult.value : "[REDACTED]"
+        : SAFE_KEYS.has(key) ? itemResult.value : "[REDACTED: unexpected field]";
     }
     return { value: result, secretLeak };
   }
@@ -255,6 +295,195 @@ function sanitizeValue(value: unknown, context: EvidenceRunContext, depth = 0): 
 
 export function sanitizeEvidence(value: unknown, context: EvidenceRunContext): SanitizedValue {
   return sanitizeValue(value, context);
+}
+
+/**
+ * Minimize a live response before it becomes an inert request observation.
+ * The adapters must not hand raw provider payloads to the evidence boundary.
+ */
+export function minimizeResponseBody(text: string, contentType: string | null): Record<string, unknown> | undefined {
+  if (!text) return undefined;
+  if (contentType?.includes("json")) {
+    try {
+      const sanitized = sanitizeEvidence(
+        JSON.parse(text),
+        createEvidenceRunContext({
+          configuredSecrets: [],
+          time: { startedAt: "", finishedAt: "" },
+          versions: {},
+        }),
+      );
+      return sanitized.value && typeof sanitized.value === "object" && !Array.isArray(sanitized.value)
+        ? sanitized.value as Record<string, unknown>
+        : { type: Array.isArray(sanitized.value) ? "array" : typeof sanitized.value };
+    } catch {
+      return { body: "[REDACTED NON-JSON RESPONSE]" };
+    }
+  }
+  return { contentType: contentType ?? "unknown", body: "[REDACTED RESPONSE BODY]" };
+}
+
+export function sanitizeText(value: string, context?: EvidenceRunContext): string {
+  const effectiveContext = context ?? createEvidenceRunContext({
+    configuredSecrets: [],
+    time: { startedAt: "", finishedAt: "" },
+    versions: {},
+  });
+  return redactText(value, effectiveContext.configuredSecrets).value;
+}
+
+export function sanitizeUrl(value: string | URL, context?: EvidenceRunContext): string {
+  const effectiveContext = context ?? createEvidenceRunContext({
+    configuredSecrets: [],
+    time: { startedAt: "", finishedAt: "" },
+    versions: {},
+  });
+  try {
+    const url = new URL(value.toString());
+    const safeQueryKeys = new Set([
+      "code_challenge_method", "grant_type", "redirect_uri", "response_type", "resource", "scope",
+    ]);
+    const query = new URLSearchParams();
+    for (const [key, queryValue] of url.searchParams) {
+      query.set(
+        key,
+        safeQueryKeys.has(key)
+          ? key === "redirect_uri" || key === "resource"
+            ? sanitizeUrl(queryValue, effectiveContext)
+            : sanitizeText(queryValue, effectiveContext)
+          : "[REDACTED]",
+      );
+    }
+    const queryText = query.toString();
+    return `${url.origin}${url.pathname}${queryText ? `?${queryText}` : ""}`;
+  } catch {
+    return sanitizeText(value.toString(), effectiveContext).replace(/([?&](?:code|state|client_id|code_challenge)=[^&]+)/gi, "$1=[REDACTED]");
+  }
+}
+
+export interface ConsentPresentationObservation {
+  readonly clientNameVisible: boolean;
+  readonly clientUriVisible: boolean;
+  readonly logoVisible: boolean;
+  readonly softwareIdVisible: boolean;
+  readonly softwareVersionVisible: boolean;
+  readonly untrustedDisclaimerVisible: boolean;
+  readonly endorsementLanguageVisible: boolean;
+  readonly affirmativeControlVisible: boolean;
+  readonly denialControlVisible: boolean;
+  readonly callbackBeforeDecision: boolean;
+}
+
+export function classifyConsentPresentation(observation: ConsentPresentationObservation): GateStatus {
+  return observation.clientNameVisible &&
+    observation.clientUriVisible &&
+    observation.logoVisible &&
+    observation.softwareIdVisible &&
+    observation.softwareVersionVisible &&
+    observation.untrustedDisclaimerVisible &&
+    !observation.endorsementLanguageVisible &&
+    observation.affirmativeControlVisible &&
+    observation.denialControlVisible &&
+    !observation.callbackBeforeDecision
+    ? "pass"
+    : "fail";
+}
+
+export interface AuthorizationOutcomeObservation {
+  readonly kind: "denial" | "abandonment";
+  readonly callbackReceived: boolean;
+  readonly authorizationError: boolean;
+  readonly stateMatches?: boolean;
+  readonly authorizationCodePresent: boolean;
+  readonly tokenRequestObserved: boolean;
+  readonly accessTokenObserved: boolean;
+  readonly refreshTokenObserved: boolean;
+  readonly idTokenObserved?: boolean;
+  readonly browserFragmentCredentialObserved?: boolean;
+}
+
+export function classifyAuthorizationOutcome(observation: AuthorizationOutcomeObservation): GateStatus {
+  const credentialObserved = observation.authorizationCodePresent ||
+    observation.tokenRequestObserved ||
+    observation.accessTokenObserved ||
+    observation.refreshTokenObserved ||
+    Boolean(observation.idTokenObserved) ||
+    Boolean(observation.browserFragmentCredentialObserved);
+  if (credentialObserved) return "fail";
+  if (observation.kind === "denial") {
+    return observation.callbackReceived && observation.authorizationError && observation.stateMatches === true ? "pass" : "fail";
+  }
+  return observation.callbackReceived ? "fail" : "pass";
+}
+
+export interface BrowserUrlCredentialEvidence {
+  readonly credentialObserved: boolean;
+  readonly authorizationCodePresent: boolean;
+  readonly accessTokenPresent: boolean;
+  readonly refreshTokenPresent: boolean;
+  readonly idTokenPresent: boolean;
+  readonly fragmentKeys: readonly string[];
+}
+
+export function browserUrlCredentialEvidence(value: string): BrowserUrlCredentialEvidence {
+  try {
+    const fragment = new URLSearchParams(new URL(value).hash.replace(/^#/, ""));
+    const authorizationCodePresent = fragment.has("code");
+    const accessTokenPresent = fragment.has("access_token");
+    const refreshTokenPresent = fragment.has("refresh_token");
+    const idTokenPresent = fragment.has("id_token");
+    return {
+      credentialObserved: authorizationCodePresent || accessTokenPresent || refreshTokenPresent || idTokenPresent,
+      authorizationCodePresent,
+      accessTokenPresent,
+      refreshTokenPresent,
+      idTokenPresent,
+      fragmentKeys: [...fragment.keys()].filter((key) => /^(code|access_token|refresh_token|id_token)$/i.test(key)),
+    };
+  } catch {
+    return { credentialObserved: false, authorizationCodePresent: false, accessTokenPresent: false, refreshTokenPresent: false, idTokenPresent: false, fragmentKeys: [] };
+  }
+}
+
+export function classifyPublicRegistrationBoundary(
+  registrationObserved: boolean,
+  validationAccepted: boolean,
+  statusCode: number | undefined,
+  networkError: string | undefined,
+): GateStatus {
+  if (registrationObserved && validationAccepted) return "pass";
+  if (!registrationObserved || statusCode === undefined || networkError || statusCode >= 500 || statusCode < 200 || statusCode >= 600) return "not-proven";
+  return "fail";
+}
+
+export function isRegistrationMetadataError(observedError: unknown): boolean {
+  return typeof observedError === "string" &&
+    /invalid_client_metadata|invalid_(?:client|redirect_uri|grant_type|response_type|request)|unsupported_(?:client|grant|response)/i.test(observedError);
+}
+
+export type RegistrationProbeStatus = "accepted" | "rejected" | "not-proven";
+
+export function classifyRegistrationProbe(statusCode: number, observedError: unknown): RegistrationProbeStatus {
+  if (statusCode >= 200 && statusCode < 300) return "accepted";
+  if ((statusCode === 400 || statusCode === 422) && isRegistrationMetadataError(observedError)) return "rejected";
+  return "not-proven";
+}
+
+export function hasUnnegatedEndorsementLanguage(text: string): boolean {
+  const endorsementTerms = /\b(?:verified|endorsed|approved|trusted|recommended|sponsored|official(?:ly)?|partner)\b/gi;
+  for (const match of text.matchAll(endorsementTerms)) {
+    const index = match.index ?? 0;
+    const statementStart = Math.max(
+      text.lastIndexOf(".", index - 1),
+      text.lastIndexOf("!", index - 1),
+      text.lastIndexOf("?", index - 1),
+      text.lastIndexOf(";", index - 1),
+      text.lastIndexOf("\n", index - 1),
+    ) + 1;
+    const localPrefix = text.slice(Math.max(statementStart, index - 48), index);
+    if (!/\b(?:not|never|cannot|can't|doesn't|does not|unverified|untrusted|without)\b[\s\S]{0,30}$/i.test(localPrefix)) return true;
+  }
+  return false;
 }
 
 function detailText(detail: unknown, context: EvidenceRunContext): { value: string; secretLeak: boolean } {
@@ -285,31 +514,56 @@ function gateFromObservation(observation: BaseObservation & { status?: GateStatu
   };
 }
 
+function gateEvidence(observation: GateObservation): Record<string, unknown> | undefined {
+  const evidence = observation.evidence && typeof observation.evidence === "object"
+    ? observation.evidence as Record<string, unknown>
+    : {};
+  const errorEvidence = observation.error
+    ? { errorKind: observation.error.kind, ...(observation.error.code ? { errorCode: observation.error.code } : {}) }
+    : {};
+  const combined = { ...evidence, ...errorEvidence };
+  return Object.keys(combined).length > 0 ? combined : undefined;
+}
+
 export class GateAccumulator {
-  private readonly gates = new Map<string, CompatibilityGate>();
-  private readonly conflicts = new Set<string>();
+  private readonly gates = new Map<string, GateObservation>();
 
   constructor(initial: readonly CompatibilityGate[] = []) {
     for (const gate of initial) this.add(gate);
   }
 
   add(gate: CompatibilityGate): void {
-    const existing = this.gates.get(gate.id);
-    if (!existing) {
-      this.gates.set(gate.id, { ...gate, ...(gate.evidence ? { evidence: { ...gate.evidence } } : {}) });
-      return;
-    }
-    if (existing.status !== gate.status) {
-      this.conflicts.add(gate.id);
-      this.gates.set(gate.id, {
-        id: gate.id,
-        status: "fail",
-        detail: "Conflicting observations were supplied for this gate.",
-        evidence: { errorKind: "conflicting-observation", observedStatuses: [existing.status, gate.status] },
-      });
-      return;
-    }
-    if (!this.conflicts.has(gate.id)) this.gates.set(gate.id, gate);
+    this.gates.set(gate.id, {
+      kind: "gate",
+      gateId: gate.id,
+      status: gate.status,
+      detail: gate.detail,
+      evidence: gate.evidence,
+    });
+  }
+
+  replace(observation: GateObservation): void {
+    this.gates.set(observation.gateId, { ...observation });
+  }
+
+  has(gateId: string): boolean {
+    return this.gates.has(gateId);
+  }
+
+  get(gateId: string): CompatibilityGate | undefined {
+    const observation = this.gates.get(gateId);
+    if (!observation) return undefined;
+    const evidence = gateEvidence(observation);
+    return {
+      id: observation.gateId,
+      status: observation.status ?? "not-proven",
+      detail: typeof observation.detail === "string" ? observation.detail : "",
+      ...(evidence ? { evidence } : {}),
+    };
+  }
+
+  observations(): GateObservation[] {
+    return [...this.gates.values()].map((observation) => ({ ...observation }));
   }
 
   snapshot(requiredGateIds: readonly string[]): CompatibilityGate[] {
@@ -317,17 +571,27 @@ export class GateAccumulator {
     for (const id of required) {
       if (!this.gates.has(id)) {
         this.gates.set(id, {
-          id,
+          kind: "gate",
+          gateId: id,
           status: "not-proven",
           detail: "Gate was not reached because an earlier compatibility gate stopped the run.",
-          evidence: { errorKind: "missing-observation", reached: false, observedBoundary: "not-reached" },
+          error: { kind: "missing-observation" },
+          evidence: { reached: false, observedBoundary: "not-reached" },
         });
       }
     }
     const order = new Map(required.map((id, index) => [id, index]));
     return [...this.gates.values()]
-      .sort((a, b) => (order.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.id) ?? Number.MAX_SAFE_INTEGER) || a.id.localeCompare(b.id))
-      .map((gate) => ({ ...gate, ...(gate.evidence ? { evidence: { ...gate.evidence } } : {}) }));
+      .sort((a, b) => (order.get(a.gateId) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.gateId) ?? Number.MAX_SAFE_INTEGER) || a.gateId.localeCompare(b.gateId))
+      .map((observation) => {
+        const evidence = gateEvidence(observation);
+        return {
+          id: observation.gateId,
+          status: observation.status ?? "not-proven",
+          detail: typeof observation.detail === "string" ? observation.detail : "",
+          ...(evidence ? { evidence } : {}),
+        };
+      });
   }
 }
 
@@ -378,7 +642,9 @@ function evaluateObservation(observation: EvidenceObservation, context: Evidence
     }, context);
   }
   if (observation.kind === "pkce") {
-    const status = matchesS256CodeChallenge(observation.verifier, observation.challenge, observation.method) ? "pass" : "fail";
+    const status = observation.verifierMatchesChallenge === undefined
+      ? undefined
+      : observation.verifierMatchesChallenge && observation.method === "S256" ? "pass" : "fail";
     return gateFromObservation({ ...observation, status }, context);
   }
   const status = observation.observedResource !== undefined && isExactCanonicalResource(observation.canonicalResource, observation.observedResource)
@@ -416,10 +682,29 @@ export function finalizeEvidence(input: FinalizeEvidenceInput, contextInput: Evi
   const accumulator = new GateAccumulator();
   const requests: MinimizedRequestObservation[] = [];
   let secretLeak = false;
+  const observedGateStatuses = new Map<string, GateStatus>();
+  const conflictingGateIds = new Set<string>();
   for (const observation of input.observations) {
     const result = evaluateObservation(observation, context);
     secretLeak ||= result.secretLeak;
-    if (result.gate) accumulator.add(result.gate);
+    if (result.gate) {
+      if (conflictingGateIds.has(result.gate.id)) continue;
+      const previous = observedGateStatuses.get(result.gate.id);
+      if (previous !== undefined && previous !== result.gate.status) {
+        conflictingGateIds.add(result.gate.id);
+        accumulator.replace({
+          kind: "gate",
+          gateId: result.gate.id,
+          status: "fail",
+          detail: "Conflicting observations were supplied for this gate.",
+          error: { kind: "conflicting-observation" },
+          evidence: { observedStatuses: [previous, result.gate.status] },
+        });
+      } else {
+        observedGateStatuses.set(result.gate.id, result.gate.status);
+        accumulator.add(result.gate);
+      }
+    }
     if (result.request) requests.push(result.request);
   }
   const target = targetForReport(input.target, context);
@@ -439,12 +724,15 @@ export function finalizeEvidence(input: FinalizeEvidenceInput, contextInput: Evi
   let report = { ...baseReport, gates: [...baseReport.gates] };
   const firstVerification = verifyEvidence(report, context);
   if (input.requiredGateIds.includes("sanitized-evidence")) {
-    accumulator.add({
-      id: "sanitized-evidence",
-      status: secretLeak || !firstVerification.sanitized ? "fail" : "pass",
+    accumulator.replace({
+      kind: "gate",
+      gateId: "sanitized-evidence",
+      status: secretLeak || !firstVerification.sanitized || input.artifactWriteSucceeded === false ? "fail" : "pass",
       detail: secretLeak || !firstVerification.sanitized
         ? "Evidence could not be proven free of bearer tokens, JWTs, passwords, cookies, or reusable credentials."
-        : "Evidence was verified in memory without bearer tokens, JWTs, passwords, cookies, or reusable credentials.",
+        : input.artifactWriteSucceeded === false
+          ? "Evidence was verified in memory, but the evidence artifact could not be written."
+          : "Evidence was verified in memory without bearer tokens, JWTs, passwords, cookies, or reusable credentials.",
       evidence: { ...(secretLeak ? { errorKind: "secret-leak" } : {}), artifactFilename: EVIDENCE_ARTIFACT_FILENAME },
     });
     report = { ...report, gates: accumulator.snapshot(input.requiredGateIds) };

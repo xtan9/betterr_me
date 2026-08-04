@@ -179,6 +179,140 @@ describe("reviewable Household Runway Assessment boundary", () => {
     });
   });
 
+  it("maps normalized boundary schema failures to stable review-stage issues", () => {
+    const base = atReview(true).draft;
+    const cases = [
+      {
+        draft: { ...base, location: { ...base.location, country: null } },
+        expected: { code: "country_required", stage: "location" },
+      },
+      {
+        draft: { ...base, location: { ...base.location, region: null } },
+        expected: { code: "region_invalid", stage: "location" },
+      },
+      {
+        draft: { ...base, location: { ...base.location, currency: null } },
+        expected: { code: "currency_required", stage: "location" },
+      },
+      {
+        draft: {
+          ...base,
+          answers: {
+            ...base.answers,
+            mine: { ...base.answers.mine, take_home_source: "invalid" as never },
+          },
+        },
+        expected: { code: "income_required", stage: "myIncome" },
+      },
+      {
+        draft: {
+          ...base,
+          answers: {
+            ...base.answers,
+            partner: {
+              ...base.answers.partner!,
+              take_home_source: "invalid" as never,
+            },
+          },
+        },
+        expected: { code: "income_required", stage: "partnerIncome" },
+      },
+      {
+        draft: {
+          ...base,
+          answers: {
+            ...base.answers,
+            expense_items: [{ id: "malformed-item" }] as never,
+          },
+        },
+        expected: { code: "plan_input_invalid", stage: "expenses" },
+      },
+      {
+        draft: {
+          ...base,
+          answers: { ...base.answers, updated_at: "not-a-date" },
+        },
+        expected: { code: "draft_timestamp_required", stage: "review" },
+      },
+      {
+        draft: {
+          ...base,
+          answers: { ...base.answers, schema_version: 99 as never },
+        },
+        expected: { code: "plan_input_invalid", stage: "review" },
+      },
+    ] as const;
+
+    for (const item of cases) {
+      const normalized = normalizeHouseholdRunwayDraft(item.draft);
+      expect(normalized.success).toBe(false);
+      if (normalized.success) continue;
+      expect(normalized.validationIssues).toContainEqual(
+        expect.objectContaining(item.expected),
+      );
+    }
+  });
+
+  it("reports relational income and expense requirements before the schema boundary", () => {
+    const base = atReview(true).draft;
+    const zeroIncome = {
+      ...base.answers.mine,
+      monthly_take_home_cents: 0,
+      estimated_monthly_take_home_cents: 0,
+      entered_amount_cents: 0,
+      gross_amount_cents: 0,
+      net_amount_cents: 0,
+      entered_as: "net" as const,
+      entered_period: "monthly" as const,
+      net_period: "monthly" as const,
+      take_home_source: "user_confirmed" as const,
+      confidence: "confirmed" as const,
+    };
+    const normalized = normalizeHouseholdRunwayDraft({
+      ...base,
+      answers: {
+        ...base.answers,
+        mine: zeroIncome,
+        partner: zeroIncome,
+        expense_mode: "quick",
+        quick_expenses: {
+          current_monthly_cents: 0,
+          interruption_monthly_cents: 0,
+          confidence: "confirmed",
+        },
+        expense_items: [],
+        expense_category_subtotals: {},
+      },
+    });
+
+    expect(normalized.success).toBe(false);
+    if (normalized.success) return;
+    expect(normalized.validationIssues).toEqual(
+      expect.arrayContaining([
+        { code: "income_required", stage: "myIncome" },
+        { code: "income_required", stage: "partnerIncome" },
+        { code: "expenses_current_required", stage: "expenses" },
+        { code: "expenses_interruption_required", stage: "reductions" },
+      ]),
+    );
+  });
+
+  it("blocks an assessment when a provisional adjustment exceeds its relational limit", () => {
+    const invalid = dispatch(
+      atReview(),
+      { type: "set_plan_adjustment", patch: { expense_reduction_cents: 999_999_999 } },
+      "invalid-adjustment",
+    );
+
+    expect(invalid.state.planInputs).not.toBeNull();
+    expect(invalid.state.assessment).toBeNull();
+    expect(invalid.state.renderModel).toMatchObject({
+      kind: "review",
+      ready: false,
+      blockingIssue: { code: "assessment_required" },
+    });
+  });
+
   it("keeps applicable scenarios ordered and falls back only when the selection disappears", () => {
     let state = atReview(true);
     expect(state.renderModel).toMatchObject({
