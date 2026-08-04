@@ -3,7 +3,10 @@
 import { useCallback, useState } from "react";
 import { getLocalDateString } from "@/lib/utils";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
-import type { CalendarDisplayEvent } from "@/lib/calendar/overlay-adapter";
+import type {
+  CalendarDisplayItem,
+  CalendarOverlayDisplayItem,
+} from "@/lib/calendar/overlay-adapter";
 
 export interface QuickCreateState {
   isOpen: boolean;
@@ -41,7 +44,7 @@ interface UseCalendarEventsResult {
     endTime: string,
     position: { x: number; y: number },
   ) => void;
-  handleEventClick: (event: ExpandedCalendarEvent) => void;
+  handleEventClick: (event: CalendarDisplayItem) => void;
   handleNewEvent: () => void;
   handleQuickCreateMoreOptions: (title: string) => void;
   handleEventSaved: () => void;
@@ -49,9 +52,7 @@ interface UseCalendarEventsResult {
 
 export function useCalendarEvents(
   dateParam: string,
-  handleItemAction: (
-    event: ExpandedCalendarEvent | CalendarDisplayEvent,
-  ) => void,
+  handleItemAction: (event: CalendarOverlayDisplayItem) => void,
   onEventSaved: () => void,
 ): UseCalendarEventsResult {
   const [quickCreate, setQuickCreate] = useState<QuickCreateState | null>(null);
@@ -97,14 +98,13 @@ export function useCalendarEvents(
   );
 
   const handleEventClick = useCallback(
-    (event: ExpandedCalendarEvent) => {
+    (event: CalendarDisplayItem) => {
       // Overlay items execute their typed action instead of opening the event dialog.
-      const overlayEvent = event as CalendarDisplayEvent;
-      if (overlayEvent._layer && overlayEvent._layer !== "events") {
+      if (event.kind === "overlay") {
         handleItemAction(event);
         return;
       }
-      setEventDialog({ isOpen: true, event });
+      setEventDialog({ isOpen: true, event: event.event });
     },
     [handleItemAction],
   );

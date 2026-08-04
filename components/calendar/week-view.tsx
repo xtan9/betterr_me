@@ -5,12 +5,12 @@ import { useLocale } from "next-intl";
 import { TimeGrid } from "./time-grid";
 import { getWeekDates } from "@/lib/calendar/date-utils";
 import { getLocalDateString } from "@/lib/utils";
-import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
+import type { CalendarDisplayItem } from "@/lib/calendar/overlay-adapter";
 
 interface WeekViewProps {
   currentDate: Date;
   weekStartDay: number;
-  events: Map<string, ExpandedCalendarEvent[]>;
+  events: Map<string, CalendarDisplayItem[]>;
   today: string;
   onTimeSlotClick?: (
     date: Date,
@@ -23,7 +23,7 @@ interface WeekViewProps {
     endTime: string,
     position: { x: number; y: number },
   ) => void;
-  onEventClick?: (event: ExpandedCalendarEvent) => void;
+  onEventClick?: (event: CalendarDisplayItem) => void;
 }
 
 export function WeekView({

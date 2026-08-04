@@ -4,11 +4,11 @@ import { useMemo } from "react";
 import { useLocale } from "next-intl";
 import { getLocalDateString } from "@/lib/utils";
 import { MonthDayCell } from "./month-day-cell";
-import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
+import type { CalendarDisplayItem } from "@/lib/calendar/overlay-adapter";
 
 interface MonthGridProps {
   dates: Date[];
-  events: Map<string, ExpandedCalendarEvent[]>;
+  events: Map<string, CalendarDisplayItem[]>;
   currentMonth: number;
   today: string;
   onDayClick: (date: Date) => void;

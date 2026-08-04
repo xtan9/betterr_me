@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { EventBlock } from "@/components/calendar/event-block";
+import {
+  calendarEventToDisplayItem,
+  overlayItemsToDisplayItems,
+} from "@/lib/calendar/overlay-adapter";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 import type { CalendarEvent } from "@/lib/db/types";
 
@@ -36,7 +40,7 @@ function makeEvent(
 
 describe("EventBlock", () => {
   const defaultProps = {
-    event: makeEvent(),
+    event: calendarEventToDisplayItem(makeEvent()),
     top: 100,
     height: 48,
     left: "0%",
@@ -70,7 +74,7 @@ describe("EventBlock", () => {
 
   it("uses custom color inline styles when event.color is set", () => {
     const event = makeEvent({ color: "#ff5733" });
-    render(<EventBlock {...defaultProps} event={event} />);
+    render(<EventBlock {...defaultProps} event={calendarEventToDisplayItem(event)} />);
     const button = screen.getByRole("button");
     // Custom color uses inline style for backgroundColor and borderLeftColor
     // jsdom normalizes hex+alpha to rgba
@@ -98,12 +102,20 @@ describe("EventBlock", () => {
     expect(stopSpy).toHaveBeenCalled();
   });
 
-  it("uses Calendar Layer color styles when _layer is set", () => {
-    const event = {
-      ...makeEvent(),
-      _layer: "tasks",
-      _completed: false,
-    } as unknown as ExpandedCalendarEvent;
+  it("uses Calendar Layer color styles for an overlay display item", () => {
+    const [event] = overlayItemsToDisplayItems([{
+      layer: "tasks",
+      kind: "task",
+      id: "tasks:task-1",
+      taskId: "task-1",
+      title: "Task",
+      date: "2026-04-01",
+      startTime: "10:00",
+      endTime: null,
+      allDay: false,
+      completed: false,
+      action: { type: "toggle_task_completion", taskId: "task-1" },
+    }]);
 
     render(<EventBlock {...defaultProps} event={event} />);
     const button = screen.getByRole("button");
@@ -113,12 +125,24 @@ describe("EventBlock", () => {
     expect(button.style.borderLeftColor).toContain("hsl(var(--calendar-task))");
   });
 
-  it("shows line-through when _completed is true", () => {
-    const event = {
-      ...makeEvent(),
-      _layer: "habits",
-      _completed: true,
-    } as unknown as ExpandedCalendarEvent;
+  it("shows line-through for a completed overlay display item", () => {
+    const [event] = overlayItemsToDisplayItems([{
+      layer: "habits",
+      kind: "habit",
+      id: "habits:habit-1:2026-04-01",
+      habitId: "habit-1",
+      title: "Read",
+      date: "2026-04-01",
+      startTime: null,
+      endTime: null,
+      allDay: true,
+      completed: true,
+      action: {
+        type: "toggle_habit_completion",
+        habitId: "habit-1",
+        date: "2026-04-01",
+      },
+    }]);
 
     render(<EventBlock {...defaultProps} event={event} />);
     const button = screen.getByRole("button");

@@ -2,13 +2,13 @@
 
 import { useTranslations } from "next-intl";
 import { EventChip } from "./event-chip";
-import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
+import type { CalendarDisplayItem } from "@/lib/calendar/overlay-adapter";
 
 const MAX_VISIBLE_EVENTS = 3;
 
 interface MonthDayCellProps {
   date: Date;
-  events: ExpandedCalendarEvent[];
+  events: CalendarDisplayItem[];
   isToday: boolean;
   isOutsideMonth: boolean;
   onClick: () => void;

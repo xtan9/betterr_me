@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { EventChip } from "@/components/calendar/event-chip";
+import {
+  calendarEventToDisplayItem,
+  overlayItemsToDisplayItems,
+} from "@/lib/calendar/overlay-adapter";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 import type { CalendarEvent } from "@/lib/db/types";
 
@@ -36,51 +40,67 @@ function makeEvent(
 
 describe("EventChip", () => {
   it("renders event title", () => {
-    render(<EventChip event={makeEvent()} />);
+    render(<EventChip event={calendarEventToDisplayItem(makeEvent())} />);
     expect(screen.getByText("Test Event")).toBeInTheDocument();
   });
 
   it("renders time when start_time is set", () => {
-    render(<EventChip event={makeEvent({ start_time: "14:30:00" })} />);
+    render(<EventChip event={calendarEventToDisplayItem(makeEvent({ start_time: "14:30:00" }))} />);
     expect(screen.getByText("14:30")).toBeInTheDocument();
   });
 
   it("uses default teal color when no domain or custom color", () => {
-    render(<EventChip event={makeEvent()} />);
+    render(<EventChip event={calendarEventToDisplayItem(makeEvent())} />);
     const chip = screen.getByTitle("Test Event");
     expect(chip.className).toContain("calendar-event");
   });
 
-  it("uses Calendar Layer color when _layer is set", () => {
-    const event = {
-      ...makeEvent(),
-      _layer: "tasks",
-      _completed: false,
-    } as unknown as ExpandedCalendarEvent;
+  it("uses Calendar Layer color for an overlay display item", () => {
+    const [event] = overlayItemsToDisplayItems([{
+      layer: "tasks",
+      kind: "task",
+      id: "tasks:task-1",
+      taskId: "task-1",
+      title: "Task",
+      date: "2026-04-01",
+      startTime: null,
+      endTime: null,
+      allDay: true,
+      completed: false,
+      action: { type: "toggle_task_completion", taskId: "task-1" },
+    }]);
 
     render(<EventChip event={event} />);
-    const chip = screen.getByTitle("Test Event");
+    const chip = screen.getByTitle("Task");
     // Domain color uses inline styles, not the default CSS class
     expect(chip.className).not.toContain("bg-[hsl(var(--calendar-event-muted))]");
     expect(chip.style.backgroundColor).toContain("hsl(var(--calendar-task-muted))");
     expect(chip.style.borderLeftColor).toContain("hsl(var(--calendar-task))");
   });
 
-  it("shows line-through when _completed is true", () => {
-    const event = {
-      ...makeEvent(),
-      _layer: "tasks",
-      _completed: true,
-    } as unknown as ExpandedCalendarEvent;
+  it("shows line-through for a completed overlay display item", () => {
+    const [event] = overlayItemsToDisplayItems([{
+      layer: "tasks",
+      kind: "task",
+      id: "tasks:task-1",
+      taskId: "task-1",
+      title: "Task",
+      date: "2026-04-01",
+      startTime: null,
+      endTime: null,
+      allDay: true,
+      completed: true,
+      action: { type: "toggle_task_completion", taskId: "task-1" },
+    }]);
 
     render(<EventChip event={event} />);
-    const chip = screen.getByTitle("Test Event");
+    const chip = screen.getByTitle("Task");
     expect(chip.className).toContain("line-through");
     expect(chip.className).toContain("opacity-60");
   });
 
   it("does not show time for all-day events (start_time is null)", () => {
-    render(<EventChip event={makeEvent({ start_time: null })} />);
+    render(<EventChip event={calendarEventToDisplayItem(makeEvent({ start_time: null }))} />);
     expect(screen.getByText("Test Event")).toBeInTheDocument();
     // No time element should be rendered
     expect(screen.queryByText(/\d{2}:\d{2}/)).not.toBeInTheDocument();

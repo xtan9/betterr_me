@@ -1,10 +1,12 @@
 import { memo } from "react";
-import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
-import type { CalendarDisplayEvent, CalendarLayer } from "@/lib/calendar/overlay-adapter";
+import type {
+  CalendarDisplayItem,
+  CalendarLayer,
+} from "@/lib/calendar/overlay-adapter";
 import { CALENDAR_LAYER_COLORS } from "@/lib/calendar/overlay-adapter";
 
 interface EventBlockProps {
-  event: ExpandedCalendarEvent;
+  event: CalendarDisplayItem;
   /** Top offset in pixels from the grid top */
   top: number;
   /** Height in pixels (proportional to duration) */
@@ -14,7 +16,7 @@ interface EventBlockProps {
   /** CSS width percentage (e.g., "100%", "50%") for overlap column sizing */
   width: string;
   /** Callback when the block is clicked */
-  onClick?: (event: ExpandedCalendarEvent) => void;
+  onClick?: (event: CalendarDisplayItem) => void;
 }
 
 function formatTimeRange(start: string | null, end: string | null): string {
@@ -33,12 +35,11 @@ export const EventBlock = memo(function EventBlock({
   width,
   onClick,
 }: EventBlockProps) {
-  const overlayEvent = event as CalendarDisplayEvent;
-  const layer = overlayEvent._layer as CalendarLayer | undefined;
-  const isCompleted = overlayEvent._completed;
+  const layer: CalendarLayer = event.kind === "overlay" ? event.layer : "events";
+  const isCompleted = event.kind === "overlay" && event.completed;
 
   const hasCustomColor = !!event.color;
-  const hasLayerColor = layer && layer !== "events" && CALENDAR_LAYER_COLORS[layer];
+  const hasLayerColor = layer !== "events" && CALENDAR_LAYER_COLORS[layer];
   const isShort = height < 30;
 
   const bgStyle = hasCustomColor

@@ -5,11 +5,11 @@ import { useLocale } from "next-intl";
 import { TimeGrid } from "./time-grid";
 import { getLocalDateString } from "@/lib/utils";
 import { useSwipe } from "@/hooks/use-swipe";
-import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
+import type { CalendarDisplayItem } from "@/lib/calendar/overlay-adapter";
 
 interface DayViewProps {
   currentDate: Date;
-  events: Map<string, ExpandedCalendarEvent[]>;
+  events: Map<string, CalendarDisplayItem[]>;
   today: string;
   onTimeSlotClick?: (
     date: Date,
@@ -22,7 +22,7 @@ interface DayViewProps {
     endTime: string,
     position: { x: number; y: number },
   ) => void;
-  onEventClick?: (event: ExpandedCalendarEvent) => void;
+  onEventClick?: (event: CalendarDisplayItem) => void;
   onNavigateNext?: () => void;
   onNavigatePrev?: () => void;
 }
