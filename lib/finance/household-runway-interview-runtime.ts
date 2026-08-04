@@ -639,6 +639,26 @@ function directPlanFrom(value: unknown): HouseholdRunwayPlan | null | undefined 
   return undefined;
 }
 
+function hasRestorationStatus(
+  value: unknown,
+): value is { status: "missing" | "restored" | "rejected" } {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "status" in value &&
+      (value.status === "missing" ||
+        value.status === "restored" ||
+        value.status === "rejected"),
+  );
+}
+
+function restorationNeedsRecovery(value: unknown): boolean {
+  if (value === undefined) return false;
+  if (!hasRestorationStatus(value)) return true;
+  if (value.status !== "restored") return value.status === "rejected";
+  return !isDraftState((value as { state?: unknown }).state);
+}
+
 function isPlanPersistenceFailure(
   value: unknown,
 ): value is HouseholdRunwayInterviewRuntimePlanFailure {
@@ -793,15 +813,18 @@ export function createHouseholdRunwayInterviewRuntime(
     const restored = restorePayloadFrom(payload);
     const session = storedDraftFrom(restored.session, "session");
     const device = storedDraftFrom(restored.device, "device");
+    const eligibleDevice =
+      restored.deviceStorageConsent === true ? device : null;
     storageFacts = {
       session: session?.source === "session",
-      device: device?.source === "device",
+      device: eligibleDevice?.source === "device",
       deviceStorageConsent: restored.deviceStorageConsent === true,
     };
     if (
       failed ||
-      restored.session?.status === "rejected" ||
-      restored.device?.status === "rejected"
+      restorationNeedsRecovery(restored.session) ||
+      restorationNeedsRecovery(restored.device) ||
+      (device !== null && eligibleDevice === null)
     ) {
       runtimeIssues = [
         ...runtimeIssues.filter((issue) => issue.code !== "draft_recovery"),
@@ -836,11 +859,11 @@ export function createHouseholdRunwayInterviewRuntime(
     if (restoredHistory) assessmentHistory = clonePublicValue(restoredHistory);
 
     const selected =
-      session && device
-        ? session.state.draft.revision > device.state.draft.revision
+      session && eligibleDevice
+        ? session.state.draft.revision > eligibleDevice.state.draft.revision
           ? session
-          : device
-        : session ?? device;
+          : eligibleDevice
+        : session ?? eligibleDevice;
     restoredDraft = selected;
   };
 
