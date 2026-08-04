@@ -349,6 +349,7 @@ describe("conditional test classifier", () => {
       "tests/scripts/detect-pull-request-validated-push.test.ts",
       "tests/scripts/gate-policy.test.ts",
       "tests/scripts/github-actions-runtime-policy.test.ts",
+      "tests/scripts/preview-deployment-policy.test.ts",
       "tests/scripts/production-deployment-policy.test.ts",
       "tests/scripts/production-smoke.test.ts",
       "tests/scripts/quality-signal-contracts.test.ts",
@@ -369,6 +370,7 @@ describe("conditional test classifier", () => {
         "tests/scripts/detect-pull-request-validated-push.test.ts",
         "tests/scripts/gate-policy.test.ts",
         "tests/scripts/github-actions-runtime-policy.test.ts",
+        "tests/scripts/preview-deployment-policy.test.ts",
         "tests/scripts/production-deployment-policy.test.ts",
         "tests/scripts/production-smoke.test.ts",
         "tests/scripts/quality-signal-contracts.test.ts",
@@ -386,6 +388,10 @@ describe("conditional test classifier", () => {
 
     const docs = classifyChanges([{ status: "M", path: "docs/ci.md" }]);
     expect(docs.suites).toMatchObject({ quality: false, e2e: false, performance: false });
+    expect(docs.previewPolicy).toMatchObject({
+      action: "skip",
+      reason: "Only non-runtime files changed; a preview is not requested by default.",
+    });
     expect(Object.keys(docs.skipReasons).sort()).toEqual([
       "changedTests",
       "e2e",
@@ -426,6 +432,10 @@ describe("conditional test classifier", () => {
       changedPaths: ["app/calendar/page.tsx"],
       ownershipMatches: [{ path: "app/calendar/page.tsx", owners: ["calendar"] }],
       suites: { e2e: true },
+      previewPolicy: {
+        action: "request",
+        reason: "Runtime application changes warrant a preview.",
+      },
     });
   });
 });

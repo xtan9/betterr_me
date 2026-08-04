@@ -163,7 +163,7 @@ updates:
     expect(workflow).toContain("github.event.workflow_run.event == 'workflow_run'");
     expect(workflow).toContain("github.event.workflow_run.conclusion == 'success'");
     expect(workflow).toContain("vars.VERCEL_CI_DEPLOY_ENABLED == 'true'");
-    expect(workflow).toContain("checks: read");
+    expect(workflow).toContain("checks: write");
     expect(workflow).toContain("secrets.VERCEL_TOKEN");
     expect(workflow).toContain("vars.VERCEL_ORG_ID");
     expect(workflow).toContain("vars.VERCEL_PROJECT_ID");
@@ -171,6 +171,13 @@ updates:
     expect(workflow).not.toContain("--prebuilt");
     expect(workflow).toContain("Could not classify deployment paths; deploying after prerequisites");
     expect(workflow).toContain("node scripts/ci/production-smoke.mjs --probe");
+    expect(workflow).toContain("allow_fork_preview");
+    expect(workflow).toContain("name: 'Vercel Preview'");
+    expect(workflow).toContain("checked_out_sha=\"$(git rev-parse HEAD)\"");
+    expect(workflow).toContain("inputs.commit_sha || github.event.workflow_run.head_sha || github.sha");
+    expect(workflow).toContain(
+      "if: github.event_name == 'workflow_dispatch' && inputs.target == 'production'",
+    );
 
     const migrationWorkflow = readFileSync(
       resolve(workflowDirectory, "db-migrate.yml"),
@@ -189,6 +196,8 @@ updates:
     expect(ciWorkflow).toContain(
       "node --test scripts/ci/production-deployment-policy.policy.mjs",
     );
+    expect(ciWorkflow).toContain("preview-policy:");
+    expect(ciWorkflow).toContain("Vercel preview policy");
 
     const legacySmokeWorkflow = readFileSync(
       resolve(workflowDirectory, "production-smoke.yml"),

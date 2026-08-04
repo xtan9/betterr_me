@@ -18,14 +18,24 @@ on:
         description: Commit or branch to deploy; defaults to the workflow commit
         required: false
         type: string
+      pull_request_number:
+        description: Pull request whose exact tested head should be previewed
+        required: false
+        type: string
+      allow_fork_preview:
+        description: Explicitly authorize deployment credentials for a fork PR
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
-  group: vercel-${{ inputs.target || 'production' }}
+  group: vercel-${{ inputs.target || 'production' }}-${{ inputs.commit_sha || github.event.workflow_run.head_sha || github.sha }}
   cancel-in-progress: false
 
 permissions:
-  checks: read
+  checks: write
   contents: read
+  pull-requests: read
 
 jobs:
   deploy:
@@ -39,12 +49,10 @@ jobs:
     timeout-minutes: 30
     environment: ${{ (inputs.target || 'production') == 'production' && 'Production' || 'Preview' }}
     env:
-      APP_URL: ${{ secrets.APP_URL }}
       DEPLOY_SHA: ${{ inputs.commit_sha || github.event.workflow_run.head_sha || github.sha }}
       DEPLOY_TARGET: ${{ inputs.target || 'production' }}
-      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      PREVIEW_PR_NUMBER: ${{ inputs.pull_request_number || '' }}
+      ALLOW_FORK_PREVIEW: ${{ inputs.allow_fork_preview || false }}
 
     steps:
       - name: Checkout exact deployment commit
@@ -57,6 +65,152 @@ jobs:
         uses: ./.github/actions/setup-node-pnpm
         with:
           install-dependencies: "false"
+
+      - name: Verify exact preview checkout
+        if: github.event_name == 'workflow_dispatch' && inputs.target == 'preview'
+        shell: bash
+        run: |
+          set -euo pipefail
+          checked_out_sha="$(git rev-parse HEAD)"
+          if [[ "$checked_out_sha" != "$DEPLOY_SHA" ]]; then
+            echo "Preview checkout $checked_out_sha does not match requested commit $DEPLOY_SHA." >&2
+            exit 1
+          fi
+
+      - name: Authorize preview deployment request
+        id: preview-policy
+        if: github.event_name == 'workflow_dispatch' && inputs.target == 'preview'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          TARGET_SHA: ${{ env.DEPLOY_SHA }}
+          PR_NUMBER: ${{ env.PREVIEW_PR_NUMBER }}
+          ALLOW_FORK_PREVIEW: ${{ env.ALLOW_FORK_PREVIEW }}
+        with:
+          script: |
+            const { pathToFileURL } = require('node:url');
+            const moduleUrl = pathToFileURL(
+              `${process.env.GITHUB_WORKSPACE}/scripts/ci/preview-deployment-policy.mjs`
+            ).href;
+            const { planPreviewDeployment } = await import(moduleUrl);
+            const productionModuleUrl = pathToFileURL(
+              `${process.env.GITHUB_WORKSPACE}/scripts/ci/production-deployment-policy.mjs`
+            ).href;
+            const { changedFilesForCommit } = await import(productionModuleUrl);
+            const { owner, repo } = context.repo;
+            const sha = process.env.TARGET_SHA;
+            const requestedNumber = Number(process.env.PR_NUMBER || 0);
+            let pullRequest;
+            if (requestedNumber) {
+              const response = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: requestedNumber,
+              });
+              pullRequest = response.data;
+            } else {
+              const response = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner,
+                repo,
+                commit_sha: sha,
+                state: 'all',
+                per_page: 100,
+              });
+              pullRequest = response.data.find((candidate) => candidate.head?.sha === sha);
+            }
+
+            const report = async (result) => {
+              core.setOutput('action', result.action);
+              core.setOutput('reason', result.reason);
+              await core.summary
+                .addHeading('Vercel preview deployment policy')
+                .addRaw(`${result.action}: ${result.reason}`)
+                .addBreak()
+                .addRaw(`Commit: ${sha}`)
+                .addBreak()
+                .addRaw(`Runtime files: ${result.runtimeFiles.join(', ') || 'none'}`)
+                .write();
+            };
+
+            if (!pullRequest) {
+              await report({
+                action: 'skip',
+                reason: 'Preview dispatch requires a pull request whose head is the requested commit.',
+                runtimeFiles: [],
+              });
+              return;
+            }
+
+            if (pullRequest.head?.sha !== sha) {
+              await report({
+                action: 'skip',
+                reason: 'The requested preview commit must exactly match the pull request head.',
+                runtimeFiles: [],
+              });
+              return;
+            }
+
+            let changedFiles;
+            try {
+              changedFiles = changedFilesForCommit(sha);
+            } catch (error) {
+              await report({
+                action: 'skip',
+                reason: `The exact commit could not be classified for preview dispatch: ${error.message}`,
+                runtimeFiles: [],
+              });
+              return;
+            }
+
+            const checkResponse = await github.rest.checks.listForRef({
+              owner,
+              repo,
+              ref: sha,
+              filter: 'latest',
+              per_page: 100,
+            });
+            const checkRuns = checkResponse.data.check_runs;
+            const statusFor = (name) => {
+              const matches = checkRuns.filter((check) => check?.name === name);
+              if (matches.length === 0) return 'missing';
+              if (matches.length > 1) return 'ambiguous';
+              const check = matches[0];
+              return check.status === 'completed'
+                ? check.conclusion || 'missing'
+                : check.status || 'missing';
+            };
+            const alreadyDispatched = checkRuns.some(
+              (check) => check?.name === 'Vercel Preview',
+            );
+            const result = planPreviewDeployment({
+              alreadyDispatched,
+              changedFiles,
+              ciStatus: statusFor('CI Gate'),
+              e2eStatus: statusFor('E2E Gate'),
+              fork: pullRequest.head?.repo?.full_name !== `${owner}/${repo}`,
+              forkAuthorized: process.env.ALLOW_FORK_PREVIEW === 'true',
+              requestedSha: sha,
+              testedSha: pullRequest.head?.sha,
+            });
+
+            if (result.action !== 'request') {
+              await report(result);
+              return;
+            }
+
+            const check = await github.rest.checks.create({
+              owner,
+              repo,
+              name: 'Vercel Preview',
+              head_sha: sha,
+              status: 'in_progress',
+              details_url: `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`,
+              output: {
+                title: 'Preview dispatch authorized',
+                summary: result.reason,
+              },
+            });
+            core.setOutput('check_run_id', String(check.data.id));
+            await report(result);
 
       - name: Authorize automatic production deployment
         id: policy
@@ -113,7 +267,7 @@ jobs:
 
       - name: Force explicit manual deployment
         id: manual-policy
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.target == 'production'
         run: |
           echo "action=deploy" >> "$GITHUB_OUTPUT"
           echo "Manual $DEPLOY_TARGET deployment requested for $DEPLOY_SHA."
@@ -125,7 +279,12 @@ jobs:
         run: echo "$SKIP_REASON"
 
       - name: Require deployment credentials
-        if: steps.policy.outputs.action == 'deploy' || steps.manual-policy.outputs.action == 'deploy'
+        if: steps.policy.outputs.action == 'deploy' || steps.manual-policy.outputs.action == 'deploy' || steps.preview-policy.outputs.action == 'request'
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -141,14 +300,18 @@ jobs:
           fi
 
       - name: Pull Vercel environment
-        if: steps.policy.outputs.action == 'deploy' || steps.manual-policy.outputs.action == 'deploy'
+        if: steps.policy.outputs.action == 'deploy' || steps.manual-policy.outputs.action == 'deploy' || steps.preview-policy.outputs.action == 'request'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: >-
           pnpm --silent dlx vercel@58.4.4 pull --yes
           --environment="$DEPLOY_TARGET" --token="$VERCEL_TOKEN"
 
       - name: Deploy through Vercel remote build
         id: deploy-command
-        if: steps.policy.outputs.action == 'deploy' || steps.manual-policy.outputs.action == 'deploy'
+        if: steps.policy.outputs.action == 'deploy' || steps.manual-policy.outputs.action == 'deploy' || steps.preview-policy.outputs.action == 'request'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -164,10 +327,12 @@ jobs:
         if: >-
           (steps.policy.outputs.action == 'deploy' || steps.manual-policy.outputs.action == 'deploy') &&
           env.DEPLOY_TARGET == 'production'
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
         run: node scripts/ci/production-smoke.mjs --probe
 
       - name: Publish deployment summary
-        if: steps.policy.outputs.action == 'deploy' || steps.manual-policy.outputs.action == 'deploy'
+        if: steps.policy.outputs.action == 'deploy' || steps.manual-policy.outputs.action == 'deploy' || steps.preview-policy.outputs.action == 'request'
         env:
           DEPLOYMENT_URL: ${{ steps.deploy-command.outputs.url }}
         shell: bash
@@ -181,3 +346,26 @@ jobs:
               echo "- Production smoke: passed"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Complete preview check
+        if: always() && steps.preview-policy.outputs.check_run_id != ''
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          CHECK_RUN_ID: ${{ steps.preview-policy.outputs.check_run_id }}
+          DEPLOYMENT_STATUS: ${{ job.status }}
+        with:
+          script: |
+            const conclusion = process.env.DEPLOYMENT_STATUS === 'success'
+              ? 'success'
+              : 'failure';
+            await github.rest.checks.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              check_run_id: Number(process.env.CHECK_RUN_ID),
+              status: 'completed',
+              conclusion,
+              output: {
+                title: `Preview deployment ${conclusion}`,
+                summary: `The exact commit ${process.env.GITHUB_SHA} was used for the preview deployment.`,
+              },
+            });
