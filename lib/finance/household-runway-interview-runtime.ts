@@ -1110,7 +1110,6 @@ export function createHouseholdRunwayInterviewRuntime(
             : (() => {
                 updateStorageFacts({
                   session: true,
-                  device: storageFacts.deviceStorageConsent,
                 });
                 return outcomeCommand(createId, now, {
                   type: "draft_synchronization_succeeded",
