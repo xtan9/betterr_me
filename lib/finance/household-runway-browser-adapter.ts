@@ -701,11 +701,19 @@ export function createHouseholdRunwayBrowserAdapter(
     }
     reconcileUrl();
   };
-  const onLocale = () =>
+  const onLocale = () => {
+    let locale: RunwayLocale | undefined;
+    try {
+      locale = options.localeProvider?.();
+    } catch {
+      // A locale provider is optional presentation input; the Runtime must
+      // still flush its latest eligible Draft when that input is unavailable.
+    }
     dispatchEnvironment({
       type: "locale_changed",
-      ...(options.localeProvider ? { locale: options.localeProvider() } : {}),
+      ...(locale ? { locale } : {}),
     });
+  };
 
   const subscribeToBrowser = (
     event: "history" | "locale",
@@ -745,6 +753,7 @@ export function createHouseholdRunwayBrowserAdapter(
       started = true;
       initialHrefForProjection = environment?.location.href;
       subscribeToBrowser("history", "popstate", onHistory);
+      subscribeToBrowser("history", "hashchange", onHistory);
       subscribeToBrowser("locale", localeEvent, onLocale);
       removeProjectionSubscription = runtime.subscribe(reconcileUrl);
       runtime.start();
