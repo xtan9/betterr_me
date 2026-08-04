@@ -4,6 +4,30 @@ BetterR.Me organizes a person's self-directed work and wellbeing, including task
 
 ## Language
 
+### Household Runway
+
+**Household Runway Plan**:
+A person's revisioned, committed financial inputs for evaluating how their household could withstand an interruption to income.
+_Avoid_: Finance Cushion, saved assessment
+
+**Household Runway Assessment**:
+An evaluation of how long a household's resources could cover essential expenses under one or more income-interruption scenarios.
+_Avoid_: Cushion, runway calculation, Plan
+
+**Household Runway Interview**:
+The guided process through which a person supplies and reviews the inputs used for a Household Runway Assessment.
+_Avoid_: Wizard, finance form
+
+**Household Runway Draft**:
+The uncommitted working inputs maintained during a Household Runway Interview; it may coexist with a committed Household Runway Plan.
+_Avoid_: Unsaved Plan, form state
+
+**Household Runway Plan Adjustment**:
+A provisional What-if overlay used to compare a Household Runway Assessment; it becomes part of a Plan only after the person applies it to the Draft inputs and commits them.
+_Avoid_: Saved adjustment, Plan change
+
+### Calendar
+
 **Calendar Event**:
 A person's full-fidelity calendar entry, including the details and recurrence identity needed to view and edit it.
 _Avoid_: Feed item, overlay item
@@ -15,6 +39,8 @@ _Avoid_: Feed domain
 **Calendar Overlay Feed**:
 A date-bounded projection of selected task, habit, and workout Calendar Layers displayed alongside Calendar Events.
 _Avoid_: Unified calendar feed, calendar events feed
+
+### Recurring Tasks
 
 **Recurring Task Series**:
 A user-visible lineage of repeating work that retains its identity across schedule and detail changes.
