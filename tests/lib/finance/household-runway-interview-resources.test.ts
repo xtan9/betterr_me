@@ -259,6 +259,216 @@ describe("resource and Expenses Interview Stages", () => {
     });
   });
 
+  it("updates existing expense items, clears housing inputs on tenure changes, and bounds reductions", () => {
+    let state = atExpenses();
+    state = dispatch(
+      state,
+      { type: "set_active_expense_category", category: "housing" },
+      "open-housing",
+    ).state;
+    state = dispatch(
+      state,
+      { type: "set_housing_tenure", tenure: "rent" },
+      "rent-housing",
+    ).state;
+    state = dispatch(
+      state,
+      {
+        type: "set_expense_item",
+        category: "housing",
+        itemType: "rent",
+        itemId: "rent-1",
+        patch: { current_amount_cents: 250_000 },
+      },
+      "rent-entry",
+    ).state;
+    state = dispatch(
+      state,
+      {
+        type: "set_expense_item",
+        category: "housing",
+        itemType: "rent",
+        itemId: "ignored-id",
+        patch: { interruption_amount_cents: 100_000 },
+      },
+      "rent-update",
+    ).state;
+    expect(state.draft.answers.expense_items).toEqual([
+      expect.objectContaining({
+        id: "rent-1",
+        current_amount_cents: 250_000,
+        interruption_amount_cents: 100_000,
+      }),
+    ]);
+
+    const sameTenure = dispatch(
+      state,
+      { type: "set_housing_tenure", tenure: "rent" },
+      "rent-again",
+    );
+    expect(sameTenure.state.draft.answers.expense_items).toHaveLength(1);
+
+    state = dispatch(
+      sameTenure.state,
+      { type: "set_housing_tenure", tenure: "own" },
+      "own-housing",
+    ).state;
+    expect(state.draft.answers.expense_items).toEqual([]);
+    expect(state.draft.answers.expense_category_modes.housing).toBeUndefined();
+
+    state = dispatch(
+      state,
+      { type: "set_expense_mode", mode: "quick" },
+      "quick-mode",
+    ).state;
+    state = dispatch(
+      state,
+      { type: "set_quick_expenses", patch: { current_monthly_cents: 500_000 } },
+      "quick-current",
+    ).state;
+    state = dispatch(state, { type: "continue" }, "to-reductions").state;
+    state = dispatch(
+      state,
+      { type: "set_reduction", target: { kind: "quick" }, interruptionMonthlyCents: 700_000 },
+      "quick-reduction",
+    ).state;
+    expect(state.draft.answers.quick_expenses.interruption_monthly_cents).toBe(500_000);
+  });
+
+  it("bounds a reduction for an existing item and preserves non-housing items", () => {
+    let state = atExpenses();
+    state = dispatch(
+      state,
+      {
+        type: "set_expense_item",
+        category: "transportation",
+        itemType: "fuel_charging",
+        itemId: "fuel-1",
+        patch: { current_amount_cents: 75_000 },
+      },
+      "transportation-item",
+    ).state;
+    state = dispatch(
+      state,
+      { type: "set_active_expense_category", category: "housing" },
+      "open-housing-for-tenure",
+    ).state;
+    state = dispatch(
+      state,
+      {
+        type: "set_expense_category_subtotal",
+        category: "housing",
+        patch: { current_monthly_cents: 250_000 },
+      },
+      "housing-subtotal-for-tenure",
+    ).state;
+    state = dispatch(
+      state,
+      { type: "complete_expense_category", category: "housing" },
+      "complete-housing-for-tenure",
+    ).state;
+    state = dispatch(
+      state,
+      { type: "set_housing_tenure", tenure: "rent" },
+      "housing-tenure",
+    ).state;
+    expect(state.draft.answers.expense_items).toEqual([
+      expect.objectContaining({ id: "fuel-1", category: "transportation" }),
+    ]);
+
+    state = dispatch(state, { type: "set_active_expense_category", category: "housing" }, "open-housing").state;
+    state = dispatch(
+      state,
+      {
+        type: "set_expense_item",
+        category: "housing",
+        itemType: "rent",
+        itemId: "rent-1",
+        patch: { current_amount_cents: 250_000 },
+      },
+      "housing-item",
+    ).state;
+    state = dispatch(state, { type: "continue" }, "to-reductions").state;
+    expect(state.stage).toBe("reductions");
+
+    const reduced = dispatch(
+      state,
+      {
+        type: "set_reduction",
+        target: { kind: "item", itemId: "rent-1" },
+        interruptionMonthlyCents: 900_000,
+      },
+      "reduce-rent",
+    );
+    expect(reduced.state.draft.answers.expense_items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "rent-1",
+          interruption_amount_cents: 250_000,
+          confidence: "confirmed",
+        }),
+      ]),
+    );
+  });
+
+  it("returns stable ignored outcomes for closed expense targets", () => {
+    const state = atExpenses();
+    expect(
+      dispatch(
+        state,
+        {
+          type: "set_expense_item",
+          category: "housing",
+          itemType: "not-an-item",
+          itemId: "invalid",
+          patch: { current_amount_cents: 1 },
+        } as never,
+        "invalid-item",
+      ).events[0],
+    ).toMatchObject({ type: "command_ignored", reason: "expense_category_not_open" });
+
+    expect(
+      dispatch(
+        state,
+        { type: "complete_expense_category", category: "housing" },
+        "closed-category",
+      ).events[0],
+    ).toMatchObject({ type: "command_ignored", reason: "expense_category_not_open" });
+
+    const reductions = dispatch(
+      state,
+      { type: "set_expense_mode", mode: "quick" },
+      "quick-mode-for-ignore",
+    ).state;
+    const withExpenses = dispatch(
+      reductions,
+      { type: "set_quick_expenses", patch: { current_monthly_cents: 400_000 } },
+      "quick-expenses-for-ignore",
+    ).state;
+    const atReductions = dispatch(withExpenses, { type: "continue" }, "reductions").state;
+    expect(
+      dispatch(
+        atReductions,
+        { type: "set_reduction", target: { kind: "category", category: "housing" }, interruptionMonthlyCents: 1 },
+        "missing-category-reduction",
+      ).events[0],
+    ).toMatchObject({ type: "command_ignored", reason: "expense_category_not_open" });
+    expect(
+      dispatch(
+        atReductions,
+        { type: "set_reduction", target: { kind: "item", itemId: "missing" }, interruptionMonthlyCents: 1 },
+        "missing-item-reduction",
+      ).events[0],
+    ).toMatchObject({ type: "command_ignored", reason: "expense_category_not_open" });
+    expect(
+      dispatch(
+        atReductions,
+        { type: "set_reduction", target: { kind: "unknown" }, interruptionMonthlyCents: 1 } as never,
+        "unknown-reduction",
+      ).events[0],
+    ).toMatchObject({ type: "command_ignored", reason: "expense_category_not_open" });
+  });
+
   it("keeps forward navigation on stable validation codes and reaches Reviewing only after reductions are ready", () => {
     let state = atExpenses();
     let blocked = dispatch(state, { type: "continue" }, "expenses-required");
