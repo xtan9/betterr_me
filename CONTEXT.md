@@ -4,6 +4,18 @@ BetterR.Me organizes a person's self-directed work and wellbeing, including task
 
 ## Language
 
+**Calendar Event**:
+A person's full-fidelity calendar entry, including the details and recurrence identity needed to view and edit it.
+_Avoid_: Feed item, overlay item
+
+**Calendar Layer**:
+A selectable category of dated items shown on the calendar.
+_Avoid_: Feed domain
+
+**Calendar Overlay Feed**:
+A date-bounded projection of selected task, habit, and workout Calendar Layers displayed alongside Calendar Events.
+_Avoid_: Unified calendar feed, calendar events feed
+
 **Recurring Task Series**:
 A user-visible lineage of repeating work that retains its identity across schedule and detail changes.
 _Avoid_: Recurring task, template
