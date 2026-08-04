@@ -42,7 +42,7 @@ function driveToReview(runtime: ReturnType<typeof createHouseholdRunwayInterview
 }
 
 describe("Household Runway Interview Runtime", () => {
-  it("has side-effect-free construction and publishes initializing then usable startup", () => {
+  it("has side-effect-free construction and publishes initializing then usable startup", async () => {
     const scheduled: (() => void)[] = [];
     const focus = vi.fn();
     const runtime = createHouseholdRunwayInterviewRuntime({
@@ -67,9 +67,11 @@ describe("Household Runway Interview Runtime", () => {
       "ready",
     ]);
     expect(runtime.getSnapshot().screen.kind).toBe("location");
-    expect(scheduled).toHaveLength(1);
+    expect(scheduled).toHaveLength(0);
     expect(focus).not.toHaveBeenCalled();
 
+    await Promise.resolve();
+    expect(scheduled).toHaveLength(1);
     scheduled.shift()?.();
     expect(focus).toHaveBeenCalledWith("location");
   });
@@ -112,6 +114,13 @@ describe("Household Runway Interview Runtime", () => {
     });
     expect(snapshot.derived).toEqual({ planInputs: null, assessment: null });
     expect(snapshot.issues).toEqual([]);
+    expect(snapshot.operations).toEqual({
+      draftSynchronization: { status: "dirty" },
+      deviceDraft: { status: "idle" },
+      planPersistence: { status: "idle" },
+      reportDownload: { status: "idle" },
+      analytics: { status: "idle" },
+    });
     expect(snapshot.affordances).toMatchObject({
       continue: true,
       back: true,
@@ -119,11 +128,12 @@ describe("Household Runway Interview Runtime", () => {
       startNew: false,
     });
     expect(snapshot).not.toHaveProperty("draft");
-    expect(snapshot).not.toHaveProperty("operations");
     expect(snapshot).not.toHaveProperty("events");
     expect(snapshot).not.toHaveProperty("effects");
     expect(snapshot).not.toHaveProperty("transition");
     expect(snapshot).not.toHaveProperty("correlationId");
+    expect(snapshot.operations).not.toHaveProperty("sourceRevision");
+    expect(snapshot.operations).not.toHaveProperty("idempotencyKey");
   });
 
   it("publishes a typed validation issue and treats repeated blocked intents as no-ops", () => {
@@ -188,6 +198,56 @@ describe("Household Runway Interview Runtime", () => {
     });
   });
 
+  it("drives the review Assessment to a completed result and back into editing", () => {
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+    });
+    runtime.start();
+    driveToReview(runtime);
+    runtime.send({ type: "continue" });
+
+    expect(runtime.getSnapshot()).toMatchObject({
+      interviewStatus: "completed",
+      stage: "result",
+      screen: {
+        kind: "stage",
+        stage: "result",
+        assessment: expect.any(Object),
+      },
+      derived: {
+        assessment: expect.any(Object),
+      },
+    });
+
+    runtime.send({ type: "edit_completed_plan" });
+    expect(runtime.getSnapshot()).toMatchObject({
+      interviewStatus: "reviewing",
+      stage: "review",
+      screen: { kind: "review" },
+    });
+  });
+
+  it("supports public stage navigation without exposing a reducer transition", () => {
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+    });
+    runtime.start();
+    runtime.send({ type: "select_country", country: "US" });
+    runtime.send({ type: "select_region", region: "CA" });
+    runtime.send({ type: "select_currency", currency: "USD" });
+    runtime.send({ type: "continue" });
+
+    expect(runtime.getSnapshot().stage).toBe("household");
+    runtime.send({ type: "back" });
+    expect(runtime.getSnapshot()).toMatchObject({
+      interviewStatus: "collecting",
+      stage: "location",
+      screen: { kind: "location" },
+    });
+  });
+
   it("does not publish or run deferred capability work after disposal", () => {
     const scheduled: (() => void)[] = [];
     const focus = vi.fn();
@@ -232,14 +292,17 @@ describe("Household Runway Interview Runtime", () => {
     const published = vi.fn();
     runtime.subscribe(published);
     runtime.start();
+    await Promise.resolve();
     while (scheduled.length > 0) scheduled.shift()?.();
     driveToReview(runtime);
+    await Promise.resolve();
     while (scheduled.length > 0) scheduled.shift()?.();
     runtime.send({ type: "continue" });
     runtime.send({ type: "save_plan" });
 
     expect(persistPlan).not.toHaveBeenCalled();
     const publicationCount = published.mock.calls.length;
+    await Promise.resolve();
     scheduled.shift()?.();
     scheduled.shift()?.();
     expect(persistPlan).toHaveBeenCalledWith(
@@ -264,5 +327,137 @@ describe("Household Runway Interview Runtime", () => {
 
     expect(published).toHaveBeenCalledTimes(publicationCount);
     expect(runtime.getSnapshot().lifecycle).toBe("disposed");
+  });
+  it("projects operation status without exposing protocol or retry metadata", async () => {
+    const scheduled: (() => void)[] = [];
+    const persistPlan = vi.fn(
+      () =>
+        new Promise<HouseholdRunwayInterviewRuntimePlanResult>(() => {
+          // Keep the capability pending so the public status is observable.
+        }),
+    );
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      schedule: (task) => scheduled.push(task),
+      persistPlan,
+    });
+    runtime.start();
+    driveToReview(runtime);
+    runtime.send({ type: "continue" });
+    runtime.send({ type: "save_plan" });
+
+    expect(runtime.getSnapshot().operations.planPersistence).toEqual({
+      status: "pending",
+    });
+    expect(runtime.getSnapshot().operations.planPersistence).not.toHaveProperty(
+      "correlationId",
+    );
+    expect(runtime.getSnapshot().operations.planPersistence).not.toHaveProperty(
+      "idempotencyKey",
+    );
+
+    await Promise.resolve();
+    scheduled.splice(0).forEach((task) => task());
+    expect(persistPlan).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats repeated public save intents as an idempotent no-op while the operation is pending", async () => {
+    const scheduled: (() => void)[] = [];
+    const persistPlan = vi.fn(
+      () =>
+        new Promise<HouseholdRunwayInterviewRuntimePlanResult>(() => {
+          // Keep the capability pending.
+        }),
+    );
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      schedule: (task) => scheduled.push(task),
+      persistPlan,
+    });
+    runtime.start();
+    driveToReview(runtime);
+    runtime.send({ type: "continue" });
+    runtime.send({ type: "save_plan" });
+    runtime.send({ type: "save_plan" });
+
+    await Promise.resolve();
+    scheduled.splice(0).forEach((task) => task());
+    expect(persistPlan).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a stale capability result without suppressing later public transitions", async () => {
+    const scheduled: (() => void)[] = [];
+    let resolvePlan:
+      | ((value: HouseholdRunwayInterviewRuntimePlanResult) => void)
+      | undefined;
+    const persistPlan = vi.fn(
+      () =>
+        new Promise<HouseholdRunwayInterviewRuntimePlanResult>((resolve) => {
+          resolvePlan = resolve;
+        }),
+    );
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      schedule: (task) => scheduled.push(task),
+      persistPlan,
+    });
+    const published = vi.fn();
+    runtime.subscribe(published);
+    runtime.start();
+    await Promise.resolve();
+    scheduled.splice(0).forEach((task) => task());
+    driveToReview(runtime);
+    await Promise.resolve();
+    scheduled.splice(0).forEach((task) => task());
+    runtime.send({ type: "continue" });
+    runtime.send({ type: "save_plan" });
+    await Promise.resolve();
+    scheduled.splice(0).forEach((task) => task());
+
+    const pending = runtime.getSnapshot().derived;
+    if (!resolvePlan || !pending.planInputs || !pending.assessment) {
+      throw new Error("expected a pending plan result");
+    }
+    runtime.send({
+      type: "set_plan_adjustment",
+      patch: { expense_reduction_cents: 100 },
+    });
+    const afterEdit = published.mock.calls.length;
+    resolvePlan({
+      planRevision: 1,
+      planInputs:
+        pending.planInputs as HouseholdRunwayInterviewRuntimePlanResult["planInputs"],
+      assessment:
+        pending.assessment as HouseholdRunwayInterviewRuntimePlanResult["assessment"],
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(published).toHaveBeenCalledTimes(afterEdit);
+    runtime.send({ type: "reset_plan_adjustment" });
+    expect(published).toHaveBeenCalledTimes(afterEdit + 1);
+  });
+
+  it("publishes each synchronous transition before the capability scheduler is entered", async () => {
+    const order: string[] = [];
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      schedule: (task) => {
+        order.push("schedule");
+        task();
+      },
+      focus: () => order.push("focus"),
+    });
+    runtime.subscribe(() => order.push(runtime.getSnapshot().lifecycle));
+
+    runtime.start();
+
+    expect(order).toEqual(["initializing", "ready"]);
+    await Promise.resolve();
+    expect(order).toEqual(["initializing", "ready", "schedule", "focus"]);
   });
 });
