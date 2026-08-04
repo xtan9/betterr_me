@@ -1,4 +1,4 @@
-import type { HouseholdRunwayInterviewStage } from "@/lib/finance/household-runway-interview";
+import type { HouseholdRunwayInterviewStage } from "@/lib/finance/internal/household-runway-interview";
 import type { RunwayLocale } from "@/lib/finance/runway-regions";
 
 export type HouseholdRunwayInterviewRuntimeEnvironmentMessage =

@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createHouseholdRunwayInterview } from "@/lib/finance/household-runway-interview";
+import { createHouseholdRunwayInterview } from "@/lib/finance/internal/household-runway-interview";
 import {
   HOUSEHOLD_RUNWAY_DRAFT_DEVICE_CONSENT_KEY,
   HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY,
   HOUSEHOLD_RUNWAY_DRAFT_TTL_MS,
-} from "@/lib/finance/household-runway-draft-codec";
+} from "@/lib/finance/internal/household-runway-draft-codec";
 import {
   clearHouseholdRunwayDeviceDraft,
   clearHouseholdRunwayDraft,

@@ -4,7 +4,7 @@ import {
   type HouseholdRunwayInterviewRuntimePlanResult,
   type HouseholdRunwayInterviewRuntimeSnapshot,
 } from "@/lib/finance/household-runway-interview-runtime";
-import { createHouseholdRunwayInterview } from "@/lib/finance/household-runway-interview";
+import { createHouseholdRunwayInterview } from "@/lib/finance/internal/household-runway-interview";
 import type { RunwaySnapshotSummary } from "@/lib/finance/cushion";
 
 const now = "2026-08-03T15:00:00.000Z";

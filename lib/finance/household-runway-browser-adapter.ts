@@ -3,8 +3,8 @@ import type {
   HouseholdRunwayInterviewCommand,
   HouseholdRunwayInterviewEffect,
   HouseholdRunwayInterviewStage,
-} from "@/lib/finance/household-runway-interview";
-import { HOUSEHOLD_RUNWAY_INTERVIEW_STAGE_IDS } from "@/lib/finance/household-runway-interview";
+} from "@/lib/finance/internal/household-runway-interview";
+import { HOUSEHOLD_RUNWAY_INTERVIEW_STAGE_IDS } from "@/lib/finance/internal/household-runway-interview";
 import type { HouseholdRunwayAnswers, RunwaySnapshotSummary } from "@/lib/finance/cushion";
 import type { SuccessfulHouseholdRunwayAssessment } from "@/lib/finance/household-runway-assessment";
 import {
@@ -26,7 +26,7 @@ import {
   trackRunwayEvent,
 } from "@/lib/finance/runway-analytics-client";
 import type { HouseholdRunwayDraftStorageReadResult } from "@/lib/finance/runway-draft-client";
-import type { HouseholdRunwayDraftState } from "@/lib/finance/household-runway-draft-codec";
+import type { HouseholdRunwayDraftState } from "@/lib/finance/internal/household-runway-draft-codec";
 import {
   dispatchHouseholdRunwayRuntimeEnvironment,
   type HouseholdRunwayInterviewRuntimeEnvironmentMessage,

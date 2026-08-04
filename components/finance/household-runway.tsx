@@ -46,7 +46,7 @@ import {
 } from "@/lib/finance/runway-expenses";
 import {
   HOUSEHOLD_RUNWAY_DRAFT_TTL_MS,
-} from "@/lib/finance/household-runway-draft-codec";
+} from "@/lib/finance/internal/household-runway-draft-codec";
 import {
   RUNWAY_REGIONS,
   normalizeRunwayLocale,

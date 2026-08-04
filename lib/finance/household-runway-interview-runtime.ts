@@ -24,8 +24,8 @@ import {
   type HouseholdRunwayDraftDeviceAction,
   type HouseholdRunwayPlan,
   type HouseholdRunwayValidationIssue,
-} from "@/lib/finance/household-runway-interview";
-import type { HouseholdRunwayDraftState } from "@/lib/finance/household-runway-draft-codec";
+} from "@/lib/finance/internal/household-runway-interview";
+import type { HouseholdRunwayDraftState } from "@/lib/finance/internal/household-runway-draft-codec";
 import {
   registerHouseholdRunwayRuntimeEnvironment,
   unregisterHouseholdRunwayRuntimeEnvironment,
