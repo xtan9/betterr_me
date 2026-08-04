@@ -1,7 +1,7 @@
-import type { Habit, HabitLog, Task } from "@/lib/db/types";
+import type { Habit, HabitLog, Task, Workout } from "@/lib/db/types";
 import { shouldTrackOnDate } from "@/lib/habits/format";
 
-export const CALENDAR_OVERLAY_LAYERS = ["tasks", "habits"] as const;
+export const CALENDAR_OVERLAY_LAYERS = ["tasks", "habits", "workouts"] as const;
 export type CalendarOverlayLayer = (typeof CALENDAR_OVERLAY_LAYERS)[number];
 
 export interface LocalDateRange {
@@ -60,10 +60,25 @@ export interface HabitOverlayCapabilities {
   completionLogs: HabitCompletionLogReadPort;
 }
 
-/** Combined capabilities used when more than one overlay layer is selected. */
-export type CalendarOverlayCapabilities = TaskOverlayCapabilities & {
-  habits: HabitOverlayCapabilities;
-};
+export interface WorkoutOverlayRequest {
+  userId: string;
+  range: LocalDateRange;
+  timezone: string;
+}
+
+export interface WorkoutReadPort {
+  read(request: WorkoutOverlayRequest): Promise<Workout[]>;
+}
+
+export type WorkoutOverlayCapabilities = WorkoutReadPort;
+
+/** Combined capabilities used by the selected overlay layers. */
+export interface CalendarOverlayCapabilities {
+  coverage?: TaskCoveragePort;
+  read?: TaskReadPort;
+  habits?: HabitOverlayCapabilities;
+  workouts?: WorkoutOverlayCapabilities;
+}
 
 export interface TaskOverlayAction {
   type: "toggle_task_completion";
@@ -106,7 +121,27 @@ export interface HabitOverlayItem {
   action: HabitOverlayAction;
 }
 
-export type CalendarOverlayItem = TaskOverlayItem | HabitOverlayItem;
+export interface WorkoutOverlayAction {
+  type: "navigate_workout";
+  workoutId: string;
+}
+
+export interface WorkoutOverlayItem {
+  layer: "workouts";
+  kind: "workout";
+  /** Cross-layer identity; it cannot collide with a Calendar Event ID. */
+  id: string;
+  workoutId: string;
+  title: string;
+  date: string;
+  startTime: string;
+  endTime: null;
+  allDay: false;
+  completed: boolean;
+  action: WorkoutOverlayAction;
+}
+
+export type CalendarOverlayItem = TaskOverlayItem | HabitOverlayItem | WorkoutOverlayItem;
 
 export type OverlayUnavailable =
   | {
@@ -121,11 +156,17 @@ export type OverlayUnavailable =
   | {
       layer: "habits";
       code: "unavailable";
+    }
+  | {
+      layer: "workouts";
+      code: "unavailable";
     };
+
+export type OverlayLayerRequest = TaskOverlayRequest | HabitOverlayRequest | WorkoutOverlayRequest;
 
 export interface OverlayFailureReport {
   layer: CalendarOverlayLayer;
-  request: TaskOverlayRequest;
+  request: OverlayLayerRequest;
   cause: unknown;
 }
 
@@ -222,6 +263,43 @@ function habitItems(
   return items;
 }
 
+function workoutDateTime(workout: Workout, timezone: string): { date: string; startTime: string } {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(workout.started_at));
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return {
+    date: `${values.year}-${values.month}-${values.day}`,
+    startTime: `${values.hour}:${values.minute}`,
+  };
+}
+
+function workoutItems(workouts: Workout[], range: LocalDateRange, timezone: string): WorkoutOverlayItem[] {
+  return workouts.flatMap((workout) => {
+    const { date, startTime } = workoutDateTime(workout, timezone);
+    if (date < range.from || date > range.to) return [];
+    return [{
+      layer: "workouts" as const,
+      kind: "workout" as const,
+      id: `workouts:${workout.id}`,
+      workoutId: workout.id,
+      title: workout.title,
+      date,
+      startTime,
+      endTime: null,
+      allDay: false as const,
+      completed: workout.status === "completed",
+      action: { type: "navigate_workout" as const, workoutId: workout.id },
+    }];
+  });
+}
+
 function sortItems(items: CalendarOverlayItem[]): CalendarOverlayItem[] {
   return [...items].sort((a, b) => {
     const dateOrder = a.date.localeCompare(b.date);
@@ -241,8 +319,9 @@ export async function queryCalendarOverlayFeed(
     userId: string;
     range: LocalDateRange;
     layers: readonly CalendarOverlayLayer[];
+    timezone?: string;
   },
-  capabilities: TaskOverlayCapabilities | CalendarOverlayCapabilities,
+  capabilities: TaskOverlayCapabilities | CalendarOverlayCapabilities | WorkoutOverlayCapabilities,
   options: CalendarOverlayQueryOptions = {},
 ): Promise<CalendarOverlayQueryOutcome> {
   const selectedLayers = [...new Set(input.layers)];
@@ -253,9 +332,15 @@ export async function queryCalendarOverlayFeed(
 
   const taskAcquisition = selectedLayers.includes("tasks")
     ? (async (): Promise<{ items: CalendarOverlayItem[]; unavailable: OverlayUnavailable[]; available: boolean }> => {
+        const taskCapabilities = "coverage" in capabilities && "read" in capabilities
+          ? capabilities
+          : undefined;
+        if (!taskCapabilities?.coverage || !taskCapabilities.read) {
+          return { items: [], available: false, unavailable: [{ layer: "tasks", code: "unavailable" }] };
+        }
         let coverage: TaskCoverageResult;
         try {
-          coverage = await capabilities.coverage.ensureThrough(request);
+          coverage = await taskCapabilities.coverage.ensureThrough(request);
         } catch {
           return {
             items: [],
@@ -281,7 +366,7 @@ export async function queryCalendarOverlayFeed(
         }
 
         try {
-          const tasks = await capabilities.read.read(request);
+          const tasks = await taskCapabilities.read.read(request);
           return {
             items: sortItems(tasks.map(taskItem).filter((item): item is TaskOverlayItem => item !== null)),
             unavailable: [],
@@ -318,11 +403,46 @@ export async function queryCalendarOverlayFeed(
       })()
     : Promise.resolve({ items: [], unavailable: [], available: false });
 
-  const [taskResult, habitResult] = await Promise.all([taskAcquisition, habitAcquisition]);
-  const unavailable = [...taskResult.unavailable, ...habitResult.unavailable] as [OverlayUnavailable, ...OverlayUnavailable[]] | [];
-  const items = sortItems([...taskResult.items, ...habitResult.items]);
+  const workoutAcquisition = selectedLayers.includes("workouts")
+    ? (async (): Promise<{ items: CalendarOverlayItem[]; unavailable: OverlayUnavailable[]; available: boolean }> => {
+          const workoutCapabilities = "workouts" in capabilities ? capabilities.workouts : undefined;
+        const timezone = input.timezone ?? "UTC";
+        try {
+          if (!workoutCapabilities) throw new Error("Workout overlay capabilities are unavailable");
+          const workouts = await workoutCapabilities.read({
+            userId: input.userId,
+            range: input.range,
+            timezone,
+          });
+          return {
+            items: workoutItems(workouts, input.range, timezone),
+            unavailable: [],
+            available: true,
+          };
+        } catch (cause) {
+          options.reportFailure?.({
+            layer: "workouts",
+            request: { userId: input.userId, range: input.range, timezone },
+            cause,
+          });
+          return { items: [], available: false, unavailable: [{ layer: "workouts", code: "unavailable" }] };
+        }
+      })()
+    : Promise.resolve({ items: [], unavailable: [], available: false });
+
+  const [taskResult, habitResult, workoutResult] = await Promise.all([
+    taskAcquisition,
+    habitAcquisition,
+    workoutAcquisition,
+  ]);
+  const unavailable = [
+    ...taskResult.unavailable,
+    ...habitResult.unavailable,
+    ...workoutResult.unavailable,
+  ] as [OverlayUnavailable, ...OverlayUnavailable[]] | [];
+  const items = sortItems([...taskResult.items, ...habitResult.items, ...workoutResult.items]);
   const selectedCount = selectedLayers.length;
-  const availableCount = [taskResult, habitResult].filter((result) => result.available).length;
+  const availableCount = [taskResult, habitResult, workoutResult].filter((result) => result.available).length;
 
   if (unavailable.length === 0 || selectedCount === 0) {
     return { status: "complete", items, unavailable: [] };

@@ -5,8 +5,9 @@ import {
   type CalendarOverlayCapabilities,
   type HabitOverlayCapabilities,
   type TaskOverlayCapabilities,
+  type WorkoutOverlayCapabilities,
 } from "@/lib/calendar/overlay-feed";
-import type { Habit, HabitLog, Task } from "@/lib/db/types";
+import type { Habit, HabitLog, Task, Workout } from "@/lib/db/types";
 
 const request = {
   userId: "user-1",
@@ -70,6 +71,23 @@ function habitLog(overrides: Partial<HabitLog> = {}): HabitLog {
   };
 }
 
+function workout(overrides: Partial<Workout> = {}): Workout {
+  return {
+    id: "workout-1",
+    user_id: "user-1",
+    title: "Morning lift",
+    started_at: "2026-04-02T06:30:00Z",
+    completed_at: "2026-04-02T07:00:00Z",
+    duration_seconds: 1800,
+    status: "completed",
+    notes: null,
+    routine_id: null,
+    created_at: "2026-04-02T06:30:00Z",
+    updated_at: "2026-04-02T07:00:00Z",
+    ...overrides,
+  };
+}
+
 function capabilities(overrides: Partial<TaskOverlayCapabilities> = {}): TaskOverlayCapabilities {
   return {
     coverage: { ensureThrough: vi.fn().mockResolvedValue({ status: "complete" }) },
@@ -86,13 +104,22 @@ function habitCapabilities(overrides: Partial<HabitOverlayCapabilities> = {}): H
   };
 }
 
+function workoutCapabilities(overrides: Partial<WorkoutOverlayCapabilities> = {}): WorkoutOverlayCapabilities {
+  return {
+    read: vi.fn().mockResolvedValue([]),
+    ...overrides,
+  };
+}
+
 function allCapabilities(
   taskOverrides: Partial<TaskOverlayCapabilities> = {},
   habitOverrides: Partial<HabitOverlayCapabilities> = {},
+  workoutOverrides: Partial<WorkoutOverlayCapabilities> = {},
 ): CalendarOverlayCapabilities {
   return {
     ...capabilities(taskOverrides),
     habits: habitCapabilities(habitOverrides),
+    workouts: workoutCapabilities(workoutOverrides),
   };
 }
 
@@ -348,5 +375,80 @@ describe("queryCalendarOverlayFeed", () => {
     );
 
     expect(result).toEqual({ status: "complete", items: expect.any(Array), unavailable: [] });
+  });
+
+  it("projects workouts into the supplied timezone with a unique typed navigation action", async () => {
+    const result = await queryCalendarOverlayFeed(
+      { ...request, layers: ["tasks", "workouts"], timezone: "America/Los_Angeles" },
+      allCapabilities(
+        { read: { read: vi.fn().mockResolvedValue([task({ id: "workout-1" })]) } },
+        {},
+        { read: vi.fn().mockResolvedValue([workout()]) },
+      ),
+    );
+
+    const workoutItem = result.items.find((item) => item.layer === "workouts");
+    expect(workoutItem).toEqual({
+      layer: "workouts",
+      kind: "workout",
+      id: "workouts:workout-1",
+      workoutId: "workout-1",
+      title: "Morning lift",
+      date: "2026-04-01",
+      startTime: "23:30",
+      endTime: null,
+      allDay: false,
+      completed: true,
+      action: { type: "navigate_workout", workoutId: "workout-1" },
+    });
+    expect(result.items.map((item) => item.id)).toEqual(
+      expect.arrayContaining(["tasks:workout-1", "workouts:workout-1"]),
+    );
+    expect(workoutItem).not.toHaveProperty("actions");
+    expect(workoutItem).not.toHaveProperty("meta");
+  });
+
+  it("starts tasks and workouts concurrently and degrades only the failed workout layer", async () => {
+    let resolveWorkout!: (value: Workout[]) => void;
+    const workoutRead = vi.fn().mockReturnValue(new Promise<Workout[]>((resolve) => {
+      resolveWorkout = resolve;
+    }));
+    const taskRead = vi.fn().mockResolvedValue([task()]);
+
+    const pending = queryCalendarOverlayFeed(
+      { ...request, layers: ["tasks", "workouts"], timezone: "UTC" },
+      allCapabilities(
+        { read: { read: taskRead } },
+        {},
+        { read: workoutRead },
+      ),
+    );
+
+    await Promise.resolve();
+    expect(taskRead).toHaveBeenCalledTimes(1);
+    expect(workoutRead).toHaveBeenCalledTimes(1);
+
+    resolveWorkout([workout()]);
+    await expect(pending).resolves.toMatchObject({ status: "complete" });
+
+    const failed = await queryCalendarOverlayFeed(
+      { ...request, layers: ["tasks", "workouts"], timezone: "UTC" },
+      allCapabilities(
+        { read: { read: taskRead } },
+        {},
+        { read: vi.fn().mockRejectedValue(new Error("workouts down")) },
+      ),
+    );
+    expect(failed).toEqual({
+      status: "degraded",
+      items: [expect.objectContaining({ id: "tasks:task-1" })],
+      unavailable: [{ layer: "workouts", code: "unavailable" }],
+    });
+
+    const empty = await queryCalendarOverlayFeed(
+      { ...request, layers: ["workouts"], timezone: "UTC" },
+      allCapabilities({}, {}, { read: vi.fn().mockResolvedValue([]) }),
+    );
+    expect(empty).toEqual({ status: "complete", items: [], unavailable: [] });
   });
 });

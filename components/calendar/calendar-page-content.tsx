@@ -26,8 +26,7 @@ import { DayView } from "./day-view";
 import { EventQuickCreate } from "./event-quick-create";
 import { EventDialog } from "./event-dialog";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
-import type { CalendarFeedItem } from "@/lib/calendar/feed-types";
-import { feedItemsToExpandedEvents, overlayItemsToExpandedEvents } from "@/lib/calendar/feed-aggregation";
+import { overlayItemsToExpandedEvents } from "@/lib/calendar/feed-aggregation";
 import type { DomainCalendarEvent } from "@/lib/calendar/feed-types";
 import type { CalendarOverlayItem } from "@/lib/calendar/overlay-feed";
 import { useLocalization } from "@/lib/hooks/use-localization";
@@ -35,10 +34,6 @@ import { weekStartPreferenceToDay } from "@/lib/preferences/owners";
 
 interface EventsResponse {
   events: ExpandedCalendarEvent[];
-}
-
-interface FeedResponse {
-  items: CalendarFeedItem[];
 }
 
 interface OverlayResponse {
@@ -119,40 +114,25 @@ export function CalendarPageContent() {
     { keepPreviousData: true },
   );
 
-  // Tasks and habits are served by the typed overlay. Workouts retain the
-  // legacy feed until their own overlay migration is complete.
-  const legacyLayers = useMemo(() => {
-    const layers = Array.from(enabledLayers).filter((l) => l === "workouts");
-    return layers.sort().join(",");
-  }, [enabledLayers]);
-
-  // Detect user timezone for workout time conversion
+  // The overlay owns local-date projection for every non-event layer.
   const userTimezone = useMemo(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
     [],
   );
 
   const overlayLayers = useMemo(() => {
-    const layers = Array.from(enabledLayers).filter((l) => l === "tasks" || l === "habits");
+    const layers = Array.from(enabledLayers).filter((l) => l === "tasks" || l === "habits" || l === "workouts");
     return layers.sort().join(",");
   }, [enabledLayers]);
 
   const overlayKey = overlayLayers
     ? `/api/calendar/overlay-feed?start_date=${startDate}&end_date=${endDate}&layers=${overlayLayers}&timezone=${encodeURIComponent(userTimezone)}`
     : null;
-  const legacyFeedKey = legacyLayers
-    ? `/api/calendar/feed?start_date=${startDate}&end_date=${endDate}&layers=${legacyLayers}&timezone=${encodeURIComponent(userTimezone)}`
-    : null;
 
   const {
     data: overlayData,
     error: overlayError,
   } = useSWR<OverlayResponse>(overlayKey, fetcher, { keepPreviousData: true });
-
-  const {
-    data: feedData,
-    error: legacyFeedError,
-  } = useSWR<FeedResponse>(legacyFeedKey, fetcher, { keepPreviousData: true });
 
   const [isRetryingOverlay, setIsRetryingOverlay] = useState(false);
   const retryOverlay = useCallback(async () => {
@@ -172,25 +152,27 @@ export function CalendarPageContent() {
   const habitOverlayUnavailable = Boolean(
     enabledLayers.has("habits") && (overlayError || unavailableOverlayLayers.includes("habits")),
   );
+  const workoutOverlayUnavailable = Boolean(
+    enabledLayers.has("workouts") && (overlayError || unavailableOverlayLayers.includes("workouts")),
+  );
 
   // Log SWR fetch errors for debugging
   useEffect(() => {
     if (eventsError) console.error("Failed to fetch calendar events:", eventsError);
     if (overlayError) console.error("Failed to fetch calendar overlay:", overlayError);
-    if (legacyFeedError) console.error("Failed to fetch calendar feed:", legacyFeedError);
-  }, [eventsError, legacyFeedError, overlayError]);
+  }, [eventsError, overlayError]);
 
   // --- Inline actions ---
 
   const handleFeedMutated = useCallback(() => {
-    // Re-fetch both events and feed
+    // Re-fetch native events and the selected overlay layers.
     globalMutate(
       `/api/calendar-events?start_date=${startDate}&end_date=${endDate}`,
     );
-    if (legacyFeedKey) globalMutate(legacyFeedKey);
-  }, [startDate, endDate, legacyFeedKey, globalMutate]);
+    if (overlayKey) globalMutate(overlayKey);
+  }, [startDate, endDate, overlayKey, globalMutate]);
 
-  const { dispatch, toggleTask, toggleHabit } = useCalendarActions(handleFeedMutated);
+  const { dispatch, toggleTask, toggleHabit, navigateWorkout } = useCalendarActions(handleFeedMutated);
 
   const handleItemAction = useCallback(
     async (event: ExpandedCalendarEvent | DomainCalendarEvent) => {
@@ -211,6 +193,10 @@ export function CalendarPageContent() {
         if (!result.success) console.error("Calendar habit action failed:", result.error);
         return;
       }
+      if (domainEvent._workoutAction) {
+        navigateWorkout(domainEvent._workoutAction.workoutId);
+        return;
+      }
       if (!domainEvent._actions?.length || !domainEvent._sourceId) return;
 
       const action = domainEvent._actions[0];
@@ -229,7 +215,7 @@ export function CalendarPageContent() {
         console.error("Calendar inline action failed:", result.error);
       }
     },
-    [dispatch, globalMutate, overlayKey, toggleHabit, toggleTask],
+    [dispatch, globalMutate, navigateWorkout, overlayKey, toggleHabit, toggleTask],
   );
 
   const onEventSavedCallback = useCallback(() => {
@@ -262,10 +248,6 @@ export function CalendarPageContent() {
     const overlayEvents: DomainCalendarEvent[] = overlayData?.items
       ? overlayItemsToExpandedEvents(overlayData.items)
       : [];
-    const feedEvents: DomainCalendarEvent[] = feedData?.items
-      ? feedItemsToExpandedEvents(feedData.items)
-      : [];
-
     // Only include calendar events if the events layer is on
     const visibleCalendarEvents = enabledLayers.has("events")
       ? calendarEvents
@@ -274,11 +256,10 @@ export function CalendarPageContent() {
     const allEvents = [
       ...visibleCalendarEvents,
       ...overlayEvents,
-      ...feedEvents,
     ] as ExpandedCalendarEvent[];
 
     return groupEventsByDate(allEvents);
-  }, [eventsData?.events, feedData?.items, overlayData?.items, enabledLayers]);
+  }, [eventsData?.events, overlayData?.items, enabledLayers]);
 
   // Compute grid dates
   const gridDates = useMemo(
@@ -354,7 +335,7 @@ export function CalendarPageContent() {
           />
 
           <div className="flex-1 overflow-auto p-4">
-            {eventsError || legacyFeedError ? (
+            {eventsError ? (
               <div className="flex flex-col items-center justify-center h-64 gap-2 text-destructive">
                 <span>{t("error")}</span>
               </div>
@@ -412,6 +393,17 @@ export function CalendarPageContent() {
                 <span>{t("habitOverlay.unavailable")}</span>
                 <button type="button" onClick={retryOverlay}>
                   {t("habitOverlay.retry")}
+                </button>
+              </div>
+            )}
+            {workoutOverlayUnavailable && !isRetryingOverlay && (
+              <div
+                role="status"
+                className="mt-3 flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              >
+                <span>{t("workoutOverlay.unavailable")}</span>
+                <button type="button" onClick={retryOverlay}>
+                  {t("workoutOverlay.retry")}
                 </button>
               </div>
             )}

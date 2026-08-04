@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
         { status: 400 },
       );
     }
-    if (timezone && !validTimeZone(timezone)) {
+    if (timezone !== null && !validTimeZone(timezone)) {
       return NextResponse.json({ error: "timezone must be a valid IANA timezone" }, { status: 400 });
     }
 
@@ -113,6 +113,7 @@ export async function GET(request: NextRequest) {
         userId: auth.principal.userId,
         range: { from: startDate, to: endDate },
         layers: requestedLayers as CalendarOverlayLayer[],
+        ...(timezone !== null ? { timezone } : {}),
       },
       createSupabaseTaskOverlayCapabilities(auth.client),
       {
