@@ -1173,6 +1173,41 @@ describe("Household Runway Interview Runtime", () => {
     expect(runtime.getSnapshot().draft.current).toBe(true);
   });
 
+  it("uses UUID persistence identities when randomUUID is unavailable", async () => {
+    const scheduled: (() => void)[] = [];
+    const requests: Array<{ idempotencyKey: string; snapshotActionId: string }> = [];
+    vi.stubGlobal("crypto", undefined);
+
+    try {
+      const runtime = createHouseholdRunwayInterviewRuntime({
+        now: () => now,
+        schedule: (task) => scheduled.push(task),
+        persistPlan: (request) => {
+          requests.push(
+            request as unknown as {
+              idempotencyKey: string;
+              snapshotActionId: string;
+            },
+          );
+          return { success: false as const, error: "network" as const };
+        },
+      });
+      runtime.start();
+      driveToReview(runtime);
+      runtime.send({ type: "continue" });
+      runtime.send({ type: "save_plan" });
+      await settle(scheduled);
+
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.idempotencyKey).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      );
+      expect(requests[0]?.snapshotActionId).toBe(requests[0]?.idempotencyKey);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it.each([
     ["authentication_required", undefined],
     ["conflict", 8],

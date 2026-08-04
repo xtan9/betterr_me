@@ -677,7 +677,22 @@ function snapshotSignature(snapshot: HouseholdRunwayInterviewRuntimeSnapshot) {
 
 function defaultId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
-  return `runway-interview-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"))
+      .join("")
+      .replace(
+        /^(\w{8})(\w{4})(\w{4})(\w{4})(\w{12})$/,
+        "$1-$2-$3-$4-$5",
+      );
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (token) => {
+    const value = Math.floor(Math.random() * 16);
+    const nibble = token === "x" ? value : (value & 0x3) | 0x8;
+    return nibble.toString(16);
+  });
 }
 
 function defaultSchedule(task: () => void) {
@@ -2239,7 +2254,9 @@ export function createHouseholdRunwayInterviewRuntime(
           : commandInput;
       const command = {
         ...input,
-        ...commandMetadata(createId, now, commandType),
+        ...(commandInput.type === "save_plan"
+          ? { commandId: createId(), occurredAt: now() }
+          : commandMetadata(createId, now, commandType)),
       } as HouseholdRunwayInterviewCommand;
       applyCommand(command, true);
     }
