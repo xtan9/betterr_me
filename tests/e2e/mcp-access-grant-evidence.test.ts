@@ -108,6 +108,11 @@ describe("deterministic MCP evidence kernel", () => {
     expect(report.requests[0]).toMatchObject({ url: "https://mcp.example.test/resource" });
   });
 
+  it("preserves version-map keys while sanitizing version values", () => {
+    const report = finalizeReport({ issue: "#799", target, requiredGateIds: [], observations: [] }, context);
+    expect(report.versions).toEqual(context.versions);
+  });
+
   it("uses structured errors rather than diagnostic wording for verdicts", () => {
     const report = finalizeReport({
       issue: "#799", target, requiredGateIds: ["missing", "malformed", "leak"],
