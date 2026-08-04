@@ -1484,6 +1484,14 @@
       "unavailable": "任務暫時無法使用。您的日曆事件仍會顯示。",
       "retry": "重試任務"
     },
+    "habitOverlay": {
+      "unavailable": "習慣暫時無法使用。您的日曆事件和可用圖層仍會顯示。",
+      "retry": "重試習慣"
+    },
+    "workoutOverlay": {
+      "unavailable": "訓練暫時無法使用。您的日曆事件和可用圖層仍會顯示。",
+      "retry": "重試訓練"
+    },
     "timeGrid": {
       "allDay": "全天",
       "allDayMore": "+{count} 更多",
@@ -1567,10 +1575,6 @@
       "push": "推播",
       "email": "電子郵件",
       "remove": "移除提醒"
-    },
-    "feed": {
-      "error": "載入日曆項目失敗",
-      "loading": "載入中..."
     },
     "actions": {
       "markComplete": "標記完成",

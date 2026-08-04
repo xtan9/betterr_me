@@ -1484,6 +1484,14 @@
       "unavailable": "Tasks are temporarily unavailable. Your calendar events are still shown.",
       "retry": "Retry tasks"
     },
+    "habitOverlay": {
+      "unavailable": "Habits are temporarily unavailable. Your calendar events and available layers are still shown.",
+      "retry": "Retry habits"
+    },
+    "workoutOverlay": {
+      "unavailable": "Workouts are temporarily unavailable. Your calendar events and available layers are still shown.",
+      "retry": "Retry workouts"
+    },
     "timeGrid": {
       "allDay": "All day",
       "allDayMore": "+{count} more",
@@ -1567,10 +1575,6 @@
       "push": "Push",
       "email": "Email",
       "remove": "Remove reminder"
-    },
-    "feed": {
-      "error": "Failed to load calendar items",
-      "loading": "Loading..."
     },
     "actions": {
       "markComplete": "Mark complete",

@@ -56,6 +56,14 @@ The controlled production and manual preview workflow requires:
 - Repository secret `APP_URL`: the canonical production origin used by the
   post-deploy smoke probe.
 
+Preview requests are advisory on pull requests and remain manual. The policy
+report appears in the pull-request CI summary. To dispatch a preview, an
+authorized human or AI process must run `Vercel Deploy` with target `preview`,
+the exact pull-request head SHA, and the pull-request number. Fork previews
+also require the explicit `allow_fork_preview` authorization input. See
+[`docs/deployment/preview-policy.md`](../docs/deployment/preview-policy.md)
+for the criteria and duplicate-dispatch guard.
+
 Keep the repository variable `VERCEL_CI_DEPLOY_ENABLED` unset or set to `false`
 when the controlled workflow is first merged. Automatic Vercel Git deployments
 and the legacy production smoke workflow remain active in that state.

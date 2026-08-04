@@ -10,7 +10,10 @@ const lifecycleBoundarySources = [
   "app/api/recurring-tasks/[id]/route.ts",
   "app/api/cron/prewarm-recurring-tasks/route.ts",
   "app/api/sidebar/counts/route.ts",
-  "app/api/calendar/feed/route.ts",
+  "app/api/calendar/overlay-feed/route.ts",
+  "lib/calendar/overlay-feed.ts",
+  "lib/calendar/supabase-overlay-feed.ts",
+  "lib/calendar/overlay-adapter.ts",
   "lib/ai/tools/tasks.ts",
   "lib/recurring-tasks/creation.ts",
   "lib/recurring-tasks/supabase-occurrence-adapter.ts",
@@ -23,6 +26,12 @@ const lifecycleBoundarySources = [
 ];
 
 describe("recurring lifecycle import boundary", () => {
+  it("retires the obsolete unified calendar feed without a compatibility alias", () => {
+    expect(existsSync(resolve(process.cwd(), "app/api/calendar/feed/route.ts"))).toBe(false);
+    expect(existsSync(resolve(process.cwd(), "lib/calendar/feed-aggregation.ts"))).toBe(false);
+    expect(existsSync(resolve(process.cwd(), "lib/calendar/feed-types.ts"))).toBe(false);
+  });
+
   it("retires the best-effort materializer instead of leaving a compatibility entry point", () => {
     expect(
       existsSync(resolve(process.cwd(), "lib/recurring-tasks/instance-generator.ts")),

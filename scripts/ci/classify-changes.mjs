@@ -1,5 +1,7 @@
 import { spawnSync } from "node:child_process";
 
+import { planPreviewDeployment } from "./preview-deployment-policy.mjs";
+
 const SPECS = {
   accessibility: "e2e/accessibility.spec.ts",
   completeHabit: "e2e/complete-habit.spec.ts",
@@ -27,6 +29,7 @@ const CI_POLICY_TESTS = [
   "tests/scripts/github-actions-runtime-policy.test.ts",
   "tests/scripts/production-deployment-policy.test.ts",
   "tests/scripts/production-smoke.test.ts",
+  "tests/scripts/preview-deployment-policy.test.ts",
   "tests/scripts/quality-signal-contracts.test.ts",
   "tests/scripts/vercel-ignore-build.test.ts",
 ];
@@ -291,7 +294,16 @@ function finalize({ changedPaths, ownershipMatches, reasons, fallback, suiteSeed
   if (!suites.architecture) skipReasons.architecture = "This push was already validated by its pull request.";
   if (!suites.mutation) skipReasons.mutation = "No changed path is owned by a mutation-testing scope.";
   const labels = { quality: qualityLabel(suites), e2e: e2eLabel(suites) };
-  return { changedPaths, ownershipMatches, suites, labels, reasons, skipReasons, fallback };
+  return {
+    changedPaths,
+    ownershipMatches,
+    suites,
+    labels,
+    previewPolicy: planPreviewDeployment({ changedFiles: changedPaths }),
+    reasons,
+    skipReasons,
+    fallback,
+  };
 }
 
 /**
@@ -352,6 +364,9 @@ export function formatGitHubOutputs(result, baseSha = "") {
     `e2e_visual=${suites.e2eVisual}`,
     `e2e_supabase=${suites.e2eSupabase}`,
     `e2e_label=${e2eLabel(suites)}`,
+    `preview_policy_action=${result.previewPolicy?.action ?? "skip"}`,
+    `preview_policy_reason=${result.previewPolicy?.reason ?? "Preview policy unavailable."}`,
+    `preview_policy_json=${JSON.stringify(result.previewPolicy ?? {})}`,
     `performance=${suites.performance}`,
     `architecture=${suites.architecture}`,
     `mutation=${suites.mutation}`,

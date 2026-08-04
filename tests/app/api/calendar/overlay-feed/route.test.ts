@@ -17,7 +17,7 @@ vi.mock("@/lib/calendar/overlay-feed", async () => {
   return { ...actual, queryCalendarOverlayFeed };
 });
 vi.mock("@/lib/calendar/supabase-overlay-feed", () => ({
-  createSupabaseTaskOverlayCapabilities: createCapabilities,
+  createSupabaseOverlayCapabilities: createCapabilities,
 }));
 vi.mock("@/lib/logger", () => ({ log: { error: logError } }));
 
@@ -67,6 +67,39 @@ describe("GET /api/calendar/overlay-feed", () => {
     expect(await response.json()).toEqual({ items: [] });
   });
 
+  it("accepts habits/workouts alone and combined task/habit/workout selections", async () => {
+    await GET(request("/api/calendar/overlay-feed?start_date=2026-04-01&end_date=2026-04-07&layers=habits"));
+    expect(queryCalendarOverlayFeed).toHaveBeenLastCalledWith(
+      expect.objectContaining({ layers: ["habits"] }),
+      {},
+      expect.any(Object),
+    );
+
+    await GET(request("/api/calendar/overlay-feed?start_date=2026-04-01&end_date=2026-04-07&layers=tasks,habits"));
+    expect(queryCalendarOverlayFeed).toHaveBeenLastCalledWith(
+      expect.objectContaining({ layers: ["tasks", "habits"] }),
+      {},
+      expect.any(Object),
+    );
+
+    await GET(request("/api/calendar/overlay-feed?start_date=2026-04-01&end_date=2026-04-07&layers=workouts&timezone=America%2FLos_Angeles"));
+    expect(queryCalendarOverlayFeed).toHaveBeenLastCalledWith(
+      expect.objectContaining({ layers: ["workouts"], timezone: "America/Los_Angeles" }),
+      {},
+      expect.any(Object),
+    );
+  });
+
+  it("deduplicates and canonicalizes selected overlay layers before querying", async () => {
+    await GET(request("/api/calendar/overlay-feed?start_date=2026-04-01&end_date=2026-04-07&layers=workouts,tasks,workouts,habits,tasks"));
+
+    expect(queryCalendarOverlayFeed).toHaveBeenLastCalledWith(
+      expect.objectContaining({ layers: ["tasks", "habits", "workouts"] }),
+      {},
+      expect.any(Object),
+    );
+  });
+
   it("does not put Calendar Events in the overlay response", async () => {
     queryCalendarOverlayFeed.mockResolvedValueOnce({
       status: "complete",
@@ -103,9 +136,37 @@ describe("GET /api/calendar/overlay-feed", () => {
     expect(await response.json()).toEqual({ items: [], unavailableLayers: ["tasks"] });
   });
 
+  it("returns a degraded response with successful items and an unavailable habit layer", async () => {
+    queryCalendarOverlayFeed.mockResolvedValueOnce({
+      status: "degraded",
+      items: [{
+        layer: "tasks",
+        kind: "task",
+        id: "tasks:task-1",
+        taskId: "task-1",
+        title: "Task",
+        date: "2026-04-02",
+        startTime: null,
+        endTime: null,
+        allDay: true,
+        completed: false,
+        action: { type: "toggle_task_completion", taskId: "task-1" },
+      }],
+      unavailable: [{ layer: "habits", code: "unavailable" }],
+    });
+
+    const response = await GET(request("/api/calendar/overlay-feed?start_date=2026-04-01&end_date=2026-04-07&layers=tasks,habits"));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      items: [expect.objectContaining({ id: "tasks:task-1" })],
+      unavailableLayers: ["habits"],
+    });
+  });
+
   it("rejects ranges that are reversed, too long, or invalid", async () => {
     expect((await GET(request("/api/calendar/overlay-feed?start_date=2026-04-07&end_date=2026-04-01&layers=tasks"))).status).toBe(400);
     expect((await GET(request("/api/calendar/overlay-feed?start_date=2026-04-01&end_date=2026-05-14&layers=tasks"))).status).toBe(400);
     expect((await GET(request("/api/calendar/overlay-feed?start_date=2026-02-30&end_date=2026-03-01&layers=tasks"))).status).toBe(400);
+    expect((await GET(request("/api/calendar/overlay-feed?start_date=2026-04-01&end_date=2026-04-07&layers=workouts&timezone=Not%2FAZone"))).status).toBe(400);
   });
 });

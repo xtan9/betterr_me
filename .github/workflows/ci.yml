@@ -35,7 +35,7 @@ jobs:
           install-dependencies: "false"
 
       - name: Test deployment policy
-        run: node --test scripts/ci/production-deployment-policy.policy.mjs
+        run: node --test scripts/ci/production-deployment-policy.policy.mjs scripts/ci/preview-deployment-policy.policy.mjs
 
   changes:
     runs-on: ubuntu-latest
@@ -87,6 +87,33 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           VALIDATED_BY_PULL_REQUEST: ${{ steps.pull-request.outputs.validated || 'false' }}
         run: node scripts/ci/run-change-classifier.mjs
+
+  preview-policy:
+    name: Preview policy (${{ fromJSON(needs.changes.outputs.classification_json).previewPolicy.action }})
+    needs: changes
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report preview policy decision
+        env:
+          PREVIEW_POLICY_JSON: ${{ toJSON(fromJSON(needs.changes.outputs.classification_json).previewPolicy) }}
+        shell: bash
+        run: |
+          node --input-type=module - <<'NODE'
+          import { appendFileSync } from 'node:fs';
+
+          const policy = JSON.parse(process.env.PREVIEW_POLICY_JSON);
+          const lines = [
+            '## Vercel preview policy',
+            '',
+            `- Decision: **${policy.action}**`,
+            `- Reason: ${policy.reason}`,
+            `- Runtime files: ${policy.runtimeFiles.join(', ') || 'none'}`,
+            '',
+            'This is advisory. A preview is dispatched only by an authorized manual process for the exact tested commit.',
+          ];
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join('\n')}\n`);
+          NODE
 
   lint-and-test:
     name: Lint + test (${{ fromJSON(needs.changes.outputs.classification_json).labels.quality }})

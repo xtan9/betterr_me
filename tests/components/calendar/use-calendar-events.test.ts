@@ -66,7 +66,7 @@ describe("useCalendarEvents", () => {
     });
   });
 
-  it("opens event dialog when clicking a plain event (no _domain)", () => {
+  it("opens event dialog when clicking a plain event (no _layer)", () => {
     const handleItemAction = vi.fn();
     const { result } = renderHook(() =>
       useCalendarEvents("2026-04-12", handleItemAction, vi.fn()),
@@ -85,19 +85,19 @@ describe("useCalendarEvents", () => {
       useCalendarEvents("2026-04-12", handleItemAction, vi.fn()),
     );
 
-    const ev = { id: "h1", _domain: "habits" } as unknown as ExpandedCalendarEvent;
+    const ev = { id: "h1", _layer: "habits" } as unknown as ExpandedCalendarEvent;
     act(() => result.current.handleEventClick(ev));
 
     expect(handleItemAction).toHaveBeenCalledWith(ev);
     expect(result.current.eventDialog).toBeNull();
   });
 
-  it("still opens the dialog for _domain=events", () => {
+  it("still opens the dialog for _layer=events", () => {
     const handleItemAction = vi.fn();
     const { result } = renderHook(() =>
       useCalendarEvents("2026-04-12", handleItemAction, vi.fn()),
     );
-    const ev = { id: "e", _domain: "events" } as unknown as ExpandedCalendarEvent;
+    const ev = { id: "e", _layer: "events" } as unknown as ExpandedCalendarEvent;
     act(() => result.current.handleEventClick(ev));
     expect(result.current.eventDialog?.isOpen).toBe(true);
     expect(handleItemAction).not.toHaveBeenCalled();

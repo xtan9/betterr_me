@@ -108,6 +108,23 @@ function state(): HouseholdRunwayInterviewState {
   });
 }
 
+function encodedEnvelope() {
+  return JSON.parse(
+    encodeHouseholdRunwayDraft(
+      { status: state().status, stage: state().stage, draft: state().draft },
+      NOW,
+    ),
+  ) as Record<string, unknown>;
+}
+
+function decodeMutation(
+  mutate: (payload: Record<string, unknown>) => void,
+) {
+  const payload = encodedEnvelope();
+  mutate(payload);
+  return decodeHouseholdRunwayDraft(JSON.stringify(payload), NOW);
+}
+
 describe("Household Runway Draft codec", () => {
   it("preserves an in-progress location before a country is selected", () => {
     const source = createHouseholdRunwayInterview({
@@ -301,6 +318,50 @@ describe("Household Runway Draft codec", () => {
     ).toMatchObject({ success: false, code: "invalid_scenario", cleanup: true });
   });
 
+  it.each([
+    ["a non-record draft", (payload: Record<string, unknown>) => { payload.draft = null; }],
+    ["non-record validation issues", (payload: Record<string, unknown>) => {
+      (payload.draft as Record<string, unknown>).validationIssues = null;
+    }],
+    ["answers that disagree with the location", (payload: Record<string, unknown>) => {
+      (payload.draft as Record<string, unknown>).answers = {
+        ...((payload.draft as Record<string, unknown>).answers as object),
+        country: "CA",
+        region: "AB",
+        currency: "CAD",
+      };
+    }],
+    ["an unset currency selection with a proposed currency", (payload: Record<string, unknown>) => {
+      (payload.draft as Record<string, unknown>).location = {
+        ...((payload.draft as Record<string, unknown>).location as object),
+        currency: null,
+        proposedCurrency: "CAD",
+        currencySelection: "unset",
+      };
+    }],
+    ["a pending result stage status", (payload: Record<string, unknown>) => {
+      ((payload.draft as Record<string, unknown>).stageStatus as Record<string, unknown>).result = "pending";
+    }],
+    ["an inapplicable expense stage", (payload: Record<string, unknown>) => {
+      ((payload.draft as Record<string, unknown>).stageStatus as Record<string, unknown>).expenses = "inapplicable";
+    }],
+  ] as const)("rejects %s cross-field draft", (_label, mutate) => {
+    const result = decodeMutation(mutate);
+    expect(result).toMatchObject({ success: false, cleanup: true });
+  });
+
+  it("rejects a current draft whose status and stage are inconsistent", () => {
+    const result = decodeMutation((payload) => {
+      payload.status = "reviewing";
+      payload.stage = "expenses";
+    });
+    expect(result).toMatchObject({
+      success: false,
+      code: "invalid_stage",
+      cleanup: true,
+    });
+  });
+
   it("never restores an incomplete draft as completed", () => {
     const current = JSON.parse(
       encodeHouseholdRunwayDraft(
@@ -341,5 +402,210 @@ describe("Household Runway Draft codec", () => {
       code: "incomplete_completion",
       cleanup: true,
     });
+  });
+
+  it.each([
+    ["missing location", (draft: Record<string, unknown>) => { draft.location = null; }],
+    ["invalid region type", (draft: Record<string, unknown>) => { (draft.location as Record<string, unknown>).region = 42; }],
+    ["invalid currency", (draft: Record<string, unknown>) => { (draft.location as Record<string, unknown>).currency = "EUR"; }],
+    ["invalid proposed currency", (draft: Record<string, unknown>) => { (draft.location as Record<string, unknown>).proposedCurrency = "EUR"; }],
+    ["invalid currency selection", (draft: Record<string, unknown>) => { (draft.location as Record<string, unknown>).currencySelection = "automatic"; }],
+    ["region without country", (draft: Record<string, unknown>) => {
+      const location = draft.location as Record<string, unknown>;
+      location.country = null;
+      location.region = "CA";
+      location.currency = null;
+      location.proposedCurrency = null;
+      location.currencySelection = "unset";
+    }],
+    ["currency on an unset location", (draft: Record<string, unknown>) => {
+      const location = draft.location as Record<string, unknown>;
+      location.country = null;
+      location.region = null;
+      location.currency = "USD";
+      location.proposedCurrency = null;
+      location.currencySelection = "unset";
+    }],
+    ["proposed selection with an explicit currency", (draft: Record<string, unknown>) => {
+      const location = draft.location as Record<string, unknown>;
+      location.currencySelection = "proposed";
+      location.currency = "USD";
+    }],
+    ["explicit selection without a currency", (draft: Record<string, unknown>) => {
+      const location = draft.location as Record<string, unknown>;
+      location.currencySelection = "explicit";
+      location.currency = null;
+    }],
+  ] as const)("rejects %s location envelopes", (_label, mutate) => {
+    const result = decodeMutation((payload) => mutate(payload.draft as Record<string, unknown>));
+    expect(result).toMatchObject({ success: false, code: "invalid_draft", cleanup: true });
+  });
+
+  it.each([
+    ["invalid country", (answers: Record<string, unknown>) => { answers.country = "GB"; }],
+    ["invalid region type", (answers: Record<string, unknown>) => { answers.region = 7; }],
+    ["invalid currency", (answers: Record<string, unknown>) => { answers.currency = "EUR"; }],
+    ["invalid timestamp", (answers: Record<string, unknown>) => { answers.updated_at = "not-a-date"; }],
+    ["invalid answer schema", (answers: Record<string, unknown>) => { answers.schema_version = 99; }],
+  ] as const)("rejects %s answer envelopes", (_label, mutate) => {
+    const result = decodeMutation((payload) => mutate(
+      (payload.draft as Record<string, unknown>).answers as Record<string, unknown>,
+    ));
+    expect(result).toMatchObject({ success: false, code: "invalid_draft", cleanup: true });
+  });
+
+  it.each([
+    ["an unknown validation code", { expenses: { code: "unknown" } }],
+    ["an invalid validation stage", { expenses: { code: "assessment_required", stage: "unknown" } }],
+    ["a non-array validation path", { expenses: { code: "assessment_required", path: "expenses" } }],
+  ] as const)("rejects %s validation issues", (_label, validationIssues) => {
+    const result = decodeMutation((payload) => {
+      (payload.draft as Record<string, unknown>).validationIssues = validationIssues;
+    });
+    expect(result).toMatchObject({ success: false, code: "invalid_draft", cleanup: true });
+  });
+
+  it.each([
+    ["a missing stage status", (draft: Record<string, unknown>) => {
+      delete (draft.stageStatus as Record<string, unknown>).expenses;
+    }],
+    ["an invalid stage status", (draft: Record<string, unknown>) => {
+      (draft.stageStatus as Record<string, unknown>).expenses = "unknown";
+    }],
+    ["duplicate nested expense progress", (draft: Record<string, unknown>) => {
+      (draft.answers as Record<string, unknown>).completed_expense_categories = ["housing", "housing"];
+    }],
+    ["invalid pending currency", (draft: Record<string, unknown>) => {
+      draft.pendingCurrencyChange = { currency: "EUR", monetaryEntryCount: 1 };
+    }],
+    ["invalid pending entry count", (draft: Record<string, unknown>) => {
+      draft.pendingCurrencyChange = { currency: "CAD", monetaryEntryCount: "1" };
+    }],
+    ["unavailable scenario", (draft: Record<string, unknown>) => {
+      draft.selectedScenario = "not-a-scenario";
+    }],
+  ] as const)("rejects %s draft progress", (_label, mutate) => {
+    const result = decodeMutation((payload) => mutate(payload.draft as Record<string, unknown>));
+    expect(result).toMatchObject({ success: false, cleanup: true });
+  });
+
+  it("rejects an active expense category when the restored stage is not Expenses", () => {
+    const result = decodeMutation((payload) => {
+      payload.stage = "review";
+      (payload.draft as Record<string, unknown>).activeExpenseCategory = "housing";
+    });
+    expect(result).toMatchObject({
+      success: false,
+      code: "invalid_nested_progress",
+      cleanup: true,
+    });
+  });
+
+  it("migrates the legacy numeric-step envelope and rejects invalid legacy stages", () => {
+    const legacyAnswers = { ...answers(), schema_version: 4 };
+    const migrated = decodeHouseholdRunwayDraft(
+      JSON.stringify({
+        version: 2,
+        expires_at: new Date(NOW.getTime() + 60_000).toISOString(),
+        step: 3,
+        completed: false,
+        answers: legacyAnswers,
+      }),
+      NOW,
+    );
+    expect(migrated).toMatchObject({ success: true, schemaVersion: 2 });
+
+    expect(
+      decodeHouseholdRunwayDraft(
+        JSON.stringify({
+          version: 4,
+          expires_at: new Date(NOW.getTime() + 60_000).toISOString(),
+          step_id: "not-a-stage",
+          answers: legacyAnswers,
+        }),
+        NOW,
+      ),
+    ).toMatchObject({ success: false, code: "invalid_stage", cleanup: true });
+  });
+
+  it.each([
+    ["confirmedFunds", "assets"],
+    ["temporaryIncome", "review"],
+  ] as const)("maps the legacy %s stage alias", (step_id, stage) => {
+    const result = decodeHouseholdRunwayDraft(
+      JSON.stringify({
+        version: 3,
+        expires_at: new Date(NOW.getTime() + 60_000).toISOString(),
+        step_id,
+        completed: false,
+        answers: { ...answers(), schema_version: 3 },
+      }),
+      NOW,
+    );
+    expect(result).toMatchObject({ success: true, schemaVersion: 3 });
+    if (result.success) expect(result.state.stage).toBe(stage);
+  });
+
+  it("derives completed and active expense stages from the v1 envelope", () => {
+    const completedDraft = draft();
+    completedDraft.activeExpenseCategory = null;
+    completedDraft.stageStatus = {
+      ...completedDraft.stageStatus,
+      result: "completed",
+    };
+    const completed = decodeHouseholdRunwayDraft(
+      JSON.stringify({
+        version: 1,
+        expires_at: new Date(NOW.getTime() + 60_000).toISOString(),
+        draft: completedDraft,
+      }),
+      NOW,
+    );
+    expect(completed).toMatchObject({ success: false, cleanup: true });
+
+    const active = decodeHouseholdRunwayDraft(
+      JSON.stringify({
+        version: 1,
+        expires_at: new Date(NOW.getTime() + 60_000).toISOString(),
+        draft: draft(),
+      }),
+      NOW,
+    );
+    expect(active).toMatchObject({
+      success: true,
+      state: { status: "collecting", stage: "expenses" },
+    });
+  });
+
+  it("rejects non-text bytes and non-numeric historical versions", () => {
+    expect(decodeHouseholdRunwayDraft({} as never, NOW)).toMatchObject({
+      success: false,
+      code: "malformed",
+    });
+    expect(
+      decodeHouseholdRunwayDraft(
+        JSON.stringify({
+          version: "3",
+          expires_at: new Date(NOW.getTime() + 60_000).toISOString(),
+          answers: { ...answers(), schema_version: 3 },
+        }),
+        NOW,
+      ),
+    ).toMatchObject({ success: false, code: "unsupported_version" });
+  });
+
+  it("rejects invalid codec dates before touching storage state", () => {
+    expect(decodeHouseholdRunwayDraft(null, NOW)).toMatchObject({
+      success: false,
+      code: "malformed",
+    });
+    expect(decodeHouseholdRunwayDraft("{}", new Date("invalid"))).toMatchObject({
+      success: false,
+      code: "malformed",
+    });
+    expect(() => encodeHouseholdRunwayDraft(
+      { status: state().status, stage: state().stage, draft: state().draft },
+      new Date("invalid"),
+    )).toThrow("malformed");
   });
 });
