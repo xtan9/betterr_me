@@ -4,8 +4,34 @@ import {
   type HouseholdRunwayInterviewRuntimePlanResult,
   type HouseholdRunwayInterviewRuntimeSnapshot,
 } from "@/lib/finance/household-runway-interview-runtime";
+import { createHouseholdRunwayInterview } from "@/lib/finance/household-runway-interview";
 
 const now = "2026-08-03T15:00:00.000Z";
+
+async function settle(scheduled: (() => void)[]) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await Promise.resolve();
+    const tasks = scheduled.splice(0);
+    tasks.forEach((task) => task());
+  }
+}
+
+function storedDraft(revision: number, stage: "location" | "result" = "location") {
+  const fresh = createHouseholdRunwayInterview();
+  return {
+    status: stage === "result" ? ("completed" as const) : ("collecting" as const),
+    stage,
+    draft: {
+      ...fresh.draft,
+      revision,
+      interviewId: `stored-${revision}`,
+      startedAt: now,
+      ...(stage === "result"
+        ? { stageStatus: { ...fresh.draft.stageStatus, result: "completed" as const } }
+        : {}),
+    },
+  };
+}
 
 function driveToReview(runtime: ReturnType<typeof createHouseholdRunwayInterviewRuntime>) {
   runtime.send({ type: "select_country", country: "US" });
@@ -113,6 +139,15 @@ describe("Household Runway Interview Runtime", () => {
       canContinue: false,
     });
     expect(snapshot.derived).toEqual({ planInputs: null, assessment: null });
+    expect(snapshot.plan).toEqual({ exists: false, revision: null });
+    expect(snapshot.draft).toEqual({
+      current: true,
+      stored: false,
+      session: false,
+      device: false,
+      deviceStorageConsent: false,
+    });
+    expect(snapshot.confirmation).toEqual({ status: "idle" });
     expect(snapshot.issues).toEqual([]);
     expect(snapshot.operations).toEqual({
       draftSynchronization: { status: "dirty" },
@@ -127,7 +162,6 @@ describe("Household Runway Interview Runtime", () => {
       skip: false,
       startNew: false,
     });
-    expect(snapshot).not.toHaveProperty("draft");
     expect(snapshot).not.toHaveProperty("events");
     expect(snapshot).not.toHaveProperty("effects");
     expect(snapshot).not.toHaveProperty("transition");
@@ -459,5 +493,196 @@ describe("Household Runway Interview Runtime", () => {
     expect(order).toEqual(["initializing", "ready"]);
     await Promise.resolve();
     expect(order).toEqual(["initializing", "ready", "schedule", "focus"]);
+  });
+
+  it("holds initialization behind restoration and deterministically selects the newer stored Draft", async () => {
+    const scheduled: (() => void)[] = [];
+    let resolveRestore: ((value: unknown) => void) | undefined;
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      schedule: (task) => scheduled.push(task),
+      restore: () =>
+        new Promise((resolve) => {
+          resolveRestore = resolve;
+        }),
+    });
+    const published: HouseholdRunwayInterviewRuntimeSnapshot[] = [];
+    runtime.subscribe(() => published.push(runtime.getSnapshot()));
+
+    runtime.start();
+    runtime.send({ type: "select_country", country: "US" });
+    expect(runtime.getSnapshot().lifecycle).toBe("initializing");
+    expect(runtime.getSnapshot().screen.kind).toBe("landing");
+
+    await Promise.resolve();
+    scheduled.shift()?.();
+    resolveRestore?.({
+      session: { status: "restored", state: storedDraft(2) },
+      device: { status: "restored", state: storedDraft(3) },
+      deviceStorageConsent: true,
+    });
+    await settle(scheduled);
+
+    expect(runtime.getSnapshot().lifecycle).toBe("ready");
+    expect(runtime.getSnapshot().screen.kind).toBe("location");
+    expect(runtime.getSnapshot().draft).toEqual({
+      current: true,
+      stored: true,
+      session: true,
+      device: true,
+      deviceStorageConsent: true,
+    });
+    expect(published.map((snapshot) => snapshot.lifecycle)).toEqual([
+      "initializing",
+      "ready",
+    ]);
+  });
+
+  it("recovers from rejected restoration without blocking a usable Interview", async () => {
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      restore: async () => ({
+        session: { status: "rejected", code: "expired" },
+        device: { status: "missing" },
+      }),
+    });
+
+    runtime.start();
+    await settle([]);
+
+    expect(runtime.getSnapshot()).toMatchObject({
+      lifecycle: "ready",
+      screen: { kind: "location" },
+      issues: [{ code: "draft_recovery" }],
+      draft: { stored: false },
+    });
+  });
+
+  it("exposes a resume choice when the selected Draft differs from the committed Plan", async () => {
+    const source = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "source",
+    });
+    source.start();
+    driveToReview(source);
+    const planInputs = source.getSnapshot().derived.planInputs as
+      | HouseholdRunwayInterviewRuntimePlanResult["planInputs"]
+      | null;
+    if (!planInputs) throw new Error("expected plan inputs");
+
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      initialPlan: { revision: 1, inputs: planInputs },
+      restore: async () => ({
+        device: { status: "restored", state: storedDraft(4) },
+        deviceStorageConsent: true,
+      }),
+    });
+    runtime.start();
+    await settle([]);
+
+    expect(runtime.getSnapshot()).toMatchObject({
+      lifecycle: "ready",
+      interviewStatus: "not_started",
+      screen: { kind: "resume_choice", recommended: "draft" },
+      draft: { device: true, deviceStorageConsent: true },
+    });
+
+    runtime.send({ type: "resume_committed_plan" });
+    expect(runtime.getSnapshot()).toMatchObject({
+      interviewStatus: "completed",
+      screen: { kind: "stage", stage: "result" },
+    });
+  });
+
+  it("coalesces autosave to the latest revision and retries a failed sync on the next intent", async () => {
+    const scheduled: (() => void)[] = [];
+    const completions: Array<(value: boolean) => void> = [];
+    const synchronizeDraft = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          completions.push(resolve);
+        }),
+    );
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      schedule: (task) => scheduled.push(task),
+      synchronizeDraft,
+    });
+    runtime.start();
+    await settle(scheduled);
+    driveToReview(runtime);
+    await settle(scheduled);
+
+    expect(synchronizeDraft).toHaveBeenCalledTimes(1);
+    runtime.send({ type: "continue" });
+    runtime.send({
+      type: "set_plan_adjustment",
+      patch: { expense_reduction_cents: 100 },
+    });
+    await settle(scheduled);
+    expect(synchronizeDraft).toHaveBeenCalledTimes(2);
+
+    completions[0]?.(true);
+    await settle(scheduled);
+    expect(runtime.getSnapshot().operations.draftSynchronization.status).toBe("pending");
+    completions[1]?.(false);
+    await settle(scheduled);
+    expect(runtime.getSnapshot().operations.draftSynchronization.status).toBe("failed");
+
+    runtime.send({ type: "back" });
+    await settle(scheduled);
+    expect(synchronizeDraft).toHaveBeenCalledTimes(3);
+    completions[2]?.(true);
+    await settle(scheduled);
+    expect(runtime.getSnapshot().operations.draftSynchronization.status).toBe("succeeded");
+  });
+
+  it("keeps a Draft unchanged when destructive confirmation is refused and clears only after acceptance", async () => {
+    const scheduled: (() => void)[] = [];
+    const confirmationResolvers: Array<(value: boolean) => void> = [];
+    const confirm = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          confirmationResolvers.push(resolve);
+        }),
+    );
+    const clearDraft = vi.fn(() => true);
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      schedule: (task) => scheduled.push(task),
+      confirm,
+      clearDraft,
+    });
+    runtime.start();
+    driveToReview(runtime);
+    const before = runtime.getSnapshot();
+
+    runtime.send({ type: "discard_draft" });
+    expect(runtime.getSnapshot().confirmation).toEqual({
+      status: "pending",
+      action: "discard_draft",
+    });
+    expect(runtime.getSnapshot().interviewStatus).toBe(before.interviewStatus);
+    expect(clearDraft).not.toHaveBeenCalled();
+
+    await Promise.resolve();
+    confirmationResolvers.shift()?.(false);
+    await settle(scheduled);
+    expect(runtime.getSnapshot().confirmation).toEqual({ status: "idle" });
+    expect(runtime.getSnapshot().interviewStatus).toBe("reviewing");
+    expect(clearDraft).not.toHaveBeenCalled();
+
+    runtime.send({ type: "discard_draft" });
+    await Promise.resolve();
+    confirmationResolvers.shift()?.(true);
+    await settle(scheduled);
+    expect(clearDraft).toHaveBeenCalledWith({ scope: "all" });
+    expect(runtime.getSnapshot().interviewStatus).toBe("not_started");
   });
 });
