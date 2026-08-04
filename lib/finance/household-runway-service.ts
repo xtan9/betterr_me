@@ -5,20 +5,18 @@ import {
   commitHouseholdRunwayPlan,
   getHouseholdRunwayPlan,
   getRunwaySnapshots,
-} from "@/lib/finance/repository";
-import type {
-  FinanceCushionCommitInput,
-} from "@/lib/validations/finance-cushion";
+} from "@/lib/finance/household-runway-repository";
+import type { RunwayAdjustments } from "@/lib/finance/cushion";
 import type { HouseholdRunwayPlan } from "@/lib/finance/household-runway-plan";
 
 export interface HouseholdRunwayPlanCommitInput {
   plan: HouseholdRunwayPlan;
-  adjustments: FinanceCushionCommitInput["adjustments"];
-  status: FinanceCushionCommitInput["status"];
-  attribution: FinanceCushionCommitInput["attribution"];
-  idempotencyKey: FinanceCushionCommitInput["idempotency_key"];
-  snapshotActionId: FinanceCushionCommitInput["snapshot_action_id"];
-  snapshotTrigger: FinanceCushionCommitInput["snapshot_trigger"];
+  adjustments: RunwayAdjustments;
+  status: "completed";
+  attribution: Record<string, string | undefined>;
+  idempotencyKey: string;
+  snapshotActionId: string;
+  snapshotTrigger: "completed" | "updated" | "imported";
 }
 
 export function createHouseholdRunwayService(client: SupabaseClient) {

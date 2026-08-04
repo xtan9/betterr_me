@@ -7,9 +7,9 @@ import {
   commitHouseholdRunwayPlan,
   getHouseholdRunwayPlan,
   getRunwaySnapshots,
-} from "@/lib/finance/repository";
+} from "@/lib/finance/household-runway-repository";
 
-vi.mock("@/lib/finance/repository", () => ({
+vi.mock("@/lib/finance/household-runway-repository", () => ({
   commitHouseholdRunwayPlan: vi.fn(),
   getHouseholdRunwayPlan: vi.fn(),
   getRunwaySnapshots: vi.fn(),

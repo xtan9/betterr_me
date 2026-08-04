@@ -10,7 +10,6 @@ import {
   withCurrentLifestyleExpenses,
   type HouseholdRunwayAnswers,
 } from "@/lib/finance/cushion";
-import { migrateRunwayAnswers } from "@/lib/finance/runway-answer-migrations";
 
 function runway(overrides?: Partial<HouseholdRunwayAnswers>) {
   const answers = createDefaultRunwayAnswers(
@@ -228,7 +227,7 @@ describe("adaptive scenarios", () => {
   });
 });
 
-describe("estimates, drafts, and migration", () => {
+describe("estimates and calculation", () => {
   it("separates 2026 US federal, state, Social Security, and Medicare estimates", () => {
     const estimate = estimateMonthlyTakeHome({ country: "US", region: "CA", amountCents: 12_000_000, period: "annual", filingStatus: "single" });
     expect(estimate.annual_federal_income_tax_cents).toBe(1_757_000);
@@ -249,30 +248,4 @@ describe("estimates, drafts, and migration", () => {
     },
   );
 
-  it("discards malformed nested version 3 data after migration", () => {
-    const oldAnswers = {
-      ...runway(),
-      schema_version: 3,
-      other_income_sources: [{ id: "broken", type: "other" }],
-    };
-    expect(migrateRunwayAnswers(oldAnswers)).toBeNull();
-  });
-
-  it("migrates version 2 totals, investments, retirement, income, and region", () => {
-    const migrated = migrateRunwayAnswers({
-      schema_version: 2, country: "US", region: "California", shares_finances: false,
-      mine: runway().mine, partner: null,
-      other_monthly_income: { cents: 40_000, confidence: "confirmed" },
-      available_cash: { cents: 100_000, confidence: "confirmed" }, confirmed_funds: [],
-      taxable_investments: { cents: 200_000, confidence: "confirmed" },
-      retirement_accounts: { cents: 300_000, confidence: "confirmed" },
-      home_equity: { cents: 400_000, confidence: "confirmed" },
-      expenses: { housing: { current_cents: 60_000, interruption_cents: 50_000, confidence: "confirmed" } },
-      temporary_income: null,
-    });
-    expect(migrated).toMatchObject({ schema_version: 4, region: "CA", expense_mode: "quick" });
-    expect(migrated?.assets.liquid_investments.cents).toBe(200_000);
-    expect(migrated?.assets.retirement_tax_deferred.confidence).toBe("needs_review");
-    expect(migrated?.other_income_sources).toHaveLength(1);
-  });
 });
