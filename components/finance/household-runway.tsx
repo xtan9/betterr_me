@@ -229,7 +229,7 @@ export function HouseholdRunway({
     reportPresentation: (request) => reportPresentationRef.current!(request),
     confirm: ({ action }) =>
       window.confirm(
-        action === "discard_draft" || action === "clear_device_draft"
+        action === "discard_work" || action === "clear_draft"
           ? t("actions.clearConfirm")
           : t("landing.startOverConfirm"),
       ),

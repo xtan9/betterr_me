@@ -210,7 +210,7 @@ describe("Household Runway browser adapter", () => {
       await Promise.resolve();
     }
 
-    expect(confirm).toHaveBeenCalledWith({ action: "discard_draft" });
+    expect(confirm).toHaveBeenCalledWith({ action: "discard_work" });
     expect(adapter.getSnapshot()).toMatchObject({
       interviewStatus: "not_started",
       screen: { kind: "landing" },

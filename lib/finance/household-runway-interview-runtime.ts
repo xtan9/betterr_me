@@ -214,9 +214,9 @@ export interface HouseholdRunwayInterviewRuntimePlanFacts {
 }
 
 export type HouseholdRunwayInterviewRuntimeConfirmationAction =
-  | "start_new"
-  | "discard_draft"
-  | "clear_device_draft";
+  | "start_over"
+  | "discard_work"
+  | "clear_draft";
 
 export interface HouseholdRunwayInterviewRuntimeConfirmation {
   readonly status: "idle" | "pending";
@@ -1445,18 +1445,18 @@ export function createHouseholdRunwayInterviewRuntime(
         state.renderModel.kind === "landing" && state.renderModel.hasDraft;
       const hasCurrentProgress = state.draft.revision > 1;
       return state.resumeChoice || hasDraftOnLanding || hasCurrentProgress
-        ? "start_new"
+        ? "start_over"
         : null;
     }
     if (intent.type === "discard_draft") {
       return state.status !== "not_started" ||
         storageFacts.session ||
         storageFacts.device
-        ? "discard_draft"
+        ? "discard_work"
         : null;
     }
     if (intent.type === "clear_device_draft") {
-      return null;
+      return storageFacts.device ? "clear_draft" : null;
     }
     return null;
   };
@@ -1526,7 +1526,7 @@ export function createHouseholdRunwayInterviewRuntime(
       return true;
     }
     return (
-      intent.type === "clear_device_draft" &&
+      (intent.type === "clear_device_draft" || intent.type === "discard_draft") &&
       state.operations.deviceDraft.status === "pending" &&
       state.operations.deviceDraft.action === "clear"
     );
@@ -1661,7 +1661,7 @@ export function createHouseholdRunwayInterviewRuntime(
       if (message.failed) runtimeIssues = [{ code: "confirmation_unavailable" }];
       confirmation = { status: "idle" };
       publish();
-      if (message.accepted && intent) {
+      if (message.accepted === true && intent) {
         enqueue({ type: "intent", intent, confirmed: true });
       }
       return;
