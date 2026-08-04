@@ -1,13 +1,13 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Exercise the shared Reminder Delivery state machine through its SQL
 -- persistence boundary. Configuration remains source-owned by Task.
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '65700000-0000-0000-0000-000000000001',
   'reminder-delivery@example.test'
 );
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '65700000-0000-0000-0000-000000000002',
   'other-reminder-delivery@example.test'
 );

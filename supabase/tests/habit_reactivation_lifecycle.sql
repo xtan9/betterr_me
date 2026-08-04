@@ -1,14 +1,14 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Exercise habit reactivation through the public RPC as an authenticated owner.
 -- The core transition commits independently from the best-effort history reaction.
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '64300000-0000-0000-0000-000000000001',
   'habit-reactivation@example.test'
 );
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '64300000-0000-0000-0000-000000000002',
   'other-habit-reactivation@example.test'
 );

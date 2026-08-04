@@ -1,13 +1,13 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Proves Series creation and exact Coverage Horizon materialization share one
 -- authenticated, idempotent transaction.
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '67900000-0000-0000-0000-000000000001',
   'recurring-series-coverage@example.test'
 );
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '67900000-0000-0000-0000-000000000002',
   'recurring-series-coverage-other@example.test'
 );

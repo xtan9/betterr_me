@@ -1,14 +1,14 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Exercise the authenticated atomic Plan/Snapshot command against real RLS,
 -- idempotency, revision conflicts, append-only history, and rollback paths.
 -- The fixture is one transaction; all disposable users and rows are rolled back.
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '76000000-0000-0000-0000-000000000001',
   'runway-commit-a@example.test'
 );
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '76000000-0000-0000-0000-000000000002',
   'runway-commit-b@example.test'
 );

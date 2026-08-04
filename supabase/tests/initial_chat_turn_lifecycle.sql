@@ -1,13 +1,13 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- The transaction leaves no test identity, conversation, or message data behind.
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '49800000-0000-0000-0000-000000000001',
   'initial-turn@example.test'
 );
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '49800000-0000-0000-0000-000000000002',
   'other-initial-turn@example.test'
 );

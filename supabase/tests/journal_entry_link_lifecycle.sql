@@ -1,5 +1,5 @@
 -- Run after `supabase db reset --local` against the local instance.
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Exercises the Journal link capability for every target type, including
 -- duplicate links, repeated unlinking, ownership masking, and identity checks.
 
@@ -33,13 +33,13 @@ where user_id = '64900000-0000-4000-8000-000000000002';
 do $$
 begin
   begin
-    perform public.ralph_ci_delete_auth_user(
+    perform public.sql_fixture_delete_auth_user(
       '64900000-0000-4000-8000-000000000001'
     );
   exception when others then null;
   end;
   begin
-    perform public.ralph_ci_delete_auth_user(
+    perform public.sql_fixture_delete_auth_user(
       '64900000-0000-4000-8000-000000000002'
     );
   exception when others then null;
@@ -47,11 +47,11 @@ begin
 end
 $$;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '64900000-0000-4000-8000-000000000001',
   'journal-link-owner@example.test'
 );
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '64900000-0000-4000-8000-000000000002',
   'journal-link-other@example.test'
 );
@@ -469,10 +469,10 @@ reset role;
 
 do $$
 begin
-  perform public.ralph_ci_delete_auth_user(
+  perform public.sql_fixture_delete_auth_user(
     '64900000-0000-4000-8000-000000000001'
   );
-  perform public.ralph_ci_delete_auth_user(
+  perform public.sql_fixture_delete_auth_user(
     '64900000-0000-4000-8000-000000000002'
   );
 end

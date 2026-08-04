@@ -1,14 +1,14 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Run after `supabase db reset` against the local instance. The transaction
 -- leaves no test identity, conversation, or message data behind.
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '48900000-0000-0000-0000-000000000001',
   'completed-turn@example.test'
 );
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '48900000-0000-0000-0000-000000000002',
   'other-completed-turn@example.test'
 );

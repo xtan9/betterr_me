@@ -1,14 +1,14 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Exercise the public habit completion lifecycle as an authenticated user.
 -- The transaction leaves the disposable database unchanged.
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '48400000-0000-0000-0000-000000000001',
   'habit-completion@example.test'
 );
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '48400000-0000-0000-0000-000000000002',
   'other-habit-completion@example.test'
 );

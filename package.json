@@ -12,7 +12,7 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:db": "bash scripts/ci/run-sql-fixtures.sh",
-    "test:db:calendar": "pnpm exec vitest run tests/scripts/sql-fixture-registry.test.ts tests/scripts/ralph-sql-policy.test.ts && bash scripts/ci/run-sql-fixtures.sh --domain calendar",
+    "test:db:calendar": "pnpm exec vitest run tests/scripts/sql-fixture-registry.test.ts tests/scripts/constrained-sql-policy.test.ts && bash scripts/ci/run-sql-fixtures.sh --domain calendar",
     "test:db:runner": "bash scripts/ci/verify-sql-fixture-runner.sh",
     "test:e2e": "playwright test",
     "test:e2e:mcp-access-grant": "playwright test --config=playwright.mcp-access-grant.config.ts",

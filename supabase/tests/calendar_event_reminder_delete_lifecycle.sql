@@ -1,24 +1,24 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Exercises create, update, and delete through the public scheduling lifecycle.
 -- The transaction leaves no test identity or schedule data behind.
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '49900000-0000-0000-0000-000000000001',
   'calendar-delete-lifecycle@example.test'
 );
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '49900000-0000-0000-0000-000000000002',
   'other-calendar-delete-lifecycle@example.test'
 );
 
-create temporary table ralph_499_ids (
+create temporary table sql_fixture_499_ids (
   label text primary key,
   event_id uuid not null,
   reminder_id uuid
 ) on commit drop;
-grant select, insert on ralph_499_ids to authenticated;
+grant select, insert on sql_fixture_499_ids to authenticated;
 
 create function pg_temp.reject_rollback_event_delete()
 returns trigger
@@ -361,7 +361,7 @@ select set_config(
   true
 );
 
-insert into ralph_499_ids(label, event_id, reminder_id)
+insert into sql_fixture_499_ids(label, event_id, reminder_id)
 select
   'other',
   (created->'event'->>'id')::uuid,
@@ -403,7 +403,7 @@ declare
   other_event_id uuid;
 begin
   select ids.event_id into other_event_id
-  from ralph_499_ids ids
+  from sql_fixture_499_ids ids
   where label = 'other';
 
   created_target := public.create_calendar_event_with_reminder(
@@ -450,7 +450,7 @@ begin
   same_owner_reminder_id :=
     (created_unrelated->'reminders'->0->>'id')::uuid;
 
-  insert into ralph_499_ids(label, event_id, reminder_id)
+  insert into sql_fixture_499_ids(label, event_id, reminder_id)
   values ('same_owner', same_owner_event_id, same_owner_reminder_id);
 
   deleted := public.delete_calendar_event_with_reminders(
@@ -505,7 +505,7 @@ $$;
 -- A service-role JWT claim cannot bypass authenticated-role caller binding.
 -- The MCP path is authorized by its actual database request role, separately
 -- covered through the public MCP tool seam.
-insert into ralph_499_ids(label, event_id, reminder_id)
+insert into sql_fixture_499_ids(label, event_id, reminder_id)
 select
   'service_claim_spoof_target',
   (created->'event'->>'id')::uuid,
@@ -546,7 +546,7 @@ begin
 
   select ids.event_id, ids.reminder_id
   into service_event_id, service_reminder_id
-  from ralph_499_ids ids
+  from sql_fixture_499_ids ids
   where label = 'service_claim_spoof_target';
 
   begin
@@ -577,7 +577,7 @@ declare
 begin
   select ids.event_id, ids.reminder_id
   into service_event_id, service_reminder_id
-  from ralph_499_ids ids
+  from sql_fixture_499_ids ids
   where label = 'service_claim_spoof_target';
 
   if not exists (
@@ -646,7 +646,7 @@ declare
 begin
   select ids.event_id, ids.reminder_id
   into other_event_id, other_reminder_id
-  from ralph_499_ids ids
+  from sql_fixture_499_ids ids
   where label = 'other';
 
   begin
@@ -714,7 +714,7 @@ declare
 begin
   select ids.event_id, ids.reminder_id
   into unrelated_event_id, unrelated_reminder_id
-  from ralph_499_ids ids
+  from sql_fixture_499_ids ids
   where label = 'other';
 
   if not exists (
@@ -754,7 +754,7 @@ declare
 begin
   select ids.event_id, ids.reminder_id
   into same_owner_event_id, same_owner_reminder_id
-  from ralph_499_ids ids
+  from sql_fixture_499_ids ids
   where label = 'same_owner';
 
   if not exists (

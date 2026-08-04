@@ -1,15 +1,15 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Exercise Habit deletion through the public RPC as an authenticated owner.
 -- Logs, milestones, graduation history, and Habit-owned Reminder Configuration
 -- are deleted atomically; reusable reminder defaults are preserved.
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '64400000-0000-0000-0000-000000000001',
   'habit-deletion@example.test'
 );
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '64400000-0000-0000-0000-000000000002',
   'other-habit-deletion@example.test'
 );
@@ -184,7 +184,7 @@ begin
     raise exception 'successful-deletion Habit reminder seed outcome was incorrect: %', outcome;
   end if;
   perform set_config(
-    'ralph.habit_deletion_success_reminder_id',
+    'sql_fixture.habit_deletion_success_reminder_id',
     outcome->'reminders'->0->>'id',
     false
   );
@@ -211,7 +211,7 @@ begin
     raise exception 'rollback-deletion Habit reminder seed outcome was incorrect: %', outcome;
   end if;
   perform set_config(
-    'ralph.habit_deletion_rollback_reminder_id',
+    'sql_fixture.habit_deletion_rollback_reminder_id',
     outcome->'reminders'->0->>'id',
     false
   );
@@ -322,7 +322,7 @@ begin
     raise exception 'other-owner Habit reminder seed outcome was incorrect: %', outcome;
   end if;
   perform set_config(
-    'ralph.habit_deletion_other_reminder_id',
+    'sql_fixture.habit_deletion_other_reminder_id',
     outcome->'reminders'->0->>'id',
     false
   );
@@ -448,7 +448,7 @@ begin
     where id = '64400000-0000-0000-0000-000000000701'
   ) or exists (
     select 1 from public.reminders
-    where id = current_setting('ralph.habit_deletion_success_reminder_id')::uuid
+    where id = current_setting('sql_fixture.habit_deletion_success_reminder_id')::uuid
   ) then
     raise exception 'Habit deletion left dependent lifecycle data';
   end if;
@@ -523,7 +523,7 @@ begin
     where id = '64400000-0000-0000-0000-000000000704'
   ) or not exists (
     select 1 from public.reminders
-    where id = current_setting('ralph.habit_deletion_other_reminder_id')::uuid
+    where id = current_setting('sql_fixture.habit_deletion_other_reminder_id')::uuid
   ) then
     raise exception 'cross-owner deletion destructively changed the other owner data';
   end if;
@@ -574,7 +574,7 @@ begin
     where id = '64400000-0000-0000-0000-000000000703'
   ) or not exists (
     select 1 from public.reminders
-    where id = current_setting('ralph.habit_deletion_rollback_reminder_id')::uuid
+    where id = current_setting('sql_fixture.habit_deletion_rollback_reminder_id')::uuid
   ) then
     raise exception 'failed Habit deletion left a partial persisted outcome';
   end if;

@@ -1,15 +1,15 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Exercise the Habit Reminder Configuration boundary as an authenticated owner.
 -- The transaction covers create, replace, remove, retry, ownership, source
 -- deletion, and rollback without leaving test data behind.
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '65600000-0000-0000-0000-000000000001',
   'habit-reminders@example.test'
 );
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '65600000-0000-0000-0000-000000000002',
   'other-habit-reminders@example.test'
 );

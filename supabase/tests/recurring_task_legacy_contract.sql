@@ -1,4 +1,4 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Proves the post-cutover storage, runtime, privilege, rollback, and import
 -- contract for the activated Recurring Task Lifecycle.
 begin;

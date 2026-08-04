@@ -1,4 +1,4 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Proves the release marker is complete, immutable, and not exposed as an
 -- application write path after the production-compatible legacy backfill.
 

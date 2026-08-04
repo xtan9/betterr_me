@@ -1,4 +1,4 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Proves the additive lineage expansion on top of the #659 lifecycle model.
 begin;
 
@@ -141,11 +141,11 @@ begin
 end
 $schema$;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '67700000-0000-0000-0000-000000000001',
   'recurring-storage-owner@example.test'
 );
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '67700000-0000-0000-0000-000000000002',
   'recurring-storage-other@example.test'
 );

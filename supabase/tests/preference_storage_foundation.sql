@@ -1,4 +1,4 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Exercises the current Preference storage foundation without reintroducing
 -- the retired top-level column or replaying a pre-retirement migration.
 -- Direct storage assertions use the constrained runner role; owner commands
@@ -6,7 +6,7 @@
 
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '66000000-0000-0000-0000-000000000001',
   'preference-storage@example.test'
 );

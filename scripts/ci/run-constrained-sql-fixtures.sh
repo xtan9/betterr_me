@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-database_url="${RALPH_SQL_TEST_DATABASE_URL:-postgresql://postgres:postgres@127.0.0.1:54322/postgres}"
-auth_admin_database_url="${RALPH_SQL_TEST_AUTH_ADMIN_DATABASE_URL:-postgresql://supabase_admin:postgres@127.0.0.1:54322/postgres}"
+database_url="${CONSTRAINED_SQL_FIXTURE_DATABASE_URL:-postgresql://postgres:postgres@127.0.0.1:54322/postgres}"
+auth_admin_database_url="${CONSTRAINED_SQL_FIXTURE_AUTH_ADMIN_DATABASE_URL:-postgresql://supabase_admin:postgres@127.0.0.1:54322/postgres}"
 list_only=false
 bootstrap_only=false
 skip_bootstrap=false
@@ -43,13 +43,13 @@ mapfile -d '' fixtures < <(
 selected=()
 if (( ${#requested_fixtures[@]} > 0 )); then
   for fixture in "${requested_fixtures[@]}"; do
-    node scripts/ci/ralph-sql-policy.mjs --validate "$fixture"
+    node scripts/ci/constrained-sql-policy.mjs --validate "$fixture"
     selected+=("$fixture")
   done
 else
   for fixture in "${fixtures[@]}"; do
-    if head -n 12 "$fixture" | grep -Fqx -- '-- ralph-ci: true'; then
-      node scripts/ci/ralph-sql-policy.mjs --validate "$fixture"
+    if head -n 12 "$fixture" | grep -Fqx -- '-- constrained-sql-fixture: true'; then
+      node scripts/ci/constrained-sql-policy.mjs --validate "$fixture"
       selected+=("$fixture")
     fi
   done
@@ -61,15 +61,15 @@ if $list_only; then
 fi
 
 if (( ${#selected[@]} == 0 )) && ! $bootstrap_only; then
-  echo "No Ralph SQL fixtures opted into disposable-database CI."
+  echo "No constrained SQL fixtures opted into disposable-database CI."
   exit 0
 fi
 
 safe_path='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
 safe_home="$(mktemp -d)"
 trap 'rm -rf -- "$safe_home"' EXIT
-runner_password='ralph-ci-disposable-only'
-runner_database_url="postgresql://ralph_ci_test:${runner_password}@127.0.0.1:54322/postgres"
+runner_password='sql-fixture-disposable-only'
+runner_database_url="postgresql://sql_fixture_test:${runner_password}@127.0.0.1:54322/postgres"
 
 if ! $skip_bootstrap; then
 env -i PATH="$safe_path" HOME="$safe_home" LANG=C psql "$database_url" \
@@ -83,9 +83,9 @@ declare
 begin
   select * into runner_role
   from pg_roles
-  where rolname = 'ralph_ci_test';
+  where rolname = 'sql_fixture_test';
   if not found then
-    execute 'create role ralph_ci_test login password ''ralph-ci-disposable-only'' nosuperuser nocreatedb nocreaterole noinherit';
+    execute 'create role sql_fixture_test login password ''sql-fixture-disposable-only'' nosuperuser nocreatedb nocreaterole noinherit';
   elsif runner_role.rolsuper
       or runner_role.rolcreatedb
       or runner_role.rolcreaterole
@@ -99,7 +99,7 @@ begin
     from pg_auth_members membership
     join pg_roles granted_role on granted_role.oid = membership.roleid
     where membership.member = (
-      select oid from pg_roles where rolname = 'ralph_ci_test'
+      select oid from pg_roles where rolname = 'sql_fixture_test'
     )
       and granted_role.rolname not in ('authenticated', 'anon')
   ) then
@@ -111,11 +111,11 @@ begin
   from pg_proc as routine
   join pg_namespace as namespace on namespace.oid = routine.pronamespace
   where namespace.nspname = 'public'
-    and routine.proname = 'ralph_ci_open_connection'
+    and routine.proname = 'sql_fixture_open_connection'
     and pg_get_function_identity_arguments(routine.oid) = 'connection_name text';
 
   if legacy_wrapper_owner = current_user then
-    drop function public.ralph_ci_open_connection(text);
+    drop function public.sql_fixture_open_connection(text);
   elsif legacy_wrapper_owner is not null
       and legacy_wrapper_owner <> 'supabase_admin' then
     raise exception 'runner connection helper has unexpected owner: %',
@@ -136,12 +136,12 @@ begin
   end if;
 end
 $block$;
-alter role ralph_ci_test login password 'ralph-ci-disposable-only';
-grant authenticated, anon to ralph_ci_test;
-revoke create on schema public from ralph_ci_test;
-grant usage on schema public to ralph_ci_test;
-grant all privileges on all tables in schema public to ralph_ci_test;
-grant all privileges on all sequences in schema public to ralph_ci_test;
+alter role sql_fixture_test login password 'sql-fixture-disposable-only';
+grant authenticated, anon to sql_fixture_test;
+revoke create on schema public from sql_fixture_test;
+grant usage on schema public to sql_fixture_test;
+grant all privileges on all tables in schema public to sql_fixture_test;
+grant all privileges on all sequences in schema public to sql_fixture_test;
 do $block$
 declare
   function_signature text;
@@ -155,7 +155,7 @@ begin
     ) as privilege
     where namespace.nspname = 'public'
       and privilege.grantee = (
-        select oid from pg_roles where rolname = 'ralph_ci_test'
+        select oid from pg_roles where rolname = 'sql_fixture_test'
       )
       and privilege.privilege_type = 'EXECUTE'
       and has_function_privilege(
@@ -165,7 +165,7 @@ begin
       )
   loop
     execute format(
-      'revoke execute on function %s from ralph_ci_test',
+      'revoke execute on function %s from sql_fixture_test',
       function_signature
     );
   end loop;
@@ -176,15 +176,15 @@ SQL
 env -i PATH="$safe_path" HOME="$safe_home" LANG=C \
   psql "$auth_admin_database_url" -v ON_ERROR_STOP=1 <<'SQL'
 create extension if not exists dblink with schema extensions;
-grant usage on schema extensions to ralph_ci_test;
+grant usage on schema extensions to sql_fixture_test;
 
 -- Remove grants issued by the legacy runner before exposing the narrow helpers.
 -- PostgreSQL ACLs are persistent, so merely omitting the old GRANT statements is
 -- insufficient when this script upgrades an existing disposable database.
-revoke usage on schema auth from ralph_ci_test;
-revoke all privileges on all tables in schema auth from ralph_ci_test;
-revoke all privileges on all sequences in schema auth from ralph_ci_test;
-revoke execute on all functions in schema auth from ralph_ci_test;
+revoke usage on schema auth from sql_fixture_test;
+revoke all privileges on all tables in schema auth from sql_fixture_test;
+revoke all privileges on all sequences in schema auth from sql_fixture_test;
+revoke execute on all functions in schema auth from sql_fixture_test;
 do $block$
 declare
   function_signature text;
@@ -198,7 +198,7 @@ begin
     ) as privilege
     where namespace.nspname = 'public'
       and privilege.grantee = (
-        select oid from pg_roles where rolname = 'ralph_ci_test'
+        select oid from pg_roles where rolname = 'sql_fixture_test'
       )
       and privilege.privilege_type = 'EXECUTE'
       and has_function_privilege(
@@ -208,7 +208,7 @@ begin
       )
   loop
     execute format(
-      'revoke execute on function %s from ralph_ci_test',
+      'revoke execute on function %s from sql_fixture_test',
       function_signature
     );
   end loop;
@@ -222,7 +222,7 @@ begin
     ) as privilege
     where namespace.nspname = 'public'
       and privilege.grantee = (
-        select oid from pg_roles where rolname = 'ralph_ci_test'
+        select oid from pg_roles where rolname = 'sql_fixture_test'
       )
       and privilege.privilege_type = 'EXECUTE'
   ) then
@@ -231,7 +231,7 @@ begin
 end
 $block$;
 
-create or replace function public.ralph_ci_create_auth_user(
+create or replace function public.sql_fixture_create_auth_user(
   test_user_id uuid,
   test_email text
 )
@@ -266,11 +266,11 @@ as $function$
     now()
   ) on conflict (id) do nothing;
 $function$;
-revoke all on function public.ralph_ci_create_auth_user(uuid, text) from public;
-grant execute on function public.ralph_ci_create_auth_user(uuid, text)
-  to ralph_ci_test;
+revoke all on function public.sql_fixture_create_auth_user(uuid, text) from public;
+grant execute on function public.sql_fixture_create_auth_user(uuid, text)
+  to sql_fixture_test;
 
-create or replace function public.ralph_ci_seed_finance_plan(
+create or replace function public.sql_fixture_seed_finance_plan(
   plan_id uuid,
   owner_id uuid,
   liquid_resources bigint,
@@ -296,12 +296,12 @@ as $function$
     monthly_continuing_income
   );
 $function$;
-revoke all on function public.ralph_ci_seed_finance_plan(uuid, uuid, bigint, bigint, bigint)
+revoke all on function public.sql_fixture_seed_finance_plan(uuid, uuid, bigint, bigint, bigint)
   from public;
-grant execute on function public.ralph_ci_seed_finance_plan(uuid, uuid, bigint, bigint, bigint)
-  to ralph_ci_test;
+grant execute on function public.sql_fixture_seed_finance_plan(uuid, uuid, bigint, bigint, bigint)
+  to sql_fixture_test;
 
-create or replace function public.ralph_ci_seed_finance_snapshot(
+create or replace function public.sql_fixture_seed_finance_snapshot(
   snapshot_id uuid,
   plan_id uuid,
   owner_id uuid,
@@ -342,14 +342,14 @@ as $function$
     snapshot_model_version
   );
 $function$;
-revoke all on function public.ralph_ci_seed_finance_snapshot(
+revoke all on function public.sql_fixture_seed_finance_snapshot(
   uuid, uuid, uuid, uuid, text, text, numeric, boolean, jsonb, text
 ) from public;
-grant execute on function public.ralph_ci_seed_finance_snapshot(
+grant execute on function public.sql_fixture_seed_finance_snapshot(
   uuid, uuid, uuid, uuid, text, text, numeric, boolean, jsonb, text
-) to ralph_ci_test;
+) to sql_fixture_test;
 
-create or replace function public.ralph_ci_delete_auth_profile(
+create or replace function public.sql_fixture_delete_auth_profile(
   test_user_id uuid
 )
 returns void
@@ -366,21 +366,21 @@ begin
   where id = test_user_id;
 
   if test_email is null or test_email not like '%@example.test' then
-    raise exception 'Ralph CI profile helper requires a disposable auth user';
+    raise exception 'SQL fixture profile helper requires a disposable auth user';
   end if;
 
   delete from public.profiles
   where id = test_user_id;
   if not found then
-    raise exception 'Ralph CI disposable profile is missing';
+    raise exception 'SQL fixture disposable profile is missing';
   end if;
 end
 $function$;
-revoke all on function public.ralph_ci_delete_auth_profile(uuid) from public;
-grant execute on function public.ralph_ci_delete_auth_profile(uuid)
-  to ralph_ci_test;
+revoke all on function public.sql_fixture_delete_auth_profile(uuid) from public;
+grant execute on function public.sql_fixture_delete_auth_profile(uuid)
+  to sql_fixture_test;
 
-create or replace function public.ralph_ci_delete_auth_user(
+create or replace function public.sql_fixture_delete_auth_user(
   test_user_id uuid
 )
 returns void
@@ -393,17 +393,17 @@ begin
   where id = test_user_id
     and email like '%@example.test';
   if not found then
-    raise exception 'Ralph CI test user is missing or is not disposable';
+    raise exception 'SQL fixture test user is missing or is not disposable';
   end if;
 end
 $function$;
-revoke all on function public.ralph_ci_delete_auth_user(uuid) from public;
-grant execute on function public.ralph_ci_delete_auth_user(uuid)
-  to ralph_ci_test;
+revoke all on function public.sql_fixture_delete_auth_user(uuid) from public;
+grant execute on function public.sql_fixture_delete_auth_user(uuid)
+  to sql_fixture_test;
 
 -- Extension installation grants EXECUTE to PUBLIC. Remove that ambient access and
 -- expose only operations on connections opened by the fixed low-privilege wrapper.
-revoke execute on all functions in schema extensions from public, ralph_ci_test;
+revoke execute on all functions in schema extensions from public, sql_fixture_test;
 do $block$
 declare
   function_signature text;
@@ -422,7 +422,7 @@ begin
         'dblink_disconnect'
       )
   loop
-    execute format('grant execute on function %s to ralph_ci_test', function_signature);
+    execute format('grant execute on function %s to sql_fixture_test', function_signature);
   end loop;
 end
 $block$;
@@ -433,14 +433,14 @@ begin
   for wrapper_name in select fdwname from pg_foreign_data_wrapper
   loop
     execute format(
-      'revoke usage on foreign data wrapper %I from public, ralph_ci_test',
+      'revoke usage on foreign data wrapper %I from public, sql_fixture_test',
       wrapper_name
     );
   end loop;
 end
 $block$;
 
-create or replace function public.ralph_ci_open_connection(connection_name text)
+create or replace function public.sql_fixture_open_connection(connection_name text)
 returns text
 language plpgsql
 security definer
@@ -450,21 +450,21 @@ declare
   connection_status text;
 begin
   if connection_name !~ '^[A-Za-z0-9_-]{1,64}$' then
-    raise exception 'invalid Ralph CI connection name';
+    raise exception 'invalid SQL fixture connection name';
   end if;
   connection_status := extensions.dblink_connect(
     connection_name,
     'hostaddr=' || host(inet_server_addr())
       || ' port=' || inet_server_port()
       || ' dbname=' || current_database()
-      || ' user=ralph_ci_test password=ralph-ci-disposable-only'
+      || ' user=sql_fixture_test password=sql-fixture-disposable-only'
   );
   perform extensions.dblink_exec(connection_name, 'set role authenticated');
   return connection_status;
 end
 $function$;
-revoke all on function public.ralph_ci_open_connection(text) from public;
-grant execute on function public.ralph_ci_open_connection(text) to ralph_ci_test;
+revoke all on function public.sql_fixture_open_connection(text) from public;
+grant execute on function public.sql_fixture_open_connection(text) to sql_fixture_test;
 SQL
 fi
 
@@ -473,7 +473,7 @@ if $bootstrap_only; then
 fi
 
 for fixture in "${selected[@]}"; do
-  echo "Running Ralph SQL fixture: $fixture"
+  echo "Running constrained SQL fixture: $fixture"
   env -i PATH="$safe_path" HOME="$safe_home" LANG=C \
     psql "$runner_database_url" -v ON_ERROR_STOP=1 -f "$fixture"
 done

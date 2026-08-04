@@ -1,14 +1,14 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Exercise habit graduation through the public RPC as an authenticated owner.
 -- The transaction leaves all disposable identities and habit records unchanged.
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '64200000-0000-0000-0000-000000000001',
   'habit-graduation@example.test'
 );
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '64200000-0000-0000-0000-000000000002',
   'other-habit-graduation@example.test'
 );

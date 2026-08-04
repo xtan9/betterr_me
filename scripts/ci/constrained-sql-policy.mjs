@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
 
-const MARKER = "-- ralph-ci: true";
+const MARKER = "-- constrained-sql-fixture: true";
 const FORBIDDEN_SQL = [
   ["server-side program execution", /\bcopy\b[\s\S]{0,160}\bprogram\b/i],
   ["server file access", /\bpg_(?:read|write|ls_dir|stat)_file\b/i],
@@ -109,7 +109,7 @@ function scanExecutableSql(sql) {
   return { executableSql, unquotedBackslash };
 }
 
-export function ralphSqlFixtureViolations(sql) {
+export function constrainedSqlFixtureViolations(sql) {
   const lines = String(sql).split(/\r?\n/);
   const violations = [];
   if (!lines.slice(0, 12).some((line) => line === MARKER)) {
@@ -136,14 +136,14 @@ export function ralphSqlFixtureViolations(sql) {
 
 function main(args) {
   if (args.length !== 2 || args[0] !== "--validate") {
-    console.error("usage: node scripts/ci/ralph-sql-policy.mjs --validate <fixture>");
+    console.error("usage: node scripts/ci/constrained-sql-policy.mjs --validate <fixture>");
     return 2;
   }
   const fixture = args[1];
-  const violations = ralphSqlFixtureViolations(fs.readFileSync(fixture, "utf8"));
+  const violations = constrainedSqlFixtureViolations(fs.readFileSync(fixture, "utf8"));
   if (violations.length === 0) return 0;
   for (const violation of violations) {
-    console.error(`${fixture}: rejected Ralph SQL fixture: ${violation}`);
+    console.error(`${fixture}: rejected constrained SQL fixture: ${violation}`);
   }
   return 1;
 }

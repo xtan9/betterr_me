@@ -1,5 +1,5 @@
 -- Run after `supabase db reset --local` against the local instance.
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Exercises Project creation through the normalized, owner-scoped RPC:
 -- defaults, invalid values, ownership masking, and concurrent placement.
 
@@ -13,13 +13,13 @@ where user_id in (
 do $$
 begin
   begin
-    perform public.ralph_ci_delete_auth_user(
+    perform public.sql_fixture_delete_auth_user(
       '65100000-0000-0000-0000-000000000001'
     );
   exception when others then null;
   end;
   begin
-    perform public.ralph_ci_delete_auth_user(
+    perform public.sql_fixture_delete_auth_user(
       '65100000-0000-0000-0000-000000000002'
     );
   exception when others then null;
@@ -27,11 +27,11 @@ begin
 end
 $$;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '65100000-0000-0000-0000-000000000001',
   'project-creation-owner@example.test'
 );
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '65100000-0000-0000-0000-000000000002',
   'project-creation-other@example.test'
 );
@@ -162,8 +162,8 @@ end
 $$;
 
 reset role;
-select public.ralph_ci_open_connection('project-create-a');
-select public.ralph_ci_open_connection('project-create-b');
+select public.sql_fixture_open_connection('project-create-a');
+select public.sql_fixture_open_connection('project-create-b');
 select pg_advisory_lock(65165101);
 
 select extensions.dblink_send_query(
@@ -265,9 +265,9 @@ delete from public.projects
 where user_id = '65100000-0000-0000-0000-000000000001';
 delete from public.projects
 where user_id = '65100000-0000-0000-0000-000000000002';
-select public.ralph_ci_delete_auth_user(
+select public.sql_fixture_delete_auth_user(
   '65100000-0000-0000-0000-000000000001'
 );
-select public.ralph_ci_delete_auth_user(
+select public.sql_fixture_delete_auth_user(
   '65100000-0000-0000-0000-000000000002'
 );

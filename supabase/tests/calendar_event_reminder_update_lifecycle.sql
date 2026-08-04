@@ -1,14 +1,14 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Run after `supabase db reset` against the local instance. Each assertion
 -- observes the public update lifecycle; the transaction leaves no data behind.
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '49100000-0000-0000-0000-000000000001',
   'calendar-update-lifecycle@example.test'
 );
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '49100000-0000-0000-0000-000000000002',
   'other-calendar-update-lifecycle@example.test'
 );
@@ -20,8 +20,8 @@ select set_config(
   true
 );
 
-create temporary table ralph_491_other_ids(event_id uuid, reminder_id uuid) on commit drop;
-insert into ralph_491_other_ids
+create temporary table sql_fixture_491_other_ids(event_id uuid, reminder_id uuid) on commit drop;
+insert into sql_fixture_491_other_ids
 select
   (created->'event'->>'id')::uuid,
   (created->'reminders'->0->>'id')::uuid
@@ -590,7 +590,7 @@ declare
   other_reminder_id uuid;
 begin
   select event_id, reminder_id into other_event_id, other_reminder_id
-  from ralph_491_other_ids;
+  from sql_fixture_491_other_ids;
   begin
     perform public.update_calendar_event_with_reminders(
       '49100000-0000-0000-0000-000000000002',
@@ -644,7 +644,7 @@ declare
 begin
   select event_id, reminder_id
   into other_event_id, other_reminder_id
-  from ralph_491_other_ids;
+  from sql_fixture_491_other_ids;
   if not exists (
     select 1
     from public.calendar_events

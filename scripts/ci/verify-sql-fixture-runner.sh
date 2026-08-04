@@ -3,11 +3,11 @@ set -euo pipefail
 
 database_url="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 results_root="${RUNNER_TEMP:-.artifacts}/sql-fixture-failure-probe"
-fixture='ralph_ci_runner_security'
+fixture='constrained_sql_runner_security'
 
 reset_failure_probe() {
   psql "$database_url" -X -q -v ON_ERROR_STOP=1 \
-    -c "alter role ralph_ci_test reset default_transaction_read_only" \
+    -c "alter role sql_fixture_test reset default_transaction_read_only" \
     >/dev/null 2>&1 || true
 }
 trap reset_failure_probe EXIT
@@ -16,7 +16,7 @@ SQL_FIXTURE_RESULTS_DIR="$results_root/passing" \
   bash scripts/ci/run-sql-fixtures.sh --fixture "$fixture"
 
 psql "$database_url" -X -q -v ON_ERROR_STOP=1 \
-  -c "alter role ralph_ci_test set default_transaction_read_only = 'on'"
+  -c "alter role sql_fixture_test set default_transaction_read_only = 'on'"
 
 if SQL_FIXTURE_RESULTS_DIR="$results_root/failing" \
   bash scripts/ci/run-sql-fixtures.sh --fixture "$fixture"; then

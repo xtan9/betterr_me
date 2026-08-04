@@ -1,9 +1,9 @@
 -- Run after `supabase db reset --local` against the local instance.
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- The transaction rolls back all synthetic identities and workout data.
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '48500000-0000-4000-8000-000000000001',
   'routine-workout@example.test'
 );

@@ -1,5 +1,5 @@
 -- Run after `supabase db reset --local` against the local instance.
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Exercises Project detail changes and active/archived lifecycle transitions
 -- through the normalized, owner-scoped RPC.
 
@@ -13,13 +13,13 @@ where user_id in (
 do $$
 begin
   begin
-    perform public.ralph_ci_delete_auth_user(
+    perform public.sql_fixture_delete_auth_user(
       '65200000-0000-0000-0000-000000000001'
     );
   exception when others then null;
   end;
   begin
-    perform public.ralph_ci_delete_auth_user(
+    perform public.sql_fixture_delete_auth_user(
       '65200000-0000-0000-0000-000000000002'
     );
   exception when others then null;
@@ -27,11 +27,11 @@ begin
 end
 $$;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '65200000-0000-0000-0000-000000000001',
   'project-changes-owner@example.test'
 );
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '65200000-0000-0000-0000-000000000002',
   'project-changes-other@example.test'
 );
@@ -309,9 +309,9 @@ where user_id in (
   '65200000-0000-0000-0000-000000000001',
   '65200000-0000-0000-0000-000000000002'
 );
-select public.ralph_ci_delete_auth_user(
+select public.sql_fixture_delete_auth_user(
   '65200000-0000-0000-0000-000000000001'
 );
-select public.ralph_ci_delete_auth_user(
+select public.sql_fixture_delete_auth_user(
   '65200000-0000-0000-0000-000000000002'
 );

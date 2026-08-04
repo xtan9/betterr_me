@@ -1,10 +1,10 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Proves date-bounded reads reconcile an exact local-date horizon, preserve
 -- monotonic/idempotent Series state, and report partial multi-Series coverage.
 
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '68900000-0000-0000-0000-000000000001',
   'coverage-horizons@example.test'
 );

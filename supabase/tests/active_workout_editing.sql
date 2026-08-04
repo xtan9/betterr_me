@@ -1,5 +1,5 @@
 -- Run after `supabase db reset --local` against the local instance.
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- The fixture covers the public mutation boundary, including real row-lock
 -- serialization for exercise ordering and set numbering.
 
@@ -25,13 +25,13 @@ reset role;
 do $$
 begin
   begin
-    perform public.ralph_ci_delete_auth_user(
+    perform public.sql_fixture_delete_auth_user(
       '64600000-0000-0000-0000-000000000001'
     );
   exception when others then null;
   end;
   begin
-    perform public.ralph_ci_delete_auth_user(
+    perform public.sql_fixture_delete_auth_user(
       '64600000-0000-0000-0000-000000000002'
     );
   exception when others then null;
@@ -41,11 +41,11 @@ $$;
 
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '64600000-0000-0000-0000-000000000001',
   'active-workout-editing@example.test'
 );
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '64600000-0000-0000-0000-000000000002',
   'other-active-workout-editing@example.test'
 );
@@ -509,8 +509,8 @@ select set_config(
   '64600000-0000-0000-0000-000000000001',
   false
 );
-select public.ralph_ci_open_connection('active-workout-exercise-a');
-select public.ralph_ci_open_connection('active-workout-exercise-b');
+select public.sql_fixture_open_connection('active-workout-exercise-a');
+select public.sql_fixture_open_connection('active-workout-exercise-b');
 select pg_advisory_lock(64664601);
 select extensions.dblink_send_query(
   'active-workout-exercise-a',
@@ -600,8 +600,8 @@ $$;
 
 -- The same two-session race covers set numbering under one exercise lock.
 reset role;
-select public.ralph_ci_open_connection('active-workout-set-a');
-select public.ralph_ci_open_connection('active-workout-set-b');
+select public.sql_fixture_open_connection('active-workout-set-a');
+select public.sql_fixture_open_connection('active-workout-set-b');
 select pg_advisory_lock(64664602);
 select extensions.dblink_send_query(
   'active-workout-set-a',
@@ -690,10 +690,10 @@ select set_config(
 delete from public.workouts
 where user_id = '64600000-0000-0000-0000-000000000002';
 reset role;
-select public.ralph_ci_delete_auth_user(
+select public.sql_fixture_delete_auth_user(
   '64600000-0000-0000-0000-000000000001'
 );
-select public.ralph_ci_delete_auth_user(
+select public.sql_fixture_delete_auth_user(
   '64600000-0000-0000-0000-000000000002'
 );
 commit;

@@ -1,15 +1,15 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Exercise the Task Reminder Configuration boundary as an authenticated owner.
 -- The transaction covers create, replace, remove, retry, ownership, source
 -- deletion, and rollback without leaving test data behind.
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '65500000-0000-0000-0000-000000000001',
   'task-reminders@example.test'
 );
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '65500000-0000-0000-0000-000000000002',
   'other-task-reminders@example.test'
 );

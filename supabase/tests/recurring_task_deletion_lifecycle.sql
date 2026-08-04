@@ -1,9 +1,9 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Exercise all-scope recurring task deletion through its authenticated,
 -- transactional lifecycle boundary. The fixture rolls back every assertion.
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '63300000-0000-0000-0000-000000000001',
   'recurring-deletion@example.test'
 );
@@ -12,7 +12,7 @@ create temporary table recurring_task_deletion_fixture_state (
 );
 grant select, insert on recurring_task_deletion_fixture_state to authenticated;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '63300000-0000-0000-0000-000000000002',
   'recurring-deletion-other@example.test'
 );

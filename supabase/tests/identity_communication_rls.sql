@@ -1,25 +1,25 @@
--- ralph-ci: true
+-- constrained-sql-fixture: true
 -- Proves the identity and communication RLS contract through real PostgreSQL.
 -- The fixture uses disposable auth identities, exercises authenticated owner and
 -- non-owner contexts plus anonymous denial, and rolls every row back.
 -- The setup helper removes the trigger-created owner profile once so the owner
 -- INSERT fallback policy is exercised explicitly.
 -- Direct table checks intentionally retain the runner's constrained
--- `ralph_ci_test` database role: it has table grants but cannot bypass RLS.
+-- `sql_fixture_test` database role: it has table grants but cannot bypass RLS.
 -- `request.jwt.claims` supplies the application identity for auth.uid() and
 -- auth.role(); SET LOCAL ROLE is also used for the production-granted profile,
 -- reminder, and anonymous database-role checks.
 begin;
 
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '57700000-0000-0000-0000-000000000001',
   'identity-owner@example.test'
 );
-select public.ralph_ci_create_auth_user(
+select public.sql_fixture_create_auth_user(
   '57700000-0000-0000-0000-000000000002',
   'identity-other@example.test'
 );
-select public.ralph_ci_delete_auth_profile(
+select public.sql_fixture_delete_auth_profile(
   '57700000-0000-0000-0000-000000000001'
 );
 
@@ -186,12 +186,12 @@ begin
   end if;
 
   perform set_config(
-    'ralph.identity_owner_push_reminder_id',
+    'sql_fixture.identity_owner_push_reminder_id',
     push_reminder_id::text,
     false
   );
   perform set_config(
-    'ralph.identity_owner_email_reminder_id',
+    'sql_fixture.identity_owner_email_reminder_id',
     email_reminder_id::text,
     false
   );
@@ -389,7 +389,7 @@ begin
 
   delivery_outcome := public.transition_reminder_delivery(
     '57700000-0000-0000-0000-000000000001',
-    current_setting('ralph.identity_owner_push_reminder_id')::uuid,
+    current_setting('sql_fixture.identity_owner_push_reminder_id')::uuid,
     'user',
     'sent',
     '2026-08-05T09:00:00Z',
@@ -794,7 +794,7 @@ begin
   if (
     select count(*)
     from public.reminders
-    where id = current_setting('ralph.identity_owner_push_reminder_id')::uuid
+    where id = current_setting('sql_fixture.identity_owner_push_reminder_id')::uuid
   ) <> 0 then
     raise exception 'non-owner can read the owner reminder';
   end if;
@@ -804,7 +804,7 @@ begin
   begin
     update public.reminders
     set status = 'failed'
-    where id = current_setting('ralph.identity_owner_push_reminder_id')::uuid;
+    where id = current_setting('sql_fixture.identity_owner_push_reminder_id')::uuid;
     get diagnostics affected_rows = row_count;
   exception when others then
     get stacked diagnostics operation_sqlstate = returned_sqlstate;
@@ -818,7 +818,7 @@ begin
   operation_sqlstate := null;
   begin
     delete from public.reminders
-    where id = current_setting('ralph.identity_owner_email_reminder_id')::uuid;
+    where id = current_setting('sql_fixture.identity_owner_email_reminder_id')::uuid;
     get diagnostics affected_rows = row_count;
   exception when others then
     get stacked diagnostics operation_sqlstate = returned_sqlstate;
@@ -1010,12 +1010,12 @@ begin
 
   if (
     select status from public.reminders
-    where id = current_setting('ralph.identity_owner_push_reminder_id')::uuid
+    where id = current_setting('sql_fixture.identity_owner_push_reminder_id')::uuid
   ) is distinct from 'sent'
   or exists (
     select 1 from public.reminders
     where id in (
-      current_setting('ralph.identity_owner_email_reminder_id')::uuid,
+      current_setting('sql_fixture.identity_owner_email_reminder_id')::uuid,
       '57700000-0000-0000-0000-000000000052'
     )
   ) then
@@ -1137,7 +1137,7 @@ begin
   operation_sqlstate := null;
   begin
     select count(*) into visible_rows from public.reminders
-    where id = current_setting('ralph.identity_owner_push_reminder_id')::uuid;
+    where id = current_setting('sql_fixture.identity_owner_push_reminder_id')::uuid;
   exception when others then
     get stacked diagnostics operation_sqlstate = returned_sqlstate;
   end;
@@ -1302,7 +1302,7 @@ begin
   begin
     update public.reminders
     set status = 'failed'
-    where id = current_setting('ralph.identity_owner_push_reminder_id')::uuid;
+    where id = current_setting('sql_fixture.identity_owner_push_reminder_id')::uuid;
     get diagnostics affected_rows = row_count;
   exception when others then
     get stacked diagnostics operation_sqlstate = returned_sqlstate;
@@ -1316,7 +1316,7 @@ begin
   operation_sqlstate := null;
   begin
     delete from public.reminders
-    where id = current_setting('ralph.identity_owner_push_reminder_id')::uuid;
+    where id = current_setting('sql_fixture.identity_owner_push_reminder_id')::uuid;
     get diagnostics affected_rows = row_count;
   exception when others then
     get stacked diagnostics operation_sqlstate = returned_sqlstate;
@@ -1596,7 +1596,7 @@ begin
   ) is distinct from 'owner-agent-updated'
   or (
     select status from public.reminders
-    where id = current_setting('ralph.identity_owner_push_reminder_id')::uuid
+    where id = current_setting('sql_fixture.identity_owner_push_reminder_id')::uuid
   ) is distinct from 'sent'
   or (
     select relative_minutes from public.reminder_defaults
@@ -1647,7 +1647,7 @@ begin
 
   if exists (select 1 from public.chat_memories where id = '57700000-0000-0000-0000-000000000030')
     or exists (select 1 from public.push_subscriptions where id = '57700000-0000-0000-0000-000000000040')
-    or exists (select 1 from public.reminders where id = current_setting('ralph.identity_owner_email_reminder_id')::uuid)
+    or exists (select 1 from public.reminders where id = current_setting('sql_fixture.identity_owner_email_reminder_id')::uuid)
     or exists (select 1 from public.reminder_defaults where id in (
       '57700000-0000-0000-0000-000000000060',
       '57700000-0000-0000-0000-000000000061'
