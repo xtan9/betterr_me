@@ -67,6 +67,22 @@ describe("GET /api/calendar/overlay-feed", () => {
     expect(await response.json()).toEqual({ items: [] });
   });
 
+  it("accepts habits alone and combined task/habit selections", async () => {
+    await GET(request("/api/calendar/overlay-feed?start_date=2026-04-01&end_date=2026-04-07&layers=habits"));
+    expect(queryCalendarOverlayFeed).toHaveBeenLastCalledWith(
+      expect.objectContaining({ layers: ["habits"] }),
+      {},
+      expect.any(Object),
+    );
+
+    await GET(request("/api/calendar/overlay-feed?start_date=2026-04-01&end_date=2026-04-07&layers=tasks,habits"));
+    expect(queryCalendarOverlayFeed).toHaveBeenLastCalledWith(
+      expect.objectContaining({ layers: ["tasks", "habits"] }),
+      {},
+      expect.any(Object),
+    );
+  });
+
   it("does not put Calendar Events in the overlay response", async () => {
     queryCalendarOverlayFeed.mockResolvedValueOnce({
       status: "complete",
@@ -101,6 +117,33 @@ describe("GET /api/calendar/overlay-feed", () => {
     const response = await GET(request("/api/calendar/overlay-feed?start_date=2026-04-01&end_date=2026-04-07&layers=tasks"));
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ items: [], unavailableLayers: ["tasks"] });
+  });
+
+  it("returns a degraded response with successful items and an unavailable habit layer", async () => {
+    queryCalendarOverlayFeed.mockResolvedValueOnce({
+      status: "degraded",
+      items: [{
+        layer: "tasks",
+        kind: "task",
+        id: "tasks:task-1",
+        taskId: "task-1",
+        title: "Task",
+        date: "2026-04-02",
+        startTime: null,
+        endTime: null,
+        allDay: true,
+        completed: false,
+        action: { type: "toggle_task_completion", taskId: "task-1" },
+      }],
+      unavailable: [{ layer: "habits", code: "unavailable" }],
+    });
+
+    const response = await GET(request("/api/calendar/overlay-feed?start_date=2026-04-01&end_date=2026-04-07&layers=tasks,habits"));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      items: [expect.objectContaining({ id: "tasks:task-1" })],
+      unavailableLayers: ["habits"],
+    });
   });
 
   it("rejects ranges that are reversed, too long, or invalid", async () => {

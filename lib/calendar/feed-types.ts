@@ -99,6 +99,12 @@ export interface DomainCalendarEvent {
     type: "toggle_task_completion";
     taskId: string;
   };
+  /** Typed habit overlay action; the date is part of the action contract. */
+  _habitAction?: {
+    type: "toggle_habit_completion";
+    habitId: string;
+    date: string;
+  };
   /** Source ID in the original domain table. */
   _sourceId?: string;
   /** Extra metadata for display. */

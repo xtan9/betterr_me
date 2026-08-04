@@ -8,7 +8,7 @@
 import type { Task, Habit, HabitLog, Workout } from "@/lib/db/types";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 import type { CalendarFeedItem, DomainCalendarEvent, FeedDomain } from "./feed-types";
-import type { TaskOverlayItem } from "./overlay-feed";
+import type { CalendarOverlayItem, HabitOverlayItem, TaskOverlayItem } from "./overlay-feed";
 import { shouldTrackOnDate } from "@/lib/habits/format";
 
 // ---------------------------------------------------------------------------
@@ -250,6 +250,13 @@ export function feedItemsToExpandedEvents(
 export function taskOverlayItemsToExpandedEvents(
   items: TaskOverlayItem[],
 ): DomainCalendarEvent[] {
+  return overlayItemsToExpandedEvents(items);
+}
+
+/** Adapt typed task and habit overlay items into the existing calendar seam. */
+export function overlayItemsToExpandedEvents(
+  items: CalendarOverlayItem[],
+): DomainCalendarEvent[] {
   return items.map((item) => ({
     id: item.id,
     user_id: "",
@@ -273,9 +280,18 @@ export function taskOverlayItemsToExpandedEvents(
     created_at: "",
     updated_at: "",
     is_virtual: true,
-    _domain: "tasks",
+    _domain: item.layer,
     _completed: item.completed,
-    _sourceId: item.taskId,
-    _taskAction: item.action,
+    _sourceId: item.layer === "tasks" ? item.taskId : item.habitId,
+    ...(item.layer === "tasks"
+      ? { _taskAction: item.action }
+      : { _habitAction: item.action }),
   }));
+}
+
+/** Adapt typed habit overlay items into the existing calendar seam. */
+export function habitOverlayItemsToExpandedEvents(
+  items: HabitOverlayItem[],
+): DomainCalendarEvent[] {
+  return overlayItemsToExpandedEvents(items);
 }

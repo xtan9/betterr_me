@@ -27,9 +27,9 @@ import { EventQuickCreate } from "./event-quick-create";
 import { EventDialog } from "./event-dialog";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 import type { CalendarFeedItem } from "@/lib/calendar/feed-types";
-import { feedItemsToExpandedEvents, taskOverlayItemsToExpandedEvents } from "@/lib/calendar/feed-aggregation";
+import { feedItemsToExpandedEvents, overlayItemsToExpandedEvents } from "@/lib/calendar/feed-aggregation";
 import type { DomainCalendarEvent } from "@/lib/calendar/feed-types";
-import type { TaskOverlayItem } from "@/lib/calendar/overlay-feed";
+import type { CalendarOverlayItem } from "@/lib/calendar/overlay-feed";
 import { useLocalization } from "@/lib/hooks/use-localization";
 import { weekStartPreferenceToDay } from "@/lib/preferences/owners";
 
@@ -41,8 +41,8 @@ interface FeedResponse {
   items: CalendarFeedItem[];
 }
 
-interface TaskOverlayResponse {
-  items: TaskOverlayItem[];
+interface OverlayResponse {
+  items: CalendarOverlayItem[];
   unavailableLayers?: string[];
 }
 
@@ -119,12 +119,10 @@ export function CalendarPageContent() {
     { keepPreviousData: true },
   );
 
-  // Tasks are served by the new typed overlay. Habits/workouts retain the
-  // legacy feed until their own overlay migrations are complete.
+  // Tasks and habits are served by the typed overlay. Workouts retain the
+  // legacy feed until their own overlay migration is complete.
   const legacyLayers = useMemo(() => {
-    const layers = Array.from(enabledLayers).filter(
-      (l) => l === "habits" || l === "workouts",
-    );
+    const layers = Array.from(enabledLayers).filter((l) => l === "workouts");
     return layers.sort().join(",");
   }, [enabledLayers]);
 
@@ -134,44 +132,53 @@ export function CalendarPageContent() {
     [],
   );
 
-  const taskOverlayKey = enabledLayers.has("tasks")
-    ? `/api/calendar/overlay-feed?start_date=${startDate}&end_date=${endDate}&layers=tasks&timezone=${encodeURIComponent(userTimezone)}`
+  const overlayLayers = useMemo(() => {
+    const layers = Array.from(enabledLayers).filter((l) => l === "tasks" || l === "habits");
+    return layers.sort().join(",");
+  }, [enabledLayers]);
+
+  const overlayKey = overlayLayers
+    ? `/api/calendar/overlay-feed?start_date=${startDate}&end_date=${endDate}&layers=${overlayLayers}&timezone=${encodeURIComponent(userTimezone)}`
     : null;
   const legacyFeedKey = legacyLayers
     ? `/api/calendar/feed?start_date=${startDate}&end_date=${endDate}&layers=${legacyLayers}&timezone=${encodeURIComponent(userTimezone)}`
     : null;
 
   const {
-    data: taskOverlayData,
-    error: taskOverlayError,
-  } = useSWR<TaskOverlayResponse>(taskOverlayKey, fetcher, { keepPreviousData: true });
+    data: overlayData,
+    error: overlayError,
+  } = useSWR<OverlayResponse>(overlayKey, fetcher, { keepPreviousData: true });
 
   const {
     data: feedData,
     error: legacyFeedError,
   } = useSWR<FeedResponse>(legacyFeedKey, fetcher, { keepPreviousData: true });
 
-  const [isRetryingTaskOverlay, setIsRetryingTaskOverlay] = useState(false);
-  const retryTaskOverlay = useCallback(async () => {
-    if (!taskOverlayKey) return;
-    setIsRetryingTaskOverlay(true);
+  const [isRetryingOverlay, setIsRetryingOverlay] = useState(false);
+  const retryOverlay = useCallback(async () => {
+    if (!overlayKey) return;
+    setIsRetryingOverlay(true);
     try {
-      await globalMutate(taskOverlayKey);
+      await globalMutate(overlayKey);
     } finally {
-      setIsRetryingTaskOverlay(false);
+      setIsRetryingOverlay(false);
     }
-  }, [globalMutate, taskOverlayKey]);
+  }, [globalMutate, overlayKey]);
 
+  const unavailableOverlayLayers = overlayData?.unavailableLayers ?? [];
   const taskOverlayUnavailable = Boolean(
-    taskOverlayError || taskOverlayData?.unavailableLayers?.includes("tasks"),
+    enabledLayers.has("tasks") && (overlayError || unavailableOverlayLayers.includes("tasks")),
+  );
+  const habitOverlayUnavailable = Boolean(
+    enabledLayers.has("habits") && (overlayError || unavailableOverlayLayers.includes("habits")),
   );
 
   // Log SWR fetch errors for debugging
   useEffect(() => {
     if (eventsError) console.error("Failed to fetch calendar events:", eventsError);
-    if (taskOverlayError) console.error("Failed to fetch calendar task overlay:", taskOverlayError);
+    if (overlayError) console.error("Failed to fetch calendar overlay:", overlayError);
     if (legacyFeedError) console.error("Failed to fetch calendar feed:", legacyFeedError);
-  }, [eventsError, legacyFeedError, taskOverlayError]);
+  }, [eventsError, legacyFeedError, overlayError]);
 
   // --- Inline actions ---
 
@@ -183,15 +190,25 @@ export function CalendarPageContent() {
     if (legacyFeedKey) globalMutate(legacyFeedKey);
   }, [startDate, endDate, legacyFeedKey, globalMutate]);
 
-  const { dispatch, toggleTask } = useCalendarActions(handleFeedMutated);
+  const { dispatch, toggleTask, toggleHabit } = useCalendarActions(handleFeedMutated);
 
   const handleItemAction = useCallback(
     async (event: ExpandedCalendarEvent | DomainCalendarEvent) => {
       const domainEvent = event as DomainCalendarEvent;
       if (domainEvent._taskAction) {
         const result = await toggleTask(domainEvent._taskAction.taskId);
-        if (result.success && taskOverlayKey) globalMutate(taskOverlayKey);
+        if (result.success && overlayKey) globalMutate(overlayKey);
         if (!result.success) console.error("Calendar task action failed:", result.error);
+        return;
+      }
+      if (domainEvent._habitAction) {
+        const result = await toggleHabit(
+          domainEvent._habitAction.habitId,
+          domainEvent._habitAction.date,
+          !domainEvent._completed,
+        );
+        if (result.success && overlayKey) globalMutate(overlayKey);
+        if (!result.success) console.error("Calendar habit action failed:", result.error);
         return;
       }
       if (!domainEvent._actions?.length || !domainEvent._sourceId) return;
@@ -212,7 +229,7 @@ export function CalendarPageContent() {
         console.error("Calendar inline action failed:", result.error);
       }
     },
-    [dispatch, globalMutate, taskOverlayKey, toggleTask],
+    [dispatch, globalMutate, overlayKey, toggleHabit, toggleTask],
   );
 
   const onEventSavedCallback = useCallback(() => {
@@ -242,8 +259,8 @@ export function CalendarPageContent() {
     const calendarEvents = eventsData?.events ?? [];
 
     // Convert feed items to pseudo-events for rendering
-    const taskEvents: DomainCalendarEvent[] = taskOverlayData?.items
-      ? taskOverlayItemsToExpandedEvents(taskOverlayData.items)
+    const overlayEvents: DomainCalendarEvent[] = overlayData?.items
+      ? overlayItemsToExpandedEvents(overlayData.items)
       : [];
     const feedEvents: DomainCalendarEvent[] = feedData?.items
       ? feedItemsToExpandedEvents(feedData.items)
@@ -256,12 +273,12 @@ export function CalendarPageContent() {
 
     const allEvents = [
       ...visibleCalendarEvents,
-      ...taskEvents,
+      ...overlayEvents,
       ...feedEvents,
     ] as ExpandedCalendarEvent[];
 
     return groupEventsByDate(allEvents);
-  }, [eventsData?.events, feedData?.items, taskOverlayData?.items, enabledLayers]);
+  }, [eventsData?.events, feedData?.items, overlayData?.items, enabledLayers]);
 
   // Compute grid dates
   const gridDates = useMemo(
@@ -376,14 +393,25 @@ export function CalendarPageContent() {
                 onNavigatePrev={goToPrev}
               />
             )}
-            {taskOverlayUnavailable && !isRetryingTaskOverlay && (
+            {taskOverlayUnavailable && !isRetryingOverlay && (
               <div
                 role="status"
                 className="mt-3 flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
               >
                 <span>{t("taskOverlay.unavailable")}</span>
-                <button type="button" onClick={retryTaskOverlay}>
+                <button type="button" onClick={retryOverlay}>
                   {t("taskOverlay.retry")}
+                </button>
+              </div>
+            )}
+            {habitOverlayUnavailable && !isRetryingOverlay && (
+              <div
+                role="status"
+                className="mt-3 flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              >
+                <span>{t("habitOverlay.unavailable")}</span>
+                <button type="button" onClick={retryOverlay}>
+                  {t("habitOverlay.retry")}
                 </button>
               </div>
             )}
