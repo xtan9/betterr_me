@@ -11,16 +11,16 @@ A person's revisioned, committed financial inputs for evaluating how their house
 _Avoid_: Finance Cushion, saved assessment
 
 **Household Runway Assessment**:
-An evaluation of how long a household's resources could cover essential expenses under one or more income-interruption scenarios.
+A calculated evaluation of how long a household's resources could cover essential expenses across one or more income-interruption scenarios and proposed adjustments. It may be calculated from a Household Runway Draft or a Household Runway Plan.
 _Avoid_: Cushion, runway calculation, Plan
 
 **Household Runway Interview**:
-The guided process through which a person supplies and reviews the inputs used for a Household Runway Assessment.
+The guided process through which a person supplies and reviews household financial inputs, assesses interruption scenarios, and may create or revise a Household Runway Plan.
 _Avoid_: Wizard, finance form
 
 **Household Runway Draft**:
-The uncommitted working inputs maintained during a Household Runway Interview; it may coexist with a committed Household Runway Plan.
-_Avoid_: Unsaved Plan, form state
+The uncommitted, resumable working inputs and progress maintained during a Household Runway Interview; it may coexist with a committed Household Runway Plan.
+_Avoid_: Interview Draft, Unsaved Plan, form state
 
 **Household Runway Plan Adjustment**:
 A provisional What-if overlay used to compare a Household Runway Assessment; it becomes part of a Plan only after the person applies it to the Draft inputs and commits them.
