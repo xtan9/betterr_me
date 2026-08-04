@@ -11,7 +11,7 @@ import {
   getHouseholdRunwayPlan,
   HouseholdRunwayPersistenceIntegrityError,
   type HouseholdRunwayAtomicCommitInput,
-} from "@/lib/finance/repository";
+} from "@/lib/finance/household-runway-repository";
 
 function input(): HouseholdRunwayAtomicCommitInput {
   const answers = createDefaultRunwayAnswers(

@@ -5,8 +5,8 @@ import {
 } from "@/lib/finance/cushion";
 import { assessHouseholdRunway } from "@/lib/finance/household-runway-assessment";
 import { GET, POST } from "@/app/api/finance/cushion/route";
-import { commitHouseholdRunwayPlan, getHouseholdRunwayPlan, getRunwaySnapshots } from "@/lib/finance/repository";
-import { HouseholdRunwayPersistenceIntegrityError } from "@/lib/finance/repository";
+import { commitHouseholdRunwayPlan, getHouseholdRunwayPlan, getRunwaySnapshots } from "@/lib/finance/household-runway-repository";
+import { HouseholdRunwayPersistenceIntegrityError } from "@/lib/finance/household-runway-repository";
 
 const { mockAuthenticateRequest } = vi.hoisted(() => ({
   mockAuthenticateRequest: vi.fn(),
@@ -18,7 +18,7 @@ vi.mock("@/lib/auth/authenticated-request", () => ({
     error.status === 401 ? "Unauthorized" : error.error,
 }));
 
-vi.mock("@/lib/finance/repository", () => ({
+vi.mock("@/lib/finance/household-runway-repository", () => ({
   commitHouseholdRunwayPlan: vi.fn(),
   getHouseholdRunwayPlan: vi.fn(),
   getRunwaySnapshots: vi.fn(),

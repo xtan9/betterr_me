@@ -5,7 +5,7 @@ import {
 } from "@/lib/auth/authenticated-request";
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { createHouseholdRunwayService } from "@/lib/finance/household-runway-service";
-import { HouseholdRunwayPersistenceIntegrityError } from "@/lib/finance/repository";
+import { HouseholdRunwayPersistenceIntegrityError } from "@/lib/finance/household-runway-repository";
 import { validateRequestBody } from "@/lib/validations/api";
 import { financeCushionCommitSchema } from "@/lib/validations/finance-cushion";
 import { log } from "@/lib/logger";
