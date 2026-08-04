@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createHouseholdRunwayInterview } from "@/lib/finance/household-runway-interview";
 import {
   HOUSEHOLD_RUNWAY_DRAFT_DEVICE_CONSENT_KEY,
@@ -134,5 +134,131 @@ describe("Household Runway Draft storage adapter", () => {
     expect(sessionStorage.getItem(HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY)).toBeNull();
     expect(localStorage.getItem(HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY)).toBeNull();
     expect(hasHouseholdRunwayDeviceStorageConsent()).toBe(false);
+  });
+
+  it("migrates a consented legacy device key and removes the legacy copy", () => {
+    const encoded = persistHouseholdRunwayDraft(draftState(), { now });
+    expect(encoded).toEqual({ success: true, source: "session" });
+    const raw = sessionStorage.getItem(HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY);
+    expect(raw).not.toBeNull();
+
+    sessionStorage.clear();
+    localStorage.setItem(HOUSEHOLD_RUNWAY_DRAFT_DEVICE_CONSENT_KEY, "granted");
+    localStorage.setItem("betterr.household-runway.v2", raw!);
+
+    expect(readHouseholdRunwayDeviceDraft({ now })).toMatchObject({
+      status: "restored",
+      source: "device",
+    });
+    expect(localStorage.getItem("betterr.household-runway.v2")).toBeNull();
+  });
+
+  it("falls back to a valid device Draft when a session Draft is rejected", () => {
+    rememberHouseholdRunwayDraft(draftState(), { now });
+    sessionStorage.setItem(HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY, "not-json");
+
+    expect(readHouseholdRunwayDraft({ now })).toMatchObject({
+      status: "restored",
+      source: "device",
+    });
+    expect(sessionStorage.getItem(HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY)).toBeNull();
+  });
+
+  it("returns a typed failure when a consented device write is unavailable", () => {
+    localStorage.setItem(HOUSEHOLD_RUNWAY_DRAFT_DEVICE_CONSENT_KEY, "granted");
+    const originalSetItem = Storage.prototype.setItem;
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (this === localStorage && key === HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY) {
+        throw new Error("device storage unavailable");
+      }
+      return originalSetItem.call(this, key, value);
+    });
+
+    expect(persistHouseholdRunwayDraft(draftState(), { now })).toEqual({
+      success: false,
+      code: "storage_unavailable",
+    });
+    setItem.mockRestore();
+  });
+
+  it("cleans up consent when remembering a Draft cannot write the durable payload", () => {
+    const originalSetItem = Storage.prototype.setItem;
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (this === localStorage && key === HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY) {
+        throw new Error("device storage unavailable");
+      }
+      return originalSetItem.call(this, key, value);
+    });
+
+    expect(rememberHouseholdRunwayDraft(draftState(), { now })).toEqual({
+      success: false,
+      code: "storage_unavailable",
+    });
+    expect(hasHouseholdRunwayDeviceStorageConsent()).toBe(false);
+    setItem.mockRestore();
+  });
+
+  it("reports session and cleanup failures without hiding the stored Draft", () => {
+    const originalSetItem = Storage.prototype.setItem;
+    const sessionWriteFailure = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(function (this: Storage, key: string, value: string) {
+        if (this === sessionStorage && key === HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY) {
+          throw new Error("session storage unavailable");
+        }
+        return originalSetItem.call(this, key, value);
+      });
+    expect(rememberHouseholdRunwayDraft(draftState(), { now })).toEqual({
+      success: false,
+      code: "storage_unavailable",
+    });
+    sessionWriteFailure.mockRestore();
+
+    rememberHouseholdRunwayDraft(draftState(), { now });
+    const originalRemoveItem = Storage.prototype.removeItem;
+    const removeFailure = vi
+      .spyOn(Storage.prototype, "removeItem")
+      .mockImplementation(function (this: Storage, key: string) {
+        if (this === localStorage && key === HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY) {
+          throw new Error("cleanup unavailable");
+        }
+        return originalRemoveItem.call(this, key);
+      });
+    expect(clearHouseholdRunwayDeviceDraft()).toEqual({
+      success: false,
+      code: "storage_unavailable",
+    });
+    removeFailure.mockRestore();
+  });
+
+  it("returns codec failures before attempting to write an invalid Draft", () => {
+    const invalid = draftState();
+    invalid.draft.answers = {
+      ...invalid.draft.answers,
+      country: "GB" as never,
+    };
+
+    expect(persistHouseholdRunwayDraft(invalid, { now })).toEqual({
+      success: false,
+      code: "invalid_draft",
+    });
+    expect(persistHouseholdRunwaySessionDraft(invalid, { now })).toEqual({
+      success: false,
+      code: "invalid_draft",
+    });
+    expect(rememberHouseholdRunwayDraft(invalid, { now })).toEqual({
+      success: false,
+      code: "invalid_draft",
+    });
+    expect(sessionStorage.getItem(HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY)).toBeNull();
+    expect(localStorage.getItem(HOUSEHOLD_RUNWAY_DRAFT_STORAGE_KEY)).toBeNull();
   });
 });

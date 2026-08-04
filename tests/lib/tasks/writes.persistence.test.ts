@@ -121,4 +121,17 @@ describe('SupabaseTaskReminderConfigurationPersistence', () => {
       'Invalid task reminder configuration outcome returned by the database',
     );
   });
+
+  it('maps reminder conflicts and foreign-key misses without leaking database errors', async () => {
+    rpc.mockResolvedValue({ data: null, error: { code: '23505', message: 'duplicate' } });
+    await expect(persistence.configureTaskReminders(record)).resolves.toEqual({
+      type: 'conflict',
+      resource: 'reminder',
+    });
+
+    rpc.mockResolvedValue({ data: null, error: { code: '23503', message: 'missing task' } });
+    await expect(persistence.configureTaskReminders(record)).resolves.toEqual({
+      type: 'not-found',
+    });
+  });
 });
