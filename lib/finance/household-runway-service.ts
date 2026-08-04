@@ -9,6 +9,17 @@ import {
 import type {
   FinanceCushionCommitInput,
 } from "@/lib/validations/finance-cushion";
+import type { HouseholdRunwayPlan } from "@/lib/finance/household-runway-plan";
+
+export interface HouseholdRunwayPlanCommitInput {
+  plan: HouseholdRunwayPlan;
+  adjustments: FinanceCushionCommitInput["adjustments"];
+  status: FinanceCushionCommitInput["status"];
+  attribution: FinanceCushionCommitInput["attribution"];
+  idempotencyKey: FinanceCushionCommitInput["idempotency_key"];
+  snapshotActionId: FinanceCushionCommitInput["snapshot_action_id"];
+  snapshotTrigger: FinanceCushionCommitInput["snapshot_trigger"];
+}
 
 export function createHouseholdRunwayService(client: SupabaseClient) {
   return {
@@ -20,23 +31,22 @@ export function createHouseholdRunwayService(client: SupabaseClient) {
       return { plan, snapshots };
     },
 
-    async commit(input: FinanceCushionCommitInput) {
+    async commit(input: HouseholdRunwayPlanCommitInput) {
       const assessment = assessHouseholdRunway({
-        answers: input.answers,
+        answers: input.plan.inputs,
         adjustments: input.adjustments,
-        startDate: new Date(input.answers.updated_at),
+        startDate: new Date(input.plan.inputs.updated_at),
       });
       if (!assessment.success) return assessment;
 
       return commitHouseholdRunwayPlan(client, {
-        answers: input.answers,
+        plan: input.plan,
         adjustments: input.adjustments,
         status: input.status,
         attribution: input.attribution,
-        idempotencyKey: input.idempotency_key,
-        expectedRevision: input.expected_revision,
-        snapshotActionId: input.snapshot_action_id,
-        snapshotTrigger: input.snapshot_trigger,
+        idempotencyKey: input.idempotencyKey,
+        snapshotActionId: input.snapshotActionId,
+        snapshotTrigger: input.snapshotTrigger,
         assessment,
       });
     },

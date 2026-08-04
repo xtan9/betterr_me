@@ -6,6 +6,7 @@ import {
 import { assessHouseholdRunway } from "@/lib/finance/household-runway-assessment";
 import { GET, POST } from "@/app/api/finance/cushion/route";
 import { commitHouseholdRunwayPlan, getHouseholdRunwayPlan, getRunwaySnapshots } from "@/lib/finance/repository";
+import { HouseholdRunwayPersistenceIntegrityError } from "@/lib/finance/repository";
 
 const { mockAuthenticateRequest } = vi.hoisted(() => ({
   mockAuthenticateRequest: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock("@/lib/finance/repository", () => ({
   commitHouseholdRunwayPlan: vi.fn(),
   getHouseholdRunwayPlan: vi.fn(),
   getRunwaySnapshots: vi.fn(),
+  HouseholdRunwayPersistenceIntegrityError: class HouseholdRunwayPersistenceIntegrityError extends Error {},
 }));
 
 const user = { id: "user-a" };
@@ -156,7 +158,7 @@ describe("/api/finance/cushion/commit", () => {
     expect(commitHouseholdRunwayPlan).toHaveBeenCalledWith(
       mockSupabase,
       expect.objectContaining({
-        expectedRevision: 0,
+        plan: { revision: 0, inputs: answers },
         idempotencyKey,
         snapshotActionId: idempotencyKey,
         snapshotTrigger: "completed",
@@ -244,6 +246,28 @@ describe("/api/finance/cushion/commit", () => {
       status: "already-applied",
       revision: 1,
       snapshots: [{ id: "snapshot-a" }],
+    });
+  });
+
+  it("keeps typed persistence-integrity failures distinct from invalid input", async () => {
+    vi.mocked(commitHouseholdRunwayPlan).mockRejectedValueOnce(
+      new HouseholdRunwayPersistenceIntegrityError("malformed committed Plan"),
+    );
+    const response = await POST(
+      request({
+        answers,
+        adjustments,
+        status: "completed",
+        idempotency_key: idempotencyKey,
+        expected_revision: 0,
+        snapshot_action_id: idempotencyKey,
+        snapshot_trigger: "completed",
+      }),
+    );
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      type: "persistence_integrity",
+      error: "Household Runway persistence integrity failure",
     });
   });
 

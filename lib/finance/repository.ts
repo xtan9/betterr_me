@@ -24,12 +24,11 @@ export type HouseholdRunwaySnapshotTrigger =
   | "updated";
 
 export interface HouseholdRunwayAtomicCommitInput {
-  answers: HouseholdRunwayAnswers;
+  plan: HouseholdRunwayPlan;
   adjustments: RunwayAdjustments;
   status: "completed";
   attribution: Record<string, string | undefined>;
   idempotencyKey: string;
-  expectedRevision: number;
   snapshotActionId: string;
   snapshotTrigger: HouseholdRunwaySnapshotTrigger;
   /** Derived by the server before entering this persistence boundary. */
@@ -223,12 +222,12 @@ export async function commitHouseholdRunwayPlan(
     "commit_household_runway_plan",
     {
       p_request: {
-        answers: input.answers,
+        answers: input.plan.inputs,
         adjustments: input.adjustments,
         status: input.status,
         attribution: input.attribution,
         idempotency_key: input.idempotencyKey,
-        expected_revision: input.expectedRevision,
+        expected_revision: input.plan.revision,
         snapshot_action_id: input.snapshotActionId,
         snapshot_trigger: input.snapshotTrigger,
         assessment: input.assessment,

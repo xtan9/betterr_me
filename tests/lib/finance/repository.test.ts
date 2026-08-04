@@ -5,6 +5,7 @@ import {
   type HouseholdRunwayAnswers,
 } from "@/lib/finance/cushion";
 import { assessHouseholdRunway } from "@/lib/finance/household-runway-assessment";
+import { createHouseholdRunwayPlan } from "@/lib/finance/household-runway-plan";
 import {
   commitHouseholdRunwayPlan,
   getHouseholdRunwayPlan,
@@ -33,8 +34,10 @@ function input(): HouseholdRunwayAtomicCommitInput {
   };
   const assessment = assessHouseholdRunway({ answers });
   if (!assessment.success) throw new Error("test assessment should be valid");
+  const plan = createHouseholdRunwayPlan({ revision: 0, inputs: answers });
+  if (!plan) throw new Error("test Plan should be valid");
   return {
-    answers,
+    plan,
     adjustments: {
       expense_reduction_cents: 0,
       added_cash_cents: 125_000,
@@ -47,7 +50,6 @@ function input(): HouseholdRunwayAtomicCommitInput {
     status: "completed",
     attribution: { campaign: "youtube" },
     idempotencyKey: "74a303ae-1ba3-4ab5-beb9-5317eb94c790",
-    expectedRevision: 0,
     snapshotActionId: "74a303ae-1ba3-4ab5-beb9-5317eb94c790",
     snapshotTrigger: "completed",
     assessment,
@@ -59,7 +61,7 @@ function plan(inputValue: HouseholdRunwayAtomicCommitInput, revision = 1) {
     id: "plan-a",
     user_id: "user-a",
     revision,
-    answers: inputValue.answers,
+    answers: inputValue.plan.inputs,
     liquid_resources_cents: 3_000_000,
     monthly_essential_expenses_cents: 600_000,
     monthly_continuing_income_cents: 0,
@@ -100,7 +102,7 @@ function snapshot() {
 
 describe("household runway atomic repository boundary", () => {
   it("maps a current row to the strict domain Plan and selects only required columns", async () => {
-    const answers = input().answers;
+    const answers = input().plan.inputs;
     const reader = readClient(currentRow(answers));
 
     await expect(getHouseholdRunwayPlan(reader.client, "user-a")).resolves.toEqual({
@@ -136,7 +138,7 @@ describe("household runway atomic repository boundary", () => {
     });
 
     const presentRevision = readClient({
-      ...currentRow(input().answers, 7),
+      ...currentRow(input().plan.inputs, 7),
       answers: null,
     });
     await expect(getHouseholdRunwayPlan(presentRevision.client, "user-a")).resolves.toMatchObject({
@@ -150,10 +152,10 @@ describe("household runway atomic repository boundary", () => {
     { revision: "1", answers: null },
     { revision: undefined, answers: null },
     { revision: 1, answers: { schema_version: 4 } },
-    { revision: 1, answers: { ...input().answers, region: "" } },
+    { revision: 1, answers: { ...input().plan.inputs, region: "" } },
   ])("rejects corrupted persisted Plan data: %j", async (corruption) => {
     const reader = readClient({
-      ...currentRow(input().answers),
+      ...currentRow(input().plan.inputs),
       ...corruption,
     });
 
@@ -191,10 +193,10 @@ describe("household runway atomic repository boundary", () => {
       "commit_household_runway_plan",
       expect.objectContaining({
         p_request: expect.objectContaining({
-          answers: commit.answers,
+          answers: commit.plan.inputs,
           adjustments: commit.adjustments,
           idempotency_key: commit.idempotencyKey,
-          expected_revision: 0,
+          expected_revision: commit.plan.revision,
           snapshot_action_id: commit.snapshotActionId,
           snapshot_trigger: "completed",
           assessment: commit.assessment,
