@@ -8,6 +8,7 @@ import { createHouseholdRunwayService } from "@/lib/finance/household-runway-ser
 import { validateRequestBody } from "@/lib/validations/api";
 import { financeCushionCommitSchema } from "@/lib/validations/finance-cushion";
 import { log } from "@/lib/logger";
+import type { HouseholdRunwayAnswers } from "@/lib/finance/cushion";
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ["cookie"],
@@ -19,6 +20,19 @@ const WRITE_REQUEST_POLICY = {
   requiredPermission: "write",
 } as const satisfies AuthenticatedRequestPolicy;
 
+function toPlanWire(value: unknown) {
+  if (!value || typeof value !== "object") return value;
+  const plan = value as {
+    revision?: unknown;
+    inputs?: HouseholdRunwayAnswers;
+    answers?: HouseholdRunwayAnswers;
+  };
+  return {
+    revision: plan.revision,
+    answers: plan.inputs ?? plan.answers,
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
@@ -28,11 +42,13 @@ export async function GET(request: NextRequest) {
         { status: auth.status },
       );
     }
-    return NextResponse.json(
-      await createHouseholdRunwayService(auth.client).load(
-        auth.principal.userId,
-      ),
+    const result = await createHouseholdRunwayService(auth.client).load(
+      auth.principal.userId,
     );
+    return NextResponse.json({
+      ...result,
+      cushion: toPlanWire(result.cushion),
+    });
   } catch (error) {
     log.error("[household-runway] GET failed", error);
     return NextResponse.json(
@@ -102,7 +118,7 @@ async function commit(request: NextRequest) {
     return NextResponse.json({
       status: result.replayed ? "already-applied" : "committed",
       revision: result.revision,
-      plan: result.plan,
+      plan: toPlanWire(result.plan),
       assessment: result.assessment,
       snapshot: result.snapshot,
       snapshots: result.snapshots,
