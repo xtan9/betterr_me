@@ -3,6 +3,7 @@ import type {
   RunwayAdjustments,
   RunwaySnapshotSummary,
 } from "@/lib/finance/cushion";
+import type { RunwayLocale } from "@/lib/finance/runway-regions";
 import type {
   HouseholdRunwayAnalyticsEventKind,
   HouseholdRunwayAnalyticsStage,
@@ -121,6 +122,7 @@ const RUNTIME_INTENT_TYPES = [
   "resume_committed_plan",
   "save_plan",
   "request_report_download",
+  "request_analytics",
 ] as const satisfies readonly HouseholdRunwayInterviewCommandInput["type"][];
 
 type RuntimeIntentType = (typeof RUNTIME_INTENT_TYPES)[number];
@@ -265,6 +267,18 @@ export interface HouseholdRunwayInterviewRuntimePlanRestore {
   readonly snapshots?: readonly RunwaySnapshotSummary[];
 }
 
+export interface HouseholdRunwayInterviewRuntimeReportRequest {
+  readonly assessment: SuccessfulHouseholdRunwayAssessment;
+  readonly locale: RunwayLocale;
+}
+
+export type HouseholdRunwayInterviewRuntimeReportOutcome =
+  | { success: true }
+  | {
+      success: false;
+      error: "capability_unavailable" | "download_failed" | "exception";
+    };
+
 export interface HouseholdRunwayInterviewRuntimeCapabilities {
   /** Injected so contract tests and hosts can keep command creation deterministic. */
   createId?: () => string;
@@ -305,8 +319,16 @@ export interface HouseholdRunwayInterviewRuntimeCapabilities {
     | HouseholdRunwayInterviewRuntimePlanOutcome
     | Promise<HouseholdRunwayInterviewRuntimePlanOutcome>;
   downloadReport?: (
-    assessment: SuccessfulHouseholdRunwayAssessment,
-  ) => boolean | void | Promise<boolean | void>;
+    request: HouseholdRunwayInterviewRuntimeReportRequest,
+  ) =>
+    | boolean
+    | void
+    | HouseholdRunwayInterviewRuntimeReportOutcome
+    | Promise<
+        | boolean
+        | void
+        | HouseholdRunwayInterviewRuntimeReportOutcome
+      >;
   trackAnalytics?: (request: {
     eventName: HouseholdRunwayAnalyticsEventKind;
     stage?: HouseholdRunwayAnalyticsStage;
@@ -315,6 +337,8 @@ export interface HouseholdRunwayInterviewRuntimeCapabilities {
 
 export interface HouseholdRunwayInterviewRuntimeOptions
   extends HouseholdRunwayInterviewRuntimeCapabilities {
+  /** Current presentation locale, kept outside the Interview state machine. */
+  locale?: RunwayLocale;
   initialPlan?: HouseholdRunwayPlan | null;
   initialSnapshots?: readonly RunwaySnapshotSummary[];
 }
@@ -655,6 +679,7 @@ export function createHouseholdRunwayInterviewRuntime(
   const createId = options.createId ?? defaultId;
   const now = options.now ?? (() => new Date().toISOString());
   const schedule = options.schedule ?? defaultSchedule;
+  const locale = options.locale ?? "en";
   let state = createHouseholdRunwayInterview(options.initialPlan ?? null);
   let lifecycle: HouseholdRunwayInterviewRuntimeLifecycle = "idle";
   let started = false;
@@ -1203,30 +1228,59 @@ export function createHouseholdRunwayInterviewRuntime(
       return;
     }
     if (effect.type === "report_download_requested") {
-      invoke(
-        options.downloadReport
-          ? () => options.downloadReport!(clonePublicValue(effect.assessment))
-          : undefined,
-        (value) =>
-          value === false
-            ? outcomeCommand(createId, now, {
-                type: "report_download_failed",
-                sourceRevision: effect.sourceRevision,
-                correlationId: effect.correlationId,
-                error: "download_failed",
-              })
-            : outcomeCommand(createId, now, {
-                type: "report_download_succeeded",
-                sourceRevision: effect.sourceRevision,
-                correlationId: effect.correlationId,
-              }),
-        () =>
-          outcomeCommand(createId, now, {
-            type: "report_download_failed",
-            sourceRevision: effect.sourceRevision,
-            correlationId: effect.correlationId,
-            error: "download_failed",
-          }),
+      const failure = (error: "capability_unavailable" | "download_failed" | "exception") =>
+        outcomeCommand(createId, now, {
+          type: "report_download_failed",
+          sourceRevision: effect.sourceRevision,
+          correlationId: effect.correlationId,
+          error,
+        });
+      if (!options.downloadReport) {
+        enqueueOutcome(() => failure("capability_unavailable"));
+        return;
+      }
+      let result:
+        | boolean
+        | void
+        | HouseholdRunwayInterviewRuntimeReportOutcome
+        | PromiseLike<
+            | boolean
+            | void
+            | HouseholdRunwayInterviewRuntimeReportOutcome
+          >;
+      try {
+        result = options.downloadReport({
+          assessment: clonePublicValue(effect.assessment),
+          locale,
+        });
+      } catch {
+        enqueueOutcome(() => failure("exception"));
+        return;
+      }
+      Promise.resolve(result).then(
+        (value) => {
+          if (value === false) {
+            enqueueOutcome(() => failure("download_failed"));
+            return;
+          }
+          if (
+            value &&
+            typeof value === "object" &&
+            "success" in value &&
+            value.success === false
+          ) {
+            enqueueOutcome(() => failure(value.error));
+            return;
+          }
+          enqueueOutcome(() =>
+            outcomeCommand(createId, now, {
+              type: "report_download_succeeded",
+              sourceRevision: effect.sourceRevision,
+              correlationId: effect.correlationId,
+            }),
+          );
+        },
+        () => enqueueOutcome(() => failure("exception")),
       );
       return;
     }
