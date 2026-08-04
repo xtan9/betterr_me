@@ -1239,6 +1239,32 @@ describe("Household Runway Interview Runtime", () => {
     expect(runtime.getSnapshot().operations.draftSynchronization.status).toBe("succeeded");
   });
 
+  it("does not claim a device Draft after session-only synchronization", async () => {
+    const scheduled: (() => void)[] = [];
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      createId: () => "interview-1",
+      schedule: (task) => scheduled.push(task),
+      synchronizeDraft: () => true,
+      restore: async () => ({
+        session: { status: "missing" as const },
+        device: { status: "missing" as const },
+        deviceStorageConsent: true,
+      }),
+    });
+
+    runtime.start();
+    await settle(scheduled);
+    runtime.send({ type: "select_country", country: "US" });
+    await settle(scheduled);
+
+    expect(runtime.getSnapshot().draft).toMatchObject({
+      stored: true,
+      session: true,
+      device: false,
+      deviceStorageConsent: true,
+    });
+  });
+
   it("keeps a Draft unchanged when destructive confirmation is refused and clears only after acceptance", async () => {
     const scheduled: (() => void)[] = [];
     const confirmationResolvers: Array<(value: boolean) => void> = [];
