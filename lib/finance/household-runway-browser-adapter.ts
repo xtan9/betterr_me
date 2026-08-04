@@ -110,9 +110,17 @@ export interface HouseholdRunwayHistoryProjectionInput {
   stage?: HouseholdRunwayInterviewStage;
 }
 
+function stageParameterFromHref(href: string): string | null {
+  try {
+    return new URL(href).searchParams.get("stage");
+  } catch {
+    return null;
+  }
+}
+
 function stageFromHref(href: string): HouseholdRunwayInterviewStage | undefined {
   try {
-    const requested = new URL(href).searchParams.get("stage");
+    const requested = stageParameterFromHref(href);
     return requested &&
       (HOUSEHOLD_RUNWAY_INTERVIEW_STAGE_IDS as readonly string[]).includes(requested)
       ? (requested as HouseholdRunwayInterviewStage)
@@ -444,15 +452,16 @@ export function createHouseholdRunwayBrowserAdapter(
 
     try {
       const url = new URL(href);
+      const requestedStageParameter = stageParameterFromHref(href);
       const requestedStage = stageFromHref(href);
       const shouldStart = snapshot.interviewStatus !== "not_started";
       if (
         (shouldStart && url.searchParams.get("start") !== "1") ||
         (!shouldStart && url.searchParams.get("start") === "1") ||
-        (!shouldStart && requestedStage !== undefined) ||
+        (!shouldStart && requestedStageParameter !== null) ||
         (shouldStart &&
-          requestedStage !== undefined &&
-          requestedStage !== snapshot.stage)
+          (requestedStageParameter !== null &&
+            (requestedStage === undefined || requestedStage !== snapshot.stage)))
       ) {
         navigate({
           action: "replace",
@@ -464,7 +473,13 @@ export function createHouseholdRunwayBrowserAdapter(
     }
   };
 
-  const onHistory = () => reconcileUrl();
+  const onHistory = () => {
+    if (runtime.getSnapshot().lifecycle !== "ready") {
+      initialHrefForProjection = environment?.location.href;
+      return;
+    }
+    reconcileUrl();
+  };
   const onLocale = () => dispatchEnvironment({ type: "locale_changed" });
 
   const subscribeToBrowser = (

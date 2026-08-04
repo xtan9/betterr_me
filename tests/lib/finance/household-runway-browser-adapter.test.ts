@@ -116,6 +116,26 @@ describe("Household Runway browser adapter", () => {
     adapter.dispose();
   });
 
+  it("repairs an invalid requested stage even when the URL starts the interview", () => {
+    const browser = createAdapterEnvironment(
+      "https://betterr.me/finance/cushion?start=1&stage=not-a-stage",
+    );
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      createId: () => "interview-1",
+    });
+
+    adapter.start();
+
+    expect(adapter.getSnapshot().interviewStatus).toBe("collecting");
+    expect(browser.environment.history.replaceState).toHaveBeenCalledWith(
+      {},
+      "",
+      "/finance/cushion?start=1",
+    );
+    adapter.dispose();
+  });
+
   it("validates Back and Forward through Runtime state instead of browser state", () => {
     const browser = createAdapterEnvironment();
     const adapter = createHouseholdRunwayBrowserAdapter({
@@ -132,6 +152,26 @@ describe("Household Runway browser adapter", () => {
     browser.environment.location.href = "https://betterr.me/finance/cushion?start=1";
     browser.emit("popstate");
     expect(adapter.getSnapshot().interviewStatus).toBe("collecting");
+    adapter.dispose();
+  });
+
+  it("uses the latest browser destination when history changes during startup", async () => {
+    const browser = createAdapterEnvironment();
+    let restore: ((value: unknown) => void) | undefined;
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      createId: () => "interview-1",
+      restore: () => new Promise((resolve) => { restore = resolve; }),
+    });
+
+    adapter.start();
+    browser.environment.location.href = "https://betterr.me/finance/cushion";
+    browser.emit("popstate");
+    restore?.({ session: { status: "missing" }, device: { status: "missing" } });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(adapter.getSnapshot().interviewStatus).toBe("not_started");
     adapter.dispose();
   });
 
