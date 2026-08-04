@@ -4,6 +4,11 @@ const state = vi.hoisted(() => ({
   overlay: { data: null as unknown, error: null as Error | null },
   mutate: vi.fn().mockResolvedValue(undefined),
   replace: vi.fn(),
+  actions: {
+    dispatch: vi.fn(),
+    toggleTask: vi.fn(),
+    toggleHabit: vi.fn().mockResolvedValue({ success: true }),
+  },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -40,7 +45,7 @@ vi.mock("@/lib/hooks/use-localization", () => ({
 }));
 vi.mock("@/hooks/use-keyboard-shortcuts", () => ({ useKeyboardShortcuts: vi.fn() }));
 vi.mock("@/hooks/use-calendar-actions", () => ({
-  useCalendarActions: () => ({ dispatch: vi.fn(), toggleTask: vi.fn() }),
+  useCalendarActions: () => state.actions,
 }));
 vi.mock("@/components/calendar/use-calendar-navigation", () => ({
   useCalendarNavigation: () => ({
@@ -62,11 +67,32 @@ vi.mock("@/components/calendar/calendar-header", () => ({ CalendarHeader: () => 
 vi.mock("@/components/calendar/calendar-sidebar", () => ({ CalendarSidebar: () => <div /> }));
 vi.mock("@/components/calendar/month-grid", () => ({ MonthGrid: () => <div /> }));
 vi.mock("@/components/calendar/week-view", () => ({ WeekView: () => <div /> }));
-vi.mock("@/components/calendar/day-view", () => ({ DayView: () => <div data-testid="day-view" /> }));
+vi.mock("@/components/calendar/day-view", () => ({
+  DayView: ({ onEventClick }: { onEventClick: (event: unknown) => void }) => (
+    <>
+      <div data-testid="day-view" />
+      <button
+        type="button"
+        data-testid="invoke-habit-action"
+        onClick={() => onEventClick({
+          id: "habits:habit-1:2026-04-02",
+          start_date: "2026-04-02",
+          _domain: "habits",
+          _completed: true,
+          _habitAction: {
+            type: "toggle_habit_completion",
+            habitId: "habit-1",
+            date: "2026-04-02",
+          },
+        })}
+      />
+    </>
+  ),
+}));
 vi.mock("@/components/calendar/event-quick-create", () => ({ EventQuickCreate: () => null }));
 vi.mock("@/components/calendar/event-dialog", () => ({ EventDialog: () => null }));
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { CalendarPageContent } from "@/components/calendar/calendar-page-content";
 
 describe("CalendarPageContent task overlay failure seam", () => {
@@ -84,5 +110,30 @@ describe("CalendarPageContent task overlay failure seam", () => {
     fireEvent.click(screen.getByRole("button", { name: "taskOverlay.retry" }));
     expect(state.mutate).toHaveBeenCalledWith(expect.stringContaining("/api/calendar/overlay-feed"));
     expect(state.mutate).not.toHaveBeenCalledWith(expect.stringContaining("/api/calendar-events"));
+  });
+
+  it("shows a localized unavailable habit notice and retries only the overlay", () => {
+    state.overlay = {
+      data: { items: [], unavailableLayers: ["habits"] },
+      error: null,
+    };
+
+    render(<CalendarPageContent />);
+
+    expect(screen.getByText("habitOverlay.unavailable")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "habitOverlay.retry" }));
+    expect(state.mutate).toHaveBeenCalledWith(expect.stringContaining("layers=habits,tasks"));
+    expect(state.mutate).not.toHaveBeenCalledWith(expect.stringContaining("/api/calendar-events"));
+  });
+
+  it("dispatches the typed habit action through the existing UI adapter", async () => {
+    state.overlay = { data: { items: [] }, error: null };
+
+    render(<CalendarPageContent />);
+    fireEvent.click(screen.getByTestId("invoke-habit-action"));
+
+    await waitFor(() => {
+      expect(state.actions.toggleHabit).toHaveBeenCalledWith("habit-1", "2026-04-02", false);
+    });
   });
 });

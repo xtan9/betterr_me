@@ -1484,6 +1484,10 @@
       "unavailable": "任务暂时不可用。您的日历事件仍会显示。",
       "retry": "重试任务"
     },
+    "habitOverlay": {
+      "unavailable": "习惯暂时不可用。您的日历事件和可用图层仍会显示。",
+      "retry": "重试习惯"
+    },
     "timeGrid": {
       "allDay": "全天",
       "allDayMore": "+{count} 更多",
