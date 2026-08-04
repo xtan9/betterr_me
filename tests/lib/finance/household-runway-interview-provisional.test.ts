@@ -7,6 +7,7 @@ import {
   EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT,
   createHouseholdRunwayInterview,
   dispatchHouseholdRunwayInterview,
+  householdRunwayDraftDiffersFromPlan,
   restoreHouseholdRunwayInterview,
   type HouseholdRunwayInterviewCommand,
   type HouseholdRunwayInterviewCommandInput,
@@ -34,6 +35,88 @@ function validAnswers(): HouseholdRunwayAnswers {
       confidence: "confirmed",
     },
     updated_at: occurredAt,
+  };
+}
+
+function richAnswers(): HouseholdRunwayAnswers {
+  const answers = validAnswers();
+  return {
+    ...answers,
+    shares_finances: true,
+    mine: {
+      ...answers.mine,
+      employment: "employed",
+      monthly_take_home_cents: 500_000,
+      entered_amount_cents: 500_000,
+      entered_as: "net",
+      entered_period: "monthly",
+      net_amount_cents: 500_000,
+      net_period: "monthly",
+      take_home_source: "user_confirmed",
+      confidence: "confirmed",
+    },
+    partner: {
+      ...answers.mine,
+      employment: "employed",
+      monthly_take_home_cents: 400_000,
+      entered_amount_cents: 400_000,
+      entered_as: "net",
+      entered_period: "monthly",
+      net_amount_cents: 400_000,
+      net_period: "monthly",
+      take_home_source: "user_confirmed",
+      confidence: "confirmed",
+    },
+    other_income_sources: [
+      {
+        id: "side-income",
+        type: "other",
+        label: "Side income",
+        monthly_cents: 25_000,
+        confidence: "confirmed",
+      },
+    ],
+    available_cash: { cents: 3_000_000, confidence: "confirmed" },
+    assets: {
+      liquid_investments: { cents: 500_000, confidence: "confirmed" },
+      illiquid_investments: { cents: 600_000, confidence: "confirmed" },
+      home_equity: { cents: 700_000, confidence: "confirmed" },
+      retirement_tax_deferred: { cents: 800_000, confidence: "confirmed" },
+      retirement_tax_free: { cents: 900_000, confidence: "confirmed" },
+    },
+    housing_tenure: "rent",
+    expense_mode: "guided",
+    expense_items: [
+      {
+        id: "rent-1",
+        category: "housing",
+        type: "rent",
+        label: "Rent",
+        current_amount_cents: 300_000,
+        interruption_amount_cents: 300_000,
+        frequency: "monthly",
+        confidence: "confirmed",
+      },
+    ],
+    completed_expense_categories: ["housing"],
+    expense_category_modes: { housing: "itemized" },
+    expense_category_subtotals: {
+      utilities: {
+        current_monthly_cents: 100_000,
+        interruption_monthly_cents: 80_000,
+        confidence: "confirmed",
+      },
+    },
+    quick_expenses: {
+      current_monthly_cents: 600_000,
+      interruption_monthly_cents: 400_000,
+      confidence: "confirmed",
+    },
+    extreme_access: {
+      illiquid_investments_cents: 100_000,
+      retirement_tax_deferred_cents: 200_000,
+      retirement_tax_free_cents: 300_000,
+    },
   };
 }
 
@@ -133,6 +216,124 @@ describe("provisional Plan Adjustment and completed-Plan lifecycle", () => {
     expect(applied.events[0]).toMatchObject({ type: "plan_adjustment_applied" });
   });
 
+  it("counts every monetary source before asking to change currency and retains them when confirmed", () => {
+    const original = createHouseholdRunwayInterview({
+      revision: 7,
+      inputs: richAnswers(),
+    });
+    const requested = dispatch(
+      original,
+      { type: "request_currency_change", currency: "CAD" },
+      "request-cad",
+    );
+
+    expect(requested.state.draft.pendingCurrencyChange).toEqual({
+      currency: "CAD",
+      monetaryEntryCount: 9,
+    });
+    expect(requested.events[0]).toMatchObject({
+      type: "currency_change_requested",
+      monetaryEntryCount: 9,
+    });
+
+    const retained = dispatch(
+      requested.state,
+      { type: "retain_currency_entries" },
+      "retain-cad",
+    );
+    expect(retained.state.draft.location.currency).toBe("CAD");
+    expect(retained.state.draft.pendingCurrencyChange).toBeNull();
+    expect(retained.state.draft.answers.available_cash.cents).toBe(3_000_000);
+    expect(retained.events[0]).toMatchObject({
+      type: "currency_entries_retained",
+      currency: "CAD",
+    });
+  });
+
+  it("applies expense, cash, income, and usable-asset adjustments to a rich Plan", () => {
+    const original = createHouseholdRunwayInterview({
+      revision: 7,
+      inputs: richAnswers(),
+    });
+    const adjusted = dispatch(
+      original,
+      {
+        type: "set_plan_adjustment",
+        patch: {
+          expense_reduction_cents: 100_000,
+          added_cash_cents: 200_000,
+          added_monthly_income_cents: 50_000,
+          usable_illiquid_investments_cents: 100_000,
+          usable_retirement_tax_deferred_cents: 200_000,
+          usable_retirement_tax_free_cents: 300_000,
+        },
+      },
+      "rich-adjustment",
+    );
+    const applied = dispatch(
+      adjusted.state,
+      { type: "apply_plan_adjustment" },
+      "apply-rich-adjustment",
+    );
+
+    expect(applied.state.committedPlan).toEqual(original.committedPlan);
+    expect(applied.state.draft.planAdjustment).toEqual(
+      EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT,
+    );
+    expect(applied.state.planInputs?.available_cash).toEqual({
+      cents: 3_200_000,
+      confidence: "confirmed",
+    });
+    expect(applied.state.planInputs?.other_income_sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Applied Plan Adjustment",
+          monthly_cents: 50_000,
+        }),
+      ]),
+    );
+    expect(applied.state.planInputs?.expense_items[0]).toMatchObject({
+      interruption_amount_cents: 200_000,
+    });
+    expect(applied.state.planInputs?.extreme_access).toEqual({
+      illiquid_investments_cents: 100_000,
+      retirement_tax_deferred_cents: 200_000,
+      retirement_tax_free_cents: 300_000,
+    });
+  });
+
+  it("ignores plan-adjustment commands outside a reviewable lifecycle", () => {
+    const fresh = createHouseholdRunwayInterview();
+    for (const [input, id] of [
+      [{ type: "set_plan_adjustment", patch: { added_cash_cents: 1 } }, "set"],
+      [{ type: "reset_plan_adjustment" }, "reset"],
+      [{ type: "apply_plan_adjustment" }, "apply"],
+    ] as const) {
+      const result = dispatch(fresh, input, `fresh-${id}`);
+      expect(result.events[0]).toMatchObject({
+        type: "command_ignored",
+        reason: "plan_adjustment_unavailable",
+      });
+    }
+
+    const incomplete = restoreHouseholdRunwayInterview({
+      version: 2,
+      status: "reviewing",
+      stage: "review",
+      draft: {},
+      validationIssue: null,
+    });
+    const applyWithoutPlan = dispatch(
+      incomplete,
+      { type: "apply_plan_adjustment" },
+      "apply-without-plan",
+    );
+    expect(applyWithoutPlan.events[0]).toMatchObject({
+      type: "command_ignored",
+      reason: "plan_adjustment_unavailable",
+    });
+  });
+
   it("edits a completed Plan as a new Draft and gives Discard the committed Plan back", () => {
     const original = completedPlanState();
     const editing = dispatch(original, { type: "edit_completed_plan" }, "edit");
@@ -192,6 +393,27 @@ describe("provisional Plan Adjustment and completed-Plan lifecycle", () => {
       type: "command_ignored",
       reason: "invalid_stage",
     });
+  });
+
+  it("blocks persistence while a completed result still has a provisional adjustment", () => {
+    const adjusted = dispatch(
+      completedPlanState(),
+      { type: "set_plan_adjustment", patch: { added_cash_cents: 1_000 } },
+      "pending-adjustment",
+    );
+    const blocked = dispatch(
+      adjusted.state,
+      { type: "save_plan" },
+      "save-with-adjustment",
+      { planPersistence: "available" },
+    );
+
+    expect(blocked.effects).toEqual([]);
+    expect(blocked.state.validationIssue).toEqual({
+      code: "plan_adjustment_pending",
+      stage: "result",
+    });
+    expect(blocked.events[0]).toMatchObject({ type: "validation_blocked" });
   });
 
   it("Start New Interview keeps the committed Plan while Discard without one returns to landing", () => {
@@ -524,6 +746,323 @@ describe("typed operation-local effects", () => {
       type: "draft_device_operation_succeeded",
       action: "clear",
     });
+  });
+
+  it("ignores persistence completions that are not pending or lose their derived inputs", () => {
+    const notPending = dispatch(
+      completedPlanState(),
+      {
+        type: "plan_persistence_succeeded",
+        sourceRevision: 7,
+        correlationId: "not-pending",
+      },
+      "not-pending-result",
+    );
+    expect(notPending.events[0]).toMatchObject({
+      type: "command_ignored",
+      reason: "operation_not_pending",
+    });
+
+    const requested = dispatch(
+      completedPlanState(),
+      { type: "save_plan" },
+      "missing-derived-inputs",
+      { planPersistence: "available" },
+    );
+    const broken = {
+      ...requested.state,
+      planInputs: null,
+      assessment: null,
+    } as HouseholdRunwayInterviewState;
+    const invalid = dispatch(
+      broken,
+      {
+        type: "plan_persistence_succeeded",
+        sourceRevision: requested.state.draft.revision,
+        correlationId: "missing-derived-inputs",
+      },
+      "missing-derived-inputs-result",
+      { planPersistence: "available" },
+    );
+    expect(invalid.events[0]).toMatchObject({
+      type: "command_ignored",
+      reason: "invalid_stage",
+    });
+  });
+
+  it("marks a matching device completion stale when the Draft changed in flight", () => {
+    const requested = dispatch(
+      completedPlanState(),
+      { type: "clear_device_draft" },
+      "clear-stale",
+    );
+    const changed = dispatch(
+      requested.state,
+      {
+        type: "update_answers",
+        patch: { available_cash: { cents: 3_100_000, confidence: "confirmed" } },
+      },
+      "edit-during-clear",
+    );
+    const stale = dispatch(
+      changed.state,
+      {
+        type: "draft_device_operation_succeeded",
+        action: "clear",
+        sourceRevision: requested.state.draft.revision,
+        correlationId: "clear-stale",
+      },
+      "clear-stale-result",
+    );
+
+    expect(stale.state.operations.deviceDraft).toMatchObject({
+      status: "failed",
+      error: "stale_result",
+    });
+    expect(stale.events[0]).toMatchObject({
+      type: "draft_device_operation_failed",
+      error: "stale_result",
+    });
+  });
+
+  it("completes failed Draft sync and remember/import device operations independently", () => {
+    const syncRequested = dispatch(
+      completedPlanState(),
+      { type: "synchronize_draft" },
+      "sync-failed",
+    );
+    const syncFailed = dispatch(
+      syncRequested.state,
+      {
+        type: "draft_synchronization_failed",
+        sourceRevision: syncRequested.state.draft.revision,
+        correlationId: "sync-failed",
+        error: "storage_unavailable",
+      },
+      "sync-failed-result",
+    );
+    expect(syncFailed.state.operations.draftSynchronization).toMatchObject({
+      status: "failed",
+      error: "storage_unavailable",
+    });
+
+    const rememberRequested = dispatch(
+      completedPlanState(),
+      { type: "remember_draft" },
+      "remember",
+    );
+    const remembered = dispatch(
+      rememberRequested.state,
+      {
+        type: "draft_device_operation_succeeded",
+        action: "remember",
+        sourceRevision: rememberRequested.state.draft.revision,
+        correlationId: "remember",
+      },
+      "remember-result",
+    );
+    expect(remembered.state.operations.deviceDraft).toMatchObject({
+      status: "succeeded",
+      action: "remember",
+    });
+
+    const importRequested = dispatch(
+      completedPlanState(),
+      { type: "import_draft" },
+      "import",
+    );
+    const importFailed = dispatch(
+      importRequested.state,
+      {
+        type: "draft_device_operation_failed",
+        action: "import",
+        sourceRevision: importRequested.state.draft.revision,
+        correlationId: "import",
+        error: "storage_unavailable",
+      },
+      "import-result",
+    );
+    expect(importFailed.state.operations.deviceDraft).toMatchObject({
+      status: "failed",
+      action: "import",
+      error: "storage_unavailable",
+    });
+  });
+
+  it("records report and analytics success, failure, and stale-result outcomes", () => {
+    const reportRequested = dispatch(
+      completedPlanState(),
+      { type: "request_report_download" },
+      "report",
+    );
+    const reportSucceeded = dispatch(
+      reportRequested.state,
+      {
+        type: "report_download_succeeded",
+        sourceRevision: reportRequested.state.draft.revision,
+        correlationId: "report",
+      },
+      "report-success",
+    );
+    expect(reportSucceeded.state.operations.reportDownload).toMatchObject({
+      status: "succeeded",
+    });
+
+    const reportFailedRequest = dispatch(
+      completedPlanState(),
+      { type: "request_report_download" },
+      "report-failed",
+    );
+    const reportFailed = dispatch(
+      reportFailedRequest.state,
+      {
+        type: "report_download_failed",
+        sourceRevision: reportFailedRequest.state.draft.revision,
+        correlationId: "report-failed",
+        error: "download_failed",
+      },
+      "report-failed-result",
+    );
+    expect(reportFailed.state.operations.reportDownload).toMatchObject({
+      status: "failed",
+      error: "download_failed",
+    });
+
+    const reportStaleRequest = dispatch(
+      completedPlanState(),
+      { type: "request_report_download" },
+      "report-stale",
+    );
+    const reportEdited = dispatch(
+      reportStaleRequest.state,
+      { type: "set_plan_adjustment", patch: { added_cash_cents: 1 } },
+      "report-edit",
+    );
+    const reportStale = dispatch(
+      reportEdited.state,
+      {
+        type: "report_download_succeeded",
+        sourceRevision: reportStaleRequest.state.draft.revision,
+        correlationId: "report-stale",
+      },
+      "report-stale-result",
+    );
+    expect(reportStale.state.operations.reportDownload).toMatchObject({
+      status: "failed",
+      error: "stale_result",
+    });
+
+    const analyticsRequested = dispatch(
+      completedPlanState(),
+      { type: "request_analytics", eventName: "completed", stage: "result" },
+      "analytics-success",
+    );
+    const analyticsSucceeded = dispatch(
+      analyticsRequested.state,
+      {
+        type: "analytics_succeeded",
+        sourceRevision: analyticsRequested.state.draft.revision,
+        correlationId: "analytics-success",
+      },
+      "analytics-success-result",
+    );
+    expect(analyticsSucceeded.state.operations.analytics).toMatchObject({
+      status: "succeeded",
+    });
+
+    const analyticsFailedRequest = dispatch(
+      completedPlanState(),
+      { type: "request_analytics", eventName: "result_interaction" },
+      "analytics-failed",
+    );
+    const analyticsFailed = dispatch(
+      analyticsFailedRequest.state,
+      {
+        type: "analytics_failed",
+        sourceRevision: analyticsFailedRequest.state.draft.revision,
+        correlationId: "analytics-failed",
+      },
+      "analytics-failed-result",
+    );
+    expect(analyticsFailed.state.operations.analytics).toMatchObject({
+      status: "failed",
+      error: "analytics_failed",
+    });
+
+    const reportNotPending = dispatch(
+      completedPlanState(),
+      {
+        type: "report_download_succeeded",
+        sourceRevision: 7,
+        correlationId: "missing-report",
+      },
+      "report-not-pending",
+    );
+    expect(reportNotPending.events[0]).toMatchObject({
+      type: "command_ignored",
+      reason: "operation_not_pending",
+    });
+
+    const analyticsNotPending = dispatch(
+      completedPlanState(),
+      {
+        type: "analytics_succeeded",
+        sourceRevision: 7,
+        correlationId: "missing-analytics",
+      },
+      "analytics-not-pending",
+    );
+    expect(analyticsNotPending.events[0]).toMatchObject({
+      type: "command_ignored",
+      reason: "operation_not_pending",
+    });
+  });
+
+  it("compares a normalized Draft with its committed Plan across lifecycle differences", () => {
+    const original = completedPlanState();
+    const plan = original.committedPlan!;
+
+    expect(
+      householdRunwayDraftDiffersFromPlan(original.draft, plan, "completed", "result"),
+    ).toBe(false);
+    expect(householdRunwayDraftDiffersFromPlan(original.draft, plan)).toBe(true);
+
+    const adjusted = { ...original.draft, planAdjustment: { ...original.draft.planAdjustment, added_cash_cents: 1 } };
+    expect(householdRunwayDraftDiffersFromPlan(adjusted, plan, "completed", "result")).toBe(true);
+
+    const revised = { ...original.draft, revision: plan.revision + 1 };
+    expect(householdRunwayDraftDiffersFromPlan(revised, plan, "completed", "result")).toBe(true);
+
+    const changed = {
+      ...original.draft,
+      answers: {
+        ...original.draft.answers,
+        available_cash: { cents: 1, confidence: "confirmed" as const },
+      },
+    };
+    expect(householdRunwayDraftDiffersFromPlan(changed, plan, "completed", "result")).toBe(true);
+
+    expect(
+      householdRunwayDraftDiffersFromPlan(
+        { ...original.draft, location: { ...original.draft.location, region: null } },
+        plan,
+        "completed",
+        "result",
+      ),
+    ).toBe(true);
+
+    const rich = createHouseholdRunwayInterview({
+      revision: 7,
+      inputs: richAnswers(),
+    });
+    expect(
+      householdRunwayDraftDiffersFromPlan(
+        rich.draft,
+        rich.committedPlan!,
+        "completed",
+        "result",
+      ),
+    ).toBe(false);
   });
 
   it("requires an explicit resume choice when a differing device Draft accompanies a Plan", () => {

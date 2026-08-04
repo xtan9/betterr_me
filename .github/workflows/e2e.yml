@@ -177,7 +177,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "${E2E_DATA_MODE:-read-only}" == "read-only" ]]; then
+          if [[ "${E2E_DATA_MODE:-}" == "read-only" ]]; then
             pnpm exec playwright test e2e/production-smoke.spec.ts --project=chromium
             exit 0
           fi

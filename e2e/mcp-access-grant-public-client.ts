@@ -26,19 +26,40 @@ import type {
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-export type GateStatus = "pass" | "fail" | "not-proven";
+import {
+  EVIDENCE_ARTIFACT_FILENAME,
+  GateAccumulator,
+  browserUrlCredentialEvidence,
+  classifyAuthorizationOutcome,
+  classifyConsentPresentation,
+  classifyPublicRegistrationBoundary,
+  classifyRegistrationProbe,
+  createEvidenceRunContext,
+  finalizeEvidence,
+  hasUnnegatedEndorsementLanguage,
+  minimizeResponseBody,
+  sanitizeText,
+  sanitizeUrl,
+  type CompatibilityReport,
+  type ConsentPresentationObservation,
+  type EvidenceObservation,
+  type GateObservation,
+  type GateStatus as EvidenceGateStatus,
+  type MinimizedRequestObservation,
+} from "./mcp-access-grant-evidence";
+import {
+  DEFAULT_LOOPBACK_CALLBACK_PATH,
+  buildLoopbackUrls,
+  buildPublicNativeClientMetadata,
+  buildRegistrationNegativeCases,
+  grantClientId,
+  LOOPBACK_HOSTS,
+  type LoopbackHost,
+  type PublicClientProfileValidation,
+  validatePublicClientProfile,
+} from "./mcp-access-grant-policy";
 
-export type LoopbackHost = "127.0.0.1" | "::1";
-
-export const LOOPBACK_HOSTS = ["127.0.0.1", "::1"] as const satisfies readonly LoopbackHost[];
-export const DEFAULT_LOOPBACK_CALLBACK_PATH = "/oauth/callback";
-
-export interface CompatibilityGate {
-  id: string;
-  status: GateStatus;
-  detail: string;
-  evidence?: Record<string, unknown>;
-}
+export type GateStatus = EvidenceGateStatus;
 
 export interface McpAccessGrantTarget {
   name: string;
@@ -51,42 +72,9 @@ export interface McpAccessGrantTarget {
   password?: string;
 }
 
-export interface CompatibilityReport {
-  issue: string;
-  outcome: "passed" | "blocked" | "not-proven";
-  startedAt: string;
-  finishedAt: string;
-  target: {
-    name: string;
-    canonicalResource: string;
-    supabaseUrl: string;
-    expectedAuthorizationServer: string;
-    loopbackHosts: LoopbackHost[];
-  };
-  versions: Record<string, string>;
-  gates: CompatibilityGate[];
-  requests: RequestEvidence[];
-}
-
-interface RequestEvidence {
-  method: string;
-  url: string;
-  requestBodyFields: string[];
-  authorizationHeaderPresent: boolean;
-  requestClientId?: string;
-  requestGrantType?: string;
-  requestRedirectUri?: string;
-  requestResource?: string;
-  requestCodeChallengeMethod?: string;
-  requestCodeChallengePresent?: boolean;
-  requestCodePresent?: boolean;
-  requestCodeVerifierPresent?: boolean;
-  requestCodeVerifierHash?: string;
-  status?: number;
-  responseLocation?: string;
-  responseBody?: Record<string, unknown>;
-  networkError?: string;
-}
+type RequestEvidence = {
+  -readonly [Key in keyof MinimizedRequestObservation]: MinimizedRequestObservation[Key]
+};
 
 interface CallbackResult {
   code?: string;
@@ -108,266 +96,7 @@ interface TargetConfig {
   passwordEnv?: unknown;
 }
 
-export interface LoopbackUrls {
-  registrationUrl: string;
-  callbackUrl: string;
-}
-
-export function buildLoopbackUrls(
-  host: LoopbackHost,
-  port: number,
-  callbackPath = DEFAULT_LOOPBACK_CALLBACK_PATH,
-): LoopbackUrls {
-  const normalizedPath = callbackPath.startsWith("/") ? callbackPath : `/${callbackPath}`;
-  const hostname = host === "::1" ? `[${host}]` : host;
-  return {
-    registrationUrl: `http://${hostname}${normalizedPath}`,
-    callbackUrl: `http://${hostname}:${port}${normalizedPath}`,
-  };
-}
-
-export function isSupportedLoopbackRegistrationRedirect(
-  value: string,
-  expectedHost: LoopbackHost,
-  callbackPath = DEFAULT_LOOPBACK_CALLBACK_PATH,
-): boolean {
-  try {
-    const url = new URL(value);
-    const actualHost = url.hostname.replace(/^\[|\]$/g, "");
-    const expectedAuthority = expectedHost === "::1" ? `[${expectedHost}]` : expectedHost;
-    const actualAuthority = /^http:\/\/([^/?#]+)/i.exec(value)?.[1];
-    const normalizedPath = callbackPath.startsWith("/") ? callbackPath : `/${callbackPath}`;
-    return url.protocol === "http:" &&
-      actualHost === expectedHost &&
-      actualAuthority === expectedAuthority &&
-      url.port === "" &&
-      url.pathname === normalizedPath &&
-      url.search === "" &&
-      url.hash === "";
-  } catch {
-    return false;
-  }
-}
-
-export interface PublicNativeClientMetadataInput {
-  registrationRedirectUri: string;
-  clientName: string;
-  clientUri: string;
-  logoUri: string;
-  softwareId: string;
-  softwareVersion: string;
-}
-
-export function buildPublicNativeClientMetadata({
-  registrationRedirectUri,
-  clientName,
-  clientUri,
-  logoUri,
-  softwareId,
-  softwareVersion,
-}: PublicNativeClientMetadataInput): OAuthClientMetadata {
-  return {
-    client_name: clientName,
-    client_uri: clientUri,
-    logo_uri: logoUri,
-    redirect_uris: [registrationRedirectUri],
-    grant_types: ["authorization_code"],
-    response_types: ["code"],
-    token_endpoint_auth_method: "none",
-    software_id: softwareId,
-    software_version: softwareVersion,
-  };
-}
-
-export interface PublicClientProfileValidation {
-  accepted: boolean;
-  clientIdPresent: boolean;
-  clientSecretReturned: boolean;
-  supportedRedirects: boolean;
-  supportedGrantTypes: boolean;
-  supportedResponseTypes: boolean;
-  publicTokenAuthentication: boolean;
-}
-
-export function validatePublicClientProfile(
-  clientInformation: OAuthClientInformationMixed | Record<string, unknown> | undefined,
-  expectedHost: LoopbackHost,
-  callbackPath = DEFAULT_LOOPBACK_CALLBACK_PATH,
-): PublicClientProfileValidation {
-  const info = clientInformation as Record<string, unknown> | undefined;
-  const redirectUris = Array.isArray(info?.redirect_uris)
-    ? info.redirect_uris.filter((value): value is string => typeof value === "string")
-    : [];
-  const grantTypes = Array.isArray(info?.grant_types)
-    ? info.grant_types.filter((value): value is string => typeof value === "string")
-    : [];
-  const responseTypes = Array.isArray(info?.response_types)
-    ? info.response_types.filter((value): value is string => typeof value === "string")
-    : [];
-  const clientIdPresent = typeof info?.client_id === "string" && info.client_id.length > 0;
-  const clientSecretReturned = Boolean(info && "client_secret" in info && info.client_secret !== undefined);
-  const supportedRedirects = redirectUris.length > 0 && redirectUris.every((uri) =>
-    isSupportedLoopbackRegistrationRedirect(uri, expectedHost, callbackPath),
-  );
-  const supportedGrantTypes = grantTypes.length === 1 && grantTypes[0] === "authorization_code";
-  const supportedResponseTypes = responseTypes.length === 1 && responseTypes[0] === "code";
-  const publicTokenAuthentication = info?.token_endpoint_auth_method === "none";
-
-  return {
-    accepted: clientIdPresent && !clientSecretReturned && supportedRedirects && supportedGrantTypes &&
-      supportedResponseTypes && publicTokenAuthentication,
-    clientIdPresent,
-    clientSecretReturned,
-    supportedRedirects,
-    supportedGrantTypes,
-    supportedResponseTypes,
-    publicTokenAuthentication,
-  };
-}
-
-export interface ConsentPresentationObservation {
-  clientNameVisible: boolean;
-  clientUriVisible: boolean;
-  logoVisible: boolean;
-  softwareIdVisible: boolean;
-  softwareVersionVisible: boolean;
-  untrustedDisclaimerVisible: boolean;
-  endorsementLanguageVisible: boolean;
-  affirmativeControlVisible: boolean;
-  denialControlVisible: boolean;
-  callbackBeforeDecision: boolean;
-}
-
-export function classifyConsentPresentation(observation: ConsentPresentationObservation): GateStatus {
-  return observation.clientNameVisible &&
-    observation.clientUriVisible &&
-    observation.logoVisible &&
-    observation.softwareIdVisible &&
-    observation.softwareVersionVisible &&
-    observation.untrustedDisclaimerVisible &&
-    !observation.endorsementLanguageVisible &&
-    observation.affirmativeControlVisible &&
-    observation.denialControlVisible &&
-    !observation.callbackBeforeDecision
-    ? "pass"
-    : "fail";
-}
-
-export interface AuthorizationOutcomeObservation {
-  kind: "denial" | "abandonment";
-  callbackReceived: boolean;
-  authorizationError: boolean;
-  stateMatches?: boolean;
-  authorizationCodePresent: boolean;
-  tokenRequestObserved: boolean;
-  accessTokenObserved: boolean;
-  refreshTokenObserved: boolean;
-  idTokenObserved?: boolean;
-  browserFragmentCredentialObserved?: boolean;
-}
-
-export function classifyAuthorizationOutcome(
-  observation: AuthorizationOutcomeObservation,
-): GateStatus {
-  const credentialObserved = observation.authorizationCodePresent ||
-    observation.tokenRequestObserved ||
-    observation.accessTokenObserved ||
-    observation.refreshTokenObserved ||
-    Boolean(observation.idTokenObserved) ||
-    Boolean(observation.browserFragmentCredentialObserved);
-  if (credentialObserved) {
-    return "fail";
-  }
-  if (observation.kind === "denial") {
-    return observation.callbackReceived && observation.authorizationError && observation.stateMatches === true ? "pass" : "fail";
-  }
-  return observation.callbackReceived ? "fail" : "pass";
-}
-
-export interface BrowserUrlCredentialEvidence {
-  credentialObserved: boolean;
-  authorizationCodePresent: boolean;
-  accessTokenPresent: boolean;
-  refreshTokenPresent: boolean;
-  idTokenPresent: boolean;
-  fragmentKeys: string[];
-}
-
-export function browserUrlCredentialEvidence(value: string): BrowserUrlCredentialEvidence {
-  try {
-    const hash = new URL(value).hash.replace(/^#/, "");
-    const fragment = new URLSearchParams(hash);
-    const authorizationCodePresent = fragment.has("code");
-    const accessTokenPresent = fragment.has("access_token");
-    const refreshTokenPresent = fragment.has("refresh_token");
-    const idTokenPresent = fragment.has("id_token");
-    return {
-      credentialObserved: authorizationCodePresent || accessTokenPresent || refreshTokenPresent || idTokenPresent,
-      authorizationCodePresent,
-      accessTokenPresent,
-      refreshTokenPresent,
-      idTokenPresent,
-      fragmentKeys: [...fragment.keys()].filter((key) => /^(code|access_token|refresh_token|id_token)$/i.test(key)),
-    };
-  } catch {
-    return {
-      credentialObserved: false,
-      authorizationCodePresent: false,
-      accessTokenPresent: false,
-      refreshTokenPresent: false,
-      idTokenPresent: false,
-      fragmentKeys: [],
-    };
-  }
-}
-
-export function classifyPublicRegistrationBoundary(
-  registrationObserved: boolean,
-  validationAccepted: boolean,
-  statusCode: number | undefined,
-  networkError: string | undefined,
-): GateStatus {
-  if (registrationObserved && validationAccepted) {
-    return "pass";
-  }
-  if (!registrationObserved || statusCode === undefined || networkError || statusCode >= 500 || statusCode < 200 || statusCode >= 600) {
-    return "not-proven";
-  }
-  return "fail";
-}
-
-export function hasUnnegatedEndorsementLanguage(text: string): boolean {
-  const endorsementTerms = /\b(?:verified|endorsed|approved|trusted|recommended|sponsored|official(?:ly)?|partner)\b/gi;
-  for (const match of text.matchAll(endorsementTerms)) {
-    const index = match.index ?? 0;
-    const statementStart = Math.max(
-      text.lastIndexOf(".", index - 1),
-      text.lastIndexOf("!", index - 1),
-      text.lastIndexOf("?", index - 1),
-      text.lastIndexOf(";", index - 1),
-      text.lastIndexOf("\n", index - 1),
-    ) + 1;
-    const localPrefix = text.slice(Math.max(statementStart, index - 48), index);
-    if (!/\b(?:not|never|cannot|can't|doesn't|does not|unverified|untrusted|without)\b[\s\S]{0,30}$/i.test(localPrefix)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-export function isEvidenceSanitized(serialized: string, secrets: string[] = []): boolean {
-  if (secrets.some((secret) => secret.length >= 4 && serialized.includes(secret))) {
-    return false;
-  }
-
-  const sensitiveJsonValue = /"(?:access_token|refresh_token|id_token|client_secret|code_verifier|password|cookie|authorization|code)"\s*:\s*"(?!\[REDACTED\])[^"]+"/i;
-  const sensitiveFormValue = /(?<![A-Za-z_])(?:access_token|refresh_token|id_token|client_secret|code_verifier|password|cookie|authorization|code)\s*=\s*(?!\[REDACTED\])[^&\s,}]+/i;
-  return !/(Bearer\s+(?!\[REDACTED\])[A-Za-z0-9._~-]{10,}|\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b)/i.test(serialized) &&
-    !sensitiveJsonValue.test(serialized) &&
-    !sensitiveFormValue.test(serialized);
-}
-
-const REQUIRED_GATE_IDS = [
+export const PUBLIC_CLIENT_REQUIRED_GATE_IDS = [
   "resource-discovery",
   "provider-discovery",
   "public-client-registration-both",
@@ -391,45 +120,6 @@ const CALLBACK_WAIT_TIMEOUT_MS = 10_000;
 const LOGO_FIXTURE_PATH = "/mcp-client-logo.svg";
 const LOGO_FIXTURE_CONTENT = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="#0f766e"/><path d="M18 32h28M32 18v28" stroke="#fff" stroke-width="6" stroke-linecap="round"/></svg>`;
 
-const SAFE_RESPONSE_KEYS = new Set([
-  "authorization_endpoint",
-  "authorization_servers",
-  "client_name",
-  "client_uri",
-  "code_challenge_methods_supported",
-  "error",
-  "error_description",
-  "error_code",
-  "grant_types_supported",
-  "issuer",
-  "jwks_uri",
-  "logo_uri",
-  "msg",
-  "registration_endpoint",
-  "redirect_uris",
-  "resource",
-  "response_types_supported",
-  "scopes_supported",
-  "software_id",
-  "software_version",
-  "token_endpoint",
-  "token_endpoint_auth_method",
-  "token_endpoint_auth_methods_supported",
-]);
-
-const SAFE_URL_KEYS = new Set([
-  "authorization_endpoint",
-  "client_uri",
-  "issuer",
-  "jwks_uri",
-  "logo_uri",
-  "registration_endpoint",
-  "resource",
-  "token_endpoint",
-]);
-
-const SAFE_URL_ARRAY_KEYS = new Set(["authorization_servers", "redirect_uris"]);
-
 const SENSITIVE_ENV_NAMES = [
   "MCP_TEST_PASSWORD",
   "SUPABASE_SERVICE_ROLE_KEY",
@@ -437,118 +127,15 @@ const SENSITIVE_ENV_NAMES = [
   "API_KEY_HMAC_SECRET",
 ];
 
-let activeTargetSecrets: string[] = [];
-
 function addGate(
-  gates: CompatibilityGate[],
+  gates: GateAccumulator,
   id: string,
   status: GateStatus,
-  detail: string,
-  evidence?: Record<string, unknown>,
+  detail: unknown,
+  evidence?: unknown,
+  error?: GateObservation["error"],
 ): void {
-  const existing = gates.findIndex((gate) => gate.id === id);
-  const gate = { id, status, detail, ...(evidence ? { evidence } : {}) };
-
-  if (existing === -1) {
-    gates.push(gate);
-  } else {
-    gates[existing] = gate;
-  }
-}
-
-function sanitizeText(value: string): string {
-  let sanitized = value;
-
-  const configuredSecrets = SENSITIVE_ENV_NAMES.map((name) => process.env[name]);
-  for (const secret of [...configuredSecrets, ...activeTargetSecrets]) {
-    if (secret && secret.length >= 4) {
-      sanitized = sanitized.split(secret).join("[REDACTED]");
-    }
-  }
-
-  return sanitized
-    .replace(/(?<![A-Za-z_])(access_token|refresh_token|id_token|client_secret|code_verifier|password|authorization|code)=([^&\s]+)/gi, "$1=[REDACTED]")
-    .replace(/Bearer\s+[^\s]+/gi, "Bearer [REDACTED]")
-    .replace(/\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, "[JWT REDACTED]");
-}
-
-function sanitizeUrl(value: string | URL): string {
-  try {
-    const url = new URL(value.toString());
-    const safeQueryKeys = new Set([
-      "code_challenge_method",
-      "grant_type",
-      "redirect_uri",
-      "response_type",
-      "resource",
-      "scope",
-    ]);
-    const query = new URLSearchParams();
-
-    for (const [key, queryValue] of url.searchParams) {
-      query.set(
-        key,
-        safeQueryKeys.has(key)
-          ? key === "redirect_uri" || key === "resource"
-            ? sanitizeUrl(queryValue)
-            : sanitizeText(queryValue)
-          : "[REDACTED]",
-      );
-    }
-
-    const queryText = query.toString();
-    return `${url.origin}${url.pathname}${queryText ? `?${queryText}` : ""}`;
-  } catch {
-    return sanitizeText(value.toString()).replace(/([?&](?:code|state|client_id|code_challenge)=[^&]+)/gi, "$1=[REDACTED]");
-  }
-}
-
-function safeBodyValue(value: unknown): unknown {
-  if (typeof value === "string") {
-    return sanitizeText(value);
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((item) => safeBodyValue(item));
-  }
-
-  if (value && typeof value === "object") {
-    const result: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value)) {
-      if (/^(access_token|refresh_token|id_token|client_secret|code_verifier|password|cookie|authorization|secret|token|code)$/i.test(key)) {
-        result[key] = "[REDACTED]";
-      } else if (SAFE_URL_KEYS.has(key) && typeof item === "string") {
-        result[key] = sanitizeUrl(item);
-      } else if (SAFE_URL_ARRAY_KEYS.has(key) && Array.isArray(item)) {
-        result[key] = item.map((value) => typeof value === "string" ? sanitizeUrl(value) : "[REDACTED]");
-      } else if (SAFE_RESPONSE_KEYS.has(key)) {
-        result[key] = safeBodyValue(item);
-      }
-    }
-    return result;
-  }
-
-  return value;
-}
-
-function summarizeResponseBody(text: string, contentType: string | null): Record<string, unknown> | undefined {
-  if (!text) {
-    return undefined;
-  }
-
-  if (contentType?.includes("json")) {
-    try {
-      const parsed: unknown = JSON.parse(text);
-      const safe = safeBodyValue(parsed);
-      return safe && typeof safe === "object" && !Array.isArray(safe)
-        ? (safe as Record<string, unknown>)
-        : { type: Array.isArray(safe) ? "array" : typeof safe };
-    } catch {
-      return { body: "[REDACTED NON-JSON RESPONSE]" };
-    }
-  }
-
-  return { contentType: contentType ?? "unknown", body: "[REDACTED RESPONSE BODY]" };
+  gates.replace({ kind: "gate", gateId: id, status, detail, evidence, error });
 }
 
 function requestBodyFields(body: BodyInit | null | undefined): string[] {
@@ -646,7 +233,7 @@ function createEvidenceFetch(requests: RequestEvidence[]) {
         const contentType = response.headers.get("content-type");
         request.responseBody = contentType?.includes("text/event-stream")
           ? { contentType, body: "[STREAM BODY NOT RECORDED]" }
-          : summarizeResponseBody(
+          : minimizeResponseBody(
               await response.clone().text(),
               contentType,
             );
@@ -1099,28 +686,6 @@ function providerFeatureDisabled(requests: RequestEvidence[], providerUrl: strin
   return `Supabase OAuth provider returned HTTP ${status} with error_code=feature_disabled: ${sanitizeText(message)}`;
 }
 
-export function grantClientId(grant: unknown): string | undefined {
-  if (!grant || typeof grant !== "object") {
-    return undefined;
-  }
-
-  const record = grant as Record<string, unknown>;
-  if (typeof record.client_id === "string") {
-    return record.client_id;
-  }
-
-  if (record.client && typeof record.client === "object") {
-    const client = record.client as Record<string, unknown>;
-    return typeof client.id === "string"
-      ? client.id
-      : typeof client.client_id === "string"
-        ? client.client_id
-        : undefined;
-  }
-
-  return undefined;
-}
-
 function grantSummary(grant: unknown): Record<string, unknown> {
   if (!grant || typeof grant !== "object") {
     return { present: false };
@@ -1347,9 +912,8 @@ async function revokeGrantForClient(
   }
 }
 
-async function writeReport(report: CompatibilityReport, testInfo: TestInfo): Promise<boolean> {
-  const serialized = `${JSON.stringify(report, null, 2)}\n`;
-  const outputPath = testInfo.outputPath("mcp-access-grant-evidence.json");
+async function writeReport(serialized: string, testInfo: TestInfo): Promise<boolean> {
+  const outputPath = testInfo.outputPath(EVIDENCE_ARTIFACT_FILENAME);
   try {
     await mkdir(path.dirname(outputPath), { recursive: true });
     await writeFile(outputPath, serialized, "utf8");
@@ -1360,55 +924,49 @@ async function writeReport(report: CompatibilityReport, testInfo: TestInfo): Pro
       await writeFile(path.resolve(configuredPath), serialized, "utf8");
     }
 
-    return isEvidenceSanitized(serialized, [
-      ...SENSITIVE_ENV_NAMES.map((name) => process.env[name] ?? ""),
-      ...activeTargetSecrets,
-    ]);
+    return true;
   } catch {
     return false;
   }
 }
 
-function completeReport(report: CompatibilityReport, gates: CompatibilityGate[]): void {
-  for (const id of REQUIRED_GATE_IDS) {
-    if (!gates.some((gate) => gate.id === id)) {
-      addGate(
-        gates,
-        id,
-        "not-proven",
-        "Gate was not reached because an earlier compatibility gate stopped the run.",
-        { reached: false, observedBoundary: "not-reached" },
-      );
-    }
-  }
-
-  report.gates = gates;
-  report.outcome = gates.some((gate) => gate.status === "fail")
-    ? "blocked"
-    : gates.some((gate) => gate.status === "not-proven")
-      ? "not-proven"
-      : "passed";
-  report.finishedAt = new Date().toISOString();
+interface LiveEvidenceRun {
+  readonly issue: string;
+  readonly target: CompatibilityReport["target"];
+  readonly startedAt: string;
+  readonly versions: Readonly<Record<string, string>>;
+  readonly configuredSecrets: readonly string[];
 }
 
 async function finishReport(
-  report: CompatibilityReport,
-  gates: CompatibilityGate[],
+  run: LiveEvidenceRun,
+  gates: GateAccumulator,
+  requests: RequestEvidence[],
   testInfo: TestInfo,
 ): Promise<CompatibilityReport> {
-  completeReport(report, gates);
-  const sanitized = await writeReport(report, testInfo);
-  addGate(
-    gates,
-    "sanitized-evidence",
-    sanitized ? "pass" : "fail",
-    sanitized
-      ? "Evidence artifact was written without bearer tokens, JWTs, passwords, cookies, or reusable credentials."
-      : "Evidence artifact could not be proven free of bearer tokens, JWTs, passwords, cookies, or reusable credentials.",
-  );
-  completeReport(report, gates);
-  await writeReport(report, testInfo);
-  return report;
+  const context = createEvidenceRunContext({
+    configuredSecrets: run.configuredSecrets,
+    time: { startedAt: run.startedAt, finishedAt: new Date().toISOString() },
+    versions: run.versions,
+  });
+  const input = {
+    issue: run.issue,
+    target: run.target,
+    requiredGateIds: PUBLIC_CLIENT_REQUIRED_GATE_IDS,
+    observations: [
+      ...gates.observations(),
+      ...requests.map((request): EvidenceObservation => ({ kind: "request", request })),
+    ],
+  };
+  const preliminary = finalizeEvidence(input, context);
+  const preliminaryWritten = await writeReport(preliminary.verification.serialized, testInfo);
+  const finalized = finalizeEvidence({ ...input, artifactWriteSucceeded: preliminaryWritten }, context);
+  const finalizedWritten = await writeReport(finalized.verification.serialized, testInfo);
+  if (finalizedWritten) return finalized.report;
+
+  const artifactFailure = finalizeEvidence({ ...input, artifactWriteSucceeded: false }, context);
+  await writeReport(artifactFailure.verification.serialized, testInfo);
+  return artifactFailure.report;
 }
 
 async function probeProviderMetadata(
@@ -1490,58 +1048,6 @@ async function validateProviderToken(
       detail: `Local provider-token verification failed: ${errorDetail(error)}`,
     };
   }
-}
-
-export interface RegistrationNegativeCase {
-  id: string;
-  metadata: Record<string, unknown>;
-}
-
-export type RegistrationProbeStatus = "accepted" | "rejected" | "not-proven";
-
-export function isRegistrationMetadataError(observedError: unknown): boolean {
-  return typeof observedError === "string" &&
-    /invalid_client_metadata|invalid_(?:client|redirect_uri|grant_type|response_type|request)|unsupported_(?:client|grant|response)/i.test(observedError);
-}
-
-export function classifyRegistrationProbe(
-  statusCode: number,
-  observedError: unknown,
-): RegistrationProbeStatus {
-  if (statusCode >= 200 && statusCode < 300) {
-    return "accepted";
-  }
-  if ((statusCode === 400 || statusCode === 422) && isRegistrationMetadataError(observedError)) {
-    return "rejected";
-  }
-  return "not-proven";
-}
-
-export function buildRegistrationNegativeCases(
-  metadata: OAuthClientMetadata,
-): RegistrationNegativeCase[] {
-  return [
-    {
-      id: "unsupported-client-auth-method",
-      metadata: { ...metadata, token_endpoint_auth_method: "client_secret_post" },
-    },
-    {
-      id: "unsupported-grant-type",
-      metadata: { ...metadata, grant_types: ["client_credentials"] },
-    },
-    {
-      id: "unsupported-response-type",
-      metadata: { ...metadata, response_types: ["token"] },
-    },
-    {
-      id: "malformed-metadata",
-      metadata: { ...metadata, redirect_uris: ["not-a-loopback-uri"] },
-    },
-    {
-      id: "unsafe-redirect-metadata",
-      metadata: { ...metadata, redirect_uris: ["https://untrusted-client.example.test/callback"] },
-    },
-  ];
 }
 
 async function probeRegistrationConstraints(
@@ -1733,7 +1239,7 @@ async function registerConsentScenarioClient(
   sdkVersion: string,
   logoUri: string,
   requests: RequestEvidence[],
-  gates: CompatibilityGate[],
+  gates: GateAccumulator,
 ): Promise<RegisteredConsentClient | undefined> {
   const family = familyName(host);
   const registrationRedirectUri = buildLoopbackUrls(host, 0).registrationUrl;
@@ -1826,7 +1332,7 @@ async function runConsentRejection(
   registrationEvidence: Record<string, unknown>,
   page: Page,
   requests: RequestEvidence[],
-  gates: CompatibilityGate[],
+  gates: GateAccumulator,
 ): Promise<void> {
   const family = familyName(host);
   const gateId = `consent-${kind}-${family}`;
@@ -1948,7 +1454,7 @@ async function runConsentRejection(
 }
 
 function addFamilyDownstreamNotProven(
-  gates: CompatibilityGate[],
+  gates: GateAccumulator,
   family: "ipv4" | "ipv6",
   reason: string,
 ): void {
@@ -1964,14 +1470,14 @@ function addFamilyDownstreamNotProven(
     `consent-abandonment-${family}`,
     `consent-cleanup-${family}`,
   ]) {
-    if (!gates.some((gate) => gate.id === id)) {
+    if (!gates.has(id)) {
       addGate(gates, id, "not-proven", reason, { reached: false, observedBoundary: "not-reached" });
     }
   }
 }
 
 function addAllLoopbackFamiliesNotProven(
-  gates: CompatibilityGate[],
+  gates: GateAccumulator,
   reason: string,
 ): void {
   for (const host of LOOPBACK_HOSTS) {
@@ -1986,12 +1492,12 @@ function addAllLoopbackFamiliesNotProven(
 }
 
 function aggregateFamilyGate(
-  gates: CompatibilityGate[],
+  gates: GateAccumulator,
   id: string,
   familyIds: string[],
   detail: string,
 ): void {
-  const familyGates = familyIds.map((familyId) => gates.find((gate) => gate.id === familyId));
+  const familyGates = familyIds.map((familyId) => gates.get(familyId));
   const status: GateStatus = familyGates.some((gate) => gate?.status === "fail")
     ? "fail"
     : familyGates.some((gate) => gate?.status === "not-proven" || !gate)
@@ -2020,7 +1526,7 @@ async function runLoopbackFamily(
   logoUri: string,
   page: Page,
   requests: RequestEvidence[],
-  gates: CompatibilityGate[],
+  gates: GateAccumulator,
 ): Promise<FamilyRunResult> {
   const family = familyName(host);
   const registrationRedirectUri = buildLoopbackUrls(host, 0).registrationUrl;
@@ -2431,12 +1937,12 @@ async function runLoopbackFamily(
       await operationClient.close().catch(() => undefined);
     }
   } catch (error) {
-    if (!gates.some((gate) => gate.id === `loopback-${family}`)) {
+    if (!gates.has(`loopback-${family}`)) {
       addGate(gates, `loopback-${family}`, loopback.callbackReceived ? "pass" : "not-proven", loopback.callbackReceived
         ? `The ${family} request-time loopback callback reached the exact registered host and callback path.`
         : "The request-time loopback callback was not observed before the loopback journey failed.");
     }
-    if (!gates.some((gate) => gate.id === `loopback-request-${family}`)) {
+    if (!gates.has(`loopback-request-${family}`)) {
       addGate(gates, `loopback-request-${family}`, "not-proven", "The loopback journey failed before its authorization request could be proven.");
     }
     addGate(gates, `loopback-pkce-${family}`, "fail", `Loopback compatibility journey failed: ${errorDetail(error)}`);
@@ -2467,7 +1973,7 @@ async function runLoopbackFamily(
             : `Per-family grant cleanup was not proven: ${cleanup.detail}`,
         cleanup.evidence,
       );
-    } else if (!gates.some((gate) => gate.id === `consent-cleanup-${family}`)) {
+    } else if (!gates.has(`consent-cleanup-${family}`)) {
       addGate(
         gates,
         `consent-cleanup-${family}`,
@@ -2486,15 +1992,10 @@ export async function runPublicClientLoopbackConsentCompatibility(
   page: Page,
   testInfo: TestInfo,
 ): Promise<CompatibilityReport> {
-  activeTargetSecrets = [target.email, target.password].filter(
-    (secret): secret is string => Boolean(secret),
-  );
   const startedAt = new Date().toISOString();
-  const report: CompatibilityReport = {
+  const run: LiveEvidenceRun = {
     issue: "#765",
-    outcome: "not-proven",
     startedAt,
-    finishedAt: startedAt,
     target: {
       name: target.name,
       canonicalResource: sanitizeUrl(target.canonicalResource),
@@ -2503,10 +2004,23 @@ export async function runPublicClientLoopbackConsentCompatibility(
       loopbackHosts: target.loopbackHosts ?? [...LOOPBACK_HOSTS],
     },
     versions: await collectVersions(),
+    configuredSecrets: [
+      ...SENSITIVE_ENV_NAMES.map((name) => process.env[name] ?? ""),
+      target.email ?? "",
+      target.password ?? "",
+    ],
+  };
+  const report: CompatibilityReport = {
+    issue: run.issue,
+    outcome: "not-proven",
+    startedAt: run.startedAt,
+    finishedAt: startedAt,
+    target: run.target,
+    versions: run.versions,
     gates: [],
     requests: [],
   };
-  const gates: CompatibilityGate[] = [];
+  const gates = new GateAccumulator();
 
   const configured = (() => {
     try {
@@ -2555,7 +2069,7 @@ export async function runPublicClientLoopbackConsentCompatibility(
 
   if (!configured || !nonProduction) {
     addAllLoopbackFamiliesNotProven(gates, "Canonical Resource and delegated provider configuration was not ready for the loopback journeys.");
-    return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, report.requests, testInfo);
   }
 
   const fetchRequests = report.requests;
@@ -2575,7 +2089,7 @@ export async function runPublicClientLoopbackConsentCompatibility(
       providerFailure ?? "Delegated provider metadata could not be proven after resource discovery failed.",
     );
     addAllLoopbackFamiliesNotProven(gates, "Canonical Resource or delegated provider discovery stopped the loopback journeys before registration.");
-    return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, report.requests, testInfo);
   }
 
   const discoveredAuthorizationServer = resourceInfo.authorizationServerUrl;
@@ -2608,14 +2122,14 @@ export async function runPublicClientLoopbackConsentCompatibility(
       providerFailure ?? "The configured delegated provider was not selected by Protected Resource Metadata.",
     );
     addAllLoopbackFamiliesNotProven(gates, "Protected Resource Metadata did not select the configured delegated provider before loopback registration.");
-    return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, report.requests, testInfo);
   }
 
   const metadata = resourceInfo.authorizationServerMetadata;
   if (!metadata) {
     addGate(gates, "provider-discovery", "not-proven", "The official SDK found the delegated issuer but could not obtain authorization-server metadata.");
     addAllLoopbackFamiliesNotProven(gates, "Delegated provider metadata was unavailable before loopback registration.");
-    return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, report.requests, testInfo);
   }
 
   const issuerMatches = metadata.issuer.replace(/\/$/, "") === target.expectedAuthorizationServer.replace(/\/$/, "");
@@ -2631,7 +2145,7 @@ export async function runPublicClientLoopbackConsentCompatibility(
 
   if (!metadataSupportsGoldenPath(metadata) || !issuerMatches) {
     addAllLoopbackFamiliesNotProven(gates, "Delegated provider metadata did not expose every required public-client capability before loopback registration.");
-    return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, report.requests, testInfo);
   }
 
   const configuredLoopbackHosts = target.loopbackHosts ?? [...LOOPBACK_HOSTS];
@@ -2708,13 +2222,13 @@ export async function runPublicClientLoopbackConsentCompatibility(
 
   for (const host of LOOPBACK_HOSTS) {
     const family = familyName(host);
-    if (!gates.some((gate) => gate.id === `loopback-${family}`)) {
+    if (!gates.has(`loopback-${family}`)) {
       addGate(gates, `loopback-${family}`, "not-proven", "Loopback family was not reached.");
     }
-    if (!gates.some((gate) => gate.id === `loopback-request-${family}`)) {
+    if (!gates.has(`loopback-request-${family}`)) {
       addGate(gates, `loopback-request-${family}`, "not-proven", "Loopback authorization request was not reached.");
     }
-    if (!gates.some((gate) => gate.id === `loopback-pkce-${family}`)) {
+    if (!gates.has(`loopback-pkce-${family}`)) {
       addGate(gates, `loopback-pkce-${family}`, "not-proven", "Loopback PKCE callback and exchange were not reached.");
     }
   }
@@ -2730,5 +2244,5 @@ export async function runPublicClientLoopbackConsentCompatibility(
   aggregateFamilyGate(gates, "consent-denial-both", LOOPBACK_HOSTS.map((host) => `consent-denial-${familyName(host)}`), "Both explicit denial journeys must return provider authorization errors without credentials.");
   aggregateFamilyGate(gates, "consent-abandonment-both", LOOPBACK_HOSTS.map((host) => `consent-abandonment-${familyName(host)}`), "Both abandoned consent journeys must produce no callback or credentials.");
   aggregateFamilyGate(gates, "consent-cleanup-both", LOOPBACK_HOSTS.map((host) => `consent-cleanup-${familyName(host)}`), "Both successful public-client journeys must revoke their per-family grant through the supported user-facing boundary.");
-  return finishReport(report, gates, testInfo);
+  return finishReport(run, gates, report.requests, testInfo);
 }
