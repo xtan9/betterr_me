@@ -284,8 +284,9 @@ function sanitizeValue(value: unknown, context: EvidenceRunContext, depth = 0): 
       const alreadyRedacted = typeof itemResult.value === "string" && /^\[(?:REDACTED|JWT REDACTED)/.test(itemResult.value);
       secretLeak ||= itemResult.secretLeak;
       if (keyIsSensitive && !alreadyRedacted) secretLeak = true;
-      result[key] = SAFE_KEYS.has(key) || !keyIsSensitive ? itemResult.value : "[REDACTED]";
-      if (!SAFE_KEYS.has(key) && !keyIsSensitive) result[key] = "[REDACTED: unexpected field]";
+      result[key] = keyIsSensitive
+        ? alreadyRedacted ? itemResult.value : "[REDACTED]"
+        : SAFE_KEYS.has(key) ? itemResult.value : "[REDACTED: unexpected field]";
     }
     return { value: result, secretLeak };
   }
@@ -294,6 +295,32 @@ function sanitizeValue(value: unknown, context: EvidenceRunContext, depth = 0): 
 
 export function sanitizeEvidence(value: unknown, context: EvidenceRunContext): SanitizedValue {
   return sanitizeValue(value, context);
+}
+
+/**
+ * Minimize a live response before it becomes an inert request observation.
+ * The adapters must not hand raw provider payloads to the evidence boundary.
+ */
+export function minimizeResponseBody(text: string, contentType: string | null): Record<string, unknown> | undefined {
+  if (!text) return undefined;
+  if (contentType?.includes("json")) {
+    try {
+      const sanitized = sanitizeEvidence(
+        JSON.parse(text),
+        createEvidenceRunContext({
+          configuredSecrets: [],
+          time: { startedAt: "", finishedAt: "" },
+          versions: {},
+        }),
+      );
+      return sanitized.value && typeof sanitized.value === "object" && !Array.isArray(sanitized.value)
+        ? sanitized.value as Record<string, unknown>
+        : { type: Array.isArray(sanitized.value) ? "array" : typeof sanitized.value };
+    } catch {
+      return { body: "[REDACTED NON-JSON RESPONSE]" };
+    }
+  }
+  return { contentType: contentType ?? "unknown", body: "[REDACTED RESPONSE BODY]" };
 }
 
 export function sanitizeText(value: string, context?: EvidenceRunContext): string {

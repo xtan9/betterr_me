@@ -8,6 +8,7 @@ import {
   finalizeEvidence,
   finalizeReport,
   isEvidenceSanitized,
+  minimizeResponseBody,
   type EvidenceObservation,
   type EvidenceRunContext,
 } from "../../e2e/mcp-access-grant-evidence";
@@ -106,6 +107,20 @@ describe("deterministic MCP evidence kernel", () => {
       }}],
     }, context);
     expect(report.requests[0]).toMatchObject({ url: "https://mcp.example.test/resource" });
+  });
+
+  it("minimizes response payloads before they cross an adapter boundary", () => {
+    expect(minimizeResponseBody(JSON.stringify({ error: "invalid_request", unexpected: "provider detail" }), "application/json")).toEqual({
+      error: "invalid_request",
+      unexpected: "[REDACTED: unexpected field]",
+    });
+    expect(minimizeResponseBody(JSON.stringify({ access_token: "live-access-token" }), "application/json")).toEqual({
+      access_token: "[REDACTED]",
+    });
+    expect(minimizeResponseBody("opaque response", "text/plain")).toEqual({
+      contentType: "text/plain",
+      body: "[REDACTED RESPONSE BODY]",
+    });
   });
 
   it("preserves version-map keys while sanitizing version values", () => {
