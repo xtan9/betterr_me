@@ -147,7 +147,6 @@ const RUNTIME_COMMAND_INTENT_TYPES = [
   "apply_plan_adjustment",
   "edit_completed_plan",
   "set_active_expense_category",
-  "complete_expense_category",
   "set_reduction",
   "continue",
   "back",
