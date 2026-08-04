@@ -9,7 +9,6 @@ import {
   type ExpenseCategory,
   type ExpenseItemType,
 } from "@/lib/finance/runway-expenses";
-import { migrateRunwayAnswers } from "@/lib/finance/runway-answer-migrations";
 export { EXPENSE_CATEGORIES } from "@/lib/finance/runway-expenses";
 export type { ExpenseCategory } from "@/lib/finance/runway-expenses";
 export type { TakeHomeEstimateBreakdown, TaxFilingStatus } from "@/lib/finance/runway-tax";
@@ -677,90 +676,6 @@ export function highestLeverageActions(
   };
 }
 
-interface RequiredCushionColumns {
-  liquid_resources_cents: number;
-  monthly_essential_expenses_cents: number;
-  monthly_continuing_income_cents: number;
-}
-export interface FinanceCushionRecord extends RequiredCushionColumns {
-  id: string;
-  user_id: string;
-  created_at: string;
-  updated_at: string;
-  revision?: number;
-  answers?: unknown;
-  latest_result?: unknown;
-  adjustments?: unknown;
-  model_version?: string;
-  status?: string;
-  country?: string | null;
-  region?: string | null;
-  currency?: string | null;
-  attribution?: Record<string, string | undefined>;
-  completed_at?: string | null;
-}
-export type FinanceCushionView = Omit<FinanceCushionRecord, "answers"> & {
-  answers: HouseholdRunwayAnswers | null;
-};
-export const FINANCE_CUSHION_COLUMNS =
-  "id, user_id, revision, liquid_resources_cents, monthly_essential_expenses_cents, monthly_continuing_income_cents, answers, latest_result, adjustments, model_version, status, country, region, currency, attribution, completed_at, created_at, updated_at";
-
-function persistedCushionAnswers(
-  record: FinanceCushionRecord,
-): HouseholdRunwayAnswers | null {
-  const versioned = migrateRunwayAnswers(
-    record.answers,
-    new Date(record.updated_at),
-    { allowIncompleteRegion: true },
-  );
-  if (versioned || record.answers != null) return versioned;
-
-  const answers = createDefaultRunwayAnswers(new Date(record.updated_at));
-  answers.available_cash = {
-    cents: record.liquid_resources_cents,
-    confidence: "confirmed",
-  };
-  if (record.monthly_continuing_income_cents > 0) {
-    answers.other_income_sources = [
-      {
-        id: "retained-continuing-income",
-        type: "other",
-        label: "Previous continuing income",
-        monthly_cents: record.monthly_continuing_income_cents,
-        confidence: "needs_review",
-      },
-    ];
-  }
-  answers.mine = {
-    ...answers.mine,
-    employment: "unemployed",
-    monthly_take_home_cents: 0,
-    estimated_monthly_take_home_cents: 0,
-    entered_amount_cents: 0,
-    take_home_source: "user_confirmed",
-    confidence: "confirmed",
-  };
-  answers.expense_mode = "quick";
-  answers.quick_expenses = {
-    current_monthly_cents: record.monthly_essential_expenses_cents,
-    interruption_monthly_cents: record.monthly_essential_expenses_cents,
-    confidence: "confirmed",
-  };
-  return answers;
-}
-
-export function toFinanceCushionView(
-  record: FinanceCushionRecord,
-): FinanceCushionView {
-  return {
-    ...record,
-    revision:
-      Number.isInteger(record.revision) && record.revision !== undefined
-        ? Math.max(0, record.revision)
-        : 0,
-    answers: persistedCushionAnswers(record),
-  };
-}
 export function formatCents(
   cents: number,
   locale = "en-US",
