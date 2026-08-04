@@ -1576,10 +1576,6 @@
       "email": "Email",
       "remove": "Remove reminder"
     },
-    "feed": {
-      "error": "Failed to load calendar items",
-      "loading": "Loading..."
-    },
     "actions": {
       "markComplete": "Mark complete",
       "markIncomplete": "Mark incomplete",

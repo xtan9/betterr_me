@@ -299,16 +299,33 @@ function workoutItems(workouts: Workout[], range: LocalDateRange, timezone: stri
 }
 
 function sortItems(items: CalendarOverlayItem[]): CalendarOverlayItem[] {
+  const layerOrder: Record<CalendarOverlayLayer, number> = {
+    tasks: 0,
+    habits: 1,
+    workouts: 2,
+  };
+
   return [...items].sort((a, b) => {
     const dateOrder = a.date.localeCompare(b.date);
     if (dateOrder !== 0) return dateOrder;
     if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
-    if (a.startTime && b.startTime) {
-      const timeOrder = a.startTime.localeCompare(b.startTime);
-      if (timeOrder !== 0) return timeOrder;
-    }
+    const timeOrder = (a.startTime ?? "").slice(0, 5).localeCompare((b.startTime ?? "").slice(0, 5));
+    if (timeOrder !== 0) return timeOrder;
+    const layerOrderDifference = layerOrder[a.layer] - layerOrder[b.layer];
+    if (layerOrderDifference !== 0) return layerOrderDifference;
     return a.id.localeCompare(b.id);
   });
+}
+
+function reportFailure(
+  options: CalendarOverlayQueryOptions,
+  report: OverlayFailureReport,
+): void {
+  try {
+    options.reportFailure?.(report);
+  } catch {
+    // Reporting must not change the classified acquisition outcome.
+  }
 }
 
 /** Query selected Calendar Overlay Layers without depending on HTTP or a framework. */
@@ -334,12 +351,18 @@ export async function queryCalendarOverlayFeed(
           ? capabilities
           : undefined;
         if (!taskCapabilities?.coverage || !taskCapabilities.read) {
+          reportFailure(options, {
+            layer: "tasks",
+            request,
+            cause: new Error("Task overlay capabilities are unavailable"),
+          });
           return { items: [], available: false, unavailable: [{ layer: "tasks", code: "unavailable" }] };
         }
         let coverage: TaskCoverageResult;
         try {
           coverage = await taskCapabilities.coverage.ensureThrough(request);
-        } catch {
+        } catch (cause) {
+          reportFailure(options, { layer: "tasks", request, cause });
           return {
             items: [],
             available: false,
@@ -371,7 +394,7 @@ export async function queryCalendarOverlayFeed(
             available: true,
           };
         } catch (cause) {
-          options.reportFailure?.({ layer: "tasks", request, cause });
+          reportFailure(options, { layer: "tasks", request, cause });
           return { items: [], available: false, unavailable: [{ layer: "tasks", code: "unavailable" }] };
         }
       })()
@@ -379,11 +402,12 @@ export async function queryCalendarOverlayFeed(
 
   const habitAcquisition = selectedLayers.includes("habits")
     ? (async (): Promise<{ items: CalendarOverlayItem[]; unavailable: OverlayUnavailable[]; available: boolean }> => {
+        const habitRequest: HabitOverlayRequest = { userId: input.userId, range: input.range };
         try {
           const habitCapabilities = "habits" in capabilities ? capabilities.habits : undefined;
           if (!habitCapabilities) throw new Error("Habit overlay capabilities are unavailable");
-          const activeHabits = habitCapabilities.activeHabits.read({ userId: input.userId, range: input.range });
-          const completionLogs = habitCapabilities.completionLogs.read({ userId: input.userId, range: input.range });
+          const activeHabits = habitCapabilities.activeHabits.read(habitRequest);
+          const completionLogs = habitCapabilities.completionLogs.read(habitRequest);
           const [habits, logs] = await Promise.all([activeHabits, completionLogs]);
           return {
             items: habitItems(habits, logs, input.range),
@@ -391,9 +415,9 @@ export async function queryCalendarOverlayFeed(
             available: true,
           };
         } catch (cause) {
-          options.reportFailure?.({
+          reportFailure(options, {
             layer: "habits",
-            request,
+            request: habitRequest,
             cause,
           });
           return { items: [], available: false, unavailable: [{ layer: "habits", code: "unavailable" }] };
@@ -403,7 +427,11 @@ export async function queryCalendarOverlayFeed(
 
   const workoutAcquisition = selectedLayers.includes("workouts")
     ? (async (): Promise<{ items: CalendarOverlayItem[]; unavailable: OverlayUnavailable[]; available: boolean }> => {
-        const workoutCapabilities = "workouts" in capabilities ? capabilities.workouts : undefined;
+        const workoutCapabilities = "workouts" in capabilities
+          ? capabilities.workouts
+          : "read" in capabilities && !("coverage" in capabilities)
+            ? capabilities
+            : undefined;
         const timezone = input.timezone ?? "UTC";
         try {
           if (!workoutCapabilities) throw new Error("Workout overlay capabilities are unavailable");
@@ -418,7 +446,7 @@ export async function queryCalendarOverlayFeed(
             available: true,
           };
         } catch (cause) {
-          options.reportFailure?.({
+          reportFailure(options, {
             layer: "workouts",
             request: { userId: input.userId, range: input.range, timezone },
             cause,

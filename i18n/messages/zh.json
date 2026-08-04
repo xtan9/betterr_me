@@ -1576,10 +1576,6 @@
       "email": "邮件",
       "remove": "移除提醒"
     },
-    "feed": {
-      "error": "加载日历项目失败",
-      "loading": "加载中..."
-    },
     "actions": {
       "markComplete": "标记完成",
       "markIncomplete": "标记未完成",

@@ -169,11 +169,12 @@ describe("queryCalendarOverlayFeed", () => {
     });
   });
 
-  it("classifies a coverage port failure as recurring coverage unavailable", async () => {
+  it("classifies and reports a coverage port failure once", async () => {
+    const cause = new Error("coverage down");
     const reportFailure = vi.fn();
     const read = vi.fn();
     const caps = capabilities({
-      coverage: { ensureThrough: vi.fn().mockRejectedValue(new Error("coverage down")) },
+      coverage: { ensureThrough: vi.fn().mockRejectedValue(cause) },
       read: { read },
     });
 
@@ -184,7 +185,12 @@ describe("queryCalendarOverlayFeed", () => {
     );
 
     expect(read).not.toHaveBeenCalled();
-    expect(reportFailure).not.toHaveBeenCalled();
+    expect(reportFailure).toHaveBeenCalledTimes(1);
+    expect(reportFailure).toHaveBeenCalledWith({
+      layer: "tasks",
+      request,
+      cause,
+    });
     expect(result.status).toBe("failed");
     expect(result.unavailable).toEqual([{
       layer: "tasks",
@@ -218,6 +224,24 @@ describe("queryCalendarOverlayFeed", () => {
       items: [],
       unavailable: [{ layer: "tasks", code: "unavailable" }],
     });
+  });
+
+  it("keeps the classified outcome when the failure reporter throws", async () => {
+    const reportFailure = vi.fn(() => {
+      throw new Error("reporting unavailable");
+    });
+    const result = await queryCalendarOverlayFeed(
+      { ...request, layers: ["tasks"] },
+      capabilities({ read: { read: vi.fn().mockRejectedValue(new Error("database unavailable")) } }),
+      { reportFailure },
+    );
+
+    expect(result).toEqual({
+      status: "failed",
+      items: [],
+      unavailable: [{ layer: "tasks", code: "unavailable" }],
+    });
+    expect(reportFailure).toHaveBeenCalledTimes(1);
   });
 
   it("returns a successful empty task result and a typed completion action", async () => {
@@ -450,5 +474,40 @@ describe("queryCalendarOverlayFeed", () => {
       allCapabilities({}, {}, { read: vi.fn().mockResolvedValue([]) }),
     );
     expect(empty).toEqual({ status: "complete", items: [], unavailable: [] });
+  });
+
+  it("orders same-date items by all-day, time, layer, then stable identity", async () => {
+    const result = await queryCalendarOverlayFeed(
+      { ...request, layers: ["workouts", "habits", "tasks"], timezone: "UTC" },
+      allCapabilities(
+        {
+          read: {
+            read: vi.fn().mockResolvedValue([
+              task({ id: "task-timed", due_time: "09:00:00" }),
+              task({ id: "task-all-day", due_time: null }),
+            ]),
+          },
+        },
+        {
+          activeHabits: {
+            read: vi.fn().mockResolvedValue([
+              habit({ id: "habit-all-day", frequency: { type: "custom", days: [4] } }),
+            ]),
+          },
+        },
+        {
+          read: vi.fn().mockResolvedValue([
+            workout({ id: "workout-timed", started_at: "2026-04-02T09:00:00Z" }),
+          ]),
+        },
+      ),
+    );
+
+    expect(result.items.map((item) => item.id)).toEqual([
+      "tasks:task-all-day",
+      "habits:habit-all-day:2026-04-02",
+      "tasks:task-timed",
+      "workouts:workout-timed",
+    ]);
   });
 });

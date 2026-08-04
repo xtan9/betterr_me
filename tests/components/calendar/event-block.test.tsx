@@ -98,10 +98,10 @@ describe("EventBlock", () => {
     expect(stopSpy).toHaveBeenCalled();
   });
 
-  it("uses domain color styles when _domain is set", () => {
+  it("uses Calendar Layer color styles when _layer is set", () => {
     const event = {
       ...makeEvent(),
-      _domain: "tasks",
+      _layer: "tasks",
       _completed: false,
     } as unknown as ExpandedCalendarEvent;
 
@@ -116,7 +116,7 @@ describe("EventBlock", () => {
   it("shows line-through when _completed is true", () => {
     const event = {
       ...makeEvent(),
-      _domain: "habits",
+      _layer: "habits",
       _completed: true,
     } as unknown as ExpandedCalendarEvent;
 

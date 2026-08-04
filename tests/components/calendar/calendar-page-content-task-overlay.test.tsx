@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   overlay: { data: null as unknown, error: null as Error | null },
+  overlayKeys: [] as (string | null)[],
   mutate: vi.fn().mockResolvedValue(undefined),
   replace: vi.fn(),
   actions: {
@@ -20,6 +21,7 @@ vi.mock("next-intl", () => ({
 }));
 vi.mock("swr", () => ({
   default: (key: string | null) => {
+    state.overlayKeys.push(key);
     if (key?.includes("/overlay-feed")) return { ...state.overlay, isLoading: false };
     if (key?.includes("calendar-events")) {
       return {
@@ -65,7 +67,15 @@ vi.mock("@/components/calendar/use-calendar-navigation", () => ({
   }),
 }));
 vi.mock("@/components/calendar/calendar-header", () => ({ CalendarHeader: () => <div /> }));
-vi.mock("@/components/calendar/calendar-sidebar", () => ({ CalendarSidebar: () => <div /> }));
+vi.mock("@/components/calendar/calendar-sidebar", () => ({
+  CalendarSidebar: ({ onToggleLayer }: { onToggleLayer: (layer: string) => void }) => (
+    <div>
+      {"tasks habits workouts".split(" ").map((layer) => (
+        <button key={layer} type="button" data-testid={`toggle-${layer}`} onClick={() => onToggleLayer(layer)} />
+      ))}
+    </div>
+  ),
+}));
 vi.mock("@/components/calendar/month-grid", () => ({ MonthGrid: () => <div /> }));
 vi.mock("@/components/calendar/week-view", () => ({ WeekView: () => <div /> }));
 vi.mock("@/components/calendar/day-view", () => ({
@@ -78,7 +88,7 @@ vi.mock("@/components/calendar/day-view", () => ({
         onClick={() => onEventClick({
           id: "habits:habit-1:2026-04-02",
           start_date: "2026-04-02",
-          _domain: "habits",
+          _layer: "habits",
           _completed: true,
           _habitAction: {
             type: "toggle_habit_completion",
@@ -93,7 +103,7 @@ vi.mock("@/components/calendar/day-view", () => ({
         onClick={() => onEventClick({
           id: "workouts:workout-1",
           start_date: "2026-04-02",
-          _domain: "workouts",
+          _layer: "workouts",
           _completed: true,
           _workoutAction: {
             type: "navigate_workout",
@@ -114,6 +124,7 @@ describe("CalendarPageContent task overlay failure seam", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     state.overlay = { data: null, error: new Error("overlay unavailable") };
+    state.overlayKeys = [];
   });
 
   it("keeps Calendar Events usable and retries only the task overlay", async () => {
@@ -127,6 +138,17 @@ describe("CalendarPageContent task overlay failure seam", () => {
     expect(state.mutate).not.toHaveBeenCalledWith(expect.stringContaining("/api/calendar-events"));
   });
 
+  it("does not request the overlay when every overlay Calendar Layer is disabled", () => {
+    state.overlay = { data: { items: [] }, error: null };
+    render(<CalendarPageContent />);
+
+    for (const layer of ["tasks", "habits", "workouts"]) {
+      fireEvent.click(screen.getAllByTestId(`toggle-${layer}`)[0]);
+    }
+
+    expect(state.overlayKeys.at(-1)).toBeNull();
+  });
+
   it("shows a localized unavailable habit notice and retries only the overlay", () => {
     state.overlay = {
       data: { items: [], unavailableLayers: ["habits"] },
@@ -137,7 +159,7 @@ describe("CalendarPageContent task overlay failure seam", () => {
 
     expect(screen.getByText("habitOverlay.unavailable")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "habitOverlay.retry" }));
-    expect(state.mutate).toHaveBeenCalledWith(expect.stringContaining("layers=habits,tasks"));
+    expect(state.mutate).toHaveBeenCalledWith(expect.stringContaining("layers=tasks,habits"));
     expect(state.mutate).not.toHaveBeenCalledWith(expect.stringContaining("/api/calendar-events"));
   });
 
@@ -160,7 +182,7 @@ describe("CalendarPageContent task overlay failure seam", () => {
     expect(screen.getByTestId("day-view")).toBeInTheDocument();
     expect(screen.getByText("workoutOverlay.unavailable")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "workoutOverlay.retry" }));
-    expect(state.mutate).toHaveBeenCalledWith(expect.stringContaining("layers=habits,tasks,workouts"));
+    expect(state.mutate).toHaveBeenCalledWith(expect.stringContaining("layers=tasks,habits,workouts"));
 
     fireEvent.click(screen.getByTestId("invoke-workout-action"));
     await waitFor(() => {
