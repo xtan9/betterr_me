@@ -403,7 +403,7 @@ export async function queryCalendarOverlayFeed(
 
   const workoutAcquisition = selectedLayers.includes("workouts")
     ? (async (): Promise<{ items: CalendarOverlayItem[]; unavailable: OverlayUnavailable[]; available: boolean }> => {
-          const workoutCapabilities = "workouts" in capabilities ? capabilities.workouts : undefined;
+        const workoutCapabilities = "workouts" in capabilities ? capabilities.workouts : undefined;
         const timezone = input.timezone ?? "UTC";
         try {
           if (!workoutCapabilities) throw new Error("Workout overlay capabilities are unavailable");
