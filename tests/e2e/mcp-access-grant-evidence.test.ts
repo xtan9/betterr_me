@@ -53,6 +53,15 @@ describe("deterministic MCP evidence kernel", () => {
     }, context);
     expect(conflicting.gates.find(({ id }) => id === "conflict")).toMatchObject({ status: "fail", evidence: { errorKind: "conflicting-observation" } });
     expect(conflicting.gates.find(({ id }) => id === "malformed")).toMatchObject({ status: "not-proven", evidence: { errorKind: "missing-observation" } });
+
+    const typedConflict = finalizeReport({
+      issue: "#799", target, requiredGateIds: ["typed-conflict"],
+      observations: [
+        { kind: "pkce", gateId: "typed-conflict", verifierMatchesChallenge: true, method: "S256" },
+        { kind: "pkce", gateId: "typed-conflict", verifierMatchesChallenge: false, method: "S256" },
+      ],
+    }, context);
+    expect(typedConflict.gates[0]).toMatchObject({ status: "fail", evidence: { errorKind: "conflicting-observation" } });
   });
 
   it("redacts hostile fields, bounds diagnostics, and fails closed on configured secrets", () => {
@@ -115,7 +124,7 @@ describe("deterministic MCP evidence kernel", () => {
     const report = finalizeReport({
       issue: "#799", target, requiredGateIds: ["pkce", "resource", "boundary"],
       observations: [
-        { kind: "pkce", gateId: "pkce", verifier: "verifier", challenge: "wrong", method: "S256" },
+        { kind: "pkce", gateId: "pkce", verifierMatchesChallenge: false, method: "S256" },
         { kind: "resource-binding", gateId: "resource", canonicalResource: target.canonicalResource, observedResource: target.canonicalResource },
         { kind: "public-boundary", gateId: "boundary", status: 401, responseContainsCredentials: false },
       ],
@@ -170,6 +179,12 @@ describe("deterministic MCP evidence kernel", () => {
     expect(verified.sanitized).toBe(true);
     expect(verified.serialized).toContain(EVIDENCE_ARTIFACT_FILENAME);
     expect(JSON.parse(firstFinalized.verification.serialized).outcome).toBe(first.outcome);
+
+    const artifactFailure = finalizeEvidence({ ...input, artifactWriteSucceeded: false }, context);
+    expect(artifactFailure.report.gates.find(({ id }) => id === "sanitized-evidence")).toMatchObject({
+      status: "fail",
+      detail: expect.stringContaining("could not be written"),
+    });
   });
 
   it("owns gate accumulation without ambient state", () => {

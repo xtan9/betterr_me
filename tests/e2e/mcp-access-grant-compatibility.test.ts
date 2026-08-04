@@ -5,17 +5,19 @@ import {
   buildLoopbackUrls,
   buildPublicNativeClientMetadata,
   buildRegistrationNegativeCases,
-  classifyRegistrationProbe,
-  classifyPublicRegistrationBoundary,
-  classifyAuthorizationOutcome,
-  classifyConsentPresentation,
-  browserUrlCredentialEvidence,
   grantClientId,
-  hasUnnegatedEndorsementLanguage,
-  isEvidenceSanitized,
   isSupportedLoopbackRegistrationRedirect,
   validatePublicClientProfile,
 } from "@/e2e/mcp-access-grant-public-client";
+import {
+  browserUrlCredentialEvidence,
+  classifyAuthorizationOutcome,
+  classifyConsentPresentation,
+  classifyPublicRegistrationBoundary,
+  classifyRegistrationProbe,
+  hasUnnegatedEndorsementLanguage,
+  isEvidenceSanitized,
+} from "@/e2e/mcp-access-grant-evidence";
 
 describe("MCP Access Grant public-client boundary contracts", () => {
   it("keeps both loopback families on the registered host and callback path while varying only the request port", () => {
