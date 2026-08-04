@@ -32,7 +32,7 @@ import {
   GateAccumulator,
   createEvidenceRunContext,
   finalizeEvidence,
-  sanitizeEvidence,
+  minimizeResponseBody,
   sanitizeText,
   sanitizeUrl,
   type CompatibilityReport,
@@ -45,6 +45,7 @@ import {
 import {
   evaluateDelegatedJwtPolicy,
   isExactCanonicalResource,
+  LOOPBACK_HOSTS,
   publicBoundaryRejects,
   s256CodeChallenge,
   selectDelegatedSigningJwk,
@@ -52,11 +53,10 @@ import {
   type DelegatedJwtClaims,
   type DelegatedJwtHeader,
   type DelegatedJwtPolicy,
+  type LoopbackHost,
 } from "./mcp-access-grant-policy";
 import {
-  LOOPBACK_HOSTS,
   runPublicClientLoopbackConsentCompatibility,
-  type LoopbackHost,
 } from "./mcp-access-grant-public-client";
 
 export type { CompatibilityGate, CompatibilityReport } from "./mcp-access-grant-evidence";
@@ -229,28 +229,6 @@ function requestInputUrl(input: RequestInfo | URL): string | URL {
   return input.url;
 }
 
-function summarizeResponseBody(text: string, contentType: string | null): Record<string, unknown> | undefined {
-  if (!text) return undefined;
-  if (contentType?.includes("json")) {
-    try {
-      const sanitized = sanitizeEvidence(
-        JSON.parse(text),
-        createEvidenceRunContext({
-          configuredSecrets: [],
-          time: { startedAt: "", finishedAt: "" },
-          versions: {},
-        }),
-      );
-      return sanitized.value && typeof sanitized.value === "object" && !Array.isArray(sanitized.value)
-        ? sanitized.value as Record<string, unknown>
-        : { type: Array.isArray(sanitized.value) ? "array" : typeof sanitized.value };
-    } catch {
-      return { body: "[REDACTED NON-JSON RESPONSE]" };
-    }
-  }
-  return { contentType: contentType ?? "unknown", body: "[REDACTED RESPONSE BODY]" };
-}
-
 function createEvidenceFetch(requests: RequestEvidence[]): EvidenceFetch {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const requestObject = typeof Request !== "undefined" && input instanceof Request ? input : undefined;
@@ -305,7 +283,7 @@ function createEvidenceFetch(requests: RequestEvidence[]): EvidenceFetch {
         request.responseContainsCredentials = request.responseCredentialFields.length > 0;
         request.responseBody = contentType?.includes("text/event-stream")
           ? { contentType, body: "[STREAM BODY NOT RECORDED]" }
-          : summarizeResponseBody(responseText, contentType);
+          : minimizeResponseBody(responseText, contentType);
       } catch {
         request.responseBody = { body: "[UNAVAILABLE RESPONSE BODY]" };
       }

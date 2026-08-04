@@ -8,7 +8,7 @@ import {
   grantClientId,
   isSupportedLoopbackRegistrationRedirect,
   validatePublicClientProfile,
-} from "@/e2e/mcp-access-grant-public-client";
+} from "@/e2e/mcp-access-grant-policy";
 import {
   browserUrlCredentialEvidence,
   classifyAuthorizationOutcome,
