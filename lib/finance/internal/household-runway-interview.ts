@@ -500,6 +500,8 @@ export interface HouseholdRunwayIncomeRenderModel {
   stage: "myIncome" | "partnerIncome";
   person: "mine" | "partner";
   income: IncomeAnswer;
+  /** Presentation-ready estimate derived by the Runtime, when applicable. */
+  estimate: ReturnType<typeof estimateMonthlyTakeHome> | null;
   location: {
     country: RunwayCountry | null;
     region: string | null;
@@ -611,6 +613,10 @@ export interface HouseholdRunwayReviewRenderModel {
   selectedScenario: RunwayScenario | null;
   planAdjustment: RunwayAdjustments;
   assessmentModelVersion: typeof RUNWAY_MODEL_VERSION | null;
+  totals: { current: number; interruption: number };
+  monthlyIncomeCents: number;
+  otherIncomeCents: number;
+  excludedAssetCents: number;
   ready: boolean;
   availableStages: readonly HouseholdRunwayInterviewStage[];
   stageStatus: HouseholdRunwayInterviewStageStatus;
@@ -1706,6 +1712,28 @@ function recomputeEstimatedIncome(
   };
 }
 
+function incomeEstimateForRender(
+  income: IncomeAnswer,
+  location: HouseholdRunwayInterviewLocation,
+): ReturnType<typeof estimateMonthlyTakeHome> | null {
+  if (
+    !location.country ||
+    income.entered_as !== "gross" ||
+    income.gross_amount_cents <= 0
+  ) {
+    return null;
+  }
+  return estimateMonthlyTakeHome({
+    country: location.country,
+    region: location.region ?? "",
+    amountCents: income.gross_amount_cents,
+    period: income.gross_period,
+    filingStatus: income.tax_filing_status,
+    selfEmployed: income.employment === "self_employed",
+    annualOtherDeductionsCents: income.annual_other_deductions_cents,
+  });
+}
+
 function normalizeIncomePatch(
   current: IncomeAnswer,
   patch: Partial<IncomeAnswer>,
@@ -2041,14 +2069,16 @@ function renderFor(
   }
 
   if (stage === "myIncome" || stage === "partnerIncome") {
+    const income =
+      stage === "myIncome"
+        ? draft.answers.mine
+        : draft.answers.partner ?? freshIncome("employed");
     return {
       kind: stage,
       stage,
       person: stage === "myIncome" ? "mine" : "partner",
-      income:
-        stage === "myIncome"
-          ? draft.answers.mine
-          : draft.answers.partner ?? freshIncome("employed"),
+      income,
+      estimate: incomeEstimateForRender(income, draft.location),
       location: {
         country: draft.location.country,
         region: draft.location.region,
@@ -2159,6 +2189,8 @@ function renderFor(
   }
 
   if (stage === "review") {
+    const calculation = calculationAnswers(draft.answers);
+    const answers = draft.answers;
     return {
       kind: "review",
       stage,
@@ -2174,6 +2206,19 @@ function renderFor(
       selectedScenario: draft.selectedScenario,
       planAdjustment: draft.planAdjustment,
       assessmentModelVersion: reviewProjection?.assessment?.modelVersion ?? null,
+      totals: expenseTotals(calculation),
+      monthlyIncomeCents:
+        answers.mine.monthly_take_home_cents +
+        (answers.partner?.monthly_take_home_cents ?? 0),
+      otherIncomeCents: answers.other_income_sources.reduce(
+        (sum, source) => sum + source.monthly_cents,
+        0,
+      ),
+      excludedAssetCents:
+        answers.assets.illiquid_investments.cents +
+        answers.assets.home_equity.cents +
+        answers.assets.retirement_tax_deferred.cents +
+        answers.assets.retirement_tax_free.cents,
       ready: blockingIssue === null && reviewProjection?.assessment != null,
       availableStages,
       stageStatus,

@@ -125,6 +125,36 @@ describe("Household Runway Interview Runtime", () => {
     });
   });
 
+  it("publishes income estimates and review summaries as Runtime render facts", () => {
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+    });
+    runtime.start();
+    runtime.send({ type: "start_new" });
+    runtime.send({ type: "select_country", country: "US" });
+    runtime.send({ type: "select_region", region: "CA" });
+    runtime.send({ type: "select_currency", currency: "USD" });
+    runtime.send({ type: "continue" });
+    runtime.send({ type: "set_household", sharesFinances: false });
+    runtime.send({ type: "continue" });
+    runtime.send({ type: "set_employment", person: "mine", employment: "employed" });
+    runtime.send({ type: "continue" });
+
+    const income = runtime.getSnapshot().screen;
+    expect(income.kind).toBe("myIncome");
+    if (income.kind !== "myIncome") return;
+    runtime.send({
+      type: "set_income",
+      person: "mine",
+      patch: { entered_as: "gross", gross_amount_cents: 1_200_000 },
+    });
+    const updatedIncome = runtime.getSnapshot().screen;
+    expect(updatedIncome.kind).toBe("myIncome");
+    if (updatedIncome.kind !== "myIncome") return;
+    expect(updatedIncome.estimate?.monthly_take_home_cents).toBeGreaterThan(0);
+  });
+
   it("keeps interview IDs and protocol-only commands private to the Runtime", () => {
     let nextId = 0;
     const createId = vi.fn(() => `interview-${++nextId}`);
