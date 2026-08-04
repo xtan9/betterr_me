@@ -103,6 +103,28 @@ describe("Household Runway Interview Runtime", () => {
     expect(focus).toHaveBeenCalledWith("location");
   });
 
+  it("can hold an anonymous Runtime on its landing screen until the caller starts it", () => {
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      autoStart: false,
+      createId: () => "interview-1",
+    });
+
+    runtime.start();
+
+    expect(runtime.getSnapshot()).toMatchObject({
+      lifecycle: "ready",
+      interviewStatus: "not_started",
+      screen: { kind: "landing" },
+    });
+
+    runtime.send({ type: "start", stage: "location" });
+
+    expect(runtime.getSnapshot()).toMatchObject({
+      interviewStatus: "collecting",
+      screen: { kind: "location" },
+    });
+  });
+
   it("keeps interview IDs and protocol-only commands private to the Runtime", () => {
     let nextId = 0;
     const createId = vi.fn(() => `interview-${++nextId}`);
@@ -748,6 +770,34 @@ describe("Household Runway Interview Runtime", () => {
       "initializing",
       "ready",
     ]);
+  });
+
+  it("clears a remembered device copy without requiring a second confirmation", async () => {
+    const confirm = vi.fn(() => false);
+    const clearDraft = vi.fn(() => true);
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      autoStart: false,
+      createId: () => "interview-1",
+      confirm,
+      clearDraft,
+      restore: async () => ({
+        device: { status: "restored" as const, state: storedDraft(1) },
+        deviceStorageConsent: true,
+      }),
+    });
+
+    runtime.start();
+    await settle([]);
+    runtime.send({ type: "start" });
+    runtime.send({ type: "clear_device_draft" });
+    await settle([]);
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(clearDraft).toHaveBeenCalledWith({ scope: "device" });
+    expect(runtime.getSnapshot().draft).toMatchObject({
+      device: false,
+      deviceStorageConsent: false,
+    });
   });
 
   it("recovers from rejected restoration without blocking a usable Interview", async () => {

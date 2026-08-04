@@ -1,4 +1,5 @@
 import type { HouseholdRunwayInterviewStage } from "@/lib/finance/household-runway-interview";
+import type { RunwayLocale } from "@/lib/finance/runway-regions";
 
 export type HouseholdRunwayInterviewRuntimeEnvironmentMessage =
   | {
@@ -6,7 +7,7 @@ export type HouseholdRunwayInterviewRuntimeEnvironmentMessage =
       destination: "landing" | "interview";
       stage?: HouseholdRunwayInterviewStage;
     }
-  | { type: "locale_changed" };
+  | { type: "locale_changed"; locale?: RunwayLocale };
 
 type RuntimeEnvironmentDispatcher = (
   message: HouseholdRunwayInterviewRuntimeEnvironmentMessage,

@@ -2,12 +2,12 @@
 
 import { ArrowRight, CalendarClock, Eye, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { HouseholdRunwayInterviewRenderModel } from "@/lib/finance/household-runway-interview";
+import type { HouseholdRunwayInterviewRuntimeScreen } from "@/lib/finance/household-runway-interview-runtime";
 
 interface HouseholdRunwayLandingProps {
   t: (key: string, values?: Record<string, string | number>) => string;
   renderModel: Extract<
-    HouseholdRunwayInterviewRenderModel,
+    HouseholdRunwayInterviewRuntimeScreen,
     { kind: "landing" }
   >;
   onPrimary: () => void;

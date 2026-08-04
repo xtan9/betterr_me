@@ -6,10 +6,12 @@ import {
   executeHouseholdRunwayBrowserEffect,
   householdRunwayHistoryProjectionCommand,
   readHouseholdRunwayBrowserStorage,
+  restoreHouseholdRunwayBrowserRuntime,
   type HouseholdRunwayBrowserEnvironment,
 } from "@/lib/finance/household-runway-browser-adapter";
 import { createHouseholdRunwayInterview } from "@/lib/finance/household-runway-interview";
 import { createDefaultRunwayAnswers } from "@/lib/finance/cushion";
+import { rememberHouseholdRunwayDraft } from "@/lib/finance/runway-draft-client";
 
 function createEnvironment() {
   const history = {
@@ -113,6 +115,129 @@ describe("Household Runway browser adapter", () => {
       "",
       "/finance/cushion",
     );
+    adapter.dispose();
+  });
+
+  it("keeps an anonymous landing screen until the public start intent is sent", async () => {
+    const browser = createAdapterEnvironment(
+      "https://betterr.me/finance/cushion",
+    );
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      authenticated: false,
+      autoStart: false,
+      createId: () => "interview-1",
+      synchronizeDraft: () => true,
+    });
+
+    adapter.start();
+
+    expect(adapter.getSnapshot()).toMatchObject({
+      interviewStatus: "not_started",
+      screen: { kind: "landing" },
+    });
+    expect(browser.environment.history.pushState).not.toHaveBeenCalled();
+
+    adapter.send({ type: "start" });
+    await Promise.resolve();
+
+    expect(adapter.getSnapshot().screen.kind).toBe("location");
+    expect(browser.environment.history.pushState).toHaveBeenCalledWith(
+      {},
+      "",
+      "/finance/cushion?start=1",
+    );
+    adapter.dispose();
+  });
+
+  it("imports a restored device Draft when the URL starts the anonymous Interview", async () => {
+    const browser = createAdapterEnvironment(
+      "https://betterr.me/finance/cushion?start=1",
+    );
+    const restored = createHouseholdRunwayInterview();
+    restored.draft.revision = 1;
+    restored.draft.interviewId = "stored-interview";
+    sessionStorage.clear();
+    localStorage.clear();
+    rememberHouseholdRunwayDraft({
+      status: "collecting",
+      stage: "location",
+      draft: restored.draft,
+    });
+    sessionStorage.clear();
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      authenticated: false,
+      autoStart: false,
+      createId: () => "interview-1",
+      restore: restoreHouseholdRunwayBrowserRuntime,
+    });
+
+    adapter.start();
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await Promise.resolve();
+    }
+
+    expect(adapter.getSnapshot().screen.kind).toBe("location");
+    expect(adapter.getSnapshot().operations.deviceDraft).toEqual({
+      status: "succeeded",
+    });
+    expect(localStorage.getItem("betterr.household-runway.interview.v2")).toBeNull();
+    adapter.dispose();
+    sessionStorage.clear();
+    localStorage.clear();
+  });
+
+  it("keeps a destructive navigation command ahead of URL reconciliation", async () => {
+    const browser = createAdapterEnvironment(
+      "https://betterr.me/finance/cushion?start=1",
+    );
+    const confirm = vi.fn(() => true);
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      authenticated: false,
+      autoStart: false,
+      confirm,
+      clearDraft: () => true,
+      createId: () => "interview-1",
+      synchronizeDraft: () => true,
+    });
+
+    adapter.start();
+    adapter.send({ type: "start" });
+    adapter.send({ type: "discard_draft" });
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await Promise.resolve();
+    }
+
+    expect(confirm).toHaveBeenCalledWith({ action: "discard_draft" });
+    expect(adapter.getSnapshot()).toMatchObject({
+      interviewStatus: "not_started",
+      screen: { kind: "landing" },
+    });
+    expect(browser.environment.location.href).toBe(
+      "https://betterr.me/finance/cushion",
+    );
+    adapter.dispose();
+  });
+
+  it("auto-starts authenticated Runtime state and repairs the URL once", () => {
+    const browser = createAdapterEnvironment(
+      "https://betterr.me/finance/cushion",
+    );
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      authenticated: true,
+      createId: () => "interview-1",
+    });
+
+    adapter.start();
+
+    expect(adapter.getSnapshot().screen.kind).toBe("location");
+    expect(browser.environment.location.href).toBe(
+      "https://betterr.me/finance/cushion?start=1",
+    );
+    expect(browser.environment.history.pushState).toHaveBeenCalledTimes(1);
     adapter.dispose();
   });
 
@@ -594,6 +719,17 @@ describe("Household Runway browser adapter", () => {
       hasLocalDraft: true,
       deviceStorageConsent: true,
     });
+
+    const synchronized = await executeHouseholdRunwayBrowserEffect({
+      type: "draft_sync_requested",
+      draft: state.draft,
+      status: state.status,
+      stage: state.stage,
+      sourceRevision: state.draft.revision,
+      correlationId: "post-import-sync",
+    });
+    expect(synchronized.command.type).toBe("draft_synchronization_succeeded");
+    expect(localStorage.getItem("betterr.household-runway.interview.v2")).toBeNull();
 
     const cleared = await executeHouseholdRunwayBrowserEffect({
       type: "draft_device_clear_requested",

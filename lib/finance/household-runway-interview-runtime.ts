@@ -87,6 +87,7 @@ export interface HouseholdRunwayInterviewRuntimeOperations {
 
 /** User actions accepted by the Runtime. Protocol messages are deliberately absent. */
 const RUNTIME_INTENT_TYPES = [
+  "start",
   "start_new",
   "select_country",
   "select_region",
@@ -139,7 +140,8 @@ type RuntimeCommandIntent = Extract<
 
 /** The only user actions a Runtime caller may dispatch. */
 export type HouseholdRunwayInterviewIntent =
-  | Exclude<RuntimeCommandIntent, { type: "start_new" | "resume_draft" }>
+  | Exclude<RuntimeCommandIntent, { type: "start" | "start_new" | "resume_draft" }>
+  | { type: "start"; stage?: HouseholdRunwayInterviewStage }
   | { type: "start_new" }
   | { type: "resume_draft" }
   | { type: "save_plan" };
@@ -344,6 +346,8 @@ export interface HouseholdRunwayInterviewRuntimeOptions
   extends HouseholdRunwayInterviewRuntimeCapabilities {
   /** Current presentation locale, kept outside the Interview state machine. */
   locale?: RunwayLocale;
+  /** Starts a restored, conflict-free interview after initialization by default. */
+  autoStart?: boolean;
   initialPlan?: HouseholdRunwayPlan | null;
   initialSnapshots?: readonly RunwaySnapshotSummary[];
 }
@@ -380,16 +384,27 @@ type MaybePromise<T> = T | PromiseLike<T>;
 type RuntimeStoredDraft = {
   state: HouseholdRunwayDraftState;
   expiresAt?: string;
+  source: "session" | "device";
 };
 
 type RuntimeRestorePayload = {
   session?:
     | { status: "missing" }
-    | { status: "restored"; state: HouseholdRunwayDraftState; expiresAt?: string }
+    | {
+        status: "restored";
+        state: HouseholdRunwayDraftState;
+        expiresAt?: string;
+        source?: "session" | "device";
+      }
     | { status: "rejected"; code?: string };
   device?:
     | { status: "missing" }
-    | { status: "restored"; state: HouseholdRunwayDraftState; expiresAt?: string }
+    | {
+        status: "restored";
+        state: HouseholdRunwayDraftState;
+        expiresAt?: string;
+        source?: "session" | "device";
+      }
     | { status: "rejected"; code?: string };
   deviceStorageConsent?: boolean;
   plan?:
@@ -489,11 +504,20 @@ function publicDraftRequest(
     }
   >,
 ): HouseholdRunwayInterviewRuntimeDraftRequest {
-  return {
+  const request = {
     status: effect.status,
     stage: effect.stage,
     answers: clonePublicValue(effect.draft.answers),
-  };
+  } as HouseholdRunwayInterviewRuntimeDraftRequest;
+  Object.defineProperty(request, "draft", {
+    value: clonePublicValue({
+      status: effect.status,
+      stage: effect.stage,
+      draft: effect.draft,
+    }),
+    enumerable: false,
+  });
+  return request;
 }
 
 function affordancesFor(
@@ -586,9 +610,14 @@ function isDraftState(value: unknown): value is HouseholdRunwayDraftState {
 
 function storedDraftFrom(
   value: RuntimeRestorePayload["session"] | RuntimeRestorePayload["device"] | undefined,
+  fallbackSource: "session" | "device",
 ): RuntimeStoredDraft | null {
   return value?.status === "restored" && isDraftState(value.state)
-    ? { state: value.state, ...(value.expiresAt ? { expiresAt: value.expiresAt } : {}) }
+    ? {
+        state: value.state,
+        source: value.source ?? fallbackSource,
+        ...(value.expiresAt ? { expiresAt: value.expiresAt } : {}),
+      }
     : null;
 }
 
@@ -688,7 +717,7 @@ export function createHouseholdRunwayInterviewRuntime(
   const createId = options.createId ?? defaultId;
   const now = options.now ?? (() => new Date().toISOString());
   const schedule = options.schedule ?? defaultSchedule;
-  const locale = options.locale ?? "en";
+  let locale = options.locale ?? "en";
   let state = createHouseholdRunwayInterview(options.initialPlan ?? null);
   let lifecycle: HouseholdRunwayInterviewRuntimeLifecycle = "idle";
   let started = false;
@@ -762,11 +791,11 @@ export function createHouseholdRunwayInterviewRuntime(
 
   const applyRestoration = (payload: unknown, failed: boolean) => {
     const restored = restorePayloadFrom(payload);
-    const session = storedDraftFrom(restored.session);
-    const device = storedDraftFrom(restored.device);
+    const session = storedDraftFrom(restored.session, "session");
+    const device = storedDraftFrom(restored.device, "device");
     storageFacts = {
-      session: session !== null,
-      device: device !== null,
+      session: session?.source === "session",
+      device: device?.source === "device",
       deviceStorageConsent: restored.deviceStorageConsent === true,
     };
     if (
@@ -897,7 +926,11 @@ export function createHouseholdRunwayInterviewRuntime(
     } else if (planBootstrapResolved) {
       state = createHouseholdRunwayInterview(committedPlan);
     }
-    if (state.status === "not_started" && !state.resumeChoice) {
+    if (
+      (options.autoStart ?? true) &&
+      state.status === "not_started" &&
+      !state.resumeChoice
+    ) {
       const interviewId = createId();
       applyCommand(
         {
@@ -1399,9 +1432,7 @@ export function createHouseholdRunwayInterviewRuntime(
         : null;
     }
     if (intent.type === "clear_device_draft") {
-      return storageFacts.device || storageFacts.deviceStorageConsent
-        ? "clear_device_draft"
-        : null;
+      return null;
     }
     return null;
   };
@@ -1560,6 +1591,7 @@ export function createHouseholdRunwayInterviewRuntime(
     if (message.type === "environment") {
       if (!started || disposed || lifecycle !== "ready") return;
       if (message.message.type === "locale_changed") {
+        if (message.message.locale) locale = message.message.locale;
         if (!draftSynchronizationEligible()) return;
         const status = state.operations.draftSynchronization.status;
         if (status !== "dirty" && status !== "failed") return;
@@ -1637,7 +1669,9 @@ export function createHouseholdRunwayInterviewRuntime(
       return;
     }
     const commandInput =
-      message.intent.type === "start_new" || message.intent.type === "resume_draft"
+      message.intent.type === "start" ||
+      message.intent.type === "start_new" ||
+      message.intent.type === "resume_draft"
         ? { ...message.intent, interviewId: createId() }
         : message.intent;
     const command = {
