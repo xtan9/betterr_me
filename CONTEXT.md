@@ -26,6 +26,20 @@ _Avoid_: Unsaved Plan, form state
 A provisional What-if overlay used to compare a Household Runway Assessment; it becomes part of a Plan only after the person applies it to the Draft inputs and commits them.
 _Avoid_: Saved adjustment, Plan change
 
+### Calendar
+
+**Calendar Event**:
+A person's full-fidelity calendar entry, including the details and recurrence identity needed to view and edit it.
+_Avoid_: Feed item, overlay item
+
+**Calendar Layer**:
+A selectable category of dated items shown on the calendar.
+_Avoid_: Feed domain
+
+**Calendar Overlay Feed**:
+A date-bounded projection of selected task, habit, and workout Calendar Layers displayed alongside Calendar Events.
+_Avoid_: Unified calendar feed, calendar events feed
+
 ### Recurring Tasks
 
 **Recurring Task Series**:
