@@ -124,7 +124,9 @@ export type HouseholdRunwayPlanAdjustmentField = keyof RunwayAdjustments;
 
 export type HouseholdRunwayInterviewOperationError =
   | "authentication_required"
+  | "capability_unavailable"
   | "conflict"
+  | "exception"
   | "invalid"
   | "network"
   | "stale_result"
@@ -209,7 +211,13 @@ export type HouseholdRunwayPlanPersistenceOperation =
       currentPlanRevision?: number;
       error: Extract<
         HouseholdRunwayInterviewOperationError,
-        "authentication_required" | "conflict" | "invalid" | "network" | "stale_result"
+        | "authentication_required"
+        | "capability_unavailable"
+        | "conflict"
+        | "exception"
+        | "invalid"
+        | "network"
+        | "stale_result"
       >;
     };
 
@@ -845,6 +853,7 @@ export type HouseholdRunwayInterviewCommandInput =
       planInputs?: HouseholdRunwayAnswers;
       assessment?: SuccessfulHouseholdRunwayAssessment;
       snapshot?: RunwaySnapshotSummary;
+      snapshots?: readonly RunwaySnapshotSummary[];
     }
   | {
       type: "plan_persistence_failed";
@@ -853,7 +862,13 @@ export type HouseholdRunwayInterviewCommandInput =
       currentPlanRevision?: number;
       error: Extract<
         HouseholdRunwayInterviewOperationError,
-        "authentication_required" | "conflict" | "invalid" | "network" | "stale_result"
+        | "authentication_required"
+        | "capability_unavailable"
+        | "conflict"
+        | "exception"
+        | "invalid"
+        | "network"
+        | "stale_result"
       >;
     }
   | { type: "request_report_download" }
