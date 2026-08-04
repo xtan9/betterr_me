@@ -135,6 +135,12 @@ updates:
     expect(workflow).toContain(
       "# Household Runway has a dedicated anonymous project. Do not pull",
     );
+    expect(workflow).toContain(
+      'if [[ "${E2E_DATA_MODE:-}" == "read-only" ]]; then',
+    );
+    expect(workflow).not.toContain(
+      'if [[ "${E2E_DATA_MODE:-read-only}" == "read-only" ]]; then',
+    );
   });
 
   it("keeps github-script v9 blocks compatible with its injected context", () => {
