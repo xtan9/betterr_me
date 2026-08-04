@@ -551,11 +551,41 @@ export function createHouseholdRunwayBrowserAdapter(
     ...(schedule ? { schedule } : {}),
   });
 
+  const maybeImportRestoredDeviceDraft = () => {
+    const snapshot = runtime.getSnapshot();
+    if (
+      snapshot.lifecycle !== "ready" ||
+      snapshot.interviewStatus === "not_started" ||
+      snapshot.screen.kind === "resume_choice" ||
+      snapshot.draft.session ||
+      !snapshot.draft.device ||
+      snapshot.operations.deviceDraft.status === "pending"
+    ) {
+      return;
+    }
+    runtime.send({ type: "import_draft" });
+  };
+
+  const scheduleDeviceDraftImport = () => {
+    try {
+      queueMicrotask(() => {
+        if (!disposed) maybeImportRestoredDeviceDraft();
+      });
+    } catch {
+      // A host without microtask scheduling can still use explicit resume.
+    }
+  };
+
   const dispatchEnvironment = (
     message: HouseholdRunwayInterviewRuntimeEnvironmentMessage,
   ) => {
     if (!disposed) {
+      const shouldImportDeviceDraft =
+        message.type === "history_projection_changed" &&
+        message.destination === "interview" &&
+        runtime.getSnapshot().screen.kind !== "resume_choice";
       dispatchHouseholdRunwayRuntimeEnvironment(runtime, message);
+      if (shouldImportDeviceDraft) scheduleDeviceDraftImport();
     }
   };
 
@@ -616,6 +646,7 @@ export function createHouseholdRunwayBrowserAdapter(
         historyEffectPending = true;
         try {
           runtime.send({ type: "start", ...(stage ? { stage } : {}) });
+          scheduleDeviceDraftImport();
         } finally {
           authenticatedStartPending = false;
           if (runtime.getSnapshot().interviewStatus === "not_started") {
@@ -716,6 +747,7 @@ export function createHouseholdRunwayBrowserAdapter(
       subscribeToBrowser("locale", localeEvent, onLocale);
       removeProjectionSubscription = runtime.subscribe(reconcileUrl);
       runtime.start();
+      maybeImportRestoredDeviceDraft();
     },
     send: (intent) => {
       const historyIntent =
@@ -732,6 +764,7 @@ export function createHouseholdRunwayBrowserAdapter(
       historyEffectPending = true;
       try {
         runtime.send(intent);
+        if (intent.type === "start") maybeImportRestoredDeviceDraft();
       } finally {
         const snapshot = runtime.getSnapshot();
         if (

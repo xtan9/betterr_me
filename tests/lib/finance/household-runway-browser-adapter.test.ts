@@ -148,6 +148,47 @@ describe("Household Runway browser adapter", () => {
     adapter.dispose();
   });
 
+  it("imports a restored device Draft when the URL starts the anonymous Interview", async () => {
+    const browser = createAdapterEnvironment(
+      "https://betterr.me/finance/cushion?start=1",
+    );
+    const restored = createHouseholdRunwayInterview();
+    restored.draft.revision = 1;
+    restored.draft.interviewId = "stored-interview";
+    const importDraft = vi.fn(() => true);
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      authenticated: false,
+      autoStart: false,
+      createId: () => "interview-1",
+      importDraft,
+      restore: async () => ({
+        device: {
+          status: "restored" as const,
+          state: {
+            status: "collecting" as const,
+            stage: "location" as const,
+            draft: restored.draft,
+          },
+        },
+        deviceStorageConsent: true,
+      }),
+      synchronizeDraft: () => true,
+    });
+
+    adapter.start();
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await Promise.resolve();
+    }
+
+    expect(adapter.getSnapshot().screen.kind).toBe("location");
+    expect(importDraft).toHaveBeenCalledOnce();
+    expect(adapter.getSnapshot().operations.deviceDraft).toEqual({
+      status: "succeeded",
+    });
+    adapter.dispose();
+  });
+
   it("keeps a destructive navigation command ahead of URL reconciliation", async () => {
     const browser = createAdapterEnvironment(
       "https://betterr.me/finance/cushion?start=1",

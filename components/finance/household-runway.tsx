@@ -188,7 +188,6 @@ export function HouseholdRunway({
   const locale = normalizeRunwayLocale(useLocale());
   const localeRef = useRef(locale);
   const landingTracked = useRef(false);
-  const deviceDraftImportRequested = useRef(false);
   const reportPresentationRef = useRef<HouseholdRunwayBrowserReportPresentation | null>(null);
   const reportPresentation = useCallback(({ assessment, locale: reportLocale }: Parameters<HouseholdRunwayBrowserReportPresentation>[0]): HouseholdRunwayReportPresentation => {
     const presentationAnswers = runwayAnswersForPresentation(assessment.answers);
@@ -293,22 +292,6 @@ export function HouseholdRunway({
     (intent: HouseholdRunwayInterviewIntent) => send(intent),
     [send],
   );
-
-  useEffect(() => {
-    if (
-      !hydrated ||
-      snapshot.interviewStatus === "not_started" ||
-      snapshot.screen.kind === "resume_choice" ||
-      snapshot.draft.session ||
-      !snapshot.draft.device ||
-      snapshot.operations.deviceDraft.status === "pending" ||
-      deviceDraftImportRequested.current
-    ) {
-      return;
-    }
-    deviceDraftImportRequested.current = true;
-    dispatchInterviewCommand({ type: "import_draft" });
-  }, [dispatchInterviewCommand, hydrated, snapshot]);
 
   const landingModel = renderModel.kind === "landing" ? renderModel : null;
   const resumeModel = renderModel.kind === "resume_choice" ? renderModel : null;
