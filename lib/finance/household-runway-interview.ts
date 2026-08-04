@@ -42,6 +42,11 @@ import type {
   HouseholdRunwayAnalyticsStage,
 } from "@/lib/finance/household-runway-analytics";
 import { householdRunwayAnswersSchema } from "@/lib/validations/finance-cushion";
+import {
+  createHouseholdRunwayPlan,
+  type HouseholdRunwayPlan,
+} from "@/lib/finance/household-runway-plan";
+export type { HouseholdRunwayPlan } from "@/lib/finance/household-runway-plan";
 
 /**
  * Framework-independent Household Runway Interview behavior.
@@ -116,12 +121,6 @@ export const EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT: RunwayAdjustments = {
 };
 
 export type HouseholdRunwayPlanAdjustmentField = keyof RunwayAdjustments;
-
-/** The committed baseline that a working Interview Draft must not mutate. */
-export interface HouseholdRunwayPlan {
-  revision: number;
-  inputs: HouseholdRunwayAnswers;
-}
 
 export type HouseholdRunwayInterviewOperationError =
   | "authentication_required"
@@ -306,8 +305,7 @@ function normalizeOperations(
 function normalizeCommittedPlan(
   input: HouseholdRunwayPlan | null | undefined,
 ): HouseholdRunwayPlan | null {
-  if (!input || !Number.isInteger(input.revision) || !input.inputs) return null;
-  return { revision: Math.max(0, input.revision), inputs: input.inputs };
+  return input ? createHouseholdRunwayPlan(input) : null;
 }
 
 export interface HouseholdRunwayExpenseCategoryProgress {
@@ -4278,10 +4276,11 @@ function completePlanPersistence(
   if (!committedInputs || !committedAssessment) {
     return ignored(state, command, "invalid_stage");
   }
-  const committedPlan: HouseholdRunwayPlan = {
+  const committedPlan = createHouseholdRunwayPlan({
     revision: planRevision,
     inputs: committedInputs,
-  };
+  });
+  if (!committedPlan) return ignored(state, command, "invalid_stage");
   const draft = normalizeDraft({
     ...state.draft,
     answers: committedPlan.inputs,

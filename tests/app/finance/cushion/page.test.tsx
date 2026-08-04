@@ -79,7 +79,7 @@ describe("FinanceCushionPage", () => {
   it("does not hydrate persisted assessment adjustments into a working overlay", async () => {
     mocks.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
     mocks.getFinanceCushion.mockResolvedValue({
-      answers: createDefaultRunwayAnswers(
+      inputs: createDefaultRunwayAnswers(
         new Date("2026-07-31T00:00:00.000Z"),
       ),
       latest_result: {
@@ -98,8 +98,7 @@ describe("FinanceCushionPage", () => {
   it("does not mark a retained row without versioned answers as saved", async () => {
     mocks.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
     mocks.getFinanceCushion.mockResolvedValue({
-      answers: null,
-      latest_result: null,
+      inputs: null,
     });
 
     render(await FinanceCushionPage());

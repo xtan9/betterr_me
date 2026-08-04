@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import {
   createDefaultRunwayAnswers,
-  toFinanceCushionView,
 } from "@/lib/finance/cushion";
 import { assessHouseholdRunway } from "@/lib/finance/household-runway-assessment";
 import { GET, POST } from "@/app/api/finance/cushion/route";
@@ -62,22 +61,7 @@ const adjustments = {
 };
 const assessment = assessHouseholdRunway({ answers, adjustments });
 if (!assessment.success) throw new Error("test assessment should be valid");
-const baseline = assessment.firstScenario.baseline;
-const savedCushion = toFinanceCushionView({
-  id: "cushion-a",
-  user_id: user.id,
-  revision: 1,
-  liquid_resources_cents: baseline.starting_resources_cents,
-  monthly_essential_expenses_cents: baseline.interruption_expenses_cents,
-  monthly_continuing_income_cents: baseline.continuing_monthly_income_cents,
-  answers,
-  adjustments,
-  latest_result: assessment,
-  model_version: "4.0.0",
-  status: "completed",
-  created_at: "2026-07-26T00:00:00.000Z",
-  updated_at: "2026-07-26T00:00:00.000Z",
-});
+const savedCushion = { revision: 1, inputs: answers };
 const savedSnapshot = {
   id: "snapshot-a",
   trigger: "completed" as const,
@@ -159,7 +143,7 @@ describe("/api/finance/cushion/commit", () => {
     await expect(validResponse.json()).resolves.toMatchObject({
       status: "committed",
       revision: 1,
-      plan: { revision: 1 },
+      plan: { revision: 1, answers },
       assessment: { success: true, modelVersion: "4.0.0" },
       snapshot: { trigger: "completed" },
     });
@@ -264,9 +248,9 @@ describe("/api/finance/cushion/commit", () => {
       new NextRequest("http://localhost:3000/api/finance/cushion"),
     );
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      cushion: { revision: 1 },
-      snapshots: [{ id: "snapshot-a" }],
+    await expect(response.json()).resolves.toEqual({
+      cushion: { revision: 1, answers },
+      snapshots: [savedSnapshot],
     });
   });
 });
