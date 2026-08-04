@@ -337,6 +337,14 @@ function draftStateFor(
   return (request as HouseholdRunwayBrowserDraftCapabilityRequest).draft;
 }
 
+function synchronizeHouseholdRunwayDraft(
+  draft: HouseholdRunwayDraftState,
+) {
+  return readHouseholdRunwayDeviceDraft().status === "restored"
+    ? persistHouseholdRunwayDraft(draft)
+    : persistHouseholdRunwaySessionDraft(draft);
+}
+
 /**
  * Composes the framework-neutral Runtime with the browser capabilities. Raw
  * browser events stay here; only validated private environment messages cross
@@ -454,7 +462,7 @@ export function createHouseholdRunwayBrowserAdapter(
     synchronizeDraft:
       options.synchronizeDraft ??
       ((request: HouseholdRunwayInterviewRuntimeDraftRequest) =>
-        persistHouseholdRunwayDraft(draftStateFor(request)).success),
+        synchronizeHouseholdRunwayDraft(draftStateFor(request)).success),
     rememberDraft:
       options.rememberDraft ??
       ((request: HouseholdRunwayInterviewRuntimeDraftRequest) =>
@@ -842,7 +850,7 @@ export async function executeHouseholdRunwayBrowserEffect(
   context: HouseholdRunwayBrowserEffectContext = {},
 ): Promise<HouseholdRunwayBrowserEffectResult> {
   if (effect.type === "draft_sync_requested") {
-    const persisted = persistHouseholdRunwayDraft({
+    const persisted = synchronizeHouseholdRunwayDraft({
       status: effect.status,
       stage: effect.stage,
       draft: effect.draft,

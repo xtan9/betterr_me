@@ -266,7 +266,14 @@ export function HouseholdRunway({
   const saving = planOperation.status === "pending";
   const saved = planOperationState === "saved";
   const issue = snapshot.issues[0]?.code;
-  const error = issue ? interviewValidationMessage(t, issue) : "";
+  const error =
+    issue === "currency_change_confirmation_required" &&
+    renderModel.kind === "location" &&
+    renderModel.pendingCurrencyChange
+      ? ""
+      : issue
+        ? interviewValidationMessage(t, issue)
+        : "";
   const operationError =
     planOperation.status === "failed"
       ? planOperation.error === "authentication_required"

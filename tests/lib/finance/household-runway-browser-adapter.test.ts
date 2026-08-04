@@ -680,6 +680,17 @@ describe("Household Runway browser adapter", () => {
       deviceStorageConsent: true,
     });
 
+    const synchronized = await executeHouseholdRunwayBrowserEffect({
+      type: "draft_sync_requested",
+      draft: state.draft,
+      status: state.status,
+      stage: state.stage,
+      sourceRevision: state.draft.revision,
+      correlationId: "post-import-sync",
+    });
+    expect(synchronized.command.type).toBe("draft_synchronization_succeeded");
+    expect(localStorage.getItem("betterr.household-runway.interview.v2")).toBeNull();
+
     const cleared = await executeHouseholdRunwayBrowserEffect({
       type: "draft_device_clear_requested",
       scope: "all",
