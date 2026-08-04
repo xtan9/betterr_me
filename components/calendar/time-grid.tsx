@@ -5,7 +5,7 @@ import { getLocalDateString } from "@/lib/utils";
 import { EventBlock } from "./event-block";
 import { AllDayRow } from "./all-day-row";
 import { CurrentTimeIndicator } from "./current-time-indicator";
-import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
+import type { CalendarDisplayItem } from "@/lib/calendar/overlay-adapter";
 
 export const HOUR_HEIGHT = 48; // pixels per hour
 const TOTAL_HOURS = 24;
@@ -16,7 +16,7 @@ interface TimeGridProps {
   /** Array of dates to display as columns (1 for day, 7 for week) */
   dates: Date[];
   /** Map of date string -> events for that date */
-  events: Map<string, ExpandedCalendarEvent[]>;
+  events: Map<string, CalendarDisplayItem[]>;
   /** Today's date string (YYYY-MM-DD) for highlighting and current time indicator */
   today: string;
   /** Callback when a time slot is clicked */
@@ -33,7 +33,7 @@ interface TimeGridProps {
     position: { x: number; y: number },
   ) => void;
   /** Callback when an event block is clicked */
-  onEventClick?: (event: ExpandedCalendarEvent) => void;
+  onEventClick?: (event: CalendarDisplayItem) => void;
 }
 
 // --- Helper functions ---
@@ -45,7 +45,7 @@ export function timeToMinutes(time: string): number {
 }
 
 /** Returns event duration in minutes (default 60 if no end_time, minimum 0) */
-function getDurationMinutes(event: ExpandedCalendarEvent): number {
+function getDurationMinutes(event: CalendarDisplayItem): number {
   if (!event.start_time) return 60;
   const startMin = timeToMinutes(event.start_time);
   const endMin = event.end_time ? timeToMinutes(event.end_time) : startMin + 60;
@@ -77,7 +77,7 @@ function snapTo15(minutes: number): number {
  * Google Calendar style: overlapping events share equal-width columns.
  */
 export function computeOverlapColumns(
-  events: ExpandedCalendarEvent[],
+  events: CalendarDisplayItem[],
 ): Map<string, { column: number; totalColumns: number }> {
   // Sort by start_time, then by duration descending
   const sorted = [...events].sort((a, b) => {

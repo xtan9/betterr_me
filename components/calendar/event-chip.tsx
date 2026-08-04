@@ -1,9 +1,11 @@
-import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
-import type { CalendarDisplayEvent, CalendarLayer } from "@/lib/calendar/overlay-adapter";
+import type {
+  CalendarDisplayItem,
+  CalendarLayer,
+} from "@/lib/calendar/overlay-adapter";
 import { CALENDAR_LAYER_COLORS } from "@/lib/calendar/overlay-adapter";
 
 interface EventChipProps {
-  event: ExpandedCalendarEvent;
+  event: CalendarDisplayItem;
 }
 
 /**
@@ -14,13 +16,12 @@ function formatTime(time: string): string {
 }
 
 export function EventChip({ event }: EventChipProps) {
-  const overlayEvent = event as CalendarDisplayEvent;
-  const layer = overlayEvent._layer as CalendarLayer | undefined;
-  const isCompleted = overlayEvent._completed;
+  const layer: CalendarLayer = event.kind === "overlay" ? event.layer : "events";
+  const isCompleted = event.kind === "overlay" && event.completed;
 
   // Use custom color if set, otherwise use domain or default
   const hasCustomColor = !!event.color;
-  const hasLayerColor = layer && layer !== "events" && CALENDAR_LAYER_COLORS[layer];
+  const hasLayerColor = layer !== "events" && CALENDAR_LAYER_COLORS[layer];
 
   const bgStyle = hasCustomColor
     ? { backgroundColor: `${event.color}20` }

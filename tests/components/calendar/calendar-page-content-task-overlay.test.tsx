@@ -86,11 +86,17 @@ vi.mock("@/components/calendar/day-view", () => ({
         type="button"
         data-testid="invoke-habit-action"
         onClick={() => onEventClick({
+          kind: "overlay",
           id: "habits:habit-1:2026-04-02",
+          title: "Read",
           start_date: "2026-04-02",
-          _layer: "habits",
-          _completed: true,
-          _habitAction: {
+          end_date: "2026-04-02",
+          start_time: null,
+          end_time: null,
+          color: null,
+          layer: "habits",
+          completed: true,
+          action: {
             type: "toggle_habit_completion",
             habitId: "habit-1",
             date: "2026-04-02",
@@ -101,11 +107,17 @@ vi.mock("@/components/calendar/day-view", () => ({
         type="button"
         data-testid="invoke-workout-action"
         onClick={() => onEventClick({
+          kind: "overlay",
           id: "workouts:workout-1",
+          title: "Morning lift",
           start_date: "2026-04-02",
-          _layer: "workouts",
-          _completed: true,
-          _workoutAction: {
+          end_date: "2026-04-02",
+          start_time: "06:30",
+          end_time: null,
+          color: null,
+          layer: "workouts",
+          completed: true,
+          action: {
             type: "navigate_workout",
             workoutId: "workout-1",
           },
@@ -123,6 +135,7 @@ import { CalendarPageContent } from "@/components/calendar/calendar-page-content
 describe("CalendarPageContent task overlay failure seam", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    state.mutate = vi.fn().mockResolvedValue(undefined);
     state.overlay = { data: null, error: new Error("overlay unavailable") };
     state.overlayKeys = [];
   });
@@ -136,6 +149,31 @@ describe("CalendarPageContent task overlay failure seam", () => {
     fireEvent.click(screen.getByRole("button", { name: "taskOverlay.retry" }));
     expect(state.mutate).toHaveBeenCalledWith(expect.stringContaining("/api/calendar/overlay-feed"));
     expect(state.mutate).not.toHaveBeenCalledWith(expect.stringContaining("/api/calendar-events"));
+  });
+
+  it("keeps an unavailable layer notice visible while its retry is in flight", async () => {
+    let resolveMutate!: () => void;
+    state.mutate = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveMutate = resolve;
+        }),
+    );
+    state.overlay = { data: null, error: new Error("overlay unavailable") };
+
+    render(<CalendarPageContent />);
+
+    const notice = screen.getByText("taskOverlay.unavailable");
+    const retry = screen.getByRole("button", { name: "taskOverlay.retry" });
+    fireEvent.click(retry);
+
+    expect(notice).toBeInTheDocument();
+    expect(retry).toBeDisabled();
+    expect(retry).toHaveAttribute("aria-busy", "true");
+    expect(retry).toHaveTextContent("retrying");
+
+    resolveMutate();
+    await waitFor(() => expect(retry).not.toBeDisabled());
   });
 
   it("does not request the overlay when every overlay Calendar Layer is disabled", () => {

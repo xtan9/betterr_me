@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import {
   createHouseholdRunwayBrowserAdapter,
-  restoreHouseholdRunwayBrowserRuntime,
   type HouseholdRunwayBrowserAdapterOptions,
 } from "@/lib/finance/household-runway-browser-adapter";
 import type {
@@ -40,7 +39,6 @@ export function useHouseholdRunwayRuntime(
   if (runtimeRef.current === null) {
     runtimeRef.current = (options.createAdapter ?? createHouseholdRunwayBrowserAdapter)({
       ...options,
-      restore: options.restore ?? restoreHouseholdRunwayBrowserRuntime,
     });
   }
   const runtime = runtimeRef.current;

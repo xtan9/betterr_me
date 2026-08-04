@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { AllDayRow } from "@/components/calendar/all-day-row";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 import type { CalendarEvent } from "@/lib/db/types";
+import { toDisplayMap } from "./calendar-display-item-test-utils";
 
 // Mock next-intl
 vi.mock("next-intl", () => ({
@@ -51,7 +52,7 @@ describe("AllDayRow", () => {
   it("renders nothing when no all-day events exist", () => {
     const events = new Map<string, ExpandedCalendarEvent[]>();
     const { container } = render(
-      <AllDayRow dates={dates} events={events} />,
+      <AllDayRow dates={dates} events={toDisplayMap(events)} />,
     );
     // Should not render anything
     expect(container.firstChild).toBeNull();
@@ -63,7 +64,7 @@ describe("AllDayRow", () => {
       makeEvent({ id: "e1", title: "Timed", start_time: "10:00:00", end_time: "11:00:00" }),
     ]);
     const { container } = render(
-      <AllDayRow dates={dates} events={events} />,
+      <AllDayRow dates={dates} events={toDisplayMap(events)} />,
     );
     expect(container.firstChild).toBeNull();
   });
@@ -73,7 +74,7 @@ describe("AllDayRow", () => {
     events.set("2026-04-01", [
       makeEvent({ id: "e1", title: "All Day Meeting" }),
     ]);
-    render(<AllDayRow dates={dates} events={events} />);
+    render(<AllDayRow dates={dates} events={toDisplayMap(events)} />);
     expect(screen.getByText("All Day Meeting")).toBeInTheDocument();
   });
 
@@ -84,7 +85,7 @@ describe("AllDayRow", () => {
       makeEvent({ id: "e2", title: "Event 2" }),
       makeEvent({ id: "e3", title: "Event 3" }),
     ]);
-    render(<AllDayRow dates={dates} events={events} />);
+    render(<AllDayRow dates={dates} events={toDisplayMap(events)} />);
     expect(screen.getByText("Event 1")).toBeInTheDocument();
     expect(screen.getByText("Event 2")).toBeInTheDocument();
     expect(screen.getByText("Event 3")).toBeInTheDocument();
@@ -99,7 +100,7 @@ describe("AllDayRow", () => {
       makeEvent({ id: "e4", title: "Event 4" }),
       makeEvent({ id: "e5", title: "Event 5" }),
     ]);
-    render(<AllDayRow dates={dates} events={events} />);
+    render(<AllDayRow dates={dates} events={toDisplayMap(events)} />);
     // Only first 3 visible
     expect(screen.getByText("Event 1")).toBeInTheDocument();
     expect(screen.getByText("Event 2")).toBeInTheDocument();
@@ -119,7 +120,7 @@ describe("AllDayRow", () => {
       makeEvent({ id: "e3", title: "Event 3" }),
       makeEvent({ id: "e4", title: "Event 4" }),
     ]);
-    render(<AllDayRow dates={dates} events={events} />);
+    render(<AllDayRow dates={dates} events={toDisplayMap(events)} />);
 
     // Click +1 more
     fireEvent.click(screen.getByText("+1 more"));
@@ -138,7 +139,7 @@ describe("AllDayRow", () => {
       makeEvent({ id: "e3", title: "Event 3" }),
       makeEvent({ id: "e4", title: "Event 4" }),
     ]);
-    render(<AllDayRow dates={dates} events={events} />);
+    render(<AllDayRow dates={dates} events={toDisplayMap(events)} />);
 
     fireEvent.click(screen.getByText("+1 more"));
 
@@ -156,7 +157,7 @@ describe("AllDayRow", () => {
     events.set("2026-04-01", [makeEvent({ id: "e1", title: "Day 1 Event" })]);
 
     const { container } = render(
-      <AllDayRow dates={threeDates} events={events} />,
+      <AllDayRow dates={threeDates} events={toDisplayMap(events)} />,
     );
     // Grid should have the time gutter + 3 day columns = 4 children
     const grid = container.querySelector(".grid");

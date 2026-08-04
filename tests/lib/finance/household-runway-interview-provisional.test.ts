@@ -8,6 +8,7 @@ import {
   createHouseholdRunwayInterview,
   dispatchHouseholdRunwayInterview,
   householdRunwayDraftDiffersFromPlan,
+  householdRunwayDraftMatchesPlanContent,
   restoreHouseholdRunwayInterview,
   type HouseholdRunwayInterviewCommand,
   type HouseholdRunwayInterviewCommandInput,
@@ -1032,6 +1033,7 @@ describe("typed operation-local effects", () => {
 
     const revised = { ...original.draft, revision: plan.revision + 1 };
     expect(householdRunwayDraftDiffersFromPlan(revised, plan, "completed", "result")).toBe(true);
+    expect(householdRunwayDraftMatchesPlanContent(revised, plan, "completed", "result")).toBe(true);
 
     const changed = {
       ...original.draft,
@@ -1041,6 +1043,7 @@ describe("typed operation-local effects", () => {
       },
     };
     expect(householdRunwayDraftDiffersFromPlan(changed, plan, "completed", "result")).toBe(true);
+    expect(householdRunwayDraftMatchesPlanContent(changed, plan, "completed", "result")).toBe(false);
 
     expect(
       householdRunwayDraftDiffersFromPlan(

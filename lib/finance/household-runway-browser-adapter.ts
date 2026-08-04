@@ -60,7 +60,7 @@ export interface HouseholdRunwayBrowserEnvironment {
   removeEventListener?: (type: string, listener: () => void) => void;
 }
 
-export type HouseholdRunwayBrowserEffectOutcome =
+type HouseholdRunwayBrowserEffectOutcome =
   | { type: "history"; outcome: "applied" | "unavailable" }
   | {
       type: "focus";
@@ -68,18 +68,18 @@ export type HouseholdRunwayBrowserEffectOutcome =
       outcome: "focused" | "scheduled" | "unavailable";
     };
 
-export type HouseholdRunwayExternalEffect = Exclude<
+type HouseholdRunwayExternalEffect = Exclude<
   HouseholdRunwayInterviewEffect,
   { type: "history" | "focus" }
 >;
 
-export interface HouseholdRunwayBrowserStorageSnapshot {
+interface HouseholdRunwayBrowserStorageSnapshot {
   session: HouseholdRunwayDraftStorageReadResult;
   device: HouseholdRunwayDraftStorageReadResult;
   deviceStorageConsent: boolean;
 }
 
-export interface HouseholdRunwayBrowserEffectContext {
+interface HouseholdRunwayBrowserEffectContext {
   reportPresentation?: HouseholdRunwayReportPresentation;
 }
 
@@ -87,28 +87,15 @@ export type HouseholdRunwayBrowserReportPresentation = (
   request: HouseholdRunwayInterviewRuntimeReportRequest,
 ) => HouseholdRunwayReportPresentation;
 
-export type HouseholdRunwayBrowserAdapterOutcome =
-  | { type: "history"; outcome: "applied" | "unavailable" }
-  | {
-      type: "focus";
-      stage: HouseholdRunwayInterviewStage;
-      outcome: "focused" | "scheduled" | "unavailable";
-    }
-  | { type: "subscription"; event: "history" | "locale"; outcome: "subscribed" | "unavailable" }
-  | { type: "schedule"; outcome: "scheduled" | "unavailable" };
-
 export interface HouseholdRunwayBrowserAdapterOptions
   extends HouseholdRunwayInterviewRuntimeOptions {
   environment?: HouseholdRunwayBrowserEnvironment;
-  onOutcome?: (outcome: HouseholdRunwayBrowserAdapterOutcome) => void;
   localeChangeEvent?: string;
   reportPresentation?: HouseholdRunwayBrowserReportPresentation;
-  /** Anonymous experiences intentionally do not receive the Plan write port. */
-  authenticated?: boolean;
   localeProvider?: () => RunwayLocale;
 }
 
-export interface HouseholdRunwayBrowserEffectResult {
+interface HouseholdRunwayBrowserEffectResult {
   command: HouseholdRunwayInterviewCommandInput;
   hasLocalDraft?: boolean;
   deviceStorageConsent?: boolean;
@@ -116,7 +103,7 @@ export interface HouseholdRunwayBrowserEffectResult {
   snapshots?: RunwaySnapshotSummary[];
 }
 
-export interface HouseholdRunwayHistoryProjectionInput {
+interface HouseholdRunwayHistoryProjectionInput {
   href: string;
   interviewStarted: boolean;
   interviewId: string;
@@ -143,7 +130,7 @@ function stageFromHref(href: string): HouseholdRunwayInterviewStage | undefined 
   }
 }
 
-export function readHouseholdRunwayBrowserStorage(): HouseholdRunwayBrowserStorageSnapshot {
+function readHouseholdRunwayBrowserStorage(): HouseholdRunwayBrowserStorageSnapshot {
   return {
     session: readHouseholdRunwayDraft(),
     device: readHouseholdRunwayDeviceDraft(),
@@ -155,7 +142,7 @@ export function readHouseholdRunwayBrowserStorage(): HouseholdRunwayBrowserStora
  * Supplies the Runtime's opaque restoration capability without exposing the
  * storage keys, envelope, or codec result to presentation code.
  */
-export function restoreHouseholdRunwayBrowserRuntime(): unknown {
+function restoreHouseholdRunwayBrowserRuntime(): unknown {
   const storage = readHouseholdRunwayBrowserStorage();
   const source = (result: HouseholdRunwayDraftStorageReadResult) =>
     result.status === "empty"
@@ -180,7 +167,7 @@ export function restoreHouseholdRunwayBrowserRuntime(): unknown {
  * semantic command; the browser adapter never decides how the Interview
  * state should change.
  */
-export function householdRunwayHistoryProjectionCommand({
+function householdRunwayHistoryProjectionCommand({
   href,
   interviewStarted,
   interviewId,
@@ -260,6 +247,11 @@ function applyHistoryEffect(
     }
     url.searchParams.delete("stage");
     const projectedUrl = `${url.pathname}${url.search}${url.hash}`;
+    const current = new URL(environment.location.href);
+    const currentUrl = `${current.pathname}${current.search}${current.hash}`;
+    if (currentUrl === projectedUrl) {
+      return { type: "history", outcome: "applied" };
+    }
     const apply =
       effect.action === "push"
         ? environment.history.pushState
@@ -305,7 +297,7 @@ function applyFocusEffect(
   }
 }
 
-export function applyHouseholdRunwayBrowserEffect(
+function applyHouseholdRunwayBrowserEffect(
   effect: Extract<HouseholdRunwayInterviewEffect, { type: "history" | "focus" }>,
   environment = browserEnvironment(),
 ): HouseholdRunwayBrowserEffectOutcome {
@@ -314,20 +306,15 @@ export function applyHouseholdRunwayBrowserEffect(
     : applyFocusEffect(effect, environment);
 }
 
-function emitAdapterOutcome(
-  callback: HouseholdRunwayBrowserAdapterOptions["onOutcome"],
-  outcome: HouseholdRunwayBrowserAdapterOutcome,
-) {
-  try {
-    callback?.(outcome);
-  } catch {
-    // Observability must not become another Runtime capability failure.
-  }
-}
-
 type HouseholdRunwayBrowserDraftCapabilityRequest =
   HouseholdRunwayInterviewRuntimeDraftRequest & {
     readonly draft: HouseholdRunwayDraftState;
+  };
+
+type HouseholdRunwayBrowserInternalPlanRequest =
+  HouseholdRunwayInterviewRuntimePlanRequest & {
+    readonly idempotencyKey: string;
+    readonly snapshotActionId: string;
   };
 
 function draftStateFor(
@@ -355,7 +342,6 @@ export function createHouseholdRunwayBrowserAdapter(
   const environment = options.environment ?? browserEnvironment();
   const localeEvent = options.localeChangeEvent ?? "betterr:before-locale-change";
   const scheduledFocus = new Set<number>();
-  const onOutcome = options.onOutcome;
   let disposed = false;
   let started = false;
   let removeProjectionSubscription: (() => void) | undefined;
@@ -382,29 +368,25 @@ export function createHouseholdRunwayBrowserAdapter(
     ) {
       return;
     }
-    const outcome = applyHouseholdRunwayBrowserEffect(
+    applyHouseholdRunwayBrowserEffect(
       { type: "history", ...request },
       environment,
     );
-    emitAdapterOutcome(onOutcome, outcome);
     if (request.destination === "interview") {
       initialHrefForProjection = environment?.location.href;
       historyEffectPending = false;
     } else if (request.action !== "back") {
       initialHrefForProjection = environment?.location.href;
       historyEffectPending = false;
-    } else {
-      historyEffectPending = false;
     }
   };
 
   const focus = (stage: HouseholdRunwayInterviewStage) => {
     if (!environment?.requestAnimationFrame) {
-      const outcome = applyHouseholdRunwayBrowserEffect(
+      applyHouseholdRunwayBrowserEffect(
         { type: "focus", stage },
         environment,
       );
-      emitAdapterOutcome(onOutcome, outcome);
       return;
     }
 
@@ -414,28 +396,16 @@ export function createHouseholdRunwayBrowserAdapter(
       callbackRan = true;
       if (frameId !== undefined) scheduledFocus.delete(frameId);
       if (disposed) return;
-      const outcome = applyFocusEffect(
+      applyFocusEffect(
         { type: "focus", stage },
         { ...environment, requestAnimationFrame: undefined },
       );
-      emitAdapterOutcome(onOutcome, outcome);
     };
     try {
       frameId = environment.requestAnimationFrame(callback);
       if (!callbackRan && frameId !== undefined) scheduledFocus.add(frameId);
-      if (!callbackRan) {
-        emitAdapterOutcome(onOutcome, {
-          type: "focus",
-          stage,
-          outcome: "scheduled",
-        });
-      }
     } catch {
-      emitAdapterOutcome(onOutcome, {
-        type: "focus",
-        stage,
-        outcome: "unavailable",
-      });
+      // Focus is best-effort presentation work.
     }
   };
 
@@ -443,21 +413,14 @@ export function createHouseholdRunwayBrowserAdapter(
     ? (task: () => void) => {
         try {
           options.schedule?.(task);
-          emitAdapterOutcome(onOutcome, {
-            type: "schedule",
-            outcome: "scheduled",
-          });
         } catch {
-          emitAdapterOutcome(onOutcome, {
-            type: "schedule",
-            outcome: "unavailable",
-          });
+          // Scheduling is best-effort; Runtime state remains authoritative.
         }
       }
     : undefined;
 
   const browserCapabilities = {
-    restore: options.restore,
+    restore: options.restore ?? restoreHouseholdRunwayBrowserRuntime,
     synchronizeDraft:
       options.synchronizeDraft ??
       ((request: HouseholdRunwayInterviewRuntimeDraftRequest) =>
@@ -488,8 +451,10 @@ export function createHouseholdRunwayBrowserAdapter(
           inputs: request.inputs,
           assessment: request.assessment,
           sourceRevision: 0,
-          correlationId: request.idempotencyKey,
-          idempotencyKey: request.idempotencyKey,
+          correlationId: (request as HouseholdRunwayBrowserInternalPlanRequest)
+            .idempotencyKey,
+          idempotencyKey: (request as HouseholdRunwayBrowserInternalPlanRequest)
+            .idempotencyKey,
           expectedPlanRevision: request.expectedPlanRevision,
           adjustments: request.adjustments,
           snapshotTrigger: request.snapshotTrigger,
@@ -621,7 +586,7 @@ export function createHouseholdRunwayBrowserAdapter(
             : {}),
         });
       } else {
-        emitAdapterOutcome(onOutcome, { type: "history", outcome: "unavailable" });
+        // A malformed browser URL cannot be projected; keep Runtime state authoritative.
       }
       return;
     }
@@ -693,8 +658,9 @@ export function createHouseholdRunwayBrowserAdapter(
   };
 
   const onHistory = () => {
+    historyEffectPending = false;
+    initialHrefForProjection = environment?.location.href;
     if (runtime.getSnapshot().lifecycle !== "ready") {
-      initialHrefForProjection = environment?.location.href;
       return;
     }
     reconcileUrl();
@@ -714,32 +680,18 @@ export function createHouseholdRunwayBrowserAdapter(
   };
 
   const subscribeToBrowser = (
-    event: "history" | "locale",
+    _event: "history" | "locale",
     type: string,
     listener: () => void,
   ) => {
     if (!environment?.addEventListener || !environment.removeEventListener) {
-      emitAdapterOutcome(onOutcome, {
-        type: "subscription",
-        event,
-        outcome: "unavailable",
-      });
       return;
     }
     try {
       environment.addEventListener(type, listener);
-      subscriptions.push({ event, type, listener });
-      emitAdapterOutcome(onOutcome, {
-        type: "subscription",
-        event,
-        outcome: "subscribed",
-      });
+      subscriptions.push({ event: _event, type, listener });
     } catch {
-      emitAdapterOutcome(onOutcome, {
-        type: "subscription",
-        event,
-        outcome: "unavailable",
-      });
+      // Browser subscriptions are best-effort; Runtime state remains usable.
     }
   };
 
@@ -758,12 +710,21 @@ export function createHouseholdRunwayBrowserAdapter(
       maybeImportRestoredDeviceDraft();
     },
     send: (intent) => {
+      const snapshotBeforeIntent = runtime.getSnapshot();
+      const backChangesHistory =
+        intent.type === "back" &&
+        (snapshotBeforeIntent.interviewStatus === "collecting" ||
+          snapshotBeforeIntent.interviewStatus === "reviewing") &&
+        !(
+          snapshotBeforeIntent.screen.kind === "expenses" &&
+          snapshotBeforeIntent.screen.activeCategory
+        );
       const historyIntent =
         intent.type === "start" ||
         intent.type === "start_new" ||
         intent.type === "resume_draft" ||
         intent.type === "resume_committed_plan" ||
-        intent.type === "exit" ||
+        backChangesHistory ||
         intent.type === "discard_draft";
       if (!historyIntent) {
         runtime.send(intent);
@@ -781,9 +742,6 @@ export function createHouseholdRunwayBrowserAdapter(
             intent.type === "resume_committed_plan") &&
           snapshot.interviewStatus === "not_started"
         ) {
-          historyEffectPending = false;
-        }
-        if (intent.type === "exit" && snapshot.interviewStatus !== "not_started") {
           historyEffectPending = false;
         }
       }
@@ -886,7 +844,7 @@ function planPersistenceError(status: number) {
  * Execute effects that require a browser capability. The Interview core only
  * receives the typed completion command returned by this adapter.
  */
-export async function executeHouseholdRunwayBrowserEffect(
+async function executeHouseholdRunwayBrowserEffect(
   effect: HouseholdRunwayExternalEffect,
   context: HouseholdRunwayBrowserEffectContext = {},
 ): Promise<HouseholdRunwayBrowserEffectResult> {

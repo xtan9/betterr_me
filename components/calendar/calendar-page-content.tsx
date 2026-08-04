@@ -12,7 +12,6 @@ import {
   getMonthGridDates,
   getWeekDateRange,
   getDayDateRange,
-  groupEventsByDate,
 } from "@/lib/calendar/date-utils";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useCalendarActions } from "@/hooks/use-calendar-actions";
@@ -26,8 +25,17 @@ import { DayView } from "./day-view";
 import { EventQuickCreate } from "./event-quick-create";
 import { EventDialog } from "./event-dialog";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
-import { overlayItemsToExpandedEvents, type CalendarDisplayEvent } from "@/lib/calendar/overlay-adapter";
-import { CALENDAR_OVERLAY_LAYERS, type CalendarOverlayItem } from "@/lib/calendar/overlay-feed";
+import {
+  calendarEventToDisplayItem,
+  groupCalendarDisplayItemsByDate,
+  overlayItemsToDisplayItems,
+  type CalendarOverlayDisplayItem,
+} from "@/lib/calendar/overlay-adapter";
+import {
+  CALENDAR_OVERLAY_LAYERS,
+  type CalendarOverlayItem,
+  type CalendarOverlayLayer,
+} from "@/lib/calendar/overlay-feed";
 import { useLocalization } from "@/lib/hooks/use-localization";
 import { weekStartPreferenceToDay } from "@/lib/preferences/owners";
 
@@ -37,8 +45,19 @@ interface EventsResponse {
 
 interface OverlayResponse {
   items: CalendarOverlayItem[];
-  unavailableLayers?: string[];
+  unavailableLayers?: CalendarOverlayLayer[];
 }
+
+type OverlayNoticeTranslationKey = "taskOverlay" | "habitOverlay" | "workoutOverlay";
+
+const OVERLAY_NOTICE_DEFINITIONS = [
+  { layer: "tasks", translationKey: "taskOverlay" },
+  { layer: "habits", translationKey: "habitOverlay" },
+  { layer: "workouts", translationKey: "workoutOverlay" },
+] as const satisfies ReadonlyArray<{
+  layer: CalendarOverlayLayer;
+  translationKey: OverlayNoticeTranslationKey;
+}>;
 
 export function CalendarPageContent() {
   const t = useTranslations("calendar");
@@ -143,16 +162,15 @@ export function CalendarPageContent() {
     }
   }, [globalMutate, overlayKey]);
 
-  const unavailableOverlayLayers = overlayData?.unavailableLayers ?? [];
-  const taskOverlayUnavailable = Boolean(
-    enabledLayers.has("tasks") && (overlayError || unavailableOverlayLayers.includes("tasks")),
-  );
-  const habitOverlayUnavailable = Boolean(
-    enabledLayers.has("habits") && (overlayError || unavailableOverlayLayers.includes("habits")),
-  );
-  const workoutOverlayUnavailable = Boolean(
-    enabledLayers.has("workouts") && (overlayError || unavailableOverlayLayers.includes("workouts")),
-  );
+  const unavailableOverlayNotices = useMemo(() => {
+    const unavailableLayers = new Set(overlayData?.unavailableLayers ?? []);
+
+    return OVERLAY_NOTICE_DEFINITIONS.filter(
+      ({ layer }) =>
+        enabledLayers.has(layer) &&
+        (Boolean(overlayError) || unavailableLayers.has(layer)),
+    );
+  }, [enabledLayers, overlayData?.unavailableLayers, overlayError]);
 
   // Log SWR fetch errors for debugging
   useEffect(() => {
@@ -173,24 +191,23 @@ export function CalendarPageContent() {
   const { toggleTask, toggleHabit, navigateWorkout } = useCalendarActions(handleOverlayMutated);
 
   const handleItemAction = useCallback(
-    async (event: ExpandedCalendarEvent | CalendarDisplayEvent) => {
-      const overlayEvent = event as CalendarDisplayEvent;
-      if (overlayEvent._taskAction) {
-        const result = await toggleTask(overlayEvent._taskAction.taskId);
+    async (item: CalendarOverlayDisplayItem) => {
+      if (item.action.type === "toggle_task_completion") {
+        const result = await toggleTask(item.action.taskId);
         if (!result.success) console.error("Calendar task action failed:", result.error);
         return;
       }
-      if (overlayEvent._habitAction) {
+      if (item.action.type === "toggle_habit_completion") {
         const result = await toggleHabit(
-          overlayEvent._habitAction.habitId,
-          overlayEvent._habitAction.date,
-          !overlayEvent._completed,
+          item.action.habitId,
+          item.action.date,
+          !item.completed,
         );
         if (!result.success) console.error("Calendar habit action failed:", result.error);
         return;
       }
-      if (overlayEvent._workoutAction) {
-        navigateWorkout(overlayEvent._workoutAction.workoutId);
+      if (item.action.type === "navigate_workout") {
+        navigateWorkout(item.action.workoutId);
         return;
       }
     },
@@ -223,21 +240,21 @@ export function CalendarPageContent() {
   const eventsByDate = useMemo(() => {
     const calendarEvents = eventsData?.events ?? [];
 
-    // Convert overlay items to pseudo-events for rendering
-    const overlayEvents: CalendarDisplayEvent[] = overlayData?.items
-      ? overlayItemsToExpandedEvents(overlayData.items)
+    // Adapt selected Calendar Overlay Feed items for the Calendar views.
+    const overlayItems = overlayData?.items
+      ? overlayItemsToDisplayItems(overlayData.items)
       : [];
     // Only include calendar events if the events layer is on
     const visibleCalendarEvents = enabledLayers.has("events")
-      ? calendarEvents
+      ? calendarEvents.map(calendarEventToDisplayItem)
       : [];
 
-    const allEvents = [
+    const allItems = [
       ...visibleCalendarEvents,
-      ...overlayEvents,
-    ] as ExpandedCalendarEvent[];
+      ...overlayItems,
+    ];
 
-    return groupEventsByDate(allEvents);
+    return groupCalendarDisplayItemsByDate(allItems);
   }, [eventsData?.events, overlayData?.items, enabledLayers]);
 
   // Compute grid dates
@@ -353,39 +370,23 @@ export function CalendarPageContent() {
                 onNavigatePrev={goToPrev}
               />
             )}
-            {taskOverlayUnavailable && !isRetryingOverlay && (
+            {unavailableOverlayNotices.map(({ layer, translationKey }) => (
               <div
+                key={layer}
                 role="status"
                 className="mt-3 flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
               >
-                <span>{t("taskOverlay.unavailable")}</span>
-                <button type="button" onClick={retryOverlay}>
-                  {t("taskOverlay.retry")}
+                <span>{t(`${translationKey}.unavailable`)}</span>
+                <button
+                  type="button"
+                  onClick={retryOverlay}
+                  disabled={isRetryingOverlay}
+                  aria-busy={isRetryingOverlay}
+                >
+                  {isRetryingOverlay ? t("retrying") : t(`${translationKey}.retry`)}
                 </button>
               </div>
-            )}
-            {habitOverlayUnavailable && !isRetryingOverlay && (
-              <div
-                role="status"
-                className="mt-3 flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-              >
-                <span>{t("habitOverlay.unavailable")}</span>
-                <button type="button" onClick={retryOverlay}>
-                  {t("habitOverlay.retry")}
-                </button>
-              </div>
-            )}
-            {workoutOverlayUnavailable && !isRetryingOverlay && (
-              <div
-                role="status"
-                className="mt-3 flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-              >
-                <span>{t("workoutOverlay.unavailable")}</span>
-                <button type="button" onClick={retryOverlay}>
-                  {t("workoutOverlay.retry")}
-                </button>
-              </div>
-            )}
+            ))}
           </div>
         </div>
       </div>

@@ -56,27 +56,31 @@ export function getMonthDateRange(
   };
 }
 
-/**
- * Groups events by their dates into a Map.
- * Multi-day events appear in each date they span.
- * Events within each day are sorted: all-day first, then by start_time ascending.
- */
-export function groupEventsByDate(
-  events: ExpandedCalendarEvent[],
-): Map<string, ExpandedCalendarEvent[]> {
-  const map = new Map<string, ExpandedCalendarEvent[]>();
+interface DatedCalendarItem {
+  start_date: string;
+  end_date: string;
+  start_time: string | null;
+}
 
-  for (const event of events) {
-    const start = event.start_date;
-    const end = event.end_date;
+/**
+ * Groups dated Calendar display items into a Map.
+ * Multi-day items appear in each date they span.
+ * Items within each day are sorted: all-day first, then by start_time ascending.
+ */
+export function groupDatedCalendarItems<T extends DatedCalendarItem>(
+  items: T[],
+): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+
+  for (const item of items) {
+    const start = item.start_date;
+    const end = item.end_date;
 
     if (start === end) {
-      // Single-day event
       const existing = map.get(start) || [];
-      existing.push(event);
+      existing.push(item);
       map.set(start, existing);
     } else {
-      // Multi-day event: add to each date it spans
       const startParts = start.split("-").map(Number);
       const endParts = end.split("-").map(Number);
       const startMs = new Date(startParts[0], startParts[1] - 1, startParts[2]).getTime();
@@ -87,15 +91,14 @@ export function groupEventsByDate(
         const d = new Date(startParts[0], startParts[1] - 1, startParts[2] + i);
         const dateStr = getLocalDateString(d);
         const existing = map.get(dateStr) || [];
-        existing.push(event);
+        existing.push(item);
         map.set(dateStr, existing);
       }
     }
   }
 
-  // Sort events within each day: all-day first, then by start_time
-  for (const [, dayEvents] of map) {
-    dayEvents.sort((a, b) => {
+  for (const [, dayItems] of map) {
+    dayItems.sort((a, b) => {
       if (a.start_time === null && b.start_time === null) return 0;
       if (a.start_time === null) return -1;
       if (b.start_time === null) return 1;
@@ -104,6 +107,13 @@ export function groupEventsByDate(
   }
 
   return map;
+}
+
+/** Group full-fidelity Calendar Events while preserving their existing view contract. */
+export function groupEventsByDate(
+  events: ExpandedCalendarEvent[],
+): Map<string, ExpandedCalendarEvent[]> {
+  return groupDatedCalendarItems(events);
 }
 
 /**

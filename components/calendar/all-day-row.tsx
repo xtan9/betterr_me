@@ -3,16 +3,16 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { EventChip } from "./event-chip";
-import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
+import type { CalendarDisplayItem } from "@/lib/calendar/overlay-adapter";
 import { getLocalDateString } from "@/lib/utils";
 
 interface AllDayRowProps {
   /** Array of dates (columns) in the grid */
   dates: Date[];
   /** Map of date string -> events for that date */
-  events: Map<string, ExpandedCalendarEvent[]>;
+  events: Map<string, CalendarDisplayItem[]>;
   /** Callback when an event is clicked */
-  onEventClick?: (event: ExpandedCalendarEvent) => void;
+  onEventClick?: (event: CalendarDisplayItem) => void;
 }
 
 const MAX_VISIBLE = 3;

@@ -1,7 +1,38 @@
 import { describe, it, expect, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useCalendarEvents } from "@/components/calendar/use-calendar-events";
+import {
+  calendarEventToDisplayItem,
+  overlayItemsToDisplayItems,
+} from "@/lib/calendar/overlay-adapter";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
+
+function makeEvent(id: string): ExpandedCalendarEvent {
+  return {
+    id,
+    user_id: "user-1",
+    title: "Event",
+    description: null,
+    start_date: "2026-04-12",
+    start_time: "09:00:00",
+    end_date: "2026-04-12",
+    end_time: "10:00:00",
+    location: null,
+    color: null,
+    category_id: null,
+    is_recurring: false,
+    recurrence_rule: null,
+    end_type: null,
+    end_date_recurrence: null,
+    end_count: null,
+    recurring_event_id: null,
+    original_date: null,
+    is_exception: false,
+    created_at: "2026-04-12T00:00:00Z",
+    updated_at: "2026-04-12T00:00:00Z",
+    is_virtual: false,
+  };
+}
 
 describe("useCalendarEvents", () => {
   it("initializes with no quickCreate or eventDialog", () => {
@@ -66,16 +97,16 @@ describe("useCalendarEvents", () => {
     });
   });
 
-  it("opens event dialog when clicking a plain event (no _layer)", () => {
+  it("opens the event dialog when clicking a Calendar Event display item", () => {
     const handleItemAction = vi.fn();
     const { result } = renderHook(() =>
       useCalendarEvents("2026-04-12", handleItemAction, vi.fn()),
     );
 
-    const ev = { id: "e1" } as ExpandedCalendarEvent;
+    const ev = calendarEventToDisplayItem(makeEvent("e1"));
     act(() => result.current.handleEventClick(ev));
 
-    expect(result.current.eventDialog).toMatchObject({ isOpen: true, event: ev });
+    expect(result.current.eventDialog).toMatchObject({ isOpen: true, event: ev.event });
     expect(handleItemAction).not.toHaveBeenCalled();
   });
 
@@ -85,19 +116,35 @@ describe("useCalendarEvents", () => {
       useCalendarEvents("2026-04-12", handleItemAction, vi.fn()),
     );
 
-    const ev = { id: "h1", _layer: "habits" } as unknown as ExpandedCalendarEvent;
+    const [ev] = overlayItemsToDisplayItems([{
+      layer: "habits",
+      kind: "habit",
+      id: "habits:habit-1:2026-04-12",
+      habitId: "habit-1",
+      title: "Read",
+      date: "2026-04-12",
+      startTime: null,
+      endTime: null,
+      allDay: true,
+      completed: true,
+      action: {
+        type: "toggle_habit_completion",
+        habitId: "habit-1",
+        date: "2026-04-12",
+      },
+    }]);
     act(() => result.current.handleEventClick(ev));
 
     expect(handleItemAction).toHaveBeenCalledWith(ev);
     expect(result.current.eventDialog).toBeNull();
   });
 
-  it("still opens the dialog for _layer=events", () => {
+  it("keeps Calendar Event display items on the editing path", () => {
     const handleItemAction = vi.fn();
     const { result } = renderHook(() =>
       useCalendarEvents("2026-04-12", handleItemAction, vi.fn()),
     );
-    const ev = { id: "e", _layer: "events" } as unknown as ExpandedCalendarEvent;
+    const ev = calendarEventToDisplayItem(makeEvent("e"));
     act(() => result.current.handleEventClick(ev));
     expect(result.current.eventDialog?.isOpen).toBe(true);
     expect(handleItemAction).not.toHaveBeenCalled();

@@ -3,8 +3,10 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { axe } from "vitest-axe";
 import * as axeMatchers from "vitest-axe/matchers";
 import { TimeGrid, timeToMinutes, computeOverlapColumns } from "@/components/calendar/time-grid";
+import type { CalendarDisplayItem } from "@/lib/calendar/overlay-adapter";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 import type { CalendarEvent } from "@/lib/db/types";
+import { toDisplayItems, toDisplayMap } from "./calendar-display-item-test-utils";
 
 expect.extend(axeMatchers);
 
@@ -67,7 +69,7 @@ describe("computeOverlapColumns", () => {
     const events = [
       makeEvent({ id: "e1", start_time: "10:00:00", end_time: "11:00:00" }),
     ];
-    const result = computeOverlapColumns(events);
+    const result = computeOverlapColumns(toDisplayItems(events));
     expect(result.get("e1")).toEqual({ column: 0, totalColumns: 1 });
   });
 
@@ -76,7 +78,7 @@ describe("computeOverlapColumns", () => {
       makeEvent({ id: "e1", start_time: "10:00:00", end_time: "11:00:00" }),
       makeEvent({ id: "e2", start_time: "10:30:00", end_time: "11:30:00" }),
     ];
-    const result = computeOverlapColumns(events);
+    const result = computeOverlapColumns(toDisplayItems(events));
     expect(result.get("e1")!.column).toBe(0);
     expect(result.get("e2")!.column).toBe(1);
     expect(result.get("e1")!.totalColumns).toBe(2);
@@ -88,7 +90,7 @@ describe("computeOverlapColumns", () => {
       makeEvent({ id: "e1", start_time: "10:00:00", end_time: "11:00:00" }),
       makeEvent({ id: "e2", start_time: "12:00:00", end_time: "13:00:00" }),
     ];
-    const result = computeOverlapColumns(events);
+    const result = computeOverlapColumns(toDisplayItems(events));
     expect(result.get("e1")!.column).toBe(0);
     expect(result.get("e2")!.column).toBe(0);
     expect(result.get("e1")!.totalColumns).toBe(1);
@@ -99,7 +101,7 @@ describe("computeOverlapColumns", () => {
 describe("TimeGrid", () => {
   const today = "2026-04-01";
   const dates = [new Date(2026, 3, 1)];
-  const emptyEvents = new Map<string, ExpandedCalendarEvent[]>();
+  const emptyEvents = new Map<string, CalendarDisplayItem[]>();
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -142,7 +144,7 @@ describe("TimeGrid", () => {
       makeEvent({ id: "e1", title: "Meeting", start_time: "10:00:00", end_time: "11:00:00" }),
     ]);
     render(
-      <TimeGrid dates={dates} events={events} today={today} />,
+      <TimeGrid dates={dates} events={toDisplayMap(events)} today={today} />,
     );
     expect(screen.getByText("Meeting")).toBeInTheDocument();
   });
@@ -259,7 +261,7 @@ describe("TimeGrid", () => {
     const { container } = render(
       <TimeGrid
         dates={dates}
-        events={events}
+        events={toDisplayMap(events)}
         today={today}
         onTimeSlotClick={onTimeSlotClick}
         onEventClick={onEventClick}
@@ -309,7 +311,7 @@ describe("TimeGrid", () => {
       makeEvent({ id: "e2", title: "Second", start_time: "10:30:00", end_time: "11:30:00" }),
     ]);
     render(
-      <TimeGrid dates={dates} events={events} today={today} />,
+      <TimeGrid dates={dates} events={toDisplayMap(events)} today={today} />,
     );
     expect(screen.getByText("First")).toBeInTheDocument();
     expect(screen.getByText("Second")).toBeInTheDocument();
@@ -322,7 +324,7 @@ describe("TimeGrid", () => {
       makeEvent({ id: "e1", title: "Clickable", start_time: "10:00:00", end_time: "11:00:00" }),
     ]);
     render(
-      <TimeGrid dates={dates} events={events} today={today} onEventClick={onEventClick} />,
+      <TimeGrid dates={dates} events={toDisplayMap(events)} today={today} onEventClick={onEventClick} />,
     );
     fireEvent.click(screen.getByText("Clickable"));
     expect(onEventClick).toHaveBeenCalledTimes(1);
@@ -334,7 +336,7 @@ describe("TimeGrid", () => {
     events.set("2026-04-01", [
       makeEvent({ id: "e1", title: "OpenEnd", start_time: "10:00:00", end_time: null }),
     ]);
-    render(<TimeGrid dates={dates} events={events} today={today} />);
+    render(<TimeGrid dates={dates} events={toDisplayMap(events)} today={today} />);
     expect(screen.getByText("OpenEnd")).toBeInTheDocument();
   });
 
@@ -343,7 +345,7 @@ describe("TimeGrid", () => {
     events.set("2026-04-01", [
       makeEvent({ id: "ad1", title: "All Day Event", start_time: null, end_time: null }),
     ]);
-    render(<TimeGrid dates={dates} events={events} today={today} />);
+    render(<TimeGrid dates={dates} events={toDisplayMap(events)} today={today} />);
     expect(screen.getByText("All Day Event")).toBeInTheDocument();
   });
 

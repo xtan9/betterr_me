@@ -3774,19 +3774,30 @@ function stableSerialize(value: unknown): string {
  * silently collapsed into the committed result, even when its answers have
  * not changed yet.
  */
-export function householdRunwayDraftDiffersFromPlan(
+export function householdRunwayDraftMatchesPlanContent(
   draft: HouseholdRunwayInterviewDraft,
   plan: HouseholdRunwayPlan,
   status: HouseholdRunwayInterviewStatus = "collecting",
   stage: HouseholdRunwayInterviewStage | null = null,
 ): boolean {
   const normalized = normalizeHouseholdRunwayDraft(draft);
-  if (!normalized.success) return true;
+  if (!normalized.success) return false;
   if (stableSerialize(normalized.planInputs) !== stableSerialize(plan.inputs)) {
+    return false;
+  }
+  if (hasPlanAdjustment(draft.planAdjustment)) return false;
+  return status === "completed" && stage === "result";
+}
+
+export function householdRunwayDraftDiffersFromPlan(
+  draft: HouseholdRunwayInterviewDraft,
+  plan: HouseholdRunwayPlan,
+  status: HouseholdRunwayInterviewStatus = "collecting",
+  stage: HouseholdRunwayInterviewStage | null = null,
+): boolean {
+  if (!householdRunwayDraftMatchesPlanContent(draft, plan, status, stage)) {
     return true;
   }
-  if (hasPlanAdjustment(draft.planAdjustment)) return true;
-  if (status !== "completed" || stage !== "result") return true;
   return draft.revision > plan.revision;
 }
 

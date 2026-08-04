@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { WeekView } from "@/components/calendar/week-view";
-import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
+import type { CalendarDisplayItem } from "@/lib/calendar/overlay-adapter";
 
 // Mock next-intl
 vi.mock("next-intl", () => ({
@@ -16,7 +16,7 @@ vi.mock("next-intl", () => ({
 Element.prototype.scrollTo = vi.fn();
 
 describe("WeekView", () => {
-  const emptyEvents = new Map<string, ExpandedCalendarEvent[]>();
+  const emptyEvents = new Map<string, CalendarDisplayItem[]>();
   const today = "2026-04-01";
   // April 1, 2026 is a Wednesday
   const currentDate = new Date(2026, 3, 1);
