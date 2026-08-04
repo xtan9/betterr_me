@@ -225,14 +225,15 @@ export function HouseholdRunway({
   const planOperationState =
     planOperation.status === "pending"
       ? "saving"
-      : planOperation.status === "succeeded" ||
-          snapshot.plan.current
+      : planOperation.status === "succeeded"
         ? "saved"
         : planOperation.status === "failed"
           ? "failed"
           : planOperation.status === "dirty"
             ? "dirty"
-            : "idle";
+            : snapshot.plan.current
+              ? "saved"
+              : "idle";
   const saving = planOperation.status === "pending";
   const saved = planOperationState === "saved";
   const issue = snapshot.issues[0]?.code;

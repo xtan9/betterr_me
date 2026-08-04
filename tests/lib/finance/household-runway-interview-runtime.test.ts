@@ -1076,6 +1076,14 @@ describe("Household Runway Interview Runtime", () => {
       plan: { exists: true, current: true, inputs: planInputs },
       assessmentHistory: [history],
     });
+
+    runtime.send({ type: "edit_completed_plan" });
+    runtime.send({ type: "continue" });
+    expect(runtime.getSnapshot()).toMatchObject({
+      screen: { kind: "stage", stage: "result" },
+      plan: { exists: true, current: true },
+      operations: { planPersistence: { status: "dirty" } },
+    });
   });
 
   it("lets authenticated Plan bootstrap replace or clear a stale initial Plan", async () => {
