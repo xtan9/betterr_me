@@ -5,6 +5,7 @@ import {
   type HouseholdRunwayInterviewRuntimeSnapshot,
 } from "@/lib/finance/household-runway-interview-runtime";
 import { createHouseholdRunwayInterview } from "@/lib/finance/household-runway-interview";
+import type { RunwaySnapshotSummary } from "@/lib/finance/cushion";
 
 const now = "2026-08-03T15:00:00.000Z";
 
@@ -596,6 +597,211 @@ describe("Household Runway Interview Runtime", () => {
       interviewStatus: "completed",
       screen: { kind: "stage", stage: "result" },
     });
+  });
+
+  it("holds authenticated Plan bootstrap behind initialization and publishes committed history", async () => {
+    const source = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "source",
+    });
+    source.start();
+    driveToReview(source);
+    source.send({ type: "continue" });
+    const planInputs = source.getSnapshot().derived.planInputs as
+      | HouseholdRunwayInterviewRuntimePlanResult["planInputs"]
+      | null;
+    if (!planInputs) throw new Error("expected committed Plan inputs");
+
+    const scheduled: (() => void)[] = [];
+    let resolvePlan:
+      | ((value: {
+          plan: {
+            revision: number;
+            inputs: HouseholdRunwayInterviewRuntimePlanResult["planInputs"];
+          };
+          snapshots: RunwaySnapshotSummary[];
+        }) => void)
+      | undefined;
+    const history = {
+      id: "snapshot-1",
+      trigger: "completed" as const,
+      scenario: "current" as const,
+      months_covered: 4,
+      sustainable: false,
+      model_version: "4.0.0",
+      created_at: now,
+    };
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      schedule: (task) => scheduled.push(task),
+      restore: async () => ({
+        session: { status: "missing" as const },
+        device: { status: "missing" as const },
+      }),
+      restorePlan: () =>
+        new Promise((resolve) => {
+          resolvePlan = resolve;
+        }),
+    });
+
+    runtime.start();
+    await Promise.resolve();
+    scheduled.splice(0).forEach((task) => task());
+    expect(runtime.getSnapshot().lifecycle).toBe("initializing");
+
+    resolvePlan?.({ plan: { revision: 7, inputs: planInputs }, snapshots: [history] });
+    await settle(scheduled);
+
+    expect(runtime.getSnapshot()).toMatchObject({
+      lifecycle: "ready",
+      interviewStatus: "completed",
+      plan: { exists: true, revision: 7, inputs: planInputs },
+      assessmentHistory: [history],
+    });
+  });
+
+  it("publishes a successful Plan save with authoritative Plan and Assessment history", async () => {
+    const scheduled: (() => void)[] = [];
+    const history = {
+      id: "snapshot-2",
+      trigger: "updated" as const,
+      scenario: "current" as const,
+      months_covered: 6,
+      sustainable: true,
+      model_version: "4.0.0",
+      created_at: now,
+    };
+    const requests: unknown[] = [];
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      schedule: (task) => scheduled.push(task),
+      persistPlan: (request) => {
+        requests.push(request);
+        return Promise.resolve({
+          planRevision: 3,
+          planInputs: request.inputs,
+          assessment: request.assessment,
+          snapshot: history,
+          snapshots: [history],
+        });
+      },
+    });
+    runtime.start();
+    driveToReview(runtime);
+    runtime.send({ type: "continue" });
+    runtime.send({ type: "save_plan" });
+
+    expect(requests).toHaveLength(0);
+    await settle(scheduled);
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({
+      expectedPlanRevision: 0,
+      idempotencyKey: expect.any(String),
+      snapshotActionId: expect.any(String),
+    });
+    expect((requests[0] as { idempotencyKey: string }).idempotencyKey).toBe(
+      (requests[0] as { snapshotActionId: string }).snapshotActionId,
+    );
+    expect(runtime.getSnapshot()).toMatchObject({
+      plan: { exists: true, revision: 3 },
+      assessmentHistory: [history],
+      operations: { planPersistence: { status: "succeeded" } },
+    });
+    expect(runtime.getSnapshot().draft.current).toBe(true);
+  });
+
+  it.each([
+    ["authentication_required", undefined],
+    ["conflict", 8],
+  ] as const)("preserves the active Draft for a recoverable %s save failure", async (error, currentPlanRevision) => {
+    const scheduled: (() => void)[] = [];
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      schedule: (task) => scheduled.push(task),
+      persistPlan: () => ({
+        success: false,
+        error,
+        ...(currentPlanRevision === undefined ? {} : { currentPlanRevision }),
+      }),
+    });
+    runtime.start();
+    driveToReview(runtime);
+    runtime.send({ type: "continue" });
+    runtime.send({ type: "save_plan" });
+    await settle(scheduled);
+
+    expect(runtime.getSnapshot()).toMatchObject({
+      operations: {
+        planPersistence: {
+          status: "failed",
+          error,
+          ...(currentPlanRevision === undefined ? {} : { currentPlanRevision }),
+        },
+      },
+      draft: { current: true },
+    });
+  });
+
+  it("maps thrown Plan persistence failures to a typed recoverable issue", async () => {
+    const scheduled: (() => void)[] = [];
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      schedule: (task) => scheduled.push(task),
+      persistPlan: () => {
+        throw new Error("persistence exploded");
+      },
+    });
+    runtime.start();
+    driveToReview(runtime);
+    runtime.send({ type: "continue" });
+    runtime.send({ type: "save_plan" });
+    await settle(scheduled);
+
+    expect(runtime.getSnapshot().operations.planPersistence).toEqual({
+      status: "failed",
+      error: "exception",
+    });
+    expect(runtime.getSnapshot().draft.current).toBe(true);
+  });
+
+  it("reuses Plan idempotency for an ambiguous revision and changes it for a new revision", async () => {
+    const scheduled: (() => void)[] = [];
+    const requests: Array<{ idempotencyKey: string }> = [];
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: (() => {
+        let count = 0;
+        return () => `id-${++count}`;
+      })(),
+      schedule: (task) => scheduled.push(task),
+      persistPlan: (request) => {
+        requests.push(request);
+        return { success: false as const, error: "network" as const };
+      },
+    });
+    runtime.start();
+    driveToReview(runtime);
+    runtime.send({ type: "continue" });
+    runtime.send({ type: "save_plan" });
+    await settle(scheduled);
+    runtime.send({ type: "save_plan" });
+    await settle(scheduled);
+
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.idempotencyKey).toBe(requests[0]?.idempotencyKey);
+
+    runtime.send({ type: "set_plan_adjustment", patch: { expense_reduction_cents: 100 } });
+    runtime.send({ type: "apply_plan_adjustment" });
+    runtime.send({ type: "save_plan" });
+    await settle(scheduled);
+
+    expect(requests).toHaveLength(3);
+    expect(requests[2]?.idempotencyKey).not.toBe(requests[0]?.idempotencyKey);
   });
 
   it("coalesces autosave to the latest revision and retries a failed sync on the next intent", async () => {

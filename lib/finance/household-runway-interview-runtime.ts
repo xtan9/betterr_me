@@ -15,7 +15,6 @@ import {
   type HouseholdRunwayInterviewCommand,
   type HouseholdRunwayInterviewCommandInput,
   type HouseholdRunwayInterviewEffect,
-  type HouseholdRunwayInterviewInitialization,
   type HouseholdRunwayInterviewRenderModel,
   type HouseholdRunwayInterviewStage,
   type HouseholdRunwayInterviewState,
@@ -41,6 +40,7 @@ export type HouseholdRunwayInterviewRuntimeIssueCode =
   | "assessment_required"
   | "plan_adjustment_pending"
   | "draft_recovery"
+  | "plan_recovery"
   | "confirmation_unavailable";
 
 export interface HouseholdRunwayInterviewRuntimeIssue {
@@ -56,7 +56,9 @@ export type HouseholdRunwayInterviewRuntimeOperationStatus =
 
 export type HouseholdRunwayInterviewRuntimeOperationError =
   | "authentication_required"
+  | "capability_unavailable"
   | "conflict"
+  | "exception"
   | "invalid"
   | "network"
   | "storage_unavailable"
@@ -66,6 +68,7 @@ export type HouseholdRunwayInterviewRuntimeOperationError =
 export interface HouseholdRunwayInterviewRuntimeOperation {
   readonly status: HouseholdRunwayInterviewRuntimeOperationStatus;
   readonly error?: HouseholdRunwayInterviewRuntimeOperationError;
+  readonly currentPlanRevision?: number;
 }
 
 export interface HouseholdRunwayInterviewRuntimeOperations {
@@ -179,6 +182,7 @@ export interface HouseholdRunwayInterviewRuntimeSnapshot {
   readonly screen: HouseholdRunwayInterviewRuntimeScreen;
   readonly derived: HouseholdRunwayInterviewRuntimeDeepReadonly<HouseholdRunwayInterviewRuntimeDerivedFacts>;
   readonly plan: HouseholdRunwayInterviewRuntimePlanFacts;
+  readonly assessmentHistory: readonly RunwaySnapshotSummary[];
   readonly draft: HouseholdRunwayInterviewRuntimeDraftFacts;
   readonly issues: readonly HouseholdRunwayInterviewRuntimeIssue[];
   readonly operations: HouseholdRunwayInterviewRuntimeOperations;
@@ -197,6 +201,7 @@ export interface HouseholdRunwayInterviewRuntimeDraftFacts {
 export interface HouseholdRunwayInterviewRuntimePlanFacts {
   readonly exists: boolean;
   readonly revision: number | null;
+  readonly inputs?: HouseholdRunwayAnswers;
 }
 
 export type HouseholdRunwayInterviewRuntimeConfirmationAction =
@@ -223,6 +228,10 @@ export interface HouseholdRunwayInterviewRuntimePlanRequest {
   inputs: HouseholdRunwayAnswers;
   assessment: SuccessfulHouseholdRunwayAssessment;
   expectedPlanRevision: number;
+  /** Private durable identity forwarded to the authenticated persistence adapter. */
+  idempotencyKey: string;
+  /** The same private identity is used as the append-only snapshot action. */
+  snapshotActionId: string;
   adjustments: RunwayAdjustments;
   snapshotTrigger: RunwaySnapshotSummary["trigger"];
 }
@@ -232,6 +241,28 @@ export interface HouseholdRunwayInterviewRuntimePlanResult {
   planInputs: HouseholdRunwayAnswers;
   assessment: SuccessfulHouseholdRunwayAssessment;
   snapshot?: RunwaySnapshotSummary;
+  snapshots?: readonly RunwaySnapshotSummary[];
+}
+
+export interface HouseholdRunwayInterviewRuntimePlanFailure {
+  success: false;
+  error:
+    | "authentication_required"
+    | "capability_unavailable"
+    | "conflict"
+    | "exception"
+    | "invalid"
+    | "network";
+  currentPlanRevision?: number;
+}
+
+export type HouseholdRunwayInterviewRuntimePlanOutcome =
+  | HouseholdRunwayInterviewRuntimePlanResult
+  | HouseholdRunwayInterviewRuntimePlanFailure;
+
+export interface HouseholdRunwayInterviewRuntimePlanRestore {
+  readonly plan?: HouseholdRunwayPlan | null;
+  readonly snapshots?: readonly RunwaySnapshotSummary[];
 }
 
 export interface HouseholdRunwayInterviewRuntimeCapabilities {
@@ -243,6 +274,10 @@ export interface HouseholdRunwayInterviewRuntimeCapabilities {
   schedule?: (task: () => void) => void;
   /** Restores decoded Draft/Plan state. Storage keys and codec envelopes stay private to the host. */
   restore?: () => unknown | PromiseLike<unknown>;
+  /** Restores authenticated committed Plan facts and Assessment history. */
+  restorePlan?: () =>
+    | HouseholdRunwayInterviewRuntimePlanRestore
+    | PromiseLike<HouseholdRunwayInterviewRuntimePlanRestore>;
   /** Provides semantic confirmation for destructive user intents. */
   confirm?: (
     request: HouseholdRunwayInterviewRuntimeConfirmationRequest,
@@ -266,7 +301,9 @@ export interface HouseholdRunwayInterviewRuntimeCapabilities {
   }) => boolean | void | Promise<boolean | void>;
   persistPlan?: (
     request: HouseholdRunwayInterviewRuntimePlanRequest,
-  ) => HouseholdRunwayInterviewRuntimePlanResult | Promise<HouseholdRunwayInterviewRuntimePlanResult>;
+  ) =>
+    | HouseholdRunwayInterviewRuntimePlanOutcome
+    | Promise<HouseholdRunwayInterviewRuntimePlanOutcome>;
   downloadReport?: (
     assessment: SuccessfulHouseholdRunwayAssessment,
   ) => boolean | void | Promise<boolean | void>;
@@ -279,6 +316,7 @@ export interface HouseholdRunwayInterviewRuntimeCapabilities {
 export interface HouseholdRunwayInterviewRuntimeOptions
   extends HouseholdRunwayInterviewRuntimeCapabilities {
   initialPlan?: HouseholdRunwayPlan | null;
+  initialSnapshots?: readonly RunwaySnapshotSummary[];
 }
 
 export interface HouseholdRunwayInterviewRuntime {
@@ -292,6 +330,7 @@ export interface HouseholdRunwayInterviewRuntime {
 type RuntimeMessage =
   | { type: "start" }
   | { type: "restored"; payload?: unknown; failed?: boolean }
+  | { type: "plan_restored"; payload?: unknown; failed?: boolean }
   | { type: "intent"; intent: HouseholdRunwayInterviewIntent; confirmed?: boolean }
   | { type: "outcome"; command: HouseholdRunwayInterviewCommand }
   | { type: "synchronize_draft"; retryFailed: boolean }
@@ -320,6 +359,17 @@ type RuntimeRestorePayload = {
     | { status: "restored"; state: HouseholdRunwayDraftState; expiresAt?: string }
     | { status: "rejected"; code?: string };
   deviceStorageConsent?: boolean;
+  plan?:
+    | { status: "missing" }
+    | {
+        status: "restored";
+        plan: HouseholdRunwayPlan;
+        snapshots?: readonly RunwaySnapshotSummary[];
+      }
+    | { status: "rejected"; code?: string };
+  committedPlan?: HouseholdRunwayPlan | null;
+  snapshots?: readonly RunwaySnapshotSummary[];
+  assessmentHistory?: readonly RunwaySnapshotSummary[];
 };
 
 interface RuntimeStorageFacts {
@@ -455,7 +505,14 @@ function publicOperationFor(
     if (operation.error === "stale_result") {
       return { status: "idle" };
     }
-    return { status: "failed", error: operation.error };
+    return {
+      status: "failed",
+      error: operation.error,
+      ...("currentPlanRevision" in operation &&
+      typeof operation.currentPlanRevision === "number"
+        ? { currentPlanRevision: operation.currentPlanRevision }
+        : {}),
+    };
   }
   return { status: operation.status };
 }
@@ -507,6 +564,25 @@ function restorePayloadFrom(value: unknown): RuntimeRestorePayload {
   return value as RuntimeRestorePayload;
 }
 
+function directPlanFrom(value: unknown): HouseholdRunwayPlan | null | undefined {
+  if (value === null) return null;
+  if (
+    value &&
+    typeof value === "object" &&
+    "revision" in value &&
+    "inputs" in value
+  ) {
+    return value as HouseholdRunwayPlan;
+  }
+  return undefined;
+}
+
+function isPlanPersistenceFailure(
+  value: HouseholdRunwayInterviewRuntimePlanOutcome,
+): value is HouseholdRunwayInterviewRuntimePlanFailure {
+  return "success" in value && value.success === false;
+}
+
 function draftFactsFor(
   state: HouseholdRunwayInterviewState,
   storage: RuntimeStorageFacts,
@@ -529,6 +605,7 @@ function snapshotFor(
   storage: RuntimeStorageFacts = EMPTY_STORAGE_FACTS,
   runtimeIssues: readonly HouseholdRunwayInterviewRuntimeIssue[] = [],
   confirmation: HouseholdRunwayInterviewRuntimeConfirmation = { status: "idle" },
+  assessmentHistory: readonly RunwaySnapshotSummary[] = [],
 ): HouseholdRunwayInterviewRuntimeSnapshot {
   const screen = state.renderModel;
   const issue =
@@ -546,7 +623,11 @@ function snapshotFor(
     plan: {
       exists: state.committedPlan !== null,
       revision: state.committedPlan?.revision ?? null,
+      ...(state.committedPlan
+        ? { inputs: clonePublicValue(state.committedPlan.inputs) }
+        : {}),
     },
+    assessmentHistory: clonePublicValue(assessmentHistory),
     draft: draftFactsFor(state, storage),
     issues: [...runtimeIssues, ...(issue ? [publicIssueFor(issue)!] : [])],
     operations: publicOperationsFor(state),
@@ -575,20 +656,38 @@ export function createHouseholdRunwayInterviewRuntime(
   let disposed = false;
   let storageFacts: RuntimeStorageFacts = { ...EMPTY_STORAGE_FACTS };
   let runtimeIssues: HouseholdRunwayInterviewRuntimeIssue[] = [];
+  let committedPlan = options.initialPlan ?? null;
+  let assessmentHistory = clonePublicValue(options.initialSnapshots ?? []);
   let confirmation: HouseholdRunwayInterviewRuntimeConfirmation = { status: "idle" };
   let pendingConfirmationIntent: HouseholdRunwayInterviewIntent | null = null;
   let pendingConfirmationId: string | null = null;
+  let restoredDraft: RuntimeStoredDraft | null = null;
   let restoredStartStage: HouseholdRunwayInterviewStage | undefined;
   let draftSyncScheduled = false;
   let draftSyncAttempt = 0;
-  let snapshot = snapshotFor(state, lifecycle, storageFacts, runtimeIssues, confirmation);
+  let startupPending = 0;
+  let snapshot = snapshotFor(
+    state,
+    lifecycle,
+    storageFacts,
+    runtimeIssues,
+    confirmation,
+    assessmentHistory,
+  );
   let draining = false;
   const messages: RuntimeMessage[] = [];
   const listeners = new Set<() => void>();
 
   const publish = () => {
     if (disposed) return;
-    const next = snapshotFor(state, lifecycle, storageFacts, runtimeIssues, confirmation);
+    const next = snapshotFor(
+      state,
+      lifecycle,
+      storageFacts,
+      runtimeIssues,
+      confirmation,
+      assessmentHistory,
+    );
     if (snapshotSignature(next) === snapshotSignature(snapshot)) return;
     snapshot = next;
     for (const listener of [...listeners]) {
@@ -635,8 +734,30 @@ export function createHouseholdRunwayInterviewRuntime(
       restored.session?.status === "rejected" ||
       restored.device?.status === "rejected"
     ) {
-      runtimeIssues = [{ code: "draft_recovery" }];
+      runtimeIssues = [
+        ...runtimeIssues.filter((issue) => issue.code !== "draft_recovery"),
+        { code: "draft_recovery" },
+      ];
     }
+
+    const directRestoredPlan = directPlanFrom(restored.plan);
+    const restoredPlan =
+      restored.plan?.status === "restored"
+        ? restored.plan.plan
+        : directRestoredPlan !== undefined
+          ? directRestoredPlan
+          : restored.committedPlan !== undefined
+            ? restored.committedPlan
+            : undefined;
+    if (restored.plan?.status === "rejected") {
+      runtimeIssues = [...runtimeIssues, { code: "plan_recovery" }];
+    }
+    if (restoredPlan !== undefined) committedPlan = restoredPlan;
+    const restoredHistory =
+      restored.plan?.status === "restored"
+        ? restored.plan.snapshots
+        : restored.assessmentHistory ?? restored.snapshots;
+    if (restoredHistory) assessmentHistory = clonePublicValue(restoredHistory);
 
     const selected =
       session && device
@@ -644,48 +765,90 @@ export function createHouseholdRunwayInterviewRuntime(
           ? session
           : device
         : session ?? device;
-    if (!selected) return;
+    restoredDraft = selected;
+  };
 
-    const committedPlan = options.initialPlan ?? null;
-    const differsFromPlan = Boolean(
-      committedPlan &&
-        householdRunwayDraftDiffersFromPlan(
-          selected.state.draft,
-          committedPlan,
-          selected.state.status,
-          selected.state.stage,
-        ),
-    );
-    const initialization: HouseholdRunwayInterviewInitialization = {
-      status: "not_started",
-      stage: null,
-      draft: selected.state.draft,
-      committedPlan,
-      resumeChoice:
-        differsFromPlan && committedPlan
-          ? {
-              draftStatus: selected.state.status,
-              draftStage: selected.state.stage,
-              recommended:
-                selected.state.draft.revision >= committedPlan.revision
-                  ? "draft"
-                  : "plan",
-            }
-          : null,
-    };
-    state = createHouseholdRunwayInterview(initialization);
-    if (!differsFromPlan) {
-      restoredStartStage =
-        selected.state.status === "completed"
-          ? "result"
-          : selected.state.stage === "result"
-            ? "result"
-            : selected.state.stage ?? undefined;
+  const applyPlanRestoration = (payload: unknown, failed: boolean) => {
+    if (failed) {
+      runtimeIssues = [...runtimeIssues, { code: "plan_recovery" }];
+      return;
     }
+    const restored = restorePayloadFrom(payload);
+    const planValue = restored.plan;
+    const directPlan = directPlanFrom(planValue);
+    if (planValue?.status === "rejected") {
+      runtimeIssues = [...runtimeIssues, { code: "plan_recovery" }];
+      return;
+    }
+    if (planValue?.status === "missing" || directPlan === null) {
+      committedPlan = null;
+    } else if (planValue?.status === "restored") {
+      committedPlan = planValue.plan;
+      if (planValue.snapshots) {
+        assessmentHistory = clonePublicValue(planValue.snapshots);
+      }
+    } else if (directPlan !== undefined) {
+      committedPlan = directPlan;
+      if (restored.assessmentHistory ?? restored.snapshots) {
+        assessmentHistory = clonePublicValue(
+          restored.assessmentHistory ?? restored.snapshots ?? [],
+        );
+      }
+    } else if (restored.committedPlan !== undefined) {
+      committedPlan = restored.committedPlan;
+      if (restored.assessmentHistory ?? restored.snapshots) {
+        assessmentHistory = clonePublicValue(
+          restored.assessmentHistory ?? restored.snapshots ?? [],
+        );
+      }
+    }
+  };
+
+  const finishStartupPart = () => {
+    startupPending -= 1;
+    if (startupPending === 0) completeStartup();
   };
 
   const completeStartup = () => {
     if (disposed) return;
+    if (restoredDraft) {
+      const differsFromPlan = Boolean(
+        committedPlan &&
+          householdRunwayDraftDiffersFromPlan(
+            restoredDraft.state.draft,
+            committedPlan,
+            restoredDraft.state.status,
+            restoredDraft.state.stage,
+          ),
+      );
+      state = createHouseholdRunwayInterview({
+        status: "not_started",
+        stage: null,
+        draft: restoredDraft.state.draft,
+        committedPlan,
+        resumeChoice:
+          differsFromPlan && committedPlan
+            ? {
+                draftStatus: restoredDraft.state.status,
+                draftStage: restoredDraft.state.stage,
+                recommended:
+                  restoredDraft.state.draft.revision >= committedPlan.revision
+                    ? "draft"
+                    : "plan",
+              }
+            : null,
+      });
+      if (!differsFromPlan) {
+        restoredStartStage =
+          restoredDraft.state.status === "completed"
+            ? "result"
+            : restoredDraft.state.stage === "result"
+              ? "result"
+              : restoredDraft.state.stage ?? undefined;
+      }
+    } else if (committedPlan && state.committedPlan === null) {
+      state = createHouseholdRunwayInterview(committedPlan);
+    }
     if (state.status === "not_started" && !state.resumeChoice) {
       const interviewId = createId();
       applyCommand(
@@ -705,7 +868,7 @@ export function createHouseholdRunwayInterviewRuntime(
 
   const beginRestoration = () => {
     if (!options.restore) {
-      completeStartup();
+      finishStartupPart();
       return;
     }
     try {
@@ -732,6 +895,38 @@ export function createHouseholdRunwayInterviewRuntime(
       });
     } catch {
       enqueue({ type: "restored", failed: true });
+    }
+  };
+
+  const beginPlanRestoration = () => {
+    if (!options.restorePlan) {
+      finishStartupPart();
+      return;
+    }
+    try {
+      queueMicrotask(() => {
+        if (disposed) return;
+        try {
+          schedule(() => {
+            if (disposed) return;
+            let result: MaybePromise<HouseholdRunwayInterviewRuntimePlanRestore>;
+            try {
+              result = options.restorePlan!();
+            } catch {
+              enqueue({ type: "plan_restored", failed: true });
+              return;
+            }
+            Promise.resolve(result).then(
+              (value) => enqueue({ type: "plan_restored", payload: value }),
+              () => enqueue({ type: "plan_restored", failed: true }),
+            );
+          });
+        } catch {
+          enqueue({ type: "plan_restored", failed: true });
+        }
+      });
+    } catch {
+      enqueue({ type: "plan_restored", failed: true });
     }
   };
 
@@ -897,34 +1092,80 @@ export function createHouseholdRunwayInterviewRuntime(
       return;
     }
     if (effect.type === "plan_persistence_requested") {
-      invoke(
-        options.persistPlan
-          ? () =>
-              options.persistPlan!({
-                inputs: clonePublicValue(effect.inputs),
-                assessment: clonePublicValue(effect.assessment),
-                expectedPlanRevision: effect.expectedPlanRevision,
-                adjustments: clonePublicValue(effect.adjustments),
-                snapshotTrigger: effect.snapshotTrigger,
-              })
-          : undefined,
-        (value) =>
-          outcomeCommand(createId, now, {
-            type: "plan_persistence_succeeded",
-            sourceRevision: effect.sourceRevision,
-            correlationId: effect.correlationId,
-            planRevision: value.planRevision,
-            planInputs: value.planInputs,
-            assessment: value.assessment,
-            ...(value.snapshot ? { snapshot: value.snapshot } : {}),
-          }),
-        () =>
+      if (!options.persistPlan) {
+        enqueueOutcome(() =>
           outcomeCommand(createId, now, {
             type: "plan_persistence_failed",
             sourceRevision: effect.sourceRevision,
             correlationId: effect.correlationId,
-            error: "network",
+            error: "capability_unavailable",
           }),
+        );
+        return;
+      }
+      let result: MaybePromise<HouseholdRunwayInterviewRuntimePlanOutcome>;
+      try {
+        result = options.persistPlan({
+          inputs: clonePublicValue(effect.inputs),
+          assessment: clonePublicValue(effect.assessment),
+          expectedPlanRevision: effect.expectedPlanRevision,
+          idempotencyKey: effect.idempotencyKey,
+          snapshotActionId: effect.idempotencyKey,
+          adjustments: clonePublicValue(effect.adjustments),
+          snapshotTrigger: effect.snapshotTrigger,
+        });
+      } catch {
+        enqueueOutcome(() =>
+          outcomeCommand(createId, now, {
+            type: "plan_persistence_failed",
+            sourceRevision: effect.sourceRevision,
+            correlationId: effect.correlationId,
+            error: "exception",
+          }),
+        );
+        return;
+      }
+      Promise.resolve(result).then(
+        (value) => {
+          if (isPlanPersistenceFailure(value)) {
+            enqueueOutcome(() =>
+              outcomeCommand(createId, now, {
+                type: "plan_persistence_failed",
+                sourceRevision: effect.sourceRevision,
+                correlationId: effect.correlationId,
+                ...(value.currentPlanRevision !== undefined
+                  ? { currentPlanRevision: value.currentPlanRevision }
+                  : {}),
+                error: value.error,
+              }),
+            );
+            return;
+          }
+          const successfulValue = value as HouseholdRunwayInterviewRuntimePlanResult;
+          enqueueOutcome(() =>
+            outcomeCommand(createId, now, {
+              type: "plan_persistence_succeeded",
+              sourceRevision: effect.sourceRevision,
+              correlationId: effect.correlationId,
+              planRevision: successfulValue.planRevision,
+              planInputs: successfulValue.planInputs,
+              assessment: successfulValue.assessment,
+              ...(successfulValue.snapshot ? { snapshot: successfulValue.snapshot } : {}),
+              ...(successfulValue.snapshots
+                ? { snapshots: successfulValue.snapshots }
+                : {}),
+            }),
+          );
+        },
+        () =>
+          enqueueOutcome(() =>
+            outcomeCommand(createId, now, {
+              type: "plan_persistence_failed",
+              sourceRevision: effect.sourceRevision,
+              correlationId: effect.correlationId,
+              error: "exception",
+            }),
+          ),
       );
       return;
     }
@@ -1147,6 +1388,20 @@ export function createHouseholdRunwayInterviewRuntime(
         snapshotTrigger: state.committedPlan ? "updated" : "completed",
       });
       state = result.state;
+      if (
+        command.type === "plan_persistence_succeeded" &&
+        result.state.operations.planPersistence.status === "succeeded" &&
+        result.state.operations.planPersistence.correlationId === command.correlationId
+      ) {
+        if (command.snapshots !== undefined) {
+          assessmentHistory = clonePublicValue(command.snapshots);
+        } else if (command.snapshot) {
+          assessmentHistory = [
+            clonePublicValue(command.snapshot),
+            ...assessmentHistory.filter((item) => item.id !== command.snapshot?.id),
+          ];
+        }
+      }
       if (publishSnapshot && !introducedStaleResult(previousState, result.state)) {
         publish();
       }
@@ -1161,14 +1416,24 @@ export function createHouseholdRunwayInterviewRuntime(
       if (started || disposed) return;
       started = true;
       lifecycle = "initializing";
+      startupPending =
+        (options.restore ? 1 : 0) + (options.restorePlan ? 1 : 0);
       publish();
-      beginRestoration();
+      if (options.restore) beginRestoration();
+      if (options.restorePlan) beginPlanRestoration();
+      if (startupPending === 0) completeStartup();
       return;
     }
     if (message.type === "restored") {
       if (!started || disposed || lifecycle !== "initializing") return;
       applyRestoration(message.payload, message.failed === true);
-      completeStartup();
+      finishStartupPart();
+      return;
+    }
+    if (message.type === "plan_restored") {
+      if (!started || disposed || lifecycle !== "initializing") return;
+      applyPlanRestoration(message.payload, message.failed === true);
+      finishStartupPart();
       return;
     }
     if (message.type === "confirmation") {
@@ -1257,7 +1522,14 @@ export function createHouseholdRunwayInterviewRuntime(
       messages.length = 0;
       pendingConfirmationIntent = null;
       pendingConfirmationId = null;
-      snapshot = snapshotFor(state, lifecycle, storageFacts, runtimeIssues, confirmation);
+      snapshot = snapshotFor(
+        state,
+        lifecycle,
+        storageFacts,
+        runtimeIssues,
+        confirmation,
+        assessmentHistory,
+      );
     },
   };
 }
