@@ -94,6 +94,11 @@ export interface DomainCalendarEvent {
   _completed?: boolean;
   /** Available inline actions. */
   _actions?: FeedAction[];
+  /** Typed task overlay action; legacy feed actions remain array-based. */
+  _taskAction?: {
+    type: "toggle_task_completion";
+    taskId: string;
+  };
   /** Source ID in the original domain table. */
   _sourceId?: string;
   /** Extra metadata for display. */

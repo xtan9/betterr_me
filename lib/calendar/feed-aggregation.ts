@@ -8,6 +8,7 @@
 import type { Task, Habit, HabitLog, Workout } from "@/lib/db/types";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 import type { CalendarFeedItem, DomainCalendarEvent, FeedDomain } from "./feed-types";
+import type { TaskOverlayItem } from "./overlay-feed";
 import { shouldTrackOnDate } from "@/lib/habits/format";
 
 // ---------------------------------------------------------------------------
@@ -242,5 +243,39 @@ export function feedItemsToExpandedEvents(
     _actions: item.actions,
     _sourceId: item.sourceId,
     _meta: item.meta,
+  }));
+}
+
+/** Adapt the typed task overlay into the existing calendar rendering seam. */
+export function taskOverlayItemsToExpandedEvents(
+  items: TaskOverlayItem[],
+): DomainCalendarEvent[] {
+  return items.map((item) => ({
+    id: item.id,
+    user_id: "",
+    title: item.title,
+    description: null,
+    start_date: item.date,
+    start_time: item.startTime,
+    end_date: item.date,
+    end_time: item.endTime,
+    location: null,
+    color: null,
+    category_id: null,
+    is_recurring: false,
+    recurrence_rule: null,
+    end_type: null,
+    end_date_recurrence: null,
+    end_count: null,
+    recurring_event_id: null,
+    original_date: null,
+    is_exception: false,
+    created_at: "",
+    updated_at: "",
+    is_virtual: true,
+    _domain: "tasks",
+    _completed: item.completed,
+    _sourceId: item.taskId,
+    _taskAction: item.action,
   }));
 }
