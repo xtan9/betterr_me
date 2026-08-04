@@ -197,7 +197,7 @@ function mapPersistedPlan(
   return plan ?? persistenceError("Plan does not satisfy the domain contract");
 }
 
-export async function getFinanceCushion(
+export async function getHouseholdRunwayPlan(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<HouseholdRunwayPlan | null> {
@@ -209,8 +209,6 @@ export async function getFinanceCushion(
   if (error) throw error;
   return data ? mapPersistedPlan(data) : null;
 }
-
-export const getHouseholdRunwayPlan = getFinanceCushion;
 
 /**
  * The only Household Runway Plan write authority. The database function owns

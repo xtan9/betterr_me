@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { assessHouseholdRunway } from "@/lib/finance/household-runway-assessment";
 import {
   commitHouseholdRunwayPlan,
-  getFinanceCushion,
+  getHouseholdRunwayPlan,
   getRunwaySnapshots,
 } from "@/lib/finance/repository";
 import type {
@@ -13,11 +13,11 @@ import type {
 export function createHouseholdRunwayService(client: SupabaseClient) {
   return {
     async load(userId: string) {
-      const [cushion, snapshots] = await Promise.all([
-        getFinanceCushion(client, userId),
+      const [plan, snapshots] = await Promise.all([
+        getHouseholdRunwayPlan(client, userId),
         getRunwaySnapshots(client, userId),
       ]);
-      return { cushion, snapshots };
+      return { plan, snapshots };
     },
 
     async commit(input: FinanceCushionCommitInput) {

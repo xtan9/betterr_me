@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
-import {
-  getFinanceCushion,
-  getRunwaySnapshots,
-} from "@/lib/finance/repository";
+import { createHouseholdRunwayService } from "@/lib/finance/household-runway-service";
 import { HouseholdRunway } from "@/components/finance/household-runway";
 import { SidebarShell } from "@/components/layouts/sidebar-shell";
 import { hasEnvVars } from "@/lib/utils";
@@ -38,18 +35,15 @@ export default async function FinanceCushionPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const [cushion, snapshots] = user
-    ? await Promise.all([
-        getFinanceCushion(supabase, user.id),
-        getRunwaySnapshots(supabase, user.id),
-      ])
-    : [null, []];
+  const { plan, snapshots } = user
+    ? await createHouseholdRunwayService(supabase).load(user.id)
+    : { plan: null, snapshots: [] };
   const runway = (
     <HouseholdRunway
-      initialAnswers={cushion?.inputs ?? null}
-      initialPlanRevision={cushion?.revision ?? 0}
+      initialAnswers={plan?.inputs ?? null}
+      initialPlanRevision={plan?.revision ?? 0}
       isAuthenticated={Boolean(user)}
-      hasSavedPlan={Boolean(cushion?.inputs)}
+      hasSavedPlan={Boolean(plan?.inputs)}
       initialSnapshots={snapshots}
     />
   );

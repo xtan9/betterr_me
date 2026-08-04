@@ -7,7 +7,7 @@ import {
 import { assessHouseholdRunway } from "@/lib/finance/household-runway-assessment";
 import {
   commitHouseholdRunwayPlan,
-  getFinanceCushion,
+  getHouseholdRunwayPlan,
   HouseholdRunwayPersistenceIntegrityError,
   type HouseholdRunwayAtomicCommitInput,
 } from "@/lib/finance/repository";
@@ -103,7 +103,7 @@ describe("household runway atomic repository boundary", () => {
     const answers = input().answers;
     const reader = readClient(currentRow(answers));
 
-    await expect(getFinanceCushion(reader.client, "user-a")).resolves.toEqual({
+    await expect(getHouseholdRunwayPlan(reader.client, "user-a")).resolves.toEqual({
       revision: 3,
       inputs: answers,
     });
@@ -121,7 +121,7 @@ describe("household runway atomic repository boundary", () => {
       updated_at: "2026-07-31T00:00:00.000Z",
     });
 
-    await expect(getFinanceCushion(reader.client, "user-a")).resolves.toMatchObject({
+    await expect(getHouseholdRunwayPlan(reader.client, "user-a")).resolves.toMatchObject({
       revision: 0,
       inputs: {
         schema_version: 4,
@@ -139,7 +139,7 @@ describe("household runway atomic repository boundary", () => {
       ...currentRow(input().answers, 7),
       answers: null,
     });
-    await expect(getFinanceCushion(presentRevision.client, "user-a")).resolves.toMatchObject({
+    await expect(getHouseholdRunwayPlan(presentRevision.client, "user-a")).resolves.toMatchObject({
       revision: 7,
     });
   });
@@ -157,7 +157,7 @@ describe("household runway atomic repository boundary", () => {
       ...corruption,
     });
 
-    await expect(getFinanceCushion(reader.client, "user-a")).rejects.toBeInstanceOf(
+    await expect(getHouseholdRunwayPlan(reader.client, "user-a")).rejects.toBeInstanceOf(
       HouseholdRunwayPersistenceIntegrityError,
     );
   });

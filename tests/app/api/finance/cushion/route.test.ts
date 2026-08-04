@@ -5,7 +5,7 @@ import {
 } from "@/lib/finance/cushion";
 import { assessHouseholdRunway } from "@/lib/finance/household-runway-assessment";
 import { GET, POST } from "@/app/api/finance/cushion/route";
-import { commitHouseholdRunwayPlan, getFinanceCushion, getRunwaySnapshots } from "@/lib/finance/repository";
+import { commitHouseholdRunwayPlan, getHouseholdRunwayPlan, getRunwaySnapshots } from "@/lib/finance/repository";
 
 const { mockAuthenticateRequest } = vi.hoisted(() => ({
   mockAuthenticateRequest: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock("@/lib/auth/authenticated-request", () => ({
 
 vi.mock("@/lib/finance/repository", () => ({
   commitHouseholdRunwayPlan: vi.fn(),
-  getFinanceCushion: vi.fn(),
+  getHouseholdRunwayPlan: vi.fn(),
   getRunwaySnapshots: vi.fn(),
 }));
 
@@ -61,7 +61,13 @@ const adjustments = {
 };
 const assessment = assessHouseholdRunway({ answers, adjustments });
 if (!assessment.success) throw new Error("test assessment should be valid");
-const savedCushion = { revision: 1, inputs: answers };
+const savedCushion = {
+  revision: 1,
+  inputs: answers,
+  id: "private-plan-id",
+  updated_at: "2026-07-26T00:00:00.000Z",
+  status: "completed",
+};
 const savedSnapshot = {
   id: "snapshot-a",
   trigger: "completed" as const,
@@ -242,7 +248,7 @@ describe("/api/finance/cushion/commit", () => {
   });
 
   it("keeps the legacy GET read boundary owner-authenticated", async () => {
-    vi.mocked(getFinanceCushion).mockResolvedValue(savedCushion);
+    vi.mocked(getHouseholdRunwayPlan).mockResolvedValue(savedCushion);
     vi.mocked(getRunwaySnapshots).mockResolvedValue([savedSnapshot]);
     const response = await GET(
       new NextRequest("http://localhost:3000/api/finance/cushion"),
@@ -252,5 +258,36 @@ describe("/api/finance/cushion/commit", () => {
       cushion: { revision: 1, answers },
       snapshots: [savedSnapshot],
     });
+    expect(getHouseholdRunwayPlan).toHaveBeenCalledWith(mockSupabase, user.id);
+    expect(getRunwaySnapshots).toHaveBeenCalledWith(mockSupabase, user.id);
+  });
+
+  it("returns an empty compatibility Plan when the authenticated owner has no Plan", async () => {
+    vi.mocked(getHouseholdRunwayPlan).mockResolvedValue(null);
+    const response = await GET(
+      new NextRequest("http://localhost:3000/api/finance/cushion"),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      cushion: null,
+      snapshots: [],
+    });
+  });
+
+  it("rejects unauthenticated legacy GET reads before loading the repository", async () => {
+    mockAuthenticateRequest.mockResolvedValueOnce({
+      ok: false,
+      error: "Unauthorized",
+      status: 401,
+    });
+
+    const response = await GET(
+      new NextRequest("http://localhost:3000/api/finance/cushion"),
+    );
+
+    expect(response.status).toBe(401);
+    expect(getHouseholdRunwayPlan).not.toHaveBeenCalled();
+    expect(getRunwaySnapshots).not.toHaveBeenCalled();
   });
 });

@@ -5,8 +5,7 @@ import { createDefaultRunwayAnswers } from "@/lib/finance/cushion";
 
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
-  getFinanceCushion: vi.fn(),
-  getRunwaySnapshots: vi.fn(),
+  load: vi.fn(),
 }));
 
 vi.mock("@/lib/utils", () => ({ hasEnvVars: true }));
@@ -15,9 +14,10 @@ vi.mock("@/lib/supabase/server", () => ({
     auth: { getUser: mocks.getUser },
   })),
 }));
-vi.mock("@/lib/finance/repository", () => ({
-  getFinanceCushion: mocks.getFinanceCushion,
-  getRunwaySnapshots: mocks.getRunwaySnapshots,
+vi.mock("@/lib/finance/household-runway-service", () => ({
+  createHouseholdRunwayService: vi.fn(() => ({
+    load: mocks.load,
+  })),
 }));
 vi.mock("@/components/finance/household-runway", () => ({
   HouseholdRunway: ({
@@ -48,8 +48,7 @@ import FinanceCushionPage from "@/app/finance/cushion/page";
 describe("FinanceCushionPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getFinanceCushion.mockResolvedValue(null);
-    mocks.getRunwaySnapshots.mockResolvedValue([]);
+    mocks.load.mockResolvedValue({ plan: null, snapshots: [] });
   });
 
   it("uses the app sidebar shell for an authenticated user", async () => {
@@ -78,14 +77,12 @@ describe("FinanceCushionPage", () => {
 
   it("does not hydrate persisted assessment adjustments into a working overlay", async () => {
     mocks.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
-    mocks.getFinanceCushion.mockResolvedValue({
-      inputs: createDefaultRunwayAnswers(
-        new Date("2026-07-31T00:00:00.000Z"),
-      ),
-      latest_result: {
-        success: true,
-        adjustments: { added_cash_cents: 125_000 },
+    mocks.load.mockResolvedValue({
+      plan: {
+        revision: 4,
+        inputs: createDefaultRunwayAnswers(new Date("2026-07-31T00:00:00.000Z")),
       },
+      snapshots: [],
     });
 
     render(await FinanceCushionPage());
@@ -97,9 +94,7 @@ describe("FinanceCushionPage", () => {
 
   it("does not mark a retained row without versioned answers as saved", async () => {
     mocks.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
-    mocks.getFinanceCushion.mockResolvedValue({
-      inputs: null,
-    });
+    mocks.load.mockResolvedValue({ plan: null, snapshots: [] });
 
     render(await FinanceCushionPage());
 
