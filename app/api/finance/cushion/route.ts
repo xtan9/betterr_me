@@ -42,12 +42,12 @@ export async function GET(request: NextRequest) {
         { status: auth.status },
       );
     }
-    const result = await createHouseholdRunwayService(auth.client).load(
+    const { plan, snapshots } = await createHouseholdRunwayService(auth.client).load(
       auth.principal.userId,
     );
     return NextResponse.json({
-      ...result,
-      cushion: toPlanWire(result.cushion),
+      cushion: toPlanWire(plan),
+      snapshots,
     });
   } catch (error) {
     log.error("[household-runway] GET failed", error);
