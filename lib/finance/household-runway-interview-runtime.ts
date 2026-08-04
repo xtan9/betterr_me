@@ -1416,9 +1416,7 @@ export function createHouseholdRunwayInterviewRuntime(
         : null;
     }
     if (intent.type === "clear_device_draft") {
-      return storageFacts.device || storageFacts.deviceStorageConsent
-        ? "clear_device_draft"
-        : null;
+      return null;
     }
     return null;
   };

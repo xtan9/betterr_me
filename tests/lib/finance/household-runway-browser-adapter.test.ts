@@ -148,6 +148,39 @@ describe("Household Runway browser adapter", () => {
     adapter.dispose();
   });
 
+  it("keeps a destructive navigation command ahead of URL reconciliation", async () => {
+    const browser = createAdapterEnvironment(
+      "https://betterr.me/finance/cushion?start=1",
+    );
+    const confirm = vi.fn(() => true);
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      authenticated: false,
+      autoStart: false,
+      confirm,
+      clearDraft: () => true,
+      createId: () => "interview-1",
+      synchronizeDraft: () => true,
+    });
+
+    adapter.start();
+    adapter.send({ type: "start" });
+    adapter.send({ type: "discard_draft" });
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await Promise.resolve();
+    }
+
+    expect(confirm).toHaveBeenCalledWith({ action: "discard_draft" });
+    expect(adapter.getSnapshot()).toMatchObject({
+      interviewStatus: "not_started",
+      screen: { kind: "landing" },
+    });
+    expect(browser.environment.location.href).toBe(
+      "https://betterr.me/finance/cushion",
+    );
+    adapter.dispose();
+  });
+
   it("auto-starts authenticated Runtime state and repairs the URL once", () => {
     const browser = createAdapterEnvironment(
       "https://betterr.me/finance/cushion",

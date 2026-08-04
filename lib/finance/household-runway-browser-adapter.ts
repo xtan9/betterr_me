@@ -712,9 +712,11 @@ export function createHouseholdRunwayBrowserAdapter(
     send: (intent) => {
       const historyIntent =
         intent.type === "start" ||
+        intent.type === "start_new" ||
         intent.type === "resume_draft" ||
         intent.type === "resume_committed_plan" ||
-        intent.type === "exit";
+        intent.type === "exit" ||
+        intent.type === "discard_draft";
       if (!historyIntent) {
         runtime.send(intent);
         return;

@@ -772,6 +772,34 @@ describe("Household Runway Interview Runtime", () => {
     ]);
   });
 
+  it("clears a remembered device copy without requiring a second confirmation", async () => {
+    const confirm = vi.fn(() => false);
+    const clearDraft = vi.fn(() => true);
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      autoStart: false,
+      createId: () => "interview-1",
+      confirm,
+      clearDraft,
+      restore: async () => ({
+        device: { status: "restored" as const, state: storedDraft(1) },
+        deviceStorageConsent: true,
+      }),
+    });
+
+    runtime.start();
+    await settle([]);
+    runtime.send({ type: "start" });
+    runtime.send({ type: "clear_device_draft" });
+    await settle([]);
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(clearDraft).toHaveBeenCalledWith({ scope: "device" });
+    expect(runtime.getSnapshot().draft).toMatchObject({
+      device: false,
+      deviceStorageConsent: false,
+    });
+  });
+
   it("recovers from rejected restoration without blocking a usable Interview", async () => {
     const runtime = createHouseholdRunwayInterviewRuntime({
       now: () => now,
