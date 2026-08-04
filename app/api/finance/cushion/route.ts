@@ -5,10 +5,12 @@ import {
 } from "@/lib/auth/authenticated-request";
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { createHouseholdRunwayService } from "@/lib/finance/household-runway-service";
+import { HouseholdRunwayPersistenceIntegrityError } from "@/lib/finance/repository";
 import { validateRequestBody } from "@/lib/validations/api";
 import { financeCushionCommitSchema } from "@/lib/validations/finance-cushion";
 import { log } from "@/lib/logger";
 import type { HouseholdRunwayAnswers } from "@/lib/finance/cushion";
+import { createHouseholdRunwayPlan } from "@/lib/finance/household-runway-plan";
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ["cookie"],
@@ -72,9 +74,24 @@ async function commit(request: NextRequest) {
       financeCushionCommitSchema,
     );
     if (!validation.success) return validation.response;
+    const plan = createHouseholdRunwayPlan({
+      revision: validation.data.expected_revision,
+      inputs: validation.data.answers,
+    });
+    if (!plan) {
+      return NextResponse.json(
+        { type: "validation_error", error: "Invalid household runway Plan" },
+        { status: 400 },
+      );
+    }
     const result = await createHouseholdRunwayService(auth.client).commit({
-      ...validation.data,
+      plan,
+      adjustments: validation.data.adjustments,
+      status: validation.data.status,
       attribution: validation.data.attribution ?? {},
+      idempotencyKey: validation.data.idempotency_key,
+      snapshotActionId: validation.data.snapshot_action_id,
+      snapshotTrigger: validation.data.snapshot_trigger,
     });
     if (!result.success) {
       if ("validationIssues" in result) {
@@ -125,6 +142,15 @@ async function commit(request: NextRequest) {
     });
   } catch (error) {
     log.error("[household-runway] commit failed", error);
+    if (error instanceof HouseholdRunwayPersistenceIntegrityError) {
+      return NextResponse.json(
+        {
+          type: "persistence_integrity",
+          error: "Household Runway persistence integrity failure",
+        },
+        { status: 500 },
+      );
+    }
     return NextResponse.json(
       { error: "Failed to save runway" },
       { status: 500 },
