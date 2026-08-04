@@ -229,6 +229,8 @@ export interface HouseholdRunwayInterviewRuntimeDraftRequest {
   status: HouseholdRunwayInterviewStatus;
   stage: HouseholdRunwayInterviewStage | null;
   answers: HouseholdRunwayInterviewAnswers;
+  /** Opaque-to-React draft envelope supplied only to the browser capability. */
+  draft: HouseholdRunwayDraftState;
 }
 
 export interface HouseholdRunwayInterviewRuntimePlanRequest {
@@ -489,11 +491,20 @@ function publicDraftRequest(
     }
   >,
 ): HouseholdRunwayInterviewRuntimeDraftRequest {
-  return {
+  const request = {
     status: effect.status,
     stage: effect.stage,
     answers: clonePublicValue(effect.draft.answers),
-  };
+  } as HouseholdRunwayInterviewRuntimeDraftRequest;
+  Object.defineProperty(request, "draft", {
+    value: clonePublicValue({
+      status: effect.status,
+      stage: effect.stage,
+      draft: effect.draft,
+    }),
+    enumerable: false,
+  });
+  return request;
 }
 
 function affordancesFor(
@@ -688,7 +699,7 @@ export function createHouseholdRunwayInterviewRuntime(
   const createId = options.createId ?? defaultId;
   const now = options.now ?? (() => new Date().toISOString());
   const schedule = options.schedule ?? defaultSchedule;
-  const locale = options.locale ?? "en";
+  let locale = options.locale ?? "en";
   let state = createHouseholdRunwayInterview(options.initialPlan ?? null);
   let lifecycle: HouseholdRunwayInterviewRuntimeLifecycle = "idle";
   let started = false;
@@ -1560,6 +1571,7 @@ export function createHouseholdRunwayInterviewRuntime(
     if (message.type === "environment") {
       if (!started || disposed || lifecycle !== "ready") return;
       if (message.message.type === "locale_changed") {
+        if (message.message.locale) locale = message.message.locale;
         if (!draftSynchronizationEligible()) return;
         const status = state.operations.draftSynchronization.status;
         if (status !== "dirty" && status !== "failed") return;

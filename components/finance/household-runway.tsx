@@ -5,7 +5,6 @@ import {
   useCallback,
   useEffect,
   useRef,
-  useState,
   type ReactNode,
 } from "react";
 import { useLocale, useTranslations } from "next-intl";
@@ -47,7 +46,6 @@ import {
 } from "@/lib/finance/runway-expenses";
 import {
   HOUSEHOLD_RUNWAY_DRAFT_TTL_MS,
-  type HouseholdRunwayDraftState,
 } from "@/lib/finance/household-runway-draft-codec";
 import {
   RUNWAY_REGIONS,
@@ -55,28 +53,12 @@ import {
   runwayRegionLabel,
 } from "@/lib/finance/runway-regions";
 import {
-  createHouseholdRunwayInterview,
-  dispatchHouseholdRunwayInterview,
-  householdRunwayDraftDiffersFromPlan,
-  restoreHouseholdRunwayInterview,
-  type HouseholdRunwayInterviewCapabilities,
-  type HouseholdRunwayInterviewCommand,
-  type HouseholdRunwayInterviewCommandInput,
-  type HouseholdRunwayInterviewAnswers,
-  type HouseholdRunwayInterviewRenderModel,
-  type HouseholdRunwayInterviewState,
-  type HouseholdRunwayAssetsRenderModel,
-  type HouseholdRunwayExpensesRenderModel,
-  type HouseholdRunwayReductionsRenderModel,
-  type HouseholdRunwayReviewRenderModel,
-} from "@/lib/finance/household-runway-interview";
-import {
-  applyHouseholdRunwayBrowserEffect,
-  executeHouseholdRunwayBrowserEffect,
-  householdRunwayHistoryProjectionCommand,
-  readHouseholdRunwayBrowserStorage,
-  type HouseholdRunwayExternalEffect,
-} from "@/lib/finance/household-runway-browser-adapter";
+  type HouseholdRunwayInterviewIntent,
+  type HouseholdRunwayInterviewRuntimeScreen,
+} from "@/lib/finance/household-runway-interview-runtime";
+import type { HouseholdRunwayBrowserReportPresentation } from "@/lib/finance/household-runway-browser-adapter";
+import type { HouseholdRunwayReportPresentation } from "@/lib/finance/household-runway-download";
+import { useHouseholdRunwayRuntime } from "@/lib/finance/household-runway-react-adapter";
 
 const OPTIONAL_STEPS = new Set<RunwayStepId>([
   "otherIncome",
@@ -128,18 +110,8 @@ function newId(_prefix: string) {
   });
 }
 
-function householdRunwayInterviewCommand(
-  input: HouseholdRunwayInterviewCommandInput,
-): HouseholdRunwayInterviewCommand {
-  return {
-    ...input,
-    commandId: newId("runway-command"),
-    occurredAt: new Date().toISOString(),
-  } as HouseholdRunwayInterviewCommand;
-}
-
 function runwayAnswersForPresentation(
-  interviewAnswers: HouseholdRunwayInterviewAnswers,
+  interviewAnswers: HouseholdRunwayAnswers,
 ): HouseholdRunwayAnswers {
   return {
     ...interviewAnswers,
@@ -148,38 +120,6 @@ function runwayAnswersForPresentation(
     currency: interviewAnswers.currency ?? "USD",
     updated_at: interviewAnswers.updated_at ?? "1970-01-01T00:00:00.000Z",
   } as HouseholdRunwayAnswers;
-}
-
-function resumableRunwayStep(
-  stage: RunwayStepId | null,
-): RunwayStepId | undefined {
-  return stage ?? undefined;
-}
-
-function recommendedResumeOption(
-  draft: { revision: number },
-  plan: { revision: number; inputs: HouseholdRunwayAnswers },
-  expiresAt?: string,
-) {
-  const storedAt = expiresAt
-    ? new Date(new Date(expiresAt).getTime() - HOUSEHOLD_RUNWAY_DRAFT_TTL_MS).getTime()
-    : Number.NaN;
-  const planUpdatedAt = new Date(plan.inputs.updated_at).getTime();
-  if (Number.isFinite(storedAt) && Number.isFinite(planUpdatedAt)) {
-    return storedAt >= planUpdatedAt ? ("draft" as const) : ("plan" as const);
-  }
-  return draft.revision >= plan.revision ? ("draft" as const) : ("plan" as const);
-}
-
-function preferredStoredDraft(
-  sessionDraft: { state: HouseholdRunwayDraftState } | null,
-  deviceDraft: { state: HouseholdRunwayDraftState } | null,
-) {
-  if (!sessionDraft) return deviceDraft;
-  if (!deviceDraft) return sessionDraft;
-  return sessionDraft.state.draft.revision > deviceDraft.state.draft.revision
-    ? sessionDraft
-    : deviceDraft;
 }
 
 function interviewValidationMessage(
@@ -214,63 +154,103 @@ function interviewValidationMessage(
   }
 }
 
+type HouseholdRunwayInterviewRenderModel = HouseholdRunwayInterviewRuntimeScreen;
+type HouseholdRunwayAssetsRenderModel = Extract<
+  HouseholdRunwayInterviewRuntimeScreen,
+  { kind: "assets" }
+>;
+type HouseholdRunwayExpensesRenderModel = Extract<
+  HouseholdRunwayInterviewRuntimeScreen,
+  { kind: "expenses" }
+>;
+type HouseholdRunwayReductionsRenderModel = Extract<
+  HouseholdRunwayInterviewRuntimeScreen,
+  { kind: "reductions" }
+>;
+type HouseholdRunwayReviewRenderModel = Extract<
+  HouseholdRunwayInterviewRuntimeScreen,
+  { kind: "review" }
+>;
+
 export function HouseholdRunway({
   initialAnswers,
   initialPlanRevision = 0,
   isAuthenticated,
-  hasSavedPlan,
+  hasSavedPlan: _hasSavedPlan,
   initialSnapshots,
 }: HouseholdRunwayProps) {
   const t = useTranslations("householdRunway");
-  const locale = useLocale();
-  const [hydrated, setHydrated] = useState(false);
-  const [hasLocalDraft, setHasLocalDraft] = useState(false);
-  const [deviceStorageConsent, setDeviceStorageConsent] = useState(false);
-  const [planExists, setPlanExists] = useState(hasSavedPlan);
-  const [snapshots, setSnapshots] = useState(initialSnapshots);
-  const [interviewState, setInterviewState] =
-    useState<HouseholdRunwayInterviewState>(() =>
-      initialAnswers
-        ? createHouseholdRunwayInterview({
-            committedPlan: { revision: initialPlanRevision, inputs: initialAnswers },
-          })
-        : createHouseholdRunwayInterview(),
-    );
-  const [error, setError] = useState("");
+  const locale = normalizeRunwayLocale(useLocale());
+  const localeRef = useRef(locale);
   const landingTracked = useRef(false);
-  const resumeStageRef = useRef<RunwayStepId | null>(null);
-  const importedDraftRef = useRef(false);
-  const deviceDraftNeedsImportRef = useRef(false);
-  const planExistsRef = useRef(hasSavedPlan);
-  const interviewStateRef = useRef(interviewState);
-  const externalEffectsRef = useRef(
-    new Map<string, HouseholdRunwayExternalEffect>(),
-  );
-  const inFlightEffectsRef = useRef(new Set<string>());
-  interviewStateRef.current = interviewState;
-  planExistsRef.current = planExists;
-  const interviewStarted =
-    isAuthenticated || interviewState.status !== "not_started";
-  const renderModel = interviewState.renderModel;
+  const reportPresentationRef = useRef<HouseholdRunwayBrowserReportPresentation | null>(null);
+  const reportPresentation = useCallback(({ assessment, locale: reportLocale }: Parameters<HouseholdRunwayBrowserReportPresentation>[0]): HouseholdRunwayReportPresentation => {
+    const presentationAnswers = runwayAnswersForPresentation(assessment.answers);
+    return {
+      location: `${presentationAnswers.country} · ${runwayRegionLabel(presentationAnswers.country, presentationAnswers.region, reportLocale) ?? presentationAnswers.region}`,
+      formatMoney: (cents) =>
+        formatCents(cents, reportLocale, presentationAnswers.currency),
+      formatScenario: (scenario) => t(`scenarios.${scenario}`),
+      formatSimulation: (simulation) =>
+        simulation.sustainable
+          ? t("comparison.sustainable")
+          : `${(simulation.months_covered ?? 0).toFixed(1)} ${t("whatIf.months")}`,
+      formatCashTarget: (months, cents) =>
+        `${t("actionsPlan.cashTarget", { months })}: ${formatCents(cents, reportLocale, presentationAnswers.currency)}`,
+      formatLargestReduction: (category, cents) =>
+        `${t("actionsPlan.largest")}: ${t(`expenseCategories.${category}`)} (${formatCents(cents, reportLocale, presentationAnswers.currency)})`,
+      precisionAdvice:
+        presentationAnswers.expense_mode === "quick"
+          ? t("precision.expenses")
+          : presentationAnswers.mine.take_home_source === "estimated" ||
+              presentationAnswers.partner?.take_home_source === "estimated"
+            ? t("precision.takeHome")
+            : t("precision.complete"),
+    };
+  }, [t]);
+  useEffect(() => {
+    localeRef.current = locale;
+    reportPresentationRef.current = reportPresentation;
+  }, [locale, reportPresentation]);
+  const { snapshot, send } = useHouseholdRunwayRuntime({
+    authenticated: isAuthenticated,
+    initialPlan: initialAnswers
+      ? { revision: initialPlanRevision, inputs: initialAnswers }
+      : null,
+    initialSnapshots,
+    locale,
+    localeProvider: () => localeRef.current,
+    reportPresentation: (request) => reportPresentationRef.current!(request),
+    confirm: ({ action }) =>
+      window.confirm(
+        action === "clear_device_draft"
+          ? t("actions.clearConfirm")
+          : t("landing.startOverConfirm"),
+      ),
+  });
+  const hydrated = snapshot.lifecycle === "ready";
+  const renderModel = snapshot.screen;
   const hasResumeChoice = renderModel.kind === "resume_choice";
   const stepId = (renderModel.stage ?? "location") as RunwayStepId;
   const activeExpenseCategory =
     renderModel.kind === "expenses" ? renderModel.activeCategory : null;
-  const draftCompleted =
-    renderModel.kind === "landing" ? renderModel.draftCompleted : false;
-  const draftSyncOperation = interviewState.operations.draftSynchronization;
+  const hasLocalDraft = snapshot.draft.current || snapshot.draft.stored;
+  const deviceStorageConsent = snapshot.draft.deviceStorageConsent;
+  const planExists = snapshot.plan.exists;
+  const snapshots = snapshot.assessmentHistory;
+  const draftSyncOperation = snapshot.operations.draftSynchronization;
   const draftSyncState =
     draftSyncOperation.status === "succeeded"
       ? "synchronized"
       : draftSyncOperation.status === "failed"
         ? "failed"
         : "pending";
-  const planOperation = interviewState.operations.planPersistence;
+  const planOperation = snapshot.operations.planPersistence;
   const planOperationState =
     planOperation.status === "pending"
       ? "saving"
       : planOperation.status === "succeeded" ||
-          (planExists && !hasLocalDraft && interviewState.committedPlan !== null)
+          (planExists && !snapshot.draft.current)
         ? "saved"
         : planOperation.status === "failed"
           ? "failed"
@@ -279,353 +259,181 @@ export function HouseholdRunway({
             : "idle";
   const saving = planOperation.status === "pending";
   const saved = planOperationState === "saved";
+  const issue = snapshot.issues[0]?.code;
+  const error = issue ? interviewValidationMessage(t, issue) : "";
   const operationError =
     planOperation.status === "failed"
       ? planOperation.error === "authentication_required"
         ? t("save.authenticationRequired")
-        : planOperation.error === "stale_result" ||
-            planOperation.error === "conflict"
+        : planOperation.error === "conflict"
           ? t("save.stale")
           : t("save.error")
-      : interviewState.operations.reportDownload.status === "failed"
+      : snapshot.operations.reportDownload.status === "failed"
         ? t("save.downloadError")
         : draftSyncOperation.status === "failed"
           ? t("save.draftSyncError")
-          : interviewState.operations.deviceDraft.status === "failed"
+          : snapshot.operations.deviceDraft.status === "failed"
             ? t("save.draftSyncError")
         : "";
   const boundaryLocation = renderModel.kind === "location" ? renderModel : null;
-  const dispatchInterviewCommand = useCallback((
-    input: HouseholdRunwayInterviewCommandInput,
-    sourceState: HouseholdRunwayInterviewState = interviewStateRef.current,
-  ) => {
-    const capabilities: HouseholdRunwayInterviewCapabilities = {
-      planPersistence: isAuthenticated ? "available" : "unavailable",
-      snapshotTrigger: planExistsRef.current
-        ? "updated"
-        : importedDraftRef.current
-          ? "imported"
-          : "completed",
-    };
-    const result = dispatchHouseholdRunwayInterview(
-      sourceState,
-      householdRunwayInterviewCommand(input),
-      capabilities,
-    );
-    interviewStateRef.current = result.state;
-    setInterviewState(result.state);
-    result.effects.forEach((effect) => {
-      if (effect.type === "history" || effect.type === "focus") {
-        applyHouseholdRunwayBrowserEffect(effect);
-        return;
-      }
-      externalEffectsRef.current.set(
-        `${effect.type}:${effect.sourceRevision}:${effect.correlationId}`,
-        effect,
-      );
-    });
-    return result;
-  }, [isAuthenticated]);
+  const dispatchInterviewCommand = useCallback(
+    (intent: HouseholdRunwayInterviewIntent) => send(intent),
+    [send],
+  );
+
+  const landingModel = renderModel.kind === "landing" ? renderModel : null;
+  const resumeModel = renderModel.kind === "resume_choice" ? renderModel : null;
+  const resultModel = renderModel.kind === "stage" ? renderModel : null;
+  const assessment = snapshot.derived.assessment ?? resultModel?.assessment ?? null;
+  const showLanding = hydrated && !isAuthenticated && landingModel !== null;
 
   useEffect(() => {
-    let hydrationFrame: number | null = null;
-    const browserStorage = readHouseholdRunwayBrowserStorage();
-    const storedDraft = browserStorage.session;
-    const deviceStoredDraft = browserStorage.device;
-    const sessionRestoredDraft =
-      storedDraft.status === "restored" ? { state: storedDraft.state } : null;
-    const deviceRestoredDraft =
-      deviceStoredDraft.status === "restored"
-        ? { state: deviceStoredDraft.state }
-        : null;
-    const preferredDraft = preferredStoredDraft(
-      sessionRestoredDraft,
-      deviceRestoredDraft,
-    );
-    const restoredDraft = preferredDraft?.state ?? null;
-    const deviceDraftIsPreferred = preferredDraft === deviceRestoredDraft;
-    if (
-      storedDraft.status === "rejected" ||
-      deviceStoredDraft.status === "rejected"
-    ) {
-      setError(t("save.draftRecovery"));
+    if (showLanding && !landingTracked.current) {
+      landingTracked.current = true;
+      dispatchInterviewCommand({
+        type: "request_analytics",
+        eventName: "landing_view",
+        stage: "landing",
+      });
     }
-    setDeviceStorageConsent(browserStorage.deviceStorageConsent);
-    const committedPlan = initialAnswers
-      ? { revision: initialPlanRevision, inputs: initialAnswers }
-      : null;
-    importedDraftRef.current = Boolean(restoredDraft && !planExistsRef.current);
-    const hasPlanDraftConflict = Boolean(
-      deviceDraftIsPreferred &&
-        deviceRestoredDraft &&
-        committedPlan &&
-        householdRunwayDraftDiffersFromPlan(
-          deviceRestoredDraft.state.draft,
-          committedPlan,
-          deviceRestoredDraft.state.status,
-          deviceRestoredDraft.state.stage,
-        ),
-    );
-    deviceDraftNeedsImportRef.current = Boolean(
-      deviceDraftIsPreferred && deviceRestoredDraft && !hasPlanDraftConflict,
-    );
-    let restoredBoundary = createHouseholdRunwayInterview({
-      committedPlan,
+  }, [dispatchInterviewCommand, showLanding]);
+
+  const startInterview = () => {
+    dispatchInterviewCommand({
+      type: hasLocalDraft ? "resume_draft" : "start_new",
     });
-    if (restoredDraft) {
-      const completed = restoredDraft.status === "completed";
-      restoredBoundary = restoreHouseholdRunwayInterview({
-        version: 2,
-        status: hasPlanDraftConflict
-          ? "not_started"
-          : completed
-            ? "completed"
-            : "not_started",
-        stage: hasPlanDraftConflict ? null : completed ? "result" : null,
-        draft: restoredDraft.draft,
-        committedPlan,
-        resumeChoice: hasPlanDraftConflict && committedPlan && deviceRestoredDraft
-          ? {
-              draftStatus: deviceRestoredDraft.state.status,
-              draftStage: deviceRestoredDraft.state.stage,
-              recommended: recommendedResumeOption(
-                deviceRestoredDraft.state.draft,
-                committedPlan,
-                deviceStoredDraft.status === "restored"
-                  ? deviceStoredDraft.expiresAt
-                  : undefined,
-              ),
-            }
-          : null,
-        validationIssue: null,
+  };
+  const startNewInterview = () => dispatchInterviewCommand({ type: "start_new" });
+  const clearDraft = () => dispatchInterviewCommand({ type: "discard_draft" });
+  const rememberDraft = () => dispatchInterviewCommand({ type: "remember_draft" });
+  const forgetDeviceDraft = () =>
+    dispatchInterviewCommand({ type: "clear_device_draft" });
+  const next = () => {
+    if (boundaryLocation?.currency === null && boundaryLocation.currencyProposal) {
+      dispatchInterviewCommand({
+        type: "select_currency",
+        currency: boundaryLocation.currencyProposal,
       });
-      resumeStageRef.current =
-        restoredDraft.stage ??
-        (restoredBoundary.renderModel.kind === "landing"
-          ? restoredBoundary.renderModel.resumeStage
-          : null);
     }
-    const syncUrlMode = () => {
-      const current = interviewStateRef.current;
-      if (isAuthenticated) {
-        if (current.status === "not_started" && !current.resumeChoice) {
-          const resumeStage =
-            resumableRunwayStep(resumeStageRef.current) ??
-            (current.renderModel.kind === "landing"
-              ? current.renderModel.resumeStage ?? undefined
-              : undefined);
-          dispatchInterviewCommand(
-            {
-              type: "history_projection_changed",
-              destination: "interview",
-              interviewId: newId("runway-interview"),
-              ...(resumeStage ? { stage: resumeStage } : {}),
-            },
-            current,
-          );
-        }
-        return;
-      }
+    dispatchInterviewCommand({ type: "continue" });
+  };
+  const skip = () => dispatchInterviewCommand({ type: "skip" });
+  const savePlan = () => dispatchInterviewCommand({ type: "save_plan" });
+  const download = () => dispatchInterviewCommand({ type: "request_report_download" });
 
-      const command = householdRunwayHistoryProjectionCommand({
-        href: window.location.href,
-        interviewStarted: current.status !== "not_started",
-        interviewId: newId("runway-interview"),
-        stage:
-          current.renderModel.kind === "landing"
-            ? current.renderModel.resumeStage ?? undefined
-            : undefined,
-      });
-      if (command && !(current.resumeChoice && command.destination === "interview")) {
-        dispatchInterviewCommand(command, current);
-      }
-    };
-    setHasLocalDraft(Boolean(restoredDraft));
-    const started = new URLSearchParams(window.location.search).get("start") === "1";
-    if (
-      (isAuthenticated || started) &&
-      restoredBoundary.status === "not_started" &&
-      !restoredBoundary.resumeChoice
-    ) {
-      const resumeStage = resumableRunwayStep(resumeStageRef.current);
-      const startCommand: HouseholdRunwayInterviewCommandInput = isAuthenticated
-        ? resumeStage
-          ? {
-              type: "start",
-              interviewId: newId("runway-interview"),
-              stage: resumeStage,
-            }
-          : {
-              type: "start",
-              interviewId: newId("runway-interview"),
-            }
-        : {
-            type: "history_projection_changed",
-            destination: "interview",
-            interviewId: newId("runway-interview"),
-            ...(resumeStage ? { stage: resumeStage } : {}),
-          };
-      const startedResult = dispatchInterviewCommand(
-        startCommand,
-        restoredBoundary,
-      );
-      if (deviceDraftNeedsImportRef.current) {
-        dispatchInterviewCommand(
-          { type: "import_draft" },
-          startedResult.state,
-        );
-        deviceDraftNeedsImportRef.current = false;
-      }
-    } else {
-      interviewStateRef.current = restoredBoundary;
-      setInterviewState(restoredBoundary);
-      if (
-        deviceDraftNeedsImportRef.current &&
-        restoredBoundary.status !== "not_started"
-      ) {
-        dispatchInterviewCommand(
-          { type: "import_draft" },
-          restoredBoundary,
-        );
-        deviceDraftNeedsImportRef.current = false;
-      }
-    }
-    window.addEventListener("popstate", syncUrlMode);
-    if (restoredDraft) {
-      // Commit restored answers before enabling autosave so a locale reload
-      // can never overwrite the draft with the component defaults.
-      hydrationFrame = window.requestAnimationFrame(() => setHydrated(true));
-    } else {
-      setHydrated(true);
-    }
-    return () => {
-      window.removeEventListener("popstate", syncUrlMode);
-      if (hydrationFrame !== null) window.cancelAnimationFrame(hydrationFrame);
-    };
-  }, [
-    dispatchInterviewCommand,
-    initialAnswers,
-    initialPlanRevision,
-    isAuthenticated,
-    t,
-  ]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-
-    const requestDraftSync = () => {
-      const current = interviewStateRef.current;
-      if (
-        current.operations.draftSynchronization.status === "dirty" &&
-        (current.status !== "not_started" ||
-          hasLocalDraft ||
-          current.draft.interviewId !== null) &&
-        !current.resumeChoice
-      ) {
-        dispatchInterviewCommand({ type: "synchronize_draft" }, current);
-      }
-    };
-
-    requestDraftSync();
-    const current = interviewStateRef.current;
-    const operations = current.operations;
-    const pending = [
-      operations.draftSynchronization.status === "pending"
-        ? {
-            type: "draft_sync_requested" as const,
-            sourceRevision: operations.draftSynchronization.sourceRevision,
-            correlationId: operations.draftSynchronization.correlationId,
-          }
-        : null,
-      operations.deviceDraft.status === "pending"
-        ? {
-            type:
-              operations.deviceDraft.action === "clear"
-                ? ("draft_device_clear_requested" as const)
-                : operations.deviceDraft.action === "import"
-                  ? ("draft_device_import_requested" as const)
-                  : ("draft_device_remember_requested" as const),
-            sourceRevision: operations.deviceDraft.sourceRevision,
-            correlationId: operations.deviceDraft.correlationId,
-          }
-        : null,
-      operations.planPersistence.status === "pending"
-        ? {
-            type: "plan_persistence_requested" as const,
-            sourceRevision: operations.planPersistence.sourceRevision,
-            correlationId: operations.planPersistence.correlationId,
-          }
-        : null,
-      operations.reportDownload.status === "pending"
-        ? {
-            type: "report_download_requested" as const,
-            sourceRevision: operations.reportDownload.sourceRevision,
-            correlationId: operations.reportDownload.correlationId,
-          }
-        : null,
-      operations.analytics.status === "pending"
-        ? {
-            type: "analytics_requested" as const,
-            sourceRevision: operations.analytics.sourceRevision,
-            correlationId: operations.analytics.correlationId,
-          }
-        : null,
-    ].filter((item): item is NonNullable<typeof item> => item !== null);
-
-    pending.forEach(({ type, sourceRevision, correlationId }) => {
-      const key = `${type}:${sourceRevision}:${correlationId}`;
-      const effect = externalEffectsRef.current.get(key);
-      if (!effect || inFlightEffectsRef.current.has(key)) return;
-      inFlightEffectsRef.current.add(key);
-      externalEffectsRef.current.delete(key);
-
-      if (effect.type === "draft_sync_requested") {
-        void executeHouseholdRunwayBrowserEffect(effect).then((result) => {
-          if (result.hasLocalDraft !== undefined) {
-            setHasLocalDraft(result.hasLocalDraft);
-          }
-          if (result.deviceStorageConsent !== undefined) {
-            setDeviceStorageConsent(result.deviceStorageConsent);
-          }
-          dispatchInterviewCommand(result.command, interviewStateRef.current);
-        }).finally(() => inFlightEffectsRef.current.delete(key));
-        return;
-      }
-
-      if (
-        effect.type === "draft_device_remember_requested" ||
-        effect.type === "draft_device_import_requested" ||
-        effect.type === "draft_device_clear_requested"
-      ) {
-        void executeHouseholdRunwayBrowserEffect(effect).then((result) => {
-          if (result.hasLocalDraft !== undefined) {
-            setHasLocalDraft(result.hasLocalDraft);
-          }
-          if (result.deviceStorageConsent !== undefined) {
-            setDeviceStorageConsent(result.deviceStorageConsent);
-          }
-          dispatchInterviewCommand(result.command, interviewStateRef.current);
-        }).finally(() => inFlightEffectsRef.current.delete(key));
-        return;
-      }
-
-      if (effect.type === "plan_persistence_requested") {
-        void executeHouseholdRunwayBrowserEffect(effect).then((result) => {
-          if (result.snapshots) setSnapshots(result.snapshots);
-          if (result.planExists !== undefined) {
-            planExistsRef.current = result.planExists;
-            setPlanExists(result.planExists);
-          }
-          dispatchInterviewCommand(result.command, interviewStateRef.current);
-        }).finally(() => inFlightEffectsRef.current.delete(key));
-        return;
-      }
-
-      if (effect.type === "report_download_requested") {
-        void Promise.resolve().then(() => {
-          const presentationAnswers = runwayAnswersForPresentation(
-            effect.assessment.answers,
-          );
+  return (
+    <>
+      {!hydrated ? (
+        <main
+          className={`${isAuthenticated ? "min-h-full" : "min-h-screen"} bg-[#f5f6f2] dark:bg-[#101310]`}
+        />
+      ) : (
+        <main
+          className={`${isAuthenticated ? "min-h-full" : "min-h-screen"} bg-[#f5f6f2] text-slate-950 dark:bg-[#101310] dark:text-white`}
+          data-runway-presentation={isAuthenticated ? "authenticated" : "public"}
+          data-runway-progress={snapshot.interviewStatus}
+          data-runway-draft-sync={draftSyncState}
+          data-runway-plan-operation={planOperationState}
+        >
+          {!isAuthenticated ? <RunwayHeader t={t} /> : null}
+          {!showLanding ? (
+            <DraftStorageControl
+              t={t}
+              deviceStorageConsent={deviceStorageConsent}
+              onRemember={rememberDraft}
+              onForget={forgetDeviceDraft}
+            />
+          ) : null}
+          {(showLanding || hasResumeChoice) && (error || operationError) ? (
+            <div className="mx-auto max-w-6xl px-5 pt-3" role="alert" data-testid="runway-draft-recovery">
+              <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-400/40 dark:bg-amber-500/10 dark:text-amber-100">
+                {error || operationError}
+              </div>
+            </div>
+          ) : null}
+          {resumeModel ? (
+            <ResumeChoicePanel
+              t={t}
+              model={resumeModel}
+              onDraft={() => dispatchInterviewCommand({ type: "resume_draft" })}
+              onPlan={() => dispatchInterviewCommand({ type: "resume_committed_plan" })}
+            />
+          ) : showLanding ? (
+            <HouseholdRunwayLanding
+              t={t}
+              renderModel={landingModel!}
+              onPrimary={startInterview}
+              onStartOver={startNewInterview}
+            />
+          ) : resultModel && assessment ? (
+            <ResultExperience
+              t={t}
+              locale={locale}
+              model={resultModel}
+              dispatch={(input) => {
+                dispatchInterviewCommand(input);
+                if (input.type === "select_scenario") {
+                  dispatchInterviewCommand({
+                    type: "request_analytics",
+                    eventName: "result_interaction",
+                    stage: "scenario_switch",
+                  });
+                }
+              }}
+              onStartNew={startNewInterview}
+              onDiscardDraft={clearDraft}
+              onRegistrationClick={() =>
+                dispatchInterviewCommand({
+                  type: "request_analytics",
+                  eventName: "registration_clicked",
+                  stage: "result",
+                })
+              }
+              onDownload={download}
+              isAuthenticated={isAuthenticated}
+              saved={saved}
+              saving={saving}
+              onSave={savePlan}
+              error={error || operationError}
+              snapshots={[...snapshots]}
+            />
+          ) : (
+            <InterviewShell
+              t={t}
+              stepId={stepId}
+              renderKind={renderModel.kind}
+              error={error || operationError}
+              activeExpenseCategory={activeExpenseCategory}
+              onBack={() => {
+                if (activeExpenseCategory) {
+                  dispatchInterviewCommand({
+                    type: "complete_expense_category",
+                    category: activeExpenseCategory,
+                  });
+                } else {
+                  dispatchInterviewCommand({
+                    type: stepId === "location" ? "exit" : "back",
+                  });
+                }
+              }}
+              onSkip={OPTIONAL_STEPS.has(stepId) ? skip : undefined}
+              onContinue={next}
+              onClear={clearDraft}
+              continueLabel={stepId === "review" ? t("actions.reveal") : t("actions.continue")}
+            >
+              <StepContent
+                t={t}
+                locale={locale}
+                renderModel={renderModel}
+                dispatchInterviewCommand={dispatchInterviewCommand}
+              />
+            </InterviewShell>
+          )}
+        </main>
+      )}
+    </>
+  );
+  /*
           const result = executeHouseholdRunwayBrowserEffect(effect, {
             reportPresentation: {
             location: `${presentationAnswers.country} · ${runwayRegionLabel(presentationAnswers.country, presentationAnswers.region, locale) ?? presentationAnswers.region}`,
@@ -963,6 +771,7 @@ export function HouseholdRunway({
       )}
     </main>
   );
+  */
 }
 
 function RunwayHeader({ t }: { t: ReturnType<typeof useTranslations> }) {
@@ -1228,7 +1037,7 @@ function StepContent({
   t: ReturnType<typeof useTranslations>;
   locale: string;
   renderModel: HouseholdRunwayInterviewRenderModel;
-  dispatchInterviewCommand: (input: HouseholdRunwayInterviewCommandInput) => unknown;
+  dispatchInterviewCommand: (input: HouseholdRunwayInterviewIntent) => unknown;
 }) {
   if (renderModel.stage === null) return null;
   const step = renderModel.stage as RunwayStepId;
@@ -1554,7 +1363,7 @@ function OtherIncomeStep({
   locale: string;
   currency: HouseholdRunwayAnswers["currency"] | null;
   sources: readonly RecurringIncomeSource[];
-  dispatchInterviewCommand: (input: HouseholdRunwayInterviewCommandInput) => unknown;
+  dispatchInterviewCommand: (input: HouseholdRunwayInterviewIntent) => unknown;
 }) {
   const sendSources = (nextSources: readonly RecurringIncomeSource[]) =>
     dispatchInterviewCommand({
@@ -1637,7 +1446,7 @@ function AssetsStep({
   title: ReactNode;
   t: ReturnType<typeof useTranslations>;
   model: HouseholdRunwayAssetsRenderModel;
-  dispatchInterviewCommand: (input: HouseholdRunwayInterviewCommandInput) => unknown;
+  dispatchInterviewCommand: (input: HouseholdRunwayInterviewIntent) => unknown;
 }) {
   const currency = model.location.currency ?? "USD";
   const country = model.location.country ?? "US";
@@ -1693,7 +1502,7 @@ function ExpenseHub({
   t: ReturnType<typeof useTranslations>;
   locale: string;
   model: HouseholdRunwayExpensesRenderModel;
-  dispatchInterviewCommand: (input: HouseholdRunwayInterviewCommandInput) => unknown;
+  dispatchInterviewCommand: (input: HouseholdRunwayInterviewIntent) => unknown;
   onOpen: (category: ExpenseCategory) => void;
 }) {
   const currency = model.location.currency ?? "USD";
@@ -1769,7 +1578,7 @@ function ExpenseCategoryEditor({
   category: ExpenseCategory;
   t: ReturnType<typeof useTranslations>;
   model: HouseholdRunwayExpensesRenderModel;
-  dispatchInterviewCommand: (input: HouseholdRunwayInterviewCommandInput) => unknown;
+  dispatchInterviewCommand: (input: HouseholdRunwayInterviewIntent) => unknown;
 }) {
   const currency = model.location.currency ?? "USD";
   const subtotal = model.categorySubtotals[category] ?? {
@@ -1888,7 +1697,7 @@ function ReductionStep({
   t: ReturnType<typeof useTranslations>;
   locale: string;
   model: HouseholdRunwayReductionsRenderModel;
-  dispatchInterviewCommand: (input: HouseholdRunwayInterviewCommandInput) => unknown;
+  dispatchInterviewCommand: (input: HouseholdRunwayInterviewIntent) => unknown;
 }) {
   const currency = model.location.currency ?? "USD";
   return (
@@ -1989,7 +1798,9 @@ function ReviewStep({
   locale: string;
   model: HouseholdRunwayReviewRenderModel;
 }) {
-  const answers = runwayAnswersForPresentation(model.answers);
+  const answers = runwayAnswersForPresentation(
+    model.answers as unknown as HouseholdRunwayAnswers,
+  );
   const totals = expenseTotals(answers);
   const excluded = answers.assets.illiquid_investments.cents + answers.assets.home_equity.cents + answers.assets.retirement_tax_deferred.cents + answers.assets.retirement_tax_free.cents;
   return (

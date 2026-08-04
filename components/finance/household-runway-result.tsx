@@ -16,9 +16,13 @@ import {
   type RunwaySnapshotSummary,
 } from "@/lib/finance/cushion";
 import type {
-  HouseholdRunwayInterviewCommandInput,
-  HouseholdRunwayInterviewRenderModel,
-} from "@/lib/finance/household-runway-interview";
+  HouseholdRunwayInterviewIntent,
+  HouseholdRunwayInterviewRuntimeScreen,
+} from "@/lib/finance/household-runway-interview-runtime";
+import type {
+  HouseholdRunwayScenarioAssessment,
+  SuccessfulHouseholdRunwayAssessment,
+} from "@/lib/finance/household-runway-assessment";
 
 function primarySentence(
   simulation: RunwaySimulation,
@@ -37,7 +41,7 @@ function primarySentence(
 }
 
 type ResultModel = Extract<
-  HouseholdRunwayInterviewRenderModel,
+  HouseholdRunwayInterviewRuntimeScreen,
   { kind: "stage" }
 >;
 
@@ -60,7 +64,7 @@ export function ResultExperience({
   t: ReturnType<typeof useTranslations>;
   locale: string;
   model: ResultModel;
-  dispatch: (input: HouseholdRunwayInterviewCommandInput) => unknown;
+  dispatch: (input: HouseholdRunwayInterviewIntent) => unknown;
   onStartNew: () => void;
   onDiscardDraft: () => void;
   onRegistrationClick: () => void;
@@ -73,14 +77,14 @@ export function ResultExperience({
   snapshots: RunwaySnapshotSummary[];
 }) {
   const answers = model.planInputs;
-  const assessment = model.assessment;
+  const assessment = model.assessment as unknown as SuccessfulHouseholdRunwayAssessment;
   if (!answers || !assessment) return null;
 
   const scenarios = model.availableScenarios.map((item) => item.id);
   const scenario = model.selectedScenario ?? scenarios[0] ?? "current";
   const selectedAssessment =
-    assessment.scenarios.find((item) => item.scenario === scenario) ??
-    assessment.firstScenario;
+    (assessment.scenarios.find((item) => item.scenario === scenario) ??
+      assessment.firstScenario) as unknown as HouseholdRunwayScenarioAssessment;
   const baseline = selectedAssessment.baseline;
   const preview = selectedAssessment.adjusted;
   const currentLifestyle = selectedAssessment.comparisons.currentLifestyle;

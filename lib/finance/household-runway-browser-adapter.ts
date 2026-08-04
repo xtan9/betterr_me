@@ -1,5 +1,6 @@
 import type {
   HouseholdRunwayInterviewCommandInput,
+  HouseholdRunwayInterviewCommand,
   HouseholdRunwayInterviewEffect,
   HouseholdRunwayInterviewStage,
 } from "@/lib/finance/household-runway-interview";
@@ -32,8 +33,13 @@ import {
 import {
   createHouseholdRunwayInterviewRuntime,
   type HouseholdRunwayInterviewRuntime,
+  type HouseholdRunwayInterviewRuntimeDraftRequest,
+  type HouseholdRunwayInterviewRuntimePlanOutcome,
+  type HouseholdRunwayInterviewRuntimePlanRequest,
+  type HouseholdRunwayInterviewRuntimeReportRequest,
   type HouseholdRunwayInterviewRuntimeOptions,
 } from "@/lib/finance/household-runway-interview-runtime";
+import type { RunwayLocale } from "@/lib/finance/runway-regions";
 
 export interface HouseholdRunwayBrowserEnvironment {
   location: { href: string };
@@ -78,6 +84,10 @@ export interface HouseholdRunwayBrowserEffectContext {
   reportPresentation?: HouseholdRunwayReportPresentation;
 }
 
+export type HouseholdRunwayBrowserReportPresentation = (
+  request: HouseholdRunwayInterviewRuntimeReportRequest,
+) => HouseholdRunwayReportPresentation;
+
 export type HouseholdRunwayBrowserAdapterOutcome =
   | { type: "history"; outcome: "applied" | "unavailable" }
   | {
@@ -93,6 +103,10 @@ export interface HouseholdRunwayBrowserAdapterOptions
   environment?: HouseholdRunwayBrowserEnvironment;
   onOutcome?: (outcome: HouseholdRunwayBrowserAdapterOutcome) => void;
   localeChangeEvent?: string;
+  reportPresentation?: HouseholdRunwayBrowserReportPresentation;
+  /** Anonymous experiences intentionally do not receive the Plan write port. */
+  authenticated?: boolean;
+  localeProvider?: () => RunwayLocale;
 }
 
 export interface HouseholdRunwayBrowserEffectResult {
@@ -412,8 +426,95 @@ export function createHouseholdRunwayBrowserAdapter(
       }
     : undefined;
 
+  const browserCapabilities = {
+    restore: options.restore,
+    synchronizeDraft:
+      options.synchronizeDraft ??
+      ((request: HouseholdRunwayInterviewRuntimeDraftRequest) =>
+        persistHouseholdRunwayDraft(request.draft).success),
+    rememberDraft:
+      options.rememberDraft ??
+      ((request: HouseholdRunwayInterviewRuntimeDraftRequest) =>
+        rememberHouseholdRunwayDraft(request.draft).success),
+    importDraft:
+      options.importDraft ??
+      ((request: HouseholdRunwayInterviewRuntimeDraftRequest) =>
+        persistHouseholdRunwaySessionDraft(request.draft).success &&
+        clearHouseholdRunwayDeviceDraft({ revokeConsent: false }).success),
+    clearDraft:
+      options.clearDraft ??
+      ((request: { scope: "device" | "all" }) =>
+        (request.scope === "all"
+          ? clearHouseholdRunwayDraft({ revokeConsent: true })
+          : clearHouseholdRunwayDeviceDraft()
+        ).success),
+    persistPlan:
+      options.persistPlan ??
+      (options.authenticated === false
+        ? undefined
+        : (request: HouseholdRunwayInterviewRuntimePlanRequest) =>
+        executeHouseholdRunwayBrowserEffect({
+          type: "plan_persistence_requested",
+          inputs: request.inputs,
+          assessment: request.assessment,
+          sourceRevision: 0,
+          correlationId: request.idempotencyKey,
+          idempotencyKey: request.idempotencyKey,
+          expectedPlanRevision: request.expectedPlanRevision,
+          adjustments: request.adjustments,
+          snapshotTrigger: request.snapshotTrigger,
+        }).then((result): HouseholdRunwayInterviewRuntimePlanOutcome => {
+          if (
+            result.command.type === "plan_persistence_succeeded" &&
+            typeof result.command.planRevision === "number" &&
+            result.command.planInputs &&
+            result.command.assessment
+          ) {
+            return {
+              planRevision: result.command.planRevision,
+              planInputs: result.command.planInputs,
+              assessment: result.command.assessment,
+              ...(result.snapshots ? { snapshots: result.snapshots } : {}),
+              ...(result.command.snapshot
+                ? { snapshot: result.command.snapshot }
+                : {}),
+            };
+          }
+          const failure = result.command as Extract<
+            HouseholdRunwayInterviewCommand,
+            { type: "plan_persistence_failed" }
+          >;
+          return {
+            success: false,
+            error:
+              failure.error === "authentication_required" ||
+              failure.error === "conflict" ||
+              failure.error === "invalid" ||
+              failure.error === "network"
+                ? failure.error
+                : "exception",
+            ...(failure.currentPlanRevision !== undefined
+              ? { currentPlanRevision: failure.currentPlanRevision }
+              : {}),
+          };
+        })),
+    downloadReport:
+      options.downloadReport ??
+      ((request: HouseholdRunwayInterviewRuntimeReportRequest) => {
+        const presentation = options.reportPresentation?.(request);
+        return presentation
+          ? downloadHouseholdRunwayAssessment(request.assessment, presentation).success
+          : false;
+      }),
+    trackAnalytics:
+      options.trackAnalytics ??
+      ((request: { eventName: Parameters<typeof trackRunwayEvent>[0]; stage?: Parameters<typeof trackRunwayEvent>[1] }) =>
+        trackRunwayEvent(request.eventName, request.stage)),
+  };
+
   const runtime = createHouseholdRunwayInterviewRuntime({
     ...options,
+    ...browserCapabilities,
     navigate,
     focus,
     ...(schedule ? { schedule } : {}),
@@ -480,7 +581,11 @@ export function createHouseholdRunwayBrowserAdapter(
     }
     reconcileUrl();
   };
-  const onLocale = () => dispatchEnvironment({ type: "locale_changed" });
+  const onLocale = () =>
+    dispatchEnvironment({
+      type: "locale_changed",
+      ...(options.localeProvider ? { locale: options.localeProvider() } : {}),
+    });
 
   const subscribeToBrowser = (
     event: "history" | "locale",
