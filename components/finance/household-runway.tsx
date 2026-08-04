@@ -149,6 +149,11 @@ function interviewValidationMessage(
       return t("validation.assessment");
     case "plan_adjustment_pending":
       return t("save.adjustmentPending");
+    case "draft_recovery":
+      return t("save.draftRecovery");
+    case "plan_recovery":
+    case "confirmation_unavailable":
+      return t("save.error");
     default:
       return "";
   }
@@ -214,6 +219,7 @@ export function HouseholdRunway({
   }, [locale, reportPresentation]);
   const { snapshot, send } = useHouseholdRunwayRuntime({
     authenticated: isAuthenticated,
+    autoStart: isAuthenticated,
     initialPlan: initialAnswers
       ? { revision: initialPlanRevision, inputs: initialAnswers }
       : null,
@@ -223,7 +229,7 @@ export function HouseholdRunway({
     reportPresentation: (request) => reportPresentationRef.current!(request),
     confirm: ({ action }) =>
       window.confirm(
-        action === "clear_device_draft"
+        action === "discard_draft" || action === "clear_device_draft"
           ? t("actions.clearConfirm")
           : t("landing.startOverConfirm"),
       ),
@@ -234,7 +240,6 @@ export function HouseholdRunway({
   const stepId = (renderModel.stage ?? "location") as RunwayStepId;
   const activeExpenseCategory =
     renderModel.kind === "expenses" ? renderModel.activeCategory : null;
-  const hasLocalDraft = snapshot.draft.current || snapshot.draft.stored;
   const deviceStorageConsent = snapshot.draft.deviceStorageConsent;
   const planExists = snapshot.plan.exists;
   const snapshots = snapshot.assessmentHistory;
@@ -299,8 +304,10 @@ export function HouseholdRunway({
   }, [dispatchInterviewCommand, showLanding]);
 
   const startInterview = () => {
+    const stage = landingModel?.resumeStage;
     dispatchInterviewCommand({
-      type: hasLocalDraft ? "resume_draft" : "start_new",
+      type: "start",
+      ...(stage ? { stage } : {}),
     });
   };
   const startNewInterview = () => dispatchInterviewCommand({ type: "start_new" });
@@ -433,345 +440,7 @@ export function HouseholdRunway({
       )}
     </>
   );
-  /*
-          const result = executeHouseholdRunwayBrowserEffect(effect, {
-            reportPresentation: {
-            location: `${presentationAnswers.country} · ${runwayRegionLabel(presentationAnswers.country, presentationAnswers.region, locale) ?? presentationAnswers.region}`,
-            formatMoney: (cents) =>
-              formatCents(cents, locale, presentationAnswers.currency),
-            formatScenario: (itemScenario) => t(`scenarios.${itemScenario}`),
-            formatSimulation: (simulation) =>
-              simulation.sustainable
-                ? t("comparison.sustainable")
-                : `${(simulation.months_covered ?? 0).toFixed(1)} ${t("whatIf.months")}`,
-            formatCashTarget: (months, cents) =>
-              `${t("actionsPlan.cashTarget", { months })}: ${formatCents(cents, locale, presentationAnswers.currency)}`,
-            formatLargestReduction: (category, cents) =>
-              `${t("actionsPlan.largest")}: ${t(`expenseCategories.${category}`)} (${formatCents(cents, locale, presentationAnswers.currency)})`,
-            precisionAdvice:
-              presentationAnswers.expense_mode === "quick"
-                ? t("precision.expenses")
-                : presentationAnswers.mine.take_home_source === "estimated" ||
-                    presentationAnswers.partner?.take_home_source === "estimated"
-                  ? t("precision.takeHome")
-                  : t("precision.complete"),
-          },
-        });
-          void result.then((outcome) => {
-            dispatchInterviewCommand(outcome.command, interviewStateRef.current);
-          });
-          inFlightEffectsRef.current.delete(key);
-        });
-        return;
-      }
 
-      if (effect.type === "analytics_requested") {
-        void executeHouseholdRunwayBrowserEffect(effect)
-          .then((result) => {
-            dispatchInterviewCommand(result.command, interviewStateRef.current);
-          })
-          .finally(() => inFlightEffectsRef.current.delete(key));
-      }
-    });
-  }, [
-    hasLocalDraft,
-    hydrated,
-    interviewStarted,
-    interviewState,
-    locale,
-    t,
-    dispatchInterviewCommand,
-  ]);
-
-  useEffect(() => {
-    const flushDraft = () => {
-      const current = interviewStateRef.current;
-      if (
-        current.operations.draftSynchronization.status === "dirty" &&
-        (current.status !== "not_started" ||
-          hasLocalDraft ||
-          current.draft.interviewId !== null) &&
-        !current.resumeChoice
-      ) {
-        dispatchInterviewCommand({ type: "synchronize_draft" }, current);
-      }
-    };
-    window.addEventListener("betterr:before-locale-change", flushDraft);
-    return () =>
-      window.removeEventListener("betterr:before-locale-change", flushDraft);
-  }, [dispatchInterviewCommand, hasLocalDraft]);
-
-  const landingModel = renderModel.kind === "landing" ? renderModel : null;
-  const resumeModel = renderModel.kind === "resume_choice" ? renderModel : null;
-  const resultModel = renderModel.kind === "stage" ? renderModel : null;
-  const assessment = resultModel?.assessment ?? null;
-  const showLanding = hydrated && !isAuthenticated && landingModel !== null;
-  useEffect(() => {
-    if (showLanding && !landingTracked.current) {
-      landingTracked.current = true;
-      dispatchInterviewCommand({
-        type: "request_analytics",
-        eventName: "landing_view",
-        stage: "landing",
-      });
-    }
-  }, [dispatchInterviewCommand, showLanding]);
-
-  const startInterview = (fresh = false) => {
-    if (fresh) {
-      resumeStageRef.current = null;
-    }
-    const resumeStage = fresh
-      ? null
-      : draftCompleted
-        ? "result"
-        : resumableRunwayStep(resumeStageRef.current) ??
-          (renderModel.kind === "landing"
-            ? renderModel.resumeStage ?? undefined
-            : undefined);
-    const interviewId = newId("runway-interview");
-    const started = dispatchInterviewCommand(
-      resumeStage
-        ? {
-            type: fresh ? "start_new" : "start",
-            interviewId,
-            stage: resumeStage,
-          }
-        : {
-            type: fresh ? "start_new" : "start",
-            interviewId,
-          },
-    );
-    if (!fresh && deviceDraftNeedsImportRef.current) {
-      dispatchInterviewCommand({ type: "import_draft" }, started.state);
-      deviceDraftNeedsImportRef.current = false;
-    }
-    resumeStageRef.current = null;
-    dispatchInterviewCommand({
-      type: "request_analytics",
-      eventName: "started",
-      stage: fresh ? "new" : hasLocalDraft ? "resume" : "new",
-    });
-  };
-
-  const confirmStartOver = () => {
-    if (window.confirm(t("landing.startOverConfirm"))) startInterview(true);
-  };
-
-  const startNewInterview = () => {
-    if (window.confirm(t("landing.startOverConfirm"))) startInterview(true);
-  };
-
-  const clearDraft = () => {
-    if (!window.confirm(t("actions.clearConfirm"))) return;
-    dispatchInterviewCommand({ type: "discard_draft" });
-  };
-
-  const rememberDraft = () => {
-    setError("");
-    dispatchInterviewCommand({ type: "remember_draft" });
-  };
-
-  const forgetDeviceDraft = () => {
-    setError("");
-    dispatchInterviewCommand({ type: "clear_device_draft" });
-  };
-
-  const next = () => {
-    if (stepId === "location" && boundaryLocation) {
-      let currentInterviewState = interviewState;
-      if (
-        boundaryLocation.currency === null &&
-        boundaryLocation.currencyProposal !== null
-      ) {
-        const currencyResult = dispatchInterviewCommand(
-          {
-            type: "select_currency",
-            currency: boundaryLocation.currencyProposal,
-          },
-          currentInterviewState,
-        );
-        currentInterviewState = currencyResult.state;
-      }
-      const result = dispatchInterviewCommand(
-        { type: "continue" },
-        currentInterviewState,
-      );
-      setError(
-        interviewValidationMessage(t, result.state.validationIssue?.code),
-      );
-      if (result.state.stage === "result") {
-        dispatchInterviewCommand({
-          type: "request_analytics",
-          eventName: "completed",
-          stage: stepId,
-        });
-      }
-      return;
-    }
-    const result = dispatchInterviewCommand({ type: "continue" });
-    setError(interviewValidationMessage(t, result.state.validationIssue?.code));
-    if (result.state.stage === "result") {
-      dispatchInterviewCommand({
-        type: "request_analytics",
-        eventName: "completed",
-        stage: stepId,
-      });
-    }
-  };
-
-  const skip = () => {
-    const result = dispatchInterviewCommand({ type: "skip" });
-    setError(interviewValidationMessage(t, result.state.validationIssue?.code));
-    dispatchInterviewCommand({
-      type: "request_analytics",
-      eventName: "skipped",
-      stage: stepId,
-    });
-  };
-
-  const savePlan = () => {
-    setError("");
-    dispatchInterviewCommand({ type: "save_plan" });
-  };
-
-  const download = () => {
-    if (!assessment) {
-      setError(t("save.downloadError"));
-      return;
-    }
-    dispatchInterviewCommand({ type: "request_report_download" });
-    return;
-  };
-
-  if (!hydrated) {
-    return (
-      <main
-        className={`${isAuthenticated ? "min-h-full" : "min-h-screen"} bg-[#f5f6f2] dark:bg-[#101310]`}
-      />
-    );
-  }
-
-  return (
-    <main
-      className={`${isAuthenticated ? "min-h-full" : "min-h-screen"} bg-[#f5f6f2] text-slate-950 dark:bg-[#101310] dark:text-white`}
-      data-runway-presentation={isAuthenticated ? "authenticated" : "public"}
-      data-runway-progress={interviewState.status}
-      data-runway-draft-sync={draftSyncState}
-      data-runway-plan-operation={planOperationState}
-    >
-      {!isAuthenticated ? <RunwayHeader t={t} /> : null}
-      {!showLanding ? (
-        <DraftStorageControl
-          t={t}
-          deviceStorageConsent={deviceStorageConsent}
-          onRemember={rememberDraft}
-          onForget={forgetDeviceDraft}
-        />
-      ) : null}
-      {(showLanding || hasResumeChoice) && (error || operationError) ? (
-        <div
-          className="mx-auto max-w-6xl px-5 pt-3"
-          role="alert"
-          data-testid="runway-draft-recovery"
-        >
-          <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-400/40 dark:bg-amber-500/10 dark:text-amber-100">
-            {error || operationError}
-          </div>
-        </div>
-      ) : null}
-      {resumeModel ? (
-        <ResumeChoicePanel
-          t={t}
-          model={resumeModel}
-          onDraft={() => {
-            deviceDraftNeedsImportRef.current = false;
-            dispatchInterviewCommand({
-              type: "resume_draft",
-              interviewId: newId("runway-interview"),
-            });
-          }}
-          onPlan={() => {
-            deviceDraftNeedsImportRef.current = false;
-            dispatchInterviewCommand({ type: "resume_committed_plan" });
-          }}
-        />
-      ) : showLanding ? (
-        <HouseholdRunwayLanding
-          t={t}
-          renderModel={landingModel!}
-          onPrimary={() => startInterview(false)}
-          onStartOver={confirmStartOver}
-        />
-      ) : resultModel && assessment ? (
-        <ResultExperience
-          t={t}
-          locale={locale}
-          model={resultModel}
-          dispatch={(input) => {
-            const result = dispatchInterviewCommand(input);
-            if (input.type === "select_scenario") {
-              dispatchInterviewCommand({
-               type: "request_analytics",
-               eventName: "result_interaction",
-               stage: "scenario_switch",
-             });
-            }
-            return result;
-          }}
-          onStartNew={startNewInterview}
-          onDiscardDraft={clearDraft}
-          onRegistrationClick={() =>
-             dispatchInterviewCommand({
-               type: "request_analytics",
-               eventName: "registration_clicked",
-               stage: "result",
-             })
-           }
-          onDownload={download}
-          isAuthenticated={isAuthenticated}
-          saved={saved}
-          saving={saving}
-          onSave={savePlan}
-          error={error || operationError}
-          snapshots={snapshots}
-        />
-      ) : (
-        <InterviewShell
-          t={t}
-          stepId={stepId}
-          renderKind={interviewState.renderModel.kind}
-           error={error || operationError}
-          activeExpenseCategory={activeExpenseCategory}
-          onBack={() => {
-            setError("");
-            if (activeExpenseCategory) {
-              dispatchInterviewCommand({
-                type: "complete_expense_category",
-                category: activeExpenseCategory,
-              });
-            } else {
-              dispatchInterviewCommand({
-                type: stepId === "location" ? "exit" : "back",
-              });
-            }
-          }}
-          onSkip={OPTIONAL_STEPS.has(stepId) ? skip : undefined}
-          onContinue={next}
-          onClear={clearDraft}
-          continueLabel={stepId === "review" ? t("actions.reveal") : t("actions.continue")}
-        >
-          <StepContent
-            t={t}
-            locale={locale}
-            renderModel={renderModel}
-            dispatchInterviewCommand={dispatchInterviewCommand}
-          />
-        </InterviewShell>
-      )}
-    </main>
-  );
-  */
 }
 
 function RunwayHeader({ t }: { t: ReturnType<typeof useTranslations> }) {

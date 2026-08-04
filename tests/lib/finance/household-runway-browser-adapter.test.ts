@@ -116,6 +116,58 @@ describe("Household Runway browser adapter", () => {
     adapter.dispose();
   });
 
+  it("keeps an anonymous landing screen until the public start intent is sent", async () => {
+    const browser = createAdapterEnvironment(
+      "https://betterr.me/finance/cushion",
+    );
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      authenticated: false,
+      autoStart: false,
+      createId: () => "interview-1",
+      synchronizeDraft: () => true,
+    });
+
+    adapter.start();
+
+    expect(adapter.getSnapshot()).toMatchObject({
+      interviewStatus: "not_started",
+      screen: { kind: "landing" },
+    });
+    expect(browser.environment.history.pushState).not.toHaveBeenCalled();
+
+    adapter.send({ type: "start" });
+    await Promise.resolve();
+
+    expect(adapter.getSnapshot().screen.kind).toBe("location");
+    expect(browser.environment.history.pushState).toHaveBeenCalledWith(
+      {},
+      "",
+      "/finance/cushion?start=1",
+    );
+    adapter.dispose();
+  });
+
+  it("auto-starts authenticated Runtime state and repairs the URL once", () => {
+    const browser = createAdapterEnvironment(
+      "https://betterr.me/finance/cushion",
+    );
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      authenticated: true,
+      createId: () => "interview-1",
+    });
+
+    adapter.start();
+
+    expect(adapter.getSnapshot().screen.kind).toBe("location");
+    expect(browser.environment.location.href).toBe(
+      "https://betterr.me/finance/cushion?start=1",
+    );
+    expect(browser.environment.history.pushState).toHaveBeenCalledTimes(1);
+    adapter.dispose();
+  });
+
   it("repairs an invalid requested stage even when the URL starts the interview", () => {
     const browser = createAdapterEnvironment(
       "https://betterr.me/finance/cushion?start=1&stage=not-a-stage",

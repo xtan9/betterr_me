@@ -103,6 +103,28 @@ describe("Household Runway Interview Runtime", () => {
     expect(focus).toHaveBeenCalledWith("location");
   });
 
+  it("can hold an anonymous Runtime on its landing screen until the caller starts it", () => {
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      autoStart: false,
+      createId: () => "interview-1",
+    });
+
+    runtime.start();
+
+    expect(runtime.getSnapshot()).toMatchObject({
+      lifecycle: "ready",
+      interviewStatus: "not_started",
+      screen: { kind: "landing" },
+    });
+
+    runtime.send({ type: "start", stage: "location" });
+
+    expect(runtime.getSnapshot()).toMatchObject({
+      interviewStatus: "collecting",
+      screen: { kind: "location" },
+    });
+  });
+
   it("keeps interview IDs and protocol-only commands private to the Runtime", () => {
     let nextId = 0;
     const createId = vi.fn(() => `interview-${++nextId}`);

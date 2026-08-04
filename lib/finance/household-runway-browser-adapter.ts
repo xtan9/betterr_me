@@ -26,6 +26,7 @@ import {
   trackRunwayEvent,
 } from "@/lib/finance/runway-analytics-client";
 import type { HouseholdRunwayDraftStorageReadResult } from "@/lib/finance/runway-draft-client";
+import type { HouseholdRunwayDraftState } from "@/lib/finance/household-runway-draft-codec";
 import {
   dispatchHouseholdRunwayRuntimeEnvironment,
   type HouseholdRunwayInterviewRuntimeEnvironmentMessage,
@@ -325,6 +326,17 @@ function emitAdapterOutcome(
   }
 }
 
+type HouseholdRunwayBrowserDraftCapabilityRequest =
+  HouseholdRunwayInterviewRuntimeDraftRequest & {
+    readonly draft: HouseholdRunwayDraftState;
+  };
+
+function draftStateFor(
+  request: HouseholdRunwayInterviewRuntimeDraftRequest,
+): HouseholdRunwayDraftState {
+  return (request as HouseholdRunwayBrowserDraftCapabilityRequest).draft;
+}
+
 /**
  * Composes the framework-neutral Runtime with the browser capabilities. Raw
  * browser events stay here; only validated private environment messages cross
@@ -341,6 +353,8 @@ export function createHouseholdRunwayBrowserAdapter(
   let started = false;
   let removeProjectionSubscription: (() => void) | undefined;
   let initialHrefForProjection: string | undefined;
+  let authenticatedStartPending = false;
+  let historyEffectPending = false;
   const subscriptions: Array<{
     event: "history" | "locale";
     type: string;
@@ -366,6 +380,15 @@ export function createHouseholdRunwayBrowserAdapter(
       environment,
     );
     emitAdapterOutcome(onOutcome, outcome);
+    if (request.destination === "interview") {
+      initialHrefForProjection = environment?.location.href;
+      historyEffectPending = false;
+    } else if (request.action !== "back") {
+      initialHrefForProjection = environment?.location.href;
+      historyEffectPending = false;
+    } else {
+      historyEffectPending = false;
+    }
   };
 
   const focus = (stage: HouseholdRunwayInterviewStage) => {
@@ -431,15 +454,15 @@ export function createHouseholdRunwayBrowserAdapter(
     synchronizeDraft:
       options.synchronizeDraft ??
       ((request: HouseholdRunwayInterviewRuntimeDraftRequest) =>
-        persistHouseholdRunwayDraft(request.draft).success),
+        persistHouseholdRunwayDraft(draftStateFor(request)).success),
     rememberDraft:
       options.rememberDraft ??
       ((request: HouseholdRunwayInterviewRuntimeDraftRequest) =>
-        rememberHouseholdRunwayDraft(request.draft).success),
+        rememberHouseholdRunwayDraft(draftStateFor(request)).success),
     importDraft:
       options.importDraft ??
       ((request: HouseholdRunwayInterviewRuntimeDraftRequest) =>
-        persistHouseholdRunwaySessionDraft(request.draft).success &&
+        persistHouseholdRunwaySessionDraft(draftStateFor(request)).success &&
         clearHouseholdRunwayDeviceDraft({ revokeConsent: false }).success),
     clearDraft:
       options.clearDraft ??
@@ -531,14 +554,74 @@ export function createHouseholdRunwayBrowserAdapter(
   const reconcileUrl = () => {
     if (disposed || runtime.getSnapshot().lifecycle !== "ready") return;
     const snapshot = runtime.getSnapshot();
+    if (
+      authenticatedStartPending ||
+      historyEffectPending ||
+      snapshot.screen.kind === "resume_choice"
+    ) {
+      return;
+    }
     const href = initialHrefForProjection ?? environment?.location.href;
     if (!href) return;
     initialHrefForProjection = undefined;
+
+    let url: URL;
+    try {
+      url = new URL(href);
+    } catch {
+      const command = householdRunwayHistoryProjectionCommand({
+        href,
+        interviewStarted: snapshot.interviewStatus !== "not_started",
+        interviewId: "browser-adapter",
+        stage: stageFromHref(href),
+      });
+      if (command) {
+        dispatchEnvironment({
+          type: "history_projection_changed",
+          destination: command.destination,
+          ...(command.destination === "interview" && command.stage
+            ? { stage: command.stage }
+            : {}),
+        });
+      } else {
+        emitAdapterOutcome(onOutcome, { type: "history", outcome: "unavailable" });
+      }
+      return;
+    }
+
+    const requestedStageParameter = stageParameterFromHref(href);
+    const requestedStage = stageFromHref(href);
+    const interviewStarted = snapshot.interviewStatus !== "not_started";
+    if (options.authenticated === true) {
+      if (!interviewStarted) {
+        const stage =
+          requestedStage ??
+          (snapshot.screen.kind === "landing"
+            ? snapshot.screen.resumeStage ?? undefined
+            : undefined);
+        authenticatedStartPending = true;
+        historyEffectPending = true;
+        try {
+          runtime.send({ type: "start", ...(stage ? { stage } : {}) });
+        } finally {
+          authenticatedStartPending = false;
+          if (runtime.getSnapshot().interviewStatus === "not_started") {
+            historyEffectPending = false;
+          }
+        }
+        return;
+      }
+      if (url.searchParams.get("start") !== "1") {
+        navigate({ action: "push", destination: "interview" });
+        return;
+      }
+    }
+
     const command = householdRunwayHistoryProjectionCommand({
       href,
-      interviewStarted: snapshot.interviewStatus !== "not_started",
+      interviewStarted,
       interviewId: "browser-adapter",
-      stage: stageFromHref(href),
+      stage: requestedStage,
     });
     if (command) {
       dispatchEnvironment({
@@ -550,27 +633,19 @@ export function createHouseholdRunwayBrowserAdapter(
       });
       return;
     }
-
-    try {
-      const url = new URL(href);
-      const requestedStageParameter = stageParameterFromHref(href);
-      const requestedStage = stageFromHref(href);
-      const shouldStart = snapshot.interviewStatus !== "not_started";
-      if (
-        (shouldStart && url.searchParams.get("start") !== "1") ||
-        (!shouldStart && url.searchParams.get("start") === "1") ||
-        (!shouldStart && requestedStageParameter !== null) ||
-        (shouldStart &&
-          (requestedStageParameter !== null &&
-            (requestedStage === undefined || requestedStage !== snapshot.stage)))
-      ) {
-        navigate({
-          action: "replace",
-          destination: shouldStart ? "interview" : "landing",
-        });
-      }
-    } catch {
-      emitAdapterOutcome(onOutcome, { type: "history", outcome: "unavailable" });
+    const shouldStart = interviewStarted;
+    if (
+      (shouldStart && url.searchParams.get("start") !== "1") ||
+      (!shouldStart && url.searchParams.get("start") === "1") ||
+      (!shouldStart && requestedStageParameter !== null) ||
+      (shouldStart &&
+        (requestedStageParameter !== null &&
+          (requestedStage === undefined || requestedStage !== snapshot.stage)))
+    ) {
+      navigate({
+        action: "replace",
+        destination: shouldStart ? "interview" : "landing",
+      });
     }
   };
 
@@ -629,7 +704,34 @@ export function createHouseholdRunwayBrowserAdapter(
       removeProjectionSubscription = runtime.subscribe(reconcileUrl);
       runtime.start();
     },
-    send: (intent) => runtime.send(intent),
+    send: (intent) => {
+      const historyIntent =
+        intent.type === "start" ||
+        intent.type === "resume_draft" ||
+        intent.type === "resume_committed_plan" ||
+        intent.type === "exit";
+      if (!historyIntent) {
+        runtime.send(intent);
+        return;
+      }
+      historyEffectPending = true;
+      try {
+        runtime.send(intent);
+      } finally {
+        const snapshot = runtime.getSnapshot();
+        if (
+          (intent.type === "start" ||
+            intent.type === "resume_draft" ||
+            intent.type === "resume_committed_plan") &&
+          snapshot.interviewStatus === "not_started"
+        ) {
+          historyEffectPending = false;
+        }
+        if (intent.type === "exit" && snapshot.interviewStatus !== "not_started") {
+          historyEffectPending = false;
+        }
+      }
+    },
     dispose: () => {
       if (disposed) return;
       disposed = true;

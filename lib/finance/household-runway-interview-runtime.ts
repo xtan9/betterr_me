@@ -87,6 +87,7 @@ export interface HouseholdRunwayInterviewRuntimeOperations {
 
 /** User actions accepted by the Runtime. Protocol messages are deliberately absent. */
 const RUNTIME_INTENT_TYPES = [
+  "start",
   "start_new",
   "select_country",
   "select_region",
@@ -139,7 +140,8 @@ type RuntimeCommandIntent = Extract<
 
 /** The only user actions a Runtime caller may dispatch. */
 export type HouseholdRunwayInterviewIntent =
-  | Exclude<RuntimeCommandIntent, { type: "start_new" | "resume_draft" }>
+  | Exclude<RuntimeCommandIntent, { type: "start" | "start_new" | "resume_draft" }>
+  | { type: "start"; stage?: HouseholdRunwayInterviewStage }
   | { type: "start_new" }
   | { type: "resume_draft" }
   | { type: "save_plan" };
@@ -229,8 +231,6 @@ export interface HouseholdRunwayInterviewRuntimeDraftRequest {
   status: HouseholdRunwayInterviewStatus;
   stage: HouseholdRunwayInterviewStage | null;
   answers: HouseholdRunwayInterviewAnswers;
-  /** Opaque-to-React draft envelope supplied only to the browser capability. */
-  draft: HouseholdRunwayDraftState;
 }
 
 export interface HouseholdRunwayInterviewRuntimePlanRequest {
@@ -346,6 +346,8 @@ export interface HouseholdRunwayInterviewRuntimeOptions
   extends HouseholdRunwayInterviewRuntimeCapabilities {
   /** Current presentation locale, kept outside the Interview state machine. */
   locale?: RunwayLocale;
+  /** Starts a restored, conflict-free interview after initialization by default. */
+  autoStart?: boolean;
   initialPlan?: HouseholdRunwayPlan | null;
   initialSnapshots?: readonly RunwaySnapshotSummary[];
 }
@@ -908,7 +910,11 @@ export function createHouseholdRunwayInterviewRuntime(
     } else if (planBootstrapResolved) {
       state = createHouseholdRunwayInterview(committedPlan);
     }
-    if (state.status === "not_started" && !state.resumeChoice) {
+    if (
+      (options.autoStart ?? true) &&
+      state.status === "not_started" &&
+      !state.resumeChoice
+    ) {
       const interviewId = createId();
       applyCommand(
         {
@@ -1649,7 +1655,9 @@ export function createHouseholdRunwayInterviewRuntime(
       return;
     }
     const commandInput =
-      message.intent.type === "start_new" || message.intent.type === "resume_draft"
+      message.intent.type === "start" ||
+      message.intent.type === "start_new" ||
+      message.intent.type === "resume_draft"
         ? { ...message.intent, interviewId: createId() }
         : message.intent;
     const command = {
