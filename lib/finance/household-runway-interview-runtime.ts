@@ -24,6 +24,53 @@ import {
   type HouseholdRunwayValidationIssue,
 } from "@/lib/finance/household-runway-interview";
 
+export type HouseholdRunwayInterviewRuntimeIssueCode =
+  | "country_required"
+  | "region_required"
+  | "region_invalid"
+  | "currency_required"
+  | "currency_change_confirmation_required"
+  | "income_required"
+  | "expenses_current_required"
+  | "expenses_interruption_required"
+  | "draft_timestamp_required"
+  | "plan_input_invalid"
+  | "assessment_required"
+  | "plan_adjustment_pending";
+
+export interface HouseholdRunwayInterviewRuntimeIssue {
+  readonly code: HouseholdRunwayInterviewRuntimeIssueCode;
+}
+
+export type HouseholdRunwayInterviewRuntimeOperationStatus =
+  | "idle"
+  | "dirty"
+  | "pending"
+  | "succeeded"
+  | "failed";
+
+export type HouseholdRunwayInterviewRuntimeOperationError =
+  | "authentication_required"
+  | "conflict"
+  | "invalid"
+  | "network"
+  | "storage_unavailable"
+  | "download_failed"
+  | "analytics_failed";
+
+export interface HouseholdRunwayInterviewRuntimeOperation {
+  readonly status: HouseholdRunwayInterviewRuntimeOperationStatus;
+  readonly error?: HouseholdRunwayInterviewRuntimeOperationError;
+}
+
+export interface HouseholdRunwayInterviewRuntimeOperations {
+  readonly draftSynchronization: HouseholdRunwayInterviewRuntimeOperation;
+  readonly deviceDraft: HouseholdRunwayInterviewRuntimeOperation;
+  readonly planPersistence: HouseholdRunwayInterviewRuntimeOperation;
+  readonly reportDownload: HouseholdRunwayInterviewRuntimeOperation;
+  readonly analytics: HouseholdRunwayInterviewRuntimeOperation;
+}
+
 /** User actions accepted by the Runtime. Protocol messages are deliberately absent. */
 const RUNTIME_INTENT_TYPES = [
   "start_new",
@@ -126,7 +173,8 @@ export interface HouseholdRunwayInterviewRuntimeSnapshot {
   readonly stage: HouseholdRunwayInterviewStage | null;
   readonly screen: HouseholdRunwayInterviewRuntimeScreen;
   readonly derived: HouseholdRunwayInterviewRuntimeDeepReadonly<HouseholdRunwayInterviewRuntimeDerivedFacts>;
-  readonly issues: readonly HouseholdRunwayInterviewRuntimeDeepReadonly<HouseholdRunwayValidationIssue>[];
+  readonly issues: readonly HouseholdRunwayInterviewRuntimeIssue[];
+  readonly operations: HouseholdRunwayInterviewRuntimeOperations;
   readonly affordances: Readonly<HouseholdRunwayInterviewRuntimeAffordances>;
 }
 
@@ -229,6 +277,21 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
+function clonePublicValue<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => clonePublicValue(item)) as T;
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        clonePublicValue(item),
+      ]),
+    ) as T;
+  }
+  return value;
+}
+
 function snapshotSignature(snapshot: HouseholdRunwayInterviewRuntimeSnapshot) {
   return JSON.stringify(snapshot);
 }
@@ -239,7 +302,7 @@ function defaultId() {
 }
 
 function defaultSchedule(task: () => void) {
-  queueMicrotask(task);
+  task();
 }
 
 function commandMetadata(
@@ -267,7 +330,7 @@ function publicDraftRequest(
   return {
     status: effect.status,
     stage: effect.stage,
-    answers: effect.draft.answers,
+    answers: clonePublicValue(effect.draft.answers),
   };
 }
 
@@ -301,6 +364,43 @@ function affordancesFor(
   };
 }
 
+function publicOperationFor(
+  operation:
+    | HouseholdRunwayInterviewState["operations"]["draftSynchronization"]
+    | HouseholdRunwayInterviewState["operations"]["deviceDraft"]
+    | HouseholdRunwayInterviewState["operations"]["planPersistence"]
+    | HouseholdRunwayInterviewState["operations"]["reportDownload"]
+    | HouseholdRunwayInterviewState["operations"]["analytics"],
+): HouseholdRunwayInterviewRuntimeOperation {
+  if (operation.status === "failed") {
+    if (operation.error === "stale_result") {
+      return { status: "idle" };
+    }
+    return { status: "failed", error: operation.error };
+  }
+  return { status: operation.status };
+}
+
+function publicOperationsFor(
+  state: HouseholdRunwayInterviewState,
+): HouseholdRunwayInterviewRuntimeOperations {
+  return {
+    draftSynchronization: publicOperationFor(
+      state.operations.draftSynchronization,
+    ),
+    deviceDraft: publicOperationFor(state.operations.deviceDraft),
+    planPersistence: publicOperationFor(state.operations.planPersistence),
+    reportDownload: publicOperationFor(state.operations.reportDownload),
+    analytics: publicOperationFor(state.operations.analytics),
+  };
+}
+
+function publicIssueFor(
+  issue: HouseholdRunwayValidationIssue | null,
+): HouseholdRunwayInterviewRuntimeIssue | null {
+  return issue ? { code: issue.code } : null;
+}
+
 function snapshotFor(
   state: HouseholdRunwayInterviewState,
   lifecycle: HouseholdRunwayInterviewRuntimeLifecycle,
@@ -313,12 +413,13 @@ function snapshotFor(
     lifecycle,
     interviewStatus: state.status,
     stage: state.stage,
-    screen,
+    screen: clonePublicValue(screen),
     derived: {
-      planInputs: state.planInputs,
-      assessment: state.assessment,
+      planInputs: clonePublicValue(state.planInputs),
+      assessment: clonePublicValue(state.assessment),
     },
-    issues: issue ? [issue] : [],
+    issues: issue ? [publicIssueFor(issue)!] : [],
+    operations: publicOperationsFor(state),
     affordances: affordancesFor(state, lifecycle),
   });
 }
@@ -523,10 +624,10 @@ export function createHouseholdRunwayInterviewRuntime(
         options.persistPlan
           ? () =>
               options.persistPlan!({
-                inputs: effect.inputs,
-                assessment: effect.assessment,
+                inputs: clonePublicValue(effect.inputs),
+                assessment: clonePublicValue(effect.assessment),
                 expectedPlanRevision: effect.expectedPlanRevision,
-                adjustments: effect.adjustments,
+                adjustments: clonePublicValue(effect.adjustments),
                 snapshotTrigger: effect.snapshotTrigger,
               })
           : undefined,
@@ -553,7 +654,7 @@ export function createHouseholdRunwayInterviewRuntime(
     if (effect.type === "report_download_requested") {
       invoke(
         options.downloadReport
-          ? () => options.downloadReport!(effect.assessment)
+          ? () => options.downloadReport!(clonePublicValue(effect.assessment))
           : undefined,
         (value) =>
           value === false
@@ -602,14 +703,67 @@ export function createHouseholdRunwayInterviewRuntime(
   const scheduleEffects = (effects: readonly HouseholdRunwayInterviewEffect[]) => {
     if (effects.length === 0 || disposed) return;
     try {
-      schedule(() => {
+      queueMicrotask(() => {
         if (disposed) return;
-        // Start every independent capability in this turn without awaiting one.
-        for (const effect of effects) executeEffect(effect);
+        schedule(() => {
+          if (disposed) return;
+          // Start every independent capability in this turn without awaiting one.
+          for (const effect of effects) executeEffect(effect);
+        });
       });
     } catch {
       // Scheduling is an adapter concern; the synchronous Interview state remains valid.
     }
+  };
+
+  const duplicatePendingIntent = (intent: HouseholdRunwayInterviewIntent) => {
+    if (
+      intent.type === "save_plan" &&
+      state.operations.planPersistence.status === "pending"
+    ) {
+      return true;
+    }
+    if (
+      intent.type === "request_report_download" &&
+      state.operations.reportDownload.status === "pending"
+    ) {
+      return true;
+    }
+    if (
+      (intent.type === "remember_draft" || intent.type === "import_draft") &&
+      state.operations.deviceDraft.status === "pending" &&
+      state.operations.deviceDraft.action ===
+        (intent.type === "remember_draft" ? "remember" : "import")
+    ) {
+      return true;
+    }
+    return (
+      intent.type === "clear_device_draft" &&
+      state.operations.deviceDraft.status === "pending" &&
+      state.operations.deviceDraft.action === "clear"
+    );
+  };
+
+  const introducedStaleResult = (
+    previousState: HouseholdRunwayInterviewState,
+    nextState: HouseholdRunwayInterviewState,
+  ) => {
+    const operationNames = [
+      "draftSynchronization",
+      "deviceDraft",
+      "planPersistence",
+      "reportDownload",
+      "analytics",
+    ] as const;
+    return operationNames.some((name) => {
+      const previous = previousState.operations[name];
+      const next = nextState.operations[name];
+      return (
+        !(previous.status === "failed" && previous.error === "stale_result") &&
+        next.status === "failed" &&
+        next.error === "stale_result"
+      );
+    });
   };
 
   const applyCommand = (
@@ -618,12 +772,15 @@ export function createHouseholdRunwayInterviewRuntime(
   ) => {
     if (disposed) return;
     try {
-      const result = dispatchHouseholdRunwayInterview(state, command, {
+      const previousState = state;
+      const result = dispatchHouseholdRunwayInterview(previousState, command, {
         planPersistence: options.persistPlan ? "available" : "unavailable",
         snapshotTrigger: state.committedPlan ? "updated" : "completed",
       });
       state = result.state;
-      if (publishSnapshot) publish();
+      if (publishSnapshot && !introducedStaleResult(previousState, result.state)) {
+        publish();
+      }
       scheduleEffects(result.effects);
     } catch {
       // Malformed runtime values are safe no-ops at the facade boundary.
@@ -655,6 +812,7 @@ export function createHouseholdRunwayInterviewRuntime(
       return;
     }
     const commandType = message.intent.type;
+    if (duplicatePendingIntent(message.intent)) return;
     const commandInput =
       message.intent.type === "start_new" || message.intent.type === "resume_draft"
         ? { ...message.intent, interviewId: createId() }
