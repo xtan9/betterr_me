@@ -1488,6 +1488,10 @@
       "unavailable": "習慣暫時無法使用。您的日曆事件和可用圖層仍會顯示。",
       "retry": "重試習慣"
     },
+    "workoutOverlay": {
+      "unavailable": "訓練暫時無法使用。您的日曆事件和可用圖層仍會顯示。",
+      "retry": "重試訓練"
+    },
     "timeGrid": {
       "allDay": "全天",
       "allDayMore": "+{count} 更多",

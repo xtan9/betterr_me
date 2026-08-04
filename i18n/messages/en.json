@@ -1488,6 +1488,10 @@
       "unavailable": "Habits are temporarily unavailable. Your calendar events and available layers are still shown.",
       "retry": "Retry habits"
     },
+    "workoutOverlay": {
+      "unavailable": "Workouts are temporarily unavailable. Your calendar events and available layers are still shown.",
+      "retry": "Retry workouts"
+    },
     "timeGrid": {
       "allDay": "All day",
       "allDayMore": "+{count} more",

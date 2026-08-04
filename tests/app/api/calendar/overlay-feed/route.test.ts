@@ -67,7 +67,7 @@ describe("GET /api/calendar/overlay-feed", () => {
     expect(await response.json()).toEqual({ items: [] });
   });
 
-  it("accepts habits alone and combined task/habit selections", async () => {
+  it("accepts habits/workouts alone and combined task/habit/workout selections", async () => {
     await GET(request("/api/calendar/overlay-feed?start_date=2026-04-01&end_date=2026-04-07&layers=habits"));
     expect(queryCalendarOverlayFeed).toHaveBeenLastCalledWith(
       expect.objectContaining({ layers: ["habits"] }),
@@ -78,6 +78,13 @@ describe("GET /api/calendar/overlay-feed", () => {
     await GET(request("/api/calendar/overlay-feed?start_date=2026-04-01&end_date=2026-04-07&layers=tasks,habits"));
     expect(queryCalendarOverlayFeed).toHaveBeenLastCalledWith(
       expect.objectContaining({ layers: ["tasks", "habits"] }),
+      {},
+      expect.any(Object),
+    );
+
+    await GET(request("/api/calendar/overlay-feed?start_date=2026-04-01&end_date=2026-04-07&layers=workouts&timezone=America%2FLos_Angeles"));
+    expect(queryCalendarOverlayFeed).toHaveBeenLastCalledWith(
+      expect.objectContaining({ layers: ["workouts"], timezone: "America/Los_Angeles" }),
       {},
       expect.any(Object),
     );
@@ -150,5 +157,6 @@ describe("GET /api/calendar/overlay-feed", () => {
     expect((await GET(request("/api/calendar/overlay-feed?start_date=2026-04-07&end_date=2026-04-01&layers=tasks"))).status).toBe(400);
     expect((await GET(request("/api/calendar/overlay-feed?start_date=2026-04-01&end_date=2026-05-14&layers=tasks"))).status).toBe(400);
     expect((await GET(request("/api/calendar/overlay-feed?start_date=2026-02-30&end_date=2026-03-01&layers=tasks"))).status).toBe(400);
+    expect((await GET(request("/api/calendar/overlay-feed?start_date=2026-04-01&end_date=2026-04-07&layers=workouts&timezone=Not%2FAZone"))).status).toBe(400);
   });
 });

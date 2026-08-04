@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
     dispatch: vi.fn(),
     toggleTask: vi.fn(),
     toggleHabit: vi.fn().mockResolvedValue({ success: true }),
+    navigateWorkout: vi.fn(),
   },
 }));
 
@@ -86,6 +87,20 @@ vi.mock("@/components/calendar/day-view", () => ({
           },
         })}
       />
+      <button
+        type="button"
+        data-testid="invoke-workout-action"
+        onClick={() => onEventClick({
+          id: "workouts:workout-1",
+          start_date: "2026-04-02",
+          _domain: "workouts",
+          _completed: true,
+          _workoutAction: {
+            type: "navigate_workout",
+            workoutId: "workout-1",
+          },
+        })}
+      />
     </>
   ),
 }));
@@ -134,6 +149,22 @@ describe("CalendarPageContent task overlay failure seam", () => {
 
     await waitFor(() => {
       expect(state.actions.toggleHabit).toHaveBeenCalledWith("habit-1", "2026-04-02", false);
+    });
+  });
+
+  it("keeps the calendar visible, localizes workout degradation, and dispatches workout navigation", async () => {
+    state.overlay = { data: { items: [], unavailableLayers: ["workouts"] }, error: null };
+
+    render(<CalendarPageContent />);
+
+    expect(screen.getByTestId("day-view")).toBeInTheDocument();
+    expect(screen.getByText("workoutOverlay.unavailable")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "workoutOverlay.retry" }));
+    expect(state.mutate).toHaveBeenCalledWith(expect.stringContaining("layers=habits,tasks,workouts"));
+
+    fireEvent.click(screen.getByTestId("invoke-workout-action"));
+    await waitFor(() => {
+      expect(state.actions.navigateWorkout).toHaveBeenCalledWith("workout-1");
     });
   });
 });

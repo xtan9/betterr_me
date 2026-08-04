@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   habitOverlayItemsToExpandedEvents,
   taskOverlayItemsToExpandedEvents,
+  workoutOverlayItemsToExpandedEvents,
 } from "@/lib/calendar/feed-aggregation";
 
 describe("calendar task overlay adapter", () => {
@@ -60,6 +61,33 @@ describe("calendar habit overlay adapter", () => {
         habitId: "habit-1",
         date: "2026-04-02",
       },
+      is_virtual: true,
+    });
+    expect(event._actions).toBeUndefined();
+  });
+});
+
+describe("calendar workout overlay adapter", () => {
+  it("preserves the typed navigation action and workout identity", () => {
+    const [event] = workoutOverlayItemsToExpandedEvents([{
+      layer: "workouts",
+      kind: "workout",
+      id: "workouts:workout-1",
+      workoutId: "workout-1",
+      title: "Morning lift",
+      date: "2026-04-02",
+      startTime: "06:30",
+      endTime: null,
+      allDay: false,
+      completed: true,
+      action: { type: "navigate_workout", workoutId: "workout-1" },
+    }]);
+
+    expect(event).toMatchObject({
+      id: "workouts:workout-1",
+      _domain: "workouts",
+      _sourceId: "workout-1",
+      _workoutAction: { type: "navigate_workout", workoutId: "workout-1" },
       is_virtual: true,
     });
     expect(event._actions).toBeUndefined();

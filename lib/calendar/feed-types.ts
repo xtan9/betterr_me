@@ -105,6 +105,11 @@ export interface DomainCalendarEvent {
     habitId: string;
     date: string;
   };
+  /** Typed workout navigation action; workout identity stays out of untyped metadata. */
+  _workoutAction?: {
+    type: "navigate_workout";
+    workoutId: string;
+  };
   /** Source ID in the original domain table. */
   _sourceId?: string;
   /** Extra metadata for display. */
