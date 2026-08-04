@@ -33,17 +33,20 @@ export interface CalendarEventDisplayItem extends CalendarDisplayFields {
   event: ExpandedCalendarEvent;
 }
 
-export type CalendarOverlayAction =
-  | TaskOverlayAction
-  | HabitOverlayAction
-  | WorkoutOverlayAction;
-
-export interface CalendarOverlayDisplayItem extends CalendarDisplayFields {
+interface CalendarOverlayDisplayFields<
+  Layer extends CalendarOverlayLayer,
+  Action,
+> extends CalendarDisplayFields {
   kind: "overlay";
-  layer: CalendarOverlayLayer;
+  layer: Layer;
   completed: boolean;
-  action: CalendarOverlayAction;
+  action: Action;
 }
+
+export type CalendarOverlayDisplayItem =
+  | CalendarOverlayDisplayFields<"tasks", TaskOverlayAction>
+  | CalendarOverlayDisplayFields<"habits", HabitOverlayAction>
+  | CalendarOverlayDisplayFields<"workouts", WorkoutOverlayAction>;
 
 export type CalendarDisplayItem =
   | CalendarEventDisplayItem
@@ -67,7 +70,7 @@ export function calendarEventToDisplayItem(
 }
 
 function overlayItemToDisplayItem(item: CalendarOverlayItem): CalendarOverlayDisplayItem {
-  return {
+  const displayFields = {
     kind: "overlay",
     id: item.id,
     title: item.title,
@@ -76,10 +79,17 @@ function overlayItemToDisplayItem(item: CalendarOverlayItem): CalendarOverlayDis
     start_time: item.startTime,
     end_time: item.endTime,
     color: null,
-    layer: item.layer,
     completed: item.completed,
-    action: item.action,
-  };
+  } as const;
+
+  switch (item.layer) {
+    case "tasks":
+      return { ...displayFields, layer: item.layer, action: item.action };
+    case "habits":
+      return { ...displayFields, layer: item.layer, action: item.action };
+    case "workouts":
+      return { ...displayFields, layer: item.layer, action: item.action };
+  }
 }
 
 /** Adapt selected Calendar Overlay Feed items without manufacturing Calendar Event fields. */

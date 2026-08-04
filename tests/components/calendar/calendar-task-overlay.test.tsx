@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { EventBlock } from "@/components/calendar/event-block";
 import { EventChip } from "@/components/calendar/event-chip";
@@ -8,7 +8,10 @@ import {
   overlayItemsToDisplayItems,
 } from "@/lib/calendar/overlay-adapter";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
-import type { CalendarOverlayItem } from "@/lib/calendar/overlay-feed";
+import type {
+  CalendarOverlayItem,
+  TaskOverlayAction,
+} from "@/lib/calendar/overlay-feed";
 
 function taskItem(): CalendarOverlayItem {
   return {
@@ -136,6 +139,9 @@ describe("Calendar display adapter", () => {
       layer: "workouts",
       action: { type: "navigate_workout", workoutId: "workout-1" },
     });
+
+    if (task.layer !== "tasks") throw new Error("Expected a task display item");
+    expectTypeOf(task.action).toEqualTypeOf<TaskOverlayAction>();
   });
 
   it("passes a display item back through the time-grid view seam when clicked", () => {

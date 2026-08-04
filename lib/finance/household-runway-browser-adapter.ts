@@ -717,7 +717,6 @@ export function createHouseholdRunwayBrowserAdapter(
         intent.type === "start_new" ||
         intent.type === "resume_draft" ||
         intent.type === "resume_committed_plan" ||
-        intent.type === "exit" ||
         intent.type === "discard_draft";
       if (!historyIntent) {
         runtime.send(intent);
@@ -735,9 +734,6 @@ export function createHouseholdRunwayBrowserAdapter(
             intent.type === "resume_committed_plan") &&
           snapshot.interviewStatus === "not_started"
         ) {
-          historyEffectPending = false;
-        }
-        if (intent.type === "exit" && snapshot.interviewStatus !== "not_started") {
           historyEffectPending = false;
         }
       }

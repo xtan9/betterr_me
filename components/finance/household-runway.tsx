@@ -360,9 +360,7 @@ export function HouseholdRunway({
               error={error || operationError}
               activeExpenseCategory={activeExpenseCategory}
               onBack={() => {
-                dispatchInterviewCommand({
-                  type: stepId === "location" ? "exit" : "back",
-                });
+                dispatchInterviewCommand({ type: "back" });
               }}
               onSkip={snapshot.affordances.skip ? skip : undefined}
               onContinue={next}

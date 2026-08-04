@@ -151,7 +151,6 @@ const RUNTIME_COMMAND_INTENT_TYPES = [
   "continue",
   "back",
   "skip",
-  "exit",
   "discard_draft",
   "clear_device_draft",
   "remember_draft",
@@ -1849,6 +1848,12 @@ export function createHouseholdRunwayInterviewRuntime(
   const commandInputsForIntent = (
     intent: HouseholdRunwayInterviewIntent,
   ): readonly HouseholdRunwayInterviewCommandInput[] => {
+    const replaceOtherIncomeSources = (
+      sources: readonly RecurringIncomeSource[],
+    ): readonly HouseholdRunwayInterviewCommandInput[] => [
+      { type: "set_other_income_sources", sources },
+    ];
+
     if (intent.type === "registration_clicked") return [];
 
     if (intent.type === "continue") {
@@ -1886,32 +1891,24 @@ export function createHouseholdRunwayInterviewRuntime(
         (source) => source.type === intent.sourceType,
       );
       if (intent.enabled) {
-        return [
-          {
-            type: "set_other_income_sources",
-            sources: existing
-              ? state.renderModel.sources
-              : [
-                  ...state.renderModel.sources,
-                  {
-                    id: createId(),
-                    type: intent.sourceType,
-                    monthly_cents: 0,
-                    confidence: "confirmed",
-                  },
-                ],
-          },
-        ];
+        return replaceOtherIncomeSources(
+          existing
+            ? state.renderModel.sources
+            : [
+                ...state.renderModel.sources,
+                {
+                  id: createId(),
+                  type: intent.sourceType,
+                  monthly_cents: 0,
+                  confidence: "confirmed",
+                },
+              ],
+        );
       }
       if (!existing) return [];
-      return [
-        {
-          type: "set_other_income_sources",
-          sources: state.renderModel.sources.filter(
-            (source) => source.id !== existing.id,
-          ),
-        },
-      ];
+      return replaceOtherIncomeSources(
+        state.renderModel.sources.filter((source) => source.id !== existing.id),
+      );
     }
 
     if (intent.type === "update_other_income_source") {
@@ -1919,33 +1916,25 @@ export function createHouseholdRunwayInterviewRuntime(
       if (!state.renderModel.sources.some((source) => source.id === intent.id)) {
         return [];
       }
-      return [
-        {
-          type: "set_other_income_sources",
-          sources: state.renderModel.sources.map((source) =>
-            source.id === intent.id ? { ...source, ...intent.patch } : source,
-          ),
-        },
-      ];
+      return replaceOtherIncomeSources(
+        state.renderModel.sources.map((source) =>
+          source.id === intent.id ? { ...source, ...intent.patch } : source,
+        ),
+      );
     }
 
     if (intent.type === "add_other_income_source") {
       if (state.renderModel.kind !== "otherIncome") return [];
-      return [
+      return replaceOtherIncomeSources([
+        ...state.renderModel.sources,
         {
-          type: "set_other_income_sources",
-          sources: [
-            ...state.renderModel.sources,
-            {
-              id: createId(),
-              type: "other",
-              label: "",
-              monthly_cents: 0,
-              confidence: "confirmed",
-            },
-          ],
+          id: createId(),
+          type: "other",
+          label: "",
+          monthly_cents: 0,
+          confidence: "confirmed",
         },
-      ];
+      ]);
     }
 
     if (intent.type === "remove_other_income_source") {
@@ -1953,14 +1942,9 @@ export function createHouseholdRunwayInterviewRuntime(
       if (!state.renderModel.sources.some((source) => source.id === intent.id)) {
         return [];
       }
-      return [
-        {
-          type: "set_other_income_sources",
-          sources: state.renderModel.sources.filter(
-            (source) => source.id !== intent.id,
-          ),
-        },
-      ];
+      return replaceOtherIncomeSources(
+        state.renderModel.sources.filter((source) => source.id !== intent.id),
+      );
     }
 
     return [intent as HouseholdRunwayInterviewCommandInput];
