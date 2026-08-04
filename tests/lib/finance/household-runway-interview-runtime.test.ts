@@ -821,6 +821,43 @@ describe("Household Runway Interview Runtime", () => {
     });
   });
 
+  it("recovers from malformed and unconsented Draft restoration without selecting it", async () => {
+    const malformed = createHouseholdRunwayInterviewRuntime({
+      createId: () => "malformed",
+      restore: async () => ({
+        session: { status: "restored", state: { unsupported: true } },
+        device: { status: "missing" },
+      }),
+    });
+    malformed.start();
+    await settle([]);
+
+    expect(malformed.getSnapshot()).toMatchObject({
+      lifecycle: "ready",
+      screen: { kind: "location" },
+      issues: [{ code: "draft_recovery" }],
+      draft: { stored: false },
+    });
+
+    const unconsented = createHouseholdRunwayInterviewRuntime({
+      createId: () => "unconsented",
+      restore: async () => ({
+        session: { status: "missing" as const },
+        device: { status: "restored" as const, state: storedDraft(8) },
+        deviceStorageConsent: false,
+      }),
+    });
+    unconsented.start();
+    await settle([]);
+
+    expect(unconsented.getSnapshot()).toMatchObject({
+      lifecycle: "ready",
+      screen: { kind: "location" },
+      issues: [{ code: "draft_recovery" }],
+      draft: { stored: false, device: false, deviceStorageConsent: false },
+    });
+  });
+
   it("exposes a resume choice when the selected Draft differs from the committed Plan", async () => {
     const source = createHouseholdRunwayInterviewRuntime({
       now: () => now,
@@ -856,6 +893,43 @@ describe("Household Runway Interview Runtime", () => {
     expect(runtime.getSnapshot()).toMatchObject({
       interviewStatus: "completed",
       screen: { kind: "stage", stage: "result" },
+    });
+  });
+
+  it("resumes the selected Draft through the explicit Draft choice", async () => {
+    const source = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "source",
+    });
+    source.start();
+    driveToReview(source);
+    const inputs = source.getSnapshot().derived.planInputs as
+      | HouseholdRunwayInterviewRuntimePlanResult["planInputs"]
+      | null;
+    if (!inputs) throw new Error("expected Plan inputs");
+
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      initialPlan: { revision: 1, inputs },
+      restore: async () => ({
+        device: { status: "restored" as const, state: storedDraft(4) },
+        deviceStorageConsent: true,
+      }),
+    });
+    runtime.start();
+    await settle([]);
+
+    expect(runtime.getSnapshot().screen).toMatchObject({
+      kind: "resume_choice",
+      recommended: "draft",
+    });
+    runtime.send({ type: "resume_draft" });
+
+    expect(runtime.getSnapshot()).toMatchObject({
+      interviewStatus: "collecting",
+      stage: "location",
+      screen: { kind: "location" },
     });
   });
 
