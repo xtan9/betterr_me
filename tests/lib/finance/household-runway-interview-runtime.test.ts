@@ -808,8 +808,14 @@ describe("Household Runway Interview Runtime", () => {
     ]);
   });
 
-  it("clears a remembered device copy without requiring a second confirmation", async () => {
-    const confirm = vi.fn(() => false);
+  it("confirms clearing a remembered device copy before removing it", async () => {
+    const confirmationResolvers: Array<(value: boolean) => void> = [];
+    const confirm = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          confirmationResolvers.push(resolve);
+        }),
+    );
     const clearDraft = vi.fn(() => true);
     const runtime = createHouseholdRunwayInterviewRuntime({
       autoStart: false,
@@ -826,9 +832,21 @@ describe("Household Runway Interview Runtime", () => {
     await settle([]);
     runtime.send({ type: "start" });
     runtime.send({ type: "clear_device_draft" });
-    await settle([]);
+    expect(runtime.getSnapshot().confirmation).toEqual({
+      status: "pending",
+      action: "clear_draft",
+    });
+    expect(clearDraft).not.toHaveBeenCalled();
 
-    expect(confirm).not.toHaveBeenCalled();
+    await Promise.resolve();
+    confirmationResolvers.shift()?.(false);
+    await settle([]);
+    expect(clearDraft).not.toHaveBeenCalled();
+
+    runtime.send({ type: "clear_device_draft" });
+    await Promise.resolve();
+    confirmationResolvers.shift()?.(true);
+    await settle([]);
     expect(clearDraft).toHaveBeenCalledWith({ scope: "device" });
     expect(runtime.getSnapshot().draft).toMatchObject({
       device: false,
@@ -1351,7 +1369,7 @@ describe("Household Runway Interview Runtime", () => {
     runtime.send({ type: "discard_draft" });
     expect(runtime.getSnapshot().confirmation).toEqual({
       status: "pending",
-      action: "discard_draft",
+      action: "discard_work",
     });
     expect(runtime.getSnapshot().interviewStatus).toBe(before.interviewStatus);
     expect(clearDraft).not.toHaveBeenCalled();
@@ -1369,5 +1387,31 @@ describe("Household Runway Interview Runtime", () => {
     await settle(scheduled);
     expect(clearDraft).toHaveBeenCalledWith({ scope: "all" });
     expect(runtime.getSnapshot().interviewStatus).toBe("not_started");
+  });
+
+  it("uses semantic start-over confirmation for a restored Draft", async () => {
+    const confirm = vi.fn(() => true);
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      autoStart: false,
+      confirm,
+      restore: async () => ({
+        session: { status: "restored" as const, state: storedDraft(2) },
+        device: { status: "missing" as const },
+      }),
+    });
+
+    runtime.start();
+    await settle([]);
+    expect(runtime.getSnapshot().screen.kind).toBe("landing");
+
+    runtime.send({ type: "start_new" });
+    expect(runtime.getSnapshot().confirmation).toEqual({
+      status: "pending",
+      action: "start_over",
+    });
+    await settle([]);
+
+    expect(confirm).toHaveBeenCalledWith({ action: "start_over" });
+    expect(runtime.getSnapshot().interviewStatus).toBe("collecting");
   });
 });

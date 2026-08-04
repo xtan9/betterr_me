@@ -370,6 +370,7 @@ test("requires an explicit choice before remembering a Draft on the device", asy
   await expect.poll(() => page.evaluate(() => window.localStorage.getItem("betterr.household-runway.interview.v2"))).not.toBeNull();
   await expect(page.getByRole("button", { name: "Remove device copy" })).toBeVisible();
 
+  page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Remove device copy" }).click();
   await expect.poll(() => page.evaluate(() => ({
     draft: window.localStorage.getItem("betterr.household-runway.interview.v2"),
