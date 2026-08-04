@@ -233,7 +233,11 @@ export type HouseholdRunwayReportDownloadOperation =
       status: "failed";
       sourceRevision: number;
       correlationId: string;
-      error: "download_failed" | "stale_result";
+      error:
+        | "capability_unavailable"
+        | "download_failed"
+        | "exception"
+        | "stale_result";
     };
 
 export type HouseholdRunwayAnalyticsOperation =
@@ -881,7 +885,11 @@ export type HouseholdRunwayInterviewCommandInput =
       type: "report_download_failed";
       sourceRevision: number;
       correlationId: string;
-      error: "download_failed" | "stale_result";
+      error:
+        | "capability_unavailable"
+        | "download_failed"
+        | "exception"
+        | "stale_result";
     }
   | {
       type: "request_analytics";

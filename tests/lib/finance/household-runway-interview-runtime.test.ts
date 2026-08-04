@@ -117,8 +117,9 @@ describe("Household Runway Interview Runtime", () => {
     const snapshot = runtime.getSnapshot();
     runtime.send({ type: "request_plan_persistence" } as never);
     runtime.send({
-      type: "request_analytics",
-      eventName: "interview_started",
+      type: "analytics_succeeded",
+      sourceRevision: 1,
+      correlationId: "private",
     } as never);
     expect(runtime.getSnapshot()).toBe(snapshot);
   });
@@ -260,6 +261,215 @@ describe("Household Runway Interview Runtime", () => {
       interviewStatus: "reviewing",
       stage: "review",
       screen: { kind: "review" },
+    });
+  });
+
+  it("publishes report pending before deferred locale-aware work and preserves the Assessment", async () => {
+    const scheduled: (() => void)[] = [];
+    const downloadReport = vi.fn(() => true);
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      locale: "zh-TW",
+      schedule: (task) => scheduled.push(task),
+      downloadReport,
+    });
+    runtime.start();
+    driveToReview(runtime);
+    runtime.send({ type: "continue" });
+    await settle(scheduled);
+
+    const assessment = runtime.getSnapshot().derived.assessment;
+    if (!assessment) throw new Error("expected a successful Assessment");
+    const published = vi.fn();
+    runtime.subscribe(published);
+
+    runtime.send({ type: "request_report_download" });
+
+    expect(runtime.getSnapshot().operations.reportDownload).toEqual({
+      status: "pending",
+    });
+    expect(downloadReport).not.toHaveBeenCalled();
+    expect(published).toHaveBeenCalledWith();
+
+    await settle(scheduled);
+
+    expect(downloadReport).toHaveBeenCalledWith({
+      assessment,
+      locale: "zh-TW",
+    });
+    expect(runtime.getSnapshot().operations.reportDownload).toEqual({
+      status: "succeeded",
+    });
+    expect(runtime.getSnapshot().derived.assessment).toEqual(assessment);
+  });
+
+  const throwingReport = (): never => {
+    throw new Error("report infrastructure detail");
+  };
+  const failedReport = (): boolean => false;
+
+  it.each([
+    ["unavailable", undefined, "capability_unavailable"],
+    ["throws", throwingReport, "exception"],
+    ["returns a failure", failedReport, "download_failed"],
+  ] as const)("maps report capability %s to a typed operation outcome", async (_label, downloadReport, error) => {
+    const scheduled: (() => void)[] = [];
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      schedule: (task) => scheduled.push(task),
+      ...(downloadReport ? { downloadReport } : {}),
+    });
+    runtime.start();
+    driveToReview(runtime);
+    runtime.send({ type: "continue" });
+    await settle(scheduled);
+    const assessment = runtime.getSnapshot().derived.assessment;
+
+    runtime.send({ type: "request_report_download" });
+    await settle(scheduled);
+
+    expect(runtime.getSnapshot().operations.reportDownload).toEqual({
+      status: "failed",
+      error,
+    });
+    expect(runtime.getSnapshot().derived.assessment).toEqual(assessment);
+  });
+
+  it("retries a failed report only after another explicit download intent", async () => {
+    const scheduled: (() => void)[] = [];
+    const downloadReport = vi
+      .fn<() => boolean>()
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      schedule: (task) => scheduled.push(task),
+      downloadReport,
+    });
+    runtime.start();
+    driveToReview(runtime);
+    runtime.send({ type: "continue" });
+    await settle(scheduled);
+
+    runtime.send({ type: "request_report_download" });
+    await Promise.resolve();
+    expect(downloadReport).not.toHaveBeenCalled();
+    await settle(scheduled);
+    expect(runtime.getSnapshot().operations.reportDownload).toMatchObject({
+      status: "failed",
+      error: "download_failed",
+    });
+
+    runtime.send({ type: "request_report_download" });
+    expect(runtime.getSnapshot().operations.reportDownload).toEqual({
+      status: "pending",
+    });
+    await settle(scheduled);
+
+    expect(downloadReport).toHaveBeenCalledTimes(2);
+    expect(runtime.getSnapshot().operations.reportDownload).toEqual({
+      status: "succeeded",
+    });
+  });
+
+  it("keeps analytics best-effort and independent from report work", async () => {
+    const scheduled: (() => void)[] = [];
+    let rejectAnalytics: (() => void) | undefined;
+    const trackAnalytics = vi.fn(
+      () =>
+        new Promise<boolean>((_, reject) => {
+          rejectAnalytics = () => reject(new Error("telemetry unavailable"));
+        }),
+    );
+    const downloadReport = vi.fn(() => true);
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      schedule: (task) => scheduled.push(task),
+      trackAnalytics,
+      downloadReport,
+    });
+    runtime.start();
+    driveToReview(runtime);
+    runtime.send({ type: "continue" });
+    await settle(scheduled);
+    const assessment = runtime.getSnapshot().derived.assessment;
+    if (!assessment) throw new Error("expected a successful Assessment");
+
+    runtime.send({
+      type: "request_analytics",
+      eventName: "completed",
+      stage: "result",
+    });
+    runtime.send({ type: "request_report_download" });
+    expect(runtime.getSnapshot().operations).toMatchObject({
+      analytics: { status: "pending" },
+      reportDownload: { status: "pending" },
+    });
+
+    await settle(scheduled);
+    expect(trackAnalytics).toHaveBeenCalledWith({
+      eventName: "completed",
+      stage: "result",
+    });
+    expect(downloadReport).toHaveBeenCalledWith({
+      assessment,
+      locale: "en",
+    });
+    expect(runtime.getSnapshot().operations.reportDownload).toEqual({
+      status: "succeeded",
+    });
+    expect(runtime.getSnapshot().issues).toEqual([]);
+
+    rejectAnalytics?.();
+    await settle(scheduled);
+
+    expect(runtime.getSnapshot().operations.analytics).toEqual({
+      status: "failed",
+      error: "analytics_failed",
+    });
+    expect(runtime.getSnapshot().derived.assessment).toEqual(assessment);
+    expect(runtime.getSnapshot().operations.reportDownload).toEqual({
+      status: "succeeded",
+    });
+  });
+
+  it("ignores a late report result after the Assessment has changed and after disposal", async () => {
+    const scheduled: (() => void)[] = [];
+    let resolveReport: ((value: boolean) => void) | undefined;
+    const downloadReport = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveReport = resolve;
+        }),
+    );
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      schedule: (task) => scheduled.push(task),
+      downloadReport,
+    });
+    runtime.start();
+    driveToReview(runtime);
+    runtime.send({ type: "continue" });
+    await settle(scheduled);
+    runtime.send({ type: "request_report_download" });
+    await settle(scheduled);
+    expect(downloadReport).toHaveBeenCalledOnce();
+
+    runtime.send({ type: "edit_completed_plan" });
+    const afterEdit = runtime.getSnapshot();
+    runtime.dispose();
+    resolveReport?.(true);
+    await settle(scheduled);
+
+    expect(runtime.getSnapshot().lifecycle).toBe("disposed");
+    expect(runtime.getSnapshot().derived.assessment).toEqual(afterEdit.derived.assessment);
+    expect(runtime.getSnapshot().operations.reportDownload).toEqual({
+      status: "pending",
     });
   });
 
