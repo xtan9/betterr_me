@@ -193,7 +193,7 @@ describe("Household Runway Interview Runtime", () => {
       canContinue: false,
     });
     expect(snapshot.derived).toEqual({ planInputs: null, assessment: null });
-    expect(snapshot.plan).toEqual({ exists: false, revision: null });
+    expect(snapshot.plan).toEqual({ exists: false });
     expect(snapshot.draft).toEqual({
       current: true,
       stored: false,
@@ -241,10 +241,7 @@ describe("Household Runway Interview Runtime", () => {
     expect(blocked.issues).toEqual([
       { code: "region_required" },
     ]);
-    expect(blocked.screen).toMatchObject({
-      kind: "location",
-      blockingIssue: { code: "region_required" },
-    });
+    expect(blocked.screen).toMatchObject({ kind: "location" });
 
     runtime.send({ type: "continue" });
     expect(published).toHaveBeenCalledTimes(publicationCount);
@@ -451,11 +448,7 @@ describe("Household Runway Interview Runtime", () => {
     const assessment = runtime.getSnapshot().derived.assessment;
     if (!assessment) throw new Error("expected a successful Assessment");
 
-    runtime.send({
-      type: "request_analytics",
-      eventName: "completed",
-      stage: "result",
-    });
+    runtime.send({ type: "registration_clicked" });
     runtime.send({ type: "request_report_download" });
     expect(runtime.getSnapshot().operations).toMatchObject({
       analytics: { status: "pending" },
@@ -512,8 +505,8 @@ describe("Household Runway Interview Runtime", () => {
     runtime.send({ type: "continue" });
     await settle(scheduled);
 
-    runtime.send({ type: "request_analytics", eventName: "completed", stage: "result" });
-    runtime.send({ type: "request_analytics", eventName: "completed", stage: "result" });
+    runtime.send({ type: "registration_clicked" });
+    runtime.send({ type: "registration_clicked" });
     await settle(scheduled);
     expect(trackAnalytics).toHaveBeenCalledOnce();
 
@@ -972,6 +965,10 @@ describe("Household Runway Interview Runtime", () => {
       screen: { kind: "resume_choice", recommended: "draft" },
       draft: { device: true, deviceStorageConsent: true },
     });
+    expect(runtime.getSnapshot().screen).not.toHaveProperty("draftRevision");
+    expect(runtime.getSnapshot().screen).not.toHaveProperty(
+      "committedPlanRevision",
+    );
 
     runtime.send({ type: "resume_committed_plan" });
     expect(runtime.getSnapshot()).toMatchObject({
@@ -1074,7 +1071,7 @@ describe("Household Runway Interview Runtime", () => {
     expect(runtime.getSnapshot()).toMatchObject({
       lifecycle: "ready",
       interviewStatus: "completed",
-      plan: { exists: true, revision: 7, inputs: planInputs },
+      plan: { exists: true, inputs: planInputs },
       assessmentHistory: [history],
     });
   });
@@ -1105,7 +1102,10 @@ describe("Household Runway Interview Runtime", () => {
     });
     runtime.start();
     await settle(scheduled);
-    expect(runtime.getSnapshot().plan.revision).toBe(4);
+    expect(runtime.getSnapshot().plan).toMatchObject({
+      exists: true,
+      inputs,
+    });
 
     const cleared = createHouseholdRunwayInterviewRuntime({
       now: () => now,
@@ -1115,7 +1115,7 @@ describe("Household Runway Interview Runtime", () => {
     });
     cleared.start();
     await settle([]);
-    expect(cleared.getSnapshot().plan).toEqual({ exists: false, revision: null });
+    expect(cleared.getSnapshot().plan).toEqual({ exists: false });
   });
 
   it("publishes a successful Plan save with authoritative Plan and Assessment history", async () => {
@@ -1135,7 +1135,9 @@ describe("Household Runway Interview Runtime", () => {
       createId: () => "interview-1",
       schedule: (task) => scheduled.push(task),
       persistPlan: (request) => {
-        requests.push(request);
+        requests.push(
+          request as unknown as { idempotencyKey: string },
+        );
         return Promise.resolve({
           planRevision: 3,
           planInputs: request.inputs,
@@ -1154,16 +1156,17 @@ describe("Household Runway Interview Runtime", () => {
     await settle(scheduled);
 
     expect(requests).toHaveLength(1);
-    expect(requests[0]).toMatchObject({
-      expectedPlanRevision: 0,
-      idempotencyKey: expect.any(String),
-      snapshotActionId: expect.any(String),
-    });
-    expect((requests[0] as { idempotencyKey: string }).idempotencyKey).toBe(
-      (requests[0] as { snapshotActionId: string }).snapshotActionId,
-    );
+    const request = requests[0] as Record<string, unknown> & {
+      idempotencyKey: string;
+      snapshotActionId: string;
+    };
+    expect(request).toMatchObject({ expectedPlanRevision: 0 });
+    expect(Object.keys(request)).not.toContain("idempotencyKey");
+    expect(Object.keys(request)).not.toContain("snapshotActionId");
+    expect(Object.getOwnPropertyDescriptor(request, "idempotencyKey")?.enumerable).toBe(false);
+    expect(request.idempotencyKey).toBe(request.snapshotActionId);
     expect(runtime.getSnapshot()).toMatchObject({
-      plan: { exists: true, revision: 3 },
+      plan: { exists: true },
       assessmentHistory: [history],
       operations: { planPersistence: { status: "succeeded" } },
     });
@@ -1196,7 +1199,6 @@ describe("Household Runway Interview Runtime", () => {
         planPersistence: {
           status: "failed",
           error,
-          ...(currentPlanRevision === undefined ? {} : { currentPlanRevision }),
         },
       },
       draft: { current: true },
@@ -1281,7 +1283,9 @@ describe("Household Runway Interview Runtime", () => {
       })(),
       schedule: (task) => scheduled.push(task),
       persistPlan: (request) => {
-        requests.push(request);
+        requests.push(
+          request as unknown as { idempotencyKey: string },
+        );
         return { success: false as const, error: "network" as const };
       },
     });
@@ -1443,5 +1447,153 @@ describe("Household Runway Interview Runtime", () => {
 
     expect(confirm).toHaveBeenCalledWith({ action: "start_over" });
     expect(runtime.getSnapshot().interviewStatus).toBe("collecting");
+  });
+
+  it("accepts a proposed currency as part of one Continue intent", () => {
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      createId: () => "interview-1",
+    });
+
+    runtime.start();
+    runtime.send({ type: "select_country", country: "US" });
+    runtime.send({ type: "select_region", region: "CA" });
+    runtime.send({ type: "continue" });
+
+    expect(runtime.getSnapshot()).toMatchObject({
+      stage: "household",
+      screen: {
+        kind: "household",
+        location: { currency: "USD" },
+      },
+    });
+  });
+
+  it("owns recurring-income IDs, collection updates, and totals behind the Runtime seam", () => {
+    const createId = vi.fn(() => "generated-income-id");
+    const runtime = createHouseholdRunwayInterviewRuntime({ createId });
+
+    runtime.start();
+    runtime.send({ type: "select_country", country: "US" });
+    runtime.send({ type: "select_region", region: "CA" });
+    runtime.send({ type: "continue" });
+    runtime.send({ type: "set_household", sharesFinances: false });
+    runtime.send({ type: "continue" });
+    runtime.send({
+      type: "set_employment",
+      person: "mine",
+      employment: "unemployed",
+    });
+    runtime.send({ type: "continue" });
+
+    expect(runtime.getSnapshot().screen.kind).toBe("otherIncome");
+    runtime.send({
+      type: "set_other_income_source_enabled",
+      sourceType: "rental_net",
+      enabled: true,
+    });
+
+    const added = runtime.getSnapshot().screen;
+    expect(added.kind).toBe("otherIncome");
+    if (added.kind !== "otherIncome") return;
+    expect(added.sources).toEqual([
+      {
+        id: "generated-income-id",
+        type: "rental_net",
+        monthly_cents: 0,
+        confidence: "confirmed",
+      },
+    ]);
+    expect(added.totalMonthlyCents).toBe(0);
+
+    runtime.send({
+      type: "update_other_income_source",
+      id: "generated-income-id",
+      patch: { monthly_cents: 125_000 },
+    });
+    expect(runtime.getSnapshot().screen).toMatchObject({
+      kind: "otherIncome",
+      totalMonthlyCents: 125_000,
+    });
+
+    runtime.send({
+      type: "remove_other_income_source",
+      id: "generated-income-id",
+    });
+    expect(runtime.getSnapshot().screen).toMatchObject({
+      kind: "otherIncome",
+      sources: [],
+      totalMonthlyCents: 0,
+    });
+  });
+
+  it("completes an open expense category through one Back intent", () => {
+    const runtime = createHouseholdRunwayInterviewRuntime();
+
+    runtime.start();
+    runtime.send({ type: "select_country", country: "US" });
+    runtime.send({ type: "select_region", region: "CA" });
+    runtime.send({ type: "continue" });
+    runtime.send({ type: "set_household", sharesFinances: false });
+    runtime.send({ type: "continue" });
+    runtime.send({
+      type: "set_employment",
+      person: "mine",
+      employment: "unemployed",
+    });
+    runtime.send({ type: "continue" });
+    runtime.send({ type: "skip" });
+    runtime.send({ type: "set_cash", value: { cents: 1, confidence: "confirmed" } });
+    runtime.send({ type: "continue" });
+    runtime.send({ type: "skip" });
+    runtime.send({ type: "set_expense_mode", mode: "guided" });
+    runtime.send({ type: "set_active_expense_category", category: "housing" });
+
+    expect(runtime.getSnapshot().screen).toMatchObject({
+      kind: "expenses",
+      activeCategory: "housing",
+    });
+    runtime.send({ type: "back" });
+    expect(runtime.getSnapshot().screen).toMatchObject({
+      kind: "expenses",
+      activeCategory: null,
+    });
+  });
+
+  it("owns lifecycle analytics without exposing an analytics request intent", async () => {
+    const scheduled: (() => void)[] = [];
+    const trackAnalytics = vi.fn(() => true);
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      autoStart: false,
+      authenticated: false,
+      schedule: (task) => scheduled.push(task),
+      trackAnalytics,
+    });
+
+    runtime.start();
+    await settle(scheduled);
+
+    expect(trackAnalytics).toHaveBeenCalledWith({
+      eventName: "landing_view",
+      stage: "landing",
+    });
+    runtime.send({ type: "registration_clicked" });
+    await settle(scheduled);
+    expect(trackAnalytics).toHaveBeenCalledWith({
+      eventName: "registration_clicked",
+      stage: "result",
+    });
+  });
+
+  it("projects screen facts without internal revisions or blocking issue objects", () => {
+    const runtime = createHouseholdRunwayInterviewRuntime();
+
+    runtime.start();
+    runtime.send({ type: "select_country", country: "US" });
+    runtime.send({ type: "continue" });
+
+    const screen = runtime.getSnapshot().screen as Record<string, unknown>;
+    expect(screen).not.toHaveProperty("draftRevision");
+    expect(screen).not.toHaveProperty("committedPlanRevision");
+    expect(screen).not.toHaveProperty("blockingIssue");
   });
 });

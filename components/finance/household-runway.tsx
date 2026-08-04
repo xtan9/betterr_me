@@ -55,10 +55,6 @@ import {
 import type { HouseholdRunwayBrowserReportPresentation } from "@/lib/finance/household-runway-browser-adapter";
 import { useHouseholdRunwayRuntime } from "@/lib/finance/household-runway-react-adapter";
 
-const OPTIONAL_STEPS = new Set<RunwayStepId>([
-  "otherIncome",
-  "assets",
-]);
 const OTHER_INCOME_TYPES: Exclude<RecurringIncomeType, "other">[] = [
   "rental_net",
   "side_business",
@@ -81,28 +77,6 @@ interface HouseholdRunwayProps {
   isAuthenticated: boolean;
   hasSavedPlan: boolean;
   initialSnapshots: RunwaySnapshotSummary[];
-}
-
-function newId(_prefix: string) {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
-    const bytes = crypto.getRandomValues(new Uint8Array(16));
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"))
-      .join("")
-      .replace(
-        /^(\w{8})(\w{4})(\w{4})(\w{4})(\w{12})$/,
-        "$1-$2-$3-$4-$5",
-      );
-  }
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (token) => {
-    const value = Math.floor(Math.random() * 16);
-    const nibble = token === "x" ? value : (value & 0x3) | 0x8;
-    return nibble.toString(16);
-  });
 }
 
 function runwayAnswersForPresentation(
@@ -186,7 +160,6 @@ export function HouseholdRunway({
   const t = useTranslations("householdRunway");
   const locale = normalizeRunwayLocale(useLocale());
   const localeRef = useRef(locale);
-  const landingTracked = useRef(false);
   const reportPresentationRef = useRef<HouseholdRunwayBrowserReportPresentation | null>(null);
   const reportPresentation = useCallback(({ assessment, locale: reportLocale }: Parameters<HouseholdRunwayBrowserReportPresentation>[0]): HouseholdRunwayReportPresentation => {
     const presentationAnswers = runwayAnswersForPresentation(assessment.answers);
@@ -286,7 +259,6 @@ export function HouseholdRunway({
           : snapshot.operations.deviceDraft.status === "failed"
             ? t("save.draftSyncError")
         : "";
-  const boundaryLocation = renderModel.kind === "location" ? renderModel : null;
   const dispatchInterviewCommand = useCallback(
     (intent: HouseholdRunwayInterviewIntent) => send(intent),
     [send],
@@ -297,17 +269,6 @@ export function HouseholdRunway({
   const resultModel = renderModel.kind === "stage" ? renderModel : null;
   const assessment = snapshot.derived.assessment ?? resultModel?.assessment ?? null;
   const showLanding = hydrated && !isAuthenticated && landingModel !== null;
-
-  useEffect(() => {
-    if (showLanding && !landingTracked.current) {
-      landingTracked.current = true;
-      dispatchInterviewCommand({
-        type: "request_analytics",
-        eventName: "landing_view",
-        stage: "landing",
-      });
-    }
-  }, [dispatchInterviewCommand, showLanding]);
 
   const startInterview = () => {
     const stage = landingModel?.resumeStage;
@@ -321,15 +282,7 @@ export function HouseholdRunway({
   const rememberDraft = () => dispatchInterviewCommand({ type: "remember_draft" });
   const forgetDeviceDraft = () =>
     dispatchInterviewCommand({ type: "clear_device_draft" });
-  const next = () => {
-    if (boundaryLocation?.currency === null && boundaryLocation.currencyProposal) {
-      dispatchInterviewCommand({
-        type: "select_currency",
-        currency: boundaryLocation.currencyProposal,
-      });
-    }
-    dispatchInterviewCommand({ type: "continue" });
-  };
+  const next = () => dispatchInterviewCommand({ type: "continue" });
   const skip = () => dispatchInterviewCommand({ type: "skip" });
   const savePlan = () => dispatchInterviewCommand({ type: "save_plan" });
   const download = () => dispatchInterviewCommand({ type: "request_report_download" });
@@ -385,22 +338,11 @@ export function HouseholdRunway({
               model={resultModel}
               dispatch={(input) => {
                 dispatchInterviewCommand(input);
-                if (input.type === "select_scenario") {
-                  dispatchInterviewCommand({
-                    type: "request_analytics",
-                    eventName: "result_interaction",
-                    stage: "scenario_switch",
-                  });
-                }
               }}
               onStartNew={startNewInterview}
               onDiscardDraft={clearDraft}
               onRegistrationClick={() =>
-                dispatchInterviewCommand({
-                  type: "request_analytics",
-                  eventName: "registration_clicked",
-                  stage: "result",
-                })
+                dispatchInterviewCommand({ type: "registration_clicked" })
               }
               onDownload={download}
               isAuthenticated={isAuthenticated}
@@ -418,18 +360,11 @@ export function HouseholdRunway({
               error={error || operationError}
               activeExpenseCategory={activeExpenseCategory}
               onBack={() => {
-                if (activeExpenseCategory) {
-                  dispatchInterviewCommand({
-                    type: "complete_expense_category",
-                    category: activeExpenseCategory,
-                  });
-                } else {
-                  dispatchInterviewCommand({
-                    type: stepId === "location" ? "exit" : "back",
-                  });
-                }
+                dispatchInterviewCommand({
+                  type: stepId === "location" ? "exit" : "back",
+                });
               }}
-              onSkip={OPTIONAL_STEPS.has(stepId) ? skip : undefined}
+              onSkip={snapshot.affordances.skip ? skip : undefined}
               onContinue={next}
               onClear={clearDraft}
               continueLabel={stepId === "review" ? t("actions.reveal") : t("actions.continue")}
@@ -965,6 +900,7 @@ function StepContent({
         locale={locale}
         currency={otherIncomeModel.location.currency}
         sources={otherIncomeModel.sources}
+        totalMonthlyCents={otherIncomeModel.totalMonthlyCents}
         dispatchInterviewCommand={dispatchInterviewCommand}
       />
     );
@@ -1033,6 +969,7 @@ function OtherIncomeStep({
   locale,
   currency,
   sources,
+  totalMonthlyCents,
   dispatchInterviewCommand,
 }: {
   title: ReactNode;
@@ -1040,33 +977,26 @@ function OtherIncomeStep({
   locale: string;
   currency: HouseholdRunwayAnswers["currency"] | null;
   sources: readonly RecurringIncomeSource[];
+  totalMonthlyCents: number;
   dispatchInterviewCommand: (input: HouseholdRunwayInterviewIntent) => unknown;
 }) {
-  const sendSources = (nextSources: readonly RecurringIncomeSource[]) =>
-    dispatchInterviewCommand({
-      type: "set_other_income_sources",
-      sources: nextSources,
-    });
   const setSource = (type: RecurringIncomeType, enabled: boolean) => {
-    const existing = sources.find((source) => source.type === type);
-    sendSources(
-      enabled
-        ? existing
-          ? sources
-          : [
-              ...sources,
-              { id: newId(type), type, monthly_cents: 0, confidence: "confirmed" },
-            ]
-        : sources.filter((source) => source.id !== existing?.id),
-    );
+    if (type === "other") return;
+    dispatchInterviewCommand({
+      type: "set_other_income_source_enabled",
+      sourceType: type,
+      enabled,
+    });
   };
-  const updateSource = (id: string, patch: Partial<RecurringIncomeSource>) =>
-    sendSources(
-      sources.map((source) =>
-        source.id === id ? { ...source, ...patch } : source,
-      ),
-    );
-  const total = sources.reduce((sum, source) => sum + source.monthly_cents, 0);
+  const updateSource = (
+    id: string,
+    patch: Partial<Pick<RecurringIncomeSource, "label" | "monthly_cents" | "confidence">>,
+  ) =>
+    dispatchInterviewCommand({
+      type: "update_other_income_source",
+      id,
+      patch,
+    });
   const displayCurrency = currency ?? "USD";
   return (
     <>
@@ -1099,17 +1029,32 @@ function OtherIncomeStep({
               <input className="h-11 w-full rounded-xl border bg-transparent px-3" value={source.label ?? ""} onChange={(event) => updateSource(source.id, { label: event.target.value })} />
             </label>
             <MoneyField label={t("otherIncome.monthlyAmount")} currency={displayCurrency} value={source.monthly_cents} onChange={(value) => updateSource(source.id, { monthly_cents: value, confidence: "confirmed" })} />
-            <Button variant="ghost" size="icon" aria-label={t("otherIncome.remove")} onClick={() => sendSources(sources.filter((item) => item.id !== source.id))}>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t("otherIncome.remove")}
+              onClick={() =>
+                dispatchInterviewCommand({
+                  type: "remove_other_income_source",
+                  id: source.id,
+                })
+              }
+            >
               <Trash2 />
             </Button>
           </div>
         ))}
-        <Button variant="outline" onClick={() => sendSources([...sources, { id: newId("other-income"), type: "other", label: "", monthly_cents: 0, confidence: "confirmed" }])}>
+        <Button
+          variant="outline"
+          onClick={() =>
+            dispatchInterviewCommand({ type: "add_other_income_source" })
+          }
+        >
           <Plus />
           {t("otherIncome.addOther")}
         </Button>
       </div>
-      <p className="mt-6 font-medium">{t("otherIncome.total", { amount: formatCents(total, locale, displayCurrency) })}</p>
+      <p className="mt-6 font-medium">{t("otherIncome.total", { amount: formatCents(totalMonthlyCents, locale, displayCurrency) })}</p>
     </>
   );
 }

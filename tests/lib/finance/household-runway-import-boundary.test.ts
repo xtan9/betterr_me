@@ -68,6 +68,21 @@ describe("Household Runway Runtime import boundary", () => {
 
     expect(violations).toEqual([]);
   });
+
+  it("keeps browser adapter effects, commands, outcomes, and helpers private", () => {
+    const source = readFileSync(
+      resolve(root, "lib/finance/household-runway-browser-adapter.ts"),
+      "utf8",
+    );
+
+    expect(source).not.toMatch(
+      /export (?:type|interface) HouseholdRunway(?:ExternalEffect|BrowserEffect|BrowserAdapterOutcome|HistoryProjectionInput)/,
+    );
+    expect(source).not.toMatch(
+      /export (?:function|type|interface) (?:applyHouseholdRunwayBrowserEffect|executeHouseholdRunwayBrowserEffect|householdRunwayHistoryProjectionCommand|readHouseholdRunwayBrowserStorage|restoreHouseholdRunwayBrowserRuntime)/,
+    );
+    expect(source).not.toMatch(/export type HouseholdRunwayInterviewCommand/);
+  });
 });
 
 function walk(directory: string): string[] {
