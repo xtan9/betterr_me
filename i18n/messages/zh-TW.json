@@ -1480,6 +1480,10 @@
     "comingSoon": "即將推出",
     "noEvents": "暫無事件",
     "error": "日曆載入失敗，請嘗試重新整理頁面。",
+    "taskOverlay": {
+      "unavailable": "任務暫時無法使用。您的日曆事件仍會顯示。",
+      "retry": "重試任務"
+    },
     "timeGrid": {
       "allDay": "全天",
       "allDayMore": "+{count} 更多",

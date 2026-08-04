@@ -1480,6 +1480,10 @@
     "comingSoon": "即将推出",
     "noEvents": "暂无事件",
     "error": "日历加载失败，请尝试刷新页面。",
+    "taskOverlay": {
+      "unavailable": "任务暂时不可用。您的日历事件仍会显示。",
+      "retry": "重试任务"
+    },
     "timeGrid": {
       "allDay": "全天",
       "allDayMore": "+{count} 更多",
