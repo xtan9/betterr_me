@@ -591,6 +591,11 @@ export function createHouseholdRunwayBrowserAdapter(
 
     const requestedStageParameter = stageParameterFromHref(href);
     const requestedStage = stageFromHref(href);
+    const projectedStage =
+      requestedStage ??
+      (snapshot.screen.kind === "landing"
+        ? snapshot.screen.resumeStage ?? undefined
+        : undefined);
     const interviewStarted = snapshot.interviewStatus !== "not_started";
     if (options.authenticated === true) {
       if (!interviewStarted) {
@@ -621,7 +626,7 @@ export function createHouseholdRunwayBrowserAdapter(
       href,
       interviewStarted,
       interviewId: "browser-adapter",
-      stage: requestedStage,
+      stage: projectedStage,
     });
     if (command) {
       dispatchEnvironment({
