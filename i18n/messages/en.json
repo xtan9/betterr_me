@@ -1480,6 +1480,10 @@
     "comingSoon": "Coming soon",
     "noEvents": "No events",
     "error": "Failed to load calendar. Please try refreshing.",
+    "taskOverlay": {
+      "unavailable": "Tasks are temporarily unavailable. Your calendar events are still shown.",
+      "retry": "Retry tasks"
+    },
     "timeGrid": {
       "allDay": "All day",
       "allDayMore": "+{count} more",
