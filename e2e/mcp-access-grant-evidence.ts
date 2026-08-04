@@ -189,6 +189,19 @@ const SAFE_KEYS = new Set([
   "response_types_supported", "token_endpoint_auth_method", "token_endpoint_auth_methods_supported", "registration_endpoint",
   "redirect_uris", "authorization_endpoint", "jwks_uri", "token_endpoint", "updated_at", "msg", "client_type", "created_at",
   "scopes_supported", "scope", "logoUri", "clientUri", "softwareId", "softwareVersion", "requestTimeCallbackUrl",
+  "hasProviderCredentials", "hasProviderClientKey", "resourceMetadataUrl", "authorizationServerCount",
+  "registrationObserved", "registeredTokenEndpointAuthMethod", "registeredGrantTypes", "registeredResponseTypes",
+  "registeredRedirectUris", "tokenRequestObserved", "grantType", "redirectUri", "resourceMatchesCanonical",
+  "codeVerifierMatchesChallenge", "jwksFetched", "jwksStatus", "jwksKeyMatched", "signatureAlgorithm",
+  "localVerification", "providerValidationRoundTrip", "operationResourceMatches", "operationUrl", "resultIsError",
+  "tool", "replacementCredentialsStored", "initialTokens", "firstReplacement", "secondReplacement", "replacementOperation",
+  "previous", "replacement", "providerReturnedAccessToken", "providerReturnedRefreshToken", "accessTokenChanged",
+  "refreshTokenChanged", "tokenEndpointStatus", "succeeded", "tokenSummary", "errorDetail", "requestStatuses",
+  "rootReplayDetected", "everyIssuedDescendantRejected", "familyMemberCountExercised", "familyResults", "grantCount",
+  "registeredClientIdPresent", "grant", "grantRevoked", "grantIdentified", "revokeEndpointObserved", "requestStatus",
+  "accessTokenHasIssuedAt", "accessTokenHasExpiry", "documentedLifetimeSeconds", "secondsRemaining", "withinDocumentedLifetime",
+  "operationStatus", "accessTokenLifetime", "cases", "id", "responseType", "callbackHost", "callbackPath",
+  "tokenRequestObserved", "initial", "firstDescendant", "secondDescendant", "familyResults", "grantRevoked",
 ]);
 const SENSITIVE_KEY = /^(?:access_token|refresh_token|id_token|client_secret|code_verifier|password|cookie|authorization|secret|token|code)$/i;
 const SENSITIVE_TEXT = /(access_token|refresh_token|id_token|client_secret|code_verifier|password|cookie|authorization|secret|token|code)\s*[:=]/i;
@@ -227,6 +240,22 @@ function redactText(value: string, secrets: readonly string[]): { value: string;
   return { value: result.slice(0, MAX_DIAGNOSTIC_LENGTH), secretLeak };
 }
 
+function sanitizeVersionMap(value: unknown, context: EvidenceRunContext, depth: number): SanitizedValue {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return sanitizeValue(value, context, depth + 1);
+  }
+  const result: Record<string, unknown> = {};
+  let secretLeak = false;
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(0, MAX_OBJECT_KEYS)) {
+    const sanitized = sanitizeValue(item, context, depth + 1);
+    result[key] = sanitized.value;
+    secretLeak ||= sanitized.secretLeak;
+  }
+  return { value: result, secretLeak };
+}
+
 function sanitizeValue(value: unknown, context: EvidenceRunContext, depth = 0): SanitizedValue {
   if (depth > MAX_DEPTH) return { value: "[REDACTED: depth limit]", secretLeak: false };
   if (typeof value === "string") {
@@ -244,6 +273,12 @@ function sanitizeValue(value: unknown, context: EvidenceRunContext, depth = 0): 
     let secretLeak = false;
     const result: Record<string, unknown> = {};
     for (const [key, item] of entries.slice(0, MAX_OBJECT_KEYS)) {
+      if (key === "versions") {
+        const versions = sanitizeVersionMap(item, context, depth);
+        result[key] = versions.value;
+        secretLeak ||= versions.secretLeak;
+        continue;
+      }
       const keyIsSensitive = SENSITIVE_KEY.test(key);
       const itemResult = sanitizeValue(item, context, depth + 1);
       const alreadyRedacted = typeof itemResult.value === "string" && /^\[(?:REDACTED|JWT REDACTED)/.test(itemResult.value);

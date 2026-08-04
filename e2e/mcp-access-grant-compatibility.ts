@@ -28,6 +28,21 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { decodeJwt } from "jose";
 
 import {
+  EVIDENCE_ARTIFACT_FILENAME,
+  GateAccumulator,
+  createEvidenceRunContext,
+  finalizeEvidence,
+  sanitizeEvidence,
+  sanitizeText,
+  sanitizeUrl,
+  type CompatibilityReport,
+  type DelegatedJwtObservation,
+  type EvidenceObservation,
+  type GateObservation,
+  type MinimizedRequestObservation,
+  type GateStatus as EvidenceGateStatus,
+} from "./mcp-access-grant-evidence";
+import {
   evaluateDelegatedJwtPolicy,
   isExactCanonicalResource,
   publicBoundaryRejects,
@@ -36,6 +51,7 @@ import {
   type DelegatedJwk,
   type DelegatedJwtClaims,
   type DelegatedJwtHeader,
+  type DelegatedJwtPolicy,
 } from "./mcp-access-grant-policy";
 import {
   LOOPBACK_HOSTS,
@@ -43,14 +59,8 @@ import {
   type LoopbackHost,
 } from "./mcp-access-grant-public-client";
 
-export type GateStatus = "pass" | "fail" | "not-proven";
-
-export interface CompatibilityGate {
-  id: string;
-  status: GateStatus;
-  detail: string;
-  evidence?: Record<string, unknown>;
-}
+export type { CompatibilityGate, CompatibilityReport } from "./mcp-access-grant-evidence";
+export type GateStatus = EvidenceGateStatus;
 
 export interface McpAccessGrantTarget {
   name: string;
@@ -63,43 +73,9 @@ export interface McpAccessGrantTarget {
   password?: string;
 }
 
-export interface CompatibilityReport {
-  issue: string;
-  outcome: "passed" | "blocked" | "not-proven";
-  startedAt: string;
-  finishedAt: string;
-  target: {
-    name: string;
-    canonicalResource: string;
-    supabaseUrl: string;
-    expectedAuthorizationServer: string;
-  };
-  versions: Record<string, string>;
-  gates: CompatibilityGate[];
-  requests: RequestEvidence[];
-}
-
-interface RequestEvidence {
-  method: string;
-  url: string;
-  requestBodyFields: string[];
-  authorizationHeaderPresent: boolean;
-  requestClientIdPresent?: boolean;
-  requestCodeChallengeMethod?: string;
-  requestCodeChallengePresent?: boolean;
-  requestCodePresent?: boolean;
-  requestCodeVerifierPresent?: boolean;
-  requestGrantType?: string;
-  requestRedirectUri?: string;
-  requestResource?: string;
-  requestCodeVerifierMatchesChallenge?: boolean;
-  status?: number;
-  responseLocation?: string;
-  responseBody?: Record<string, unknown>;
-  responseCredentialFields?: string[];
-  responseContainsCredentials?: boolean;
-  networkError?: string;
-}
+type RequestEvidence = {
+  -readonly [Key in keyof MinimizedRequestObservation]: MinimizedRequestObservation[Key]
+};
 
 interface CallbackResult {
   code?: string;
@@ -140,164 +116,32 @@ export const REQUIRED_GATE_IDS = [
   "versions",
 ] as const;
 
-const SAFE_RESPONSE_KEYS = new Set([
-  "authorization_endpoint",
-  "authorization_servers",
-  "access_token",
-  "code_challenge_methods_supported",
-  "client",
-  "client_id",
-  "client_name",
-  "client_type",
-  "created_at",
-  "error",
-  "error_code",
-  "error_description",
-  "grant_types_supported",
-  "grant_types",
-  "granted_at",
-  "issuer",
-  "jwks_uri",
-  "logo_uri",
-  "msg",
-  "registration_type",
-  "registration_endpoint",
-  "resource",
-  "redirect_uris",
-  "response_types_supported",
-  "response_types",
-  "scopes_supported",
-  "scopes",
-  "scope",
-  "token_endpoint",
-  "token_endpoint_auth_methods_supported",
-  "token_type",
-  "updated_at",
-  "expires_in",
-]);
-
-const SENSITIVE_ENV_NAMES = [
-  "MCP_TEST_PASSWORD",
-  "MCP_SUPABASE_ANON_KEY",
-  "SUPABASE_ANON_KEY",
-  "SUPABASE_SERVICE_ROLE_KEY",
-  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-  "API_KEY_HMAC_SECRET",
-];
-
-let activeTargetSecrets: string[] = [];
-const requestCodeVerifierChallenges = new WeakMap<RequestEvidence, string>();
-const requestRawClientIds = new WeakMap<RequestEvidence, string>();
-const requestRawResources = new WeakMap<RequestEvidence, string>();
-
 function addGate(
-  gates: CompatibilityGate[],
+  gates: GateAccumulator,
   id: string,
   status: GateStatus,
-  detail: string,
-  evidence?: Record<string, unknown>,
+  detail: unknown,
+  evidence?: unknown,
+  error?: GateObservation["error"],
 ): void {
-  const existing = gates.findIndex((gate) => gate.id === id);
-  const gate = { id, status, detail, ...(evidence ? { evidence } : {}) };
-
-  if (existing === -1) {
-    gates.push(gate);
-  } else {
-    gates[existing] = gate;
-  }
+  gates.replace({ kind: "gate", gateId: id, status, detail, evidence, error });
 }
 
-function sanitizeText(value: string): string {
-  let sanitized = value;
-
-  const configuredSecrets = SENSITIVE_ENV_NAMES.map((name) => process.env[name]);
-  for (const secret of [...configuredSecrets, ...activeTargetSecrets]) {
-    if (secret && secret.length >= 4) {
-      sanitized = sanitized.split(secret).join("[REDACTED]");
-    }
-  }
-
-  return sanitized
-    .replace(/(access_token|refresh_token|client_secret|code_verifier|password|authorization)=([^&\s]+)/gi, "$1=[REDACTED]")
-    .replace(/("(?:access_token|refresh_token|client_secret|code_verifier|password|authorization)"\s*:\s*")[^"]*(")/gi, "$1[REDACTED]$2")
-    .replace(/((?:access_token|refresh_token|client_secret|code_verifier|password|authorization)\s*[:=]\s*)([^&,\s}\]]+)/gi, "$1[REDACTED]")
-    .replace(/Bearer\s+[^\s]+/gi, "Bearer [REDACTED]")
-    .replace(/\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, "[JWT REDACTED]");
-}
-
-function sanitizeUrl(value: string | URL): string {
-  try {
-    const url = new URL(value.toString());
-    const safeQueryKeys = new Set([
-      "code_challenge_method",
-      "grant_type",
-      "redirect_uri",
-      "response_type",
-      "resource",
-      "scope",
-    ]);
-    const query = new URLSearchParams();
-
-    for (const [key, queryValue] of url.searchParams) {
-      query.set(
-        key,
-        safeQueryKeys.has(key)
-          ? key === "redirect_uri" || key === "resource"
-            ? sanitizeUrl(queryValue)
-            : sanitizeText(queryValue)
-          : "[REDACTED]",
-      );
-    }
-
-    const queryText = query.toString();
-    return `${url.origin}${url.pathname}${queryText ? `?${queryText}` : ""}`;
-  } catch {
-    return sanitizeText(value.toString()).replace(/([?&](?:code|state|client_id|code_challenge)=[^&]+)/gi, "$1=[REDACTED]");
-  }
-}
-
-function safeBodyValue(value: unknown): unknown {
-  if (typeof value === "string") {
-    return sanitizeText(value);
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((item) => safeBodyValue(item));
-  }
-
-  if (value && typeof value === "object") {
-    const result: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value)) {
-      if (/^(access_token|refresh_token|client_secret|code_verifier|password|cookie|authorization|secret|token|code)$/i.test(key)) {
-        result[key] = "[REDACTED]";
-      } else if (SAFE_RESPONSE_KEYS.has(key)) {
-        result[key] = safeBodyValue(item);
-      }
-    }
-    return result;
-  }
-
-  return value;
-}
-
-function summarizeResponseBody(text: string, contentType: string | null): Record<string, unknown> | undefined {
-  if (!text) {
-    return undefined;
-  }
-
-  if (contentType?.includes("json")) {
-    try {
-      const parsed: unknown = JSON.parse(text);
-      const safe = safeBodyValue(parsed);
-      return safe && typeof safe === "object" && !Array.isArray(safe)
-        ? (safe as Record<string, unknown>)
-        : { type: Array.isArray(safe) ? "array" : typeof safe };
-    } catch {
-      return { body: "[REDACTED NON-JSON RESPONSE]" };
-    }
-  }
-
-  return { contentType: contentType ?? "unknown", body: "[REDACTED RESPONSE BODY]" };
+function addPkceGate(
+  observations: EvidenceObservation[],
+  detail: unknown,
+  evidence: unknown,
+  verifierMatchesChallenge: boolean | undefined,
+  method: string | undefined,
+): void {
+  observations.push({
+    kind: "pkce",
+    gateId: "loopback-pkce",
+    detail,
+    evidence,
+    verifierMatchesChallenge,
+    method,
+  });
 }
 
 function bodyText(body: BodyInit | null | undefined): string | undefined {
@@ -385,6 +229,28 @@ function requestInputUrl(input: RequestInfo | URL): string | URL {
   return input.url;
 }
 
+function summarizeResponseBody(text: string, contentType: string | null): Record<string, unknown> | undefined {
+  if (!text) return undefined;
+  if (contentType?.includes("json")) {
+    try {
+      const sanitized = sanitizeEvidence(
+        JSON.parse(text),
+        createEvidenceRunContext({
+          configuredSecrets: [],
+          time: { startedAt: "", finishedAt: "" },
+          versions: {},
+        }),
+      );
+      return sanitized.value && typeof sanitized.value === "object" && !Array.isArray(sanitized.value)
+        ? sanitized.value as Record<string, unknown>
+        : { type: Array.isArray(sanitized.value) ? "array" : typeof sanitized.value };
+    } catch {
+      return { body: "[REDACTED NON-JSON RESPONSE]" };
+    }
+  }
+  return { contentType: contentType ?? "unknown", body: "[REDACTED RESPONSE BODY]" };
+}
+
 function createEvidenceFetch(requests: RequestEvidence[]): EvidenceFetch {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const requestObject = typeof Request !== "undefined" && input instanceof Request ? input : undefined;
@@ -398,6 +264,7 @@ function createEvidenceFetch(requests: RequestEvidence[]): EvidenceFetch {
       requestBodyFields: bodyMetadata.fields,
       authorizationHeaderPresent: headers.has("authorization"),
       ...(parameters?.has("client_id") && { requestClientIdPresent: true }),
+      ...(parameters?.get("client_id") && { requestClientId: sanitizeText(parameters.get("client_id") as string) }),
       ...(parameters?.has("code") && { requestCodePresent: true }),
       ...(parameters?.has("code_challenge") && { requestCodeChallengePresent: true }),
       ...(parameters?.has("code_verifier") && { requestCodeVerifierPresent: true }),
@@ -413,14 +280,8 @@ function createEvidenceFetch(requests: RequestEvidence[]): EvidenceFetch {
       ...(parameters?.get("resource") && {
         requestResource: sanitizeUrl(parameters.get("resource") as string),
       }),
+      ...(codeVerifier && { requestCodeVerifierHash: s256CodeChallenge(codeVerifier) }),
     };
-    if (codeVerifier) {
-      requestCodeVerifierChallenges.set(request, s256CodeChallenge(codeVerifier));
-    }
-    const clientId = parameters?.get("client_id");
-    if (clientId) requestRawClientIds.set(request, clientId);
-    const resource = parameters?.get("resource");
-    if (resource) requestRawResources.set(request, resource);
     requests.push(request);
 
     try {
@@ -1085,9 +946,8 @@ async function createGrantManagementClient(
     : { client };
 }
 
-async function writeReport(report: CompatibilityReport, testInfo: TestInfo): Promise<boolean> {
-  const serialized = `${JSON.stringify(report, null, 2)}\n`;
-  const outputPath = testInfo.outputPath("mcp-access-grant-evidence.json");
+async function writeReport(serialized: string, testInfo: TestInfo): Promise<boolean> {
+  const outputPath = testInfo.outputPath(EVIDENCE_ARTIFACT_FILENAME);
   try {
     await mkdir(path.dirname(outputPath), { recursive: true });
     await writeFile(outputPath, serialized, "utf8");
@@ -1098,49 +958,51 @@ async function writeReport(report: CompatibilityReport, testInfo: TestInfo): Pro
       await writeFile(path.resolve(configuredPath), serialized, "utf8");
     }
 
-    return !/(Bearer\s+[A-Za-z0-9._~-]{20,}|\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b)/i.test(serialized) &&
-      ![...SENSITIVE_ENV_NAMES.map((name) => process.env[name]), ...activeTargetSecrets].some(
-        (secret) => Boolean(secret && secret.length >= 4 && serialized.includes(secret)),
-      );
+    return true;
   } catch {
     return false;
   }
 }
 
-function completeReport(report: CompatibilityReport, gates: CompatibilityGate[]): void {
-  for (const id of REQUIRED_GATE_IDS) {
-    if (!gates.some((gate) => gate.id === id)) {
-      addGate(gates, id, "not-proven", "Gate was not reached because an earlier compatibility gate stopped the run.");
-    }
-  }
-
-  report.gates = gates;
-  report.outcome = gates.some((gate) => gate.status === "fail")
-    ? "blocked"
-    : gates.some((gate) => gate.status === "not-proven")
-      ? "not-proven"
-      : "passed";
-  report.finishedAt = new Date().toISOString();
+interface LiveEvidenceRun {
+  readonly issue: string;
+  readonly target: CompatibilityReport["target"];
+  readonly startedAt: string;
+  readonly versions: Readonly<Record<string, string>>;
+  readonly configuredSecrets: readonly string[];
+  readonly requests: RequestEvidence[];
+  readonly typedObservations: EvidenceObservation[];
 }
 
 async function finishReport(
-  report: CompatibilityReport,
-  gates: CompatibilityGate[],
+  run: LiveEvidenceRun,
+  gates: GateAccumulator,
   testInfo: TestInfo,
 ): Promise<CompatibilityReport> {
-  completeReport(report, gates);
-  const sanitized = await writeReport(report, testInfo);
-  addGate(
-    gates,
-    "sanitized-evidence",
-    sanitized ? "pass" : "fail",
-    sanitized
-      ? "Evidence artifact was written without bearer tokens, JWTs, passwords, cookies, or reusable credentials."
-      : "Evidence artifact could not be proven free of bearer tokens, JWTs, passwords, cookies, or reusable credentials.",
-  );
-  completeReport(report, gates);
-  await writeReport(report, testInfo);
-  return report;
+  const context = createEvidenceRunContext({
+    configuredSecrets: run.configuredSecrets,
+    time: { startedAt: run.startedAt, finishedAt: new Date().toISOString() },
+    versions: run.versions,
+  });
+  const input = {
+    issue: run.issue,
+    target: run.target,
+    requiredGateIds: REQUIRED_GATE_IDS,
+    observations: [
+      ...gates.observations(),
+      ...run.typedObservations,
+      ...run.requests.map((request): EvidenceObservation => ({ kind: "request", request })),
+    ],
+  };
+  const preliminary = finalizeEvidence(input, context);
+  const preliminaryWritten = await writeReport(preliminary.verification.serialized, testInfo);
+  const finalized = finalizeEvidence({ ...input, artifactWriteSucceeded: preliminaryWritten }, context);
+  const finalizedWritten = await writeReport(finalized.verification.serialized, testInfo);
+  if (finalizedWritten) return finalized.report;
+
+  const artifactFailure = finalizeEvidence({ ...input, artifactWriteSucceeded: false }, context);
+  await writeReport(artifactFailure.verification.serialized, testInfo);
+  return artifactFailure.report;
 }
 
 async function probeProviderMetadata(
@@ -1163,13 +1025,12 @@ function recordPkceMatch(
   request: RequestEvidence | undefined,
   challenge: string | undefined,
 ): boolean {
-  const observedChallenge = request ? requestCodeVerifierChallenges.get(request) : undefined;
   const exactMatch = Boolean(
     request &&
       request.requestCodeVerifierPresent &&
-      observedChallenge &&
+      request.requestCodeVerifierHash &&
       challenge &&
-      observedChallenge === challenge,
+      request.requestCodeVerifierHash === challenge,
   );
   if (request) request.requestCodeVerifierMatchesChallenge = exactMatch;
   return exactMatch;
@@ -1477,7 +1338,7 @@ async function probeDelegatedTokenBoundaryNegatives(
   accessToken: string,
   fetchFn: ReturnType<typeof createEvidenceFetch>,
   requests: RequestEvidence[],
-  gates: CompatibilityGate[],
+  gates: GateAccumulator,
   authorizationResourceResults: PublicBoundaryProbeResult[],
 ): Promise<void> {
   const variants: Array<{ id: string; variant: NegativeTokenVariant }> = [
@@ -1533,6 +1394,43 @@ async function probeDelegatedTokenBoundaryNegatives(
   );
 }
 
+function minimizeDelegatedJwtClaims(claims: DelegatedJwtClaims): DelegatedJwtClaims {
+  const minimized: DelegatedJwtClaims = {};
+  for (const key of ["iss", "sub", "aud", "exp", "iat", "nbf", "client_id", "azp", "resource"]) {
+    const value = claims[key];
+    if (value !== undefined) minimized[key] = boundedObservationValue(value);
+  }
+  return minimized;
+}
+
+function boundedObservationValue(value: unknown): unknown {
+  if (typeof value === "string") return value.length <= 500 ? value : "[REDACTED]";
+  if (typeof value === "number" || typeof value === "boolean" || value === null) return value;
+  if (Array.isArray(value)) return [];
+  if (value && typeof value === "object") return {};
+  return "[REDACTED]";
+}
+
+function minimizeDelegatedSigningKeys(keys: readonly DelegatedJwk[], preferredKey?: DelegatedJwk): DelegatedJwk[] {
+  const boundedKeys = keys.slice(0, 32);
+  const preferredIncluded = !preferredKey || boundedKeys.some((key) => key.kid === preferredKey.kid);
+  const sourceKeys = preferredIncluded || !preferredKey
+    ? boundedKeys
+    : [...boundedKeys.slice(0, 31), preferredKey];
+  return sourceKeys.map((key) => ({
+    ...(key.alg !== undefined ? { alg: boundedObservationValue(key.alg) } : {}),
+    ...(key.kid !== undefined ? { kid: boundedObservationValue(key.kid) } : {}),
+    ...(key.kty !== undefined ? { kty: boundedObservationValue(key.kty) } : {}),
+    ...(key.crv !== undefined ? { crv: boundedObservationValue(key.crv) } : {}),
+    ...(key.use !== undefined ? { use: boundedObservationValue(key.use) } : {}),
+    ...(key.key_ops !== undefined
+      ? { key_ops: Array.isArray(key.key_ops)
+        ? key.key_ops.slice(0, 8).map((operation) => boundedObservationValue(operation))
+        : boundedObservationValue(key.key_ops) }
+      : {}),
+  }));
+}
+
 async function validateProviderToken(
   tokens: OAuthTokens,
   metadata: AuthorizationServerMetadata,
@@ -1541,7 +1439,12 @@ async function validateProviderToken(
   tokenRequest: RequestEvidence | undefined,
   requests: RequestEvidence[],
   fetchFn: ReturnType<typeof createEvidenceFetch>,
-): Promise<{ status: GateStatus; detail: string; evidence?: Record<string, unknown> }> {
+): Promise<{
+  status: GateStatus;
+  detail: string;
+  evidence?: Record<string, unknown>;
+  observation?: DelegatedJwtObservation;
+}> {
   if (!metadata.jwks_uri) {
     return {
       status: "not-proven",
@@ -1600,21 +1503,26 @@ async function validateProviderToken(
       issuer: target.expectedAuthorizationServer,
       clockTolerance: 0,
     });
-    const policyResult = evaluateDelegatedJwtPolicy(
-      protectedHeader,
-      verified.payload as DelegatedJwtClaims,
-      {
-        canonicalResource: target.canonicalResource,
-        expectedClientId: clientInfo.client_id,
-        expectedIssuer: target.expectedAuthorizationServer,
-        nowSeconds: Math.floor(Date.now() / 1000),
-        tokenRequest: {
-          clientId: tokenRequest ? requestRawClientIds.get(tokenRequest) : undefined,
-          grantType: tokenRequest?.requestGrantType,
-          resource: tokenRequest ? requestRawResources.get(tokenRequest) : undefined,
-        },
+    const policy: DelegatedJwtPolicy = {
+      canonicalResource: target.canonicalResource,
+      expectedClientId: clientInfo.client_id,
+      expectedIssuer: target.expectedAuthorizationServer,
+      nowSeconds: Math.floor(Date.now() / 1000),
+      tokenRequest: {
+        clientId: tokenRequest?.requestClientId,
+        grantType: tokenRequest?.requestGrantType,
+        resource: tokenRequest?.requestResource,
       },
-    );
+    };
+    const claims = verified.payload as DelegatedJwtClaims;
+    const minimizedHeader: DelegatedJwtHeader = {
+      ...(protectedHeader.alg !== undefined ? { alg: boundedObservationValue(protectedHeader.alg) } : {}),
+      ...(protectedHeader.kid !== undefined ? { kid: boundedObservationValue(protectedHeader.kid) } : {}),
+      ...(protectedHeader.typ !== undefined ? { typ: boundedObservationValue(protectedHeader.typ) } : {}),
+    };
+    const minimizedClaims = minimizeDelegatedJwtClaims(claims);
+    const minimizedSigningKeys = minimizeDelegatedSigningKeys(keys, selected.key);
+    const policyResult = evaluateDelegatedJwtPolicy(protectedHeader, claims, policy);
     const verificationRequests = requests.slice(verificationRequestsBefore);
     const jwksRequestObserved = verificationRequests.some(
       (request) => request.url === sanitizeUrl(String(metadata.jwks_uri)),
@@ -1633,12 +1541,28 @@ async function validateProviderToken(
       ...(policyResult.failures.length > 0 ? { failures: policyResult.failures } : {}),
     };
 
+    const valid = policyResult.valid && jwksRequestObserved && !providerValidationRoundTrip;
+    const detail = valid
+      ? "Provider-issued access token was verified locally with the advertised asymmetric JWKS, allowed algorithm/key, exact issuer/resource audience, subject, time bounds, and registered-client authorization-code context."
+      : "Provider JWT verification did not satisfy every local asymmetric-key, claim, or client/grant context gate.";
     return {
-      status: policyResult.valid && jwksRequestObserved && !providerValidationRoundTrip ? "pass" : "fail",
-      detail: policyResult.valid && jwksRequestObserved && !providerValidationRoundTrip
-        ? "Provider-issued access token was verified locally with the advertised asymmetric JWKS, allowed algorithm/key, exact issuer/resource audience, subject, time bounds, and registered-client authorization-code context."
-        : "Provider JWT verification did not satisfy every local asymmetric-key, claim, or client/grant context gate.",
+      status: valid ? "pass" : "fail",
+      detail,
       evidence,
+      observation: {
+        kind: "delegated-jwt",
+        gateId: "delegated-token-validation",
+        detail,
+        evidence,
+        header: minimizedHeader,
+        claims: minimizedClaims,
+        policy,
+        signingKeys: minimizedSigningKeys,
+        signatureValid: true,
+        ...(jwksRequestObserved && !providerValidationRoundTrip
+          ? {}
+          : { error: { kind: "malformed-observation", code: "provider-validation-round-trip" } }),
+      },
     };
   } catch (error) {
     return {
@@ -1653,30 +1577,38 @@ export async function runMcpAccessGrantCompatibility(
   page: Page,
   testInfo: TestInfo,
 ): Promise<CompatibilityReport> {
-  activeTargetSecrets = [target.email, target.password, target.anonKey].filter(
-    (secret): secret is string => Boolean(secret),
-  );
   const startedAt = new Date().toISOString();
-  const report: CompatibilityReport = {
+  const fetchRequests: RequestEvidence[] = [];
+  const versions = await collectVersions(target);
+  const run: LiveEvidenceRun = {
     issue: "#768",
-    outcome: "not-proven",
     startedAt,
-    finishedAt: startedAt,
     target: {
       name: target.name,
       canonicalResource: sanitizeUrl(target.canonicalResource),
       supabaseUrl: sanitizeUrl(target.supabaseUrl),
       expectedAuthorizationServer: sanitizeUrl(target.expectedAuthorizationServer),
     },
-    versions: await collectVersions(target),
-    gates: [],
-    requests: [],
+    versions,
+    configuredSecrets: [
+      target.email,
+      target.password,
+      target.anonKey,
+      process.env.MCP_TEST_PASSWORD,
+      process.env.MCP_SUPABASE_ANON_KEY,
+      process.env.SUPABASE_ANON_KEY,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      process.env.API_KEY_HMAC_SECRET,
+    ].filter((secret): secret is string => Boolean(secret)),
+    requests: fetchRequests,
+    typedObservations: [],
   };
-  const gates: CompatibilityGate[] = [];
+  const gates = new GateAccumulator();
 
   const publicClientLayer = await runPublicClientLoopbackConsentCompatibility(target, page, testInfo);
-  report.requests.push(...(publicClientLayer.requests as unknown as RequestEvidence[]));
-  gates.push(...publicClientLayer.gates);
+  fetchRequests.push(...publicClientLayer.requests);
+  for (const gate of publicClientLayer.gates) gates.add(gate);
 
   const configured = (() => {
     try {
@@ -1710,7 +1642,7 @@ export async function runMcpAccessGrantCompatibility(
   );
 
   const localProvider = isLocalHostname(target.supabaseUrl);
-  const versionsComplete = Object.entries(report.versions)
+  const versionsComplete = Object.entries(run.versions)
     .filter(([key]) => key !== "declared-sdk-range")
     .filter(([key]) => localProvider || key !== "supabase-auth-provider-image")
     .filter(([key]) => !localProvider || key !== "supabase-hosted-provider-version")
@@ -1726,15 +1658,14 @@ export async function runMcpAccessGrantCompatibility(
       : localProvider
         ? "One or more relevant installed versions could not be read in this environment."
         : "The hosted provider does not expose an exact server version, so the deployed provider-version gate remains not-proven.",
-    report.versions,
+    run.versions,
   );
 
   if (!configured || !nonProduction) {
-    return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
   }
 
   const loopback = new LoopbackCallback();
-  const fetchRequests = report.requests;
   const fetchFn = createEvidenceFetch(fetchRequests);
   let resourceInfo: Awaited<ReturnType<typeof discoverOAuthServerInfo>>;
 
@@ -1750,7 +1681,7 @@ export async function runMcpAccessGrantCompatibility(
       providerFailure ? "fail" : "not-proven",
       providerFailure ?? "Delegated provider metadata could not be proven after resource discovery failed.",
     );
-    return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
   }
 
   const discoveredAuthorizationServer = resourceInfo.authorizationServerUrl;
@@ -1785,13 +1716,13 @@ export async function runMcpAccessGrantCompatibility(
       providerFailure ? "fail" : "not-proven",
       providerFailure ?? "The configured delegated provider was not selected by Protected Resource Metadata.",
     );
-    return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
   }
 
   const metadata = resourceInfo.authorizationServerMetadata;
   if (!metadata) {
     addGate(gates, "provider-discovery", "not-proven", "The official SDK found the delegated issuer but could not obtain authorization-server metadata.");
-    return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
   }
 
   const issuerMatches = metadata.issuer.replace(/\/$/, "") === target.expectedAuthorizationServer.replace(/\/$/, "");
@@ -1806,13 +1737,13 @@ export async function runMcpAccessGrantCompatibility(
   );
 
   if (!metadataSupportsGoldenPath(metadata) || !issuerMatches) {
-    return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
   }
 
   await loopback.listen();
   const provider = new CompatibilityOAuthProvider(
     loopback.url,
-    report.versions["@modelcontextprotocol/sdk"] ?? "unavailable",
+    run.versions["@modelcontextprotocol/sdk"] ?? "unavailable",
     target.canonicalResource,
   );
   const initialClient = new Client({ name: "betterr-me-mcp-access-grant-compatibility", version: "1.0.0" });
@@ -1862,15 +1793,15 @@ export async function runMcpAccessGrantCompatibility(
 
   if (!initialConnectError && !provider.authorizationRequestUrl) {
     addGate(gates, "authorization-consent", "fail", "MCP endpoint connected without the required delegated authorization challenge.");
-    addGate(gates, "loopback-pkce", "not-proven", "No authorization redirect was produced because the endpoint did not challenge the client.");
+    addPkceGate(run.typedObservations, "No authorization redirect was produced because the endpoint did not challenge the client.", undefined, undefined, undefined);
     await closeAuthorizationAttempt(initialTransport, initialClient, loopback);
-    return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
   }
 
   if (!provider.authorizationRequestUrl) {
     addGate(gates, "authorization-consent", "fail", `Official SDK did not produce an authorization redirect: ${errorDetail(initialConnectError)}`);
     await closeAuthorizationAttempt(initialTransport, initialClient, loopback);
-    return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
   }
 
   const authorizationUrl = provider.authorizationRequestUrl;
@@ -1882,10 +1813,8 @@ export async function runMcpAccessGrantCompatibility(
     authorizationQuery.get("code_challenge_method") === "S256" &&
     authorizationQuery.get("redirect_uri") === loopback.url &&
     authorizationQuery.get("resource") === target.canonicalResource;
-  addGate(
-    gates,
-    "loopback-pkce",
-    pkceRequestValid ? "pass" : "fail",
+  addPkceGate(
+    run.typedObservations,
     pkceRequestValid
       ? "Authorization request used code response, fixed IPv4 loopback callback, exact Canonical Resource, and S256 PKCE."
       : "Authorization request did not preserve the required code, loopback, resource, and S256 PKCE parameters.",
@@ -1898,11 +1827,13 @@ export async function runMcpAccessGrantCompatibility(
       codeChallengePresent: Boolean(authorizationQuery.get("code_challenge")),
       resource: authorizationQuery.get("resource") ? sanitizeUrl(authorizationQuery.get("resource") as string) : "missing",
     },
+    pkceRequestValid,
+    authorizationQuery.get("code_challenge_method") ?? undefined,
   );
 
   if (!pkceRequestValid) {
     await closeAuthorizationAttempt(initialTransport, initialClient, loopback);
-    return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
   }
 
   const resourceNegativeResults = await probeResourceBindingNegatives(
@@ -1925,7 +1856,7 @@ export async function runMcpAccessGrantCompatibility(
     addGate(gates, "delegated-token-negative-boundary", "not-proven", "Negative MCP-boundary token cases require a provider-issued access token.");
     addGate(gates, "authenticated-mcp-operation", "not-proven", "No provider access token was obtained because browser credentials were not configured.");
     await closeAuthorizationAttempt(initialTransport, initialClient, loopback);
-    return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
   }
 
   try {
@@ -1962,7 +1893,7 @@ export async function runMcpAccessGrantCompatibility(
         "Browser authorization did not expose an explicit affirmative consent decision alongside a denial decision.",
       );
       await closeAuthorizationAttempt(initialTransport, initialClient, loopback);
-      return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
     }
 
     await approve.click();
@@ -1970,7 +1901,7 @@ export async function runMcpAccessGrantCompatibility(
     if (callback.error || !callback.code) {
       addGate(gates, "authorization-consent", "fail", callback.error ?? "Provider did not return an authorization code to the loopback callback.");
       await closeAuthorizationAttempt(initialTransport, initialClient, loopback);
-      return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
     }
 
     const stateMatches = callback.state === authorizationQuery.get("state");
@@ -1986,14 +1917,14 @@ export async function runMcpAccessGrantCompatibility(
 
     if (!stateMatches) {
       await closeAuthorizationAttempt(initialTransport, initialClient, loopback);
-      return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
     }
 
     if (!clientInfo) {
       addGate(gates, "pkce-negative-proof", "not-proven", "Registered client context was unavailable for negative proof requests.");
       addGate(gates, "delegated-token-validation", "not-proven", "Registered client context was unavailable for provider-token validation.");
       await closeAuthorizationAttempt(initialTransport, initialClient, loopback);
-      return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
     }
 
     const negativeProofResults = await probePkceNegativeProof(
@@ -2023,7 +1954,7 @@ export async function runMcpAccessGrantCompatibility(
       tokenRequest &&
         isExactCanonicalResource(
           target.canonicalResource,
-          requestRawResources.get(tokenRequest),
+          tokenRequest?.requestResource,
         ),
     );
     const verifierMatchesChallenge = recordPkceMatch(
@@ -2043,10 +1974,8 @@ export async function runMcpAccessGrantCompatibility(
         tokenResourceMatches &&
         verifierMatchesChallenge,
     );
-    addGate(
-      gates,
-      "loopback-pkce",
-      tokenRequestIsPublicPkce ? "pass" : "fail",
+    addPkceGate(
+      run.typedObservations,
       tokenRequestIsPublicPkce
         ? "Authorization code exchange used the loopback redirect, S256 verifier, Canonical Resource, and no token-endpoint client authentication."
         : "Authorization code exchange did not show the required public-client PKCE request shape.",
@@ -2062,6 +1991,8 @@ export async function runMcpAccessGrantCompatibility(
         resourceMatchesCanonical: tokenResourceMatches,
         codeVerifierMatchesChallenge: verifierMatchesChallenge,
       },
+      tokenRequestIsPublicPkce,
+      authorizationQuery.get("code_challenge_method") ?? undefined,
     );
 
     if (!tokenRequestIsPublicPkce) {
@@ -2069,14 +2000,14 @@ export async function runMcpAccessGrantCompatibility(
       addGate(gates, "delegated-token-negative-boundary", "not-proven", "MCP-boundary token probes were not attempted after the public PKCE/resource exchange gate failed.");
       addGate(gates, "authenticated-mcp-operation", "not-proven", "Authenticated MCP operation was not attempted after the public PKCE/resource exchange gate failed.");
       await closeAuthorizationAttempt(initialTransport, initialClient, loopback);
-      return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
     }
 
     if (!tokens?.access_token || !clientInfo) {
       addGate(gates, "delegated-token-validation", "not-proven", "Provider token exchange did not return an access token and registered client context.");
       addGate(gates, "authenticated-mcp-operation", "not-proven", "Provider token exchange did not return an access token.");
       await closeAuthorizationAttempt(initialTransport, initialClient, loopback);
-      return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
     }
 
     const tokenValidation = await validateProviderToken(
@@ -2088,7 +2019,11 @@ export async function runMcpAccessGrantCompatibility(
       fetchRequests,
       fetchFn,
     );
-    addGate(gates, "delegated-token-validation", tokenValidation.status, tokenValidation.detail, tokenValidation.evidence);
+    if (tokenValidation.observation) {
+      run.typedObservations.push(tokenValidation.observation);
+    } else {
+      addGate(gates, "delegated-token-validation", tokenValidation.status, tokenValidation.detail, tokenValidation.evidence);
+    }
 
     await probeDelegatedTokenBoundaryNegatives(
       target,
@@ -2102,7 +2037,7 @@ export async function runMcpAccessGrantCompatibility(
     if (tokenValidation.status !== "pass") {
       addGate(gates, "authenticated-mcp-operation", "not-proven", "Authenticated MCP operation was not attempted because local provider-token verification did not pass.");
       await closeAuthorizationAttempt(initialTransport, initialClient, loopback);
-      return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
     }
 
     await initialTransport.close().catch(() => undefined);
@@ -2174,7 +2109,7 @@ export async function runMcpAccessGrantCompatibility(
         "Provider token exchange did not return a refresh token, so rotation and the Refresh Token Family could not be exercised.",
         { initialTokens: tokenSummary(tokens) },
       );
-      return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
     }
 
     const refreshOptions = {
@@ -2208,13 +2143,13 @@ export async function runMcpAccessGrantCompatibility(
           : `The official MCP SDK refresh request did not return replacement credentials: ${errorDetail(firstRefresh.error)}`,
         firstReplacement,
       );
-      return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
     }
 
     provider.saveTokens(firstRefresh.tokens);
     if (!firstRefresh.tokens.refresh_token) {
       addGate(gates, "refresh-rotation", "fail", "Provider returned an access-token replacement without a usable refresh-token replacement.", firstReplacement);
-      return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
     }
 
     const secondRefresh = await refreshWithOfficialClient({
@@ -2239,7 +2174,7 @@ export async function runMcpAccessGrantCompatibility(
           : `The official MCP SDK could not issue the second Refresh Token Family descendant: ${errorDetail(secondRefresh.error)}`,
         { firstReplacement, secondReplacement },
       );
-      return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
     }
 
     provider.saveTokens(secondRefresh.tokens);
@@ -2332,7 +2267,7 @@ export async function runMcpAccessGrantCompatibility(
       addGate(gates, "post-revocation-refresh", "not-proven", "Grant revocation was not exercised because the supported user-facing grant-management client was unavailable.");
       addGate(gates, "post-revocation-access", "not-proven", "Grant revocation was not exercised because the supported user-facing grant-management client was unavailable.");
       addGate(gates, "cleanup", "not-proven", "No grant could be identified for cleanup; provider cleanup is not proven in this environment.");
-      return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
     }
 
     const grantClient = grantClientResult.client;
@@ -2388,7 +2323,7 @@ export async function runMcpAccessGrantCompatibility(
       addGate(gates, "post-revocation-refresh", "not-proven", "Post-revocation refresh behavior was not exercised because the relevant grant was not revoked.");
       addGate(gates, "post-revocation-access", "not-proven", "Post-revocation access behavior was not exercised because the relevant grant was not revoked.");
       addGate(gates, "cleanup", "not-proven", "The relevant grant was not revoked; provider cleanup remains unproven and must be handled by the dedicated test environment.");
-      return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
     }
 
     const postRevocationRefresh = await refreshWithOfficialClient({
@@ -2414,7 +2349,7 @@ export async function runMcpAccessGrantCompatibility(
 
     const formerAccessProvider = new CompatibilityOAuthProvider(
       undefined,
-      report.versions["@modelcontextprotocol/sdk"] ?? "unavailable",
+      run.versions["@modelcontextprotocol/sdk"] ?? "unavailable",
       target.canonicalResource,
     );
     formerAccessProvider.saveClientInformation(clientInfo);
@@ -2461,5 +2396,5 @@ export async function runMcpAccessGrantCompatibility(
     await closeAuthorizationAttempt(initialTransport, initialClient, loopback);
   }
 
-  return finishReport(report, gates, testInfo);
+    return finishReport(run, gates, testInfo);
 }
