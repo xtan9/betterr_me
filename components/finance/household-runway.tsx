@@ -24,10 +24,7 @@ import { MoneyField } from "@/components/finance/runway-money-field";
 import { ResultExperience } from "@/components/finance/household-runway-result";
 import {
   RUNWAY_STEP_IDS,
-  estimateMonthlyTakeHome,
-  expenseTotals,
   formatCents,
-  monthlyIncomeTotal,
   type EmploymentStatus,
   type ExpenseCategory,
   type ExpenseFrequency,
@@ -167,6 +164,10 @@ type HouseholdRunwayAssetsRenderModel = Extract<
 type HouseholdRunwayExpensesRenderModel = Extract<
   HouseholdRunwayInterviewRuntimeScreen,
   { kind: "expenses" }
+>;
+type HouseholdRunwayIncomeRenderModel = Extract<
+  HouseholdRunwayInterviewRuntimeScreen,
+  { kind: "myIncome" | "partnerIncome" }
 >;
 type HouseholdRunwayReductionsRenderModel = Extract<
   HouseholdRunwayInterviewRuntimeScreen,
@@ -931,6 +932,7 @@ function StepContent({
           locale={locale}
           location={incomeModel.location}
           income={incomeModel.income}
+          estimate={incomeModel.estimate}
           onChange={(patch) =>
             dispatchInterviewCommand({ type: "set_income", person: "mine", patch })
           }
@@ -948,6 +950,7 @@ function StepContent({
           locale={locale}
           location={incomeModel.location}
           income={incomeModel.income}
+          estimate={incomeModel.estimate}
           onChange={(patch) =>
             dispatchInterviewCommand({ type: "set_income", person: "partner", patch })
           }
@@ -1477,8 +1480,6 @@ function ReviewStep({
   const answers = runwayAnswersForPresentation(
     model.answers as unknown as HouseholdRunwayAnswers,
   );
-  const totals = expenseTotals(answers);
-  const excluded = answers.assets.illiquid_investments.cents + answers.assets.home_equity.cents + answers.assets.retirement_tax_deferred.cents + answers.assets.retirement_tax_free.cents;
   return (
     <>
       {title}
@@ -1486,11 +1487,11 @@ function ReviewStep({
         <ReviewRow label={t("review.location")} value={`${t(`countries.${answers.country}`)} · ${runwayRegionLabel(answers.country, answers.region, locale) ?? t("confidence.needs_review")} · ${answers.currency}`} status={answers.region ? "confirmed" : "needs_review"} t={t} />
         <ReviewRow label={t("review.household")} value={t(answers.partner ? "review.twoAdults" : "review.oneAdult")} status="confirmed" t={t} />
         <ReviewRow label={t("review.cash")} value={formatCents(answers.available_cash.cents, locale, answers.currency)} status={answers.available_cash.confidence} t={t} />
-        <ReviewRow label={t("review.expenses")} value={`${formatCents(totals.current, locale, answers.currency)} → ${formatCents(totals.interruption, locale, answers.currency)}`} status={answers.expense_mode === "quick" ? answers.quick_expenses.confidence : "confirmed"} t={t} />
-        <ReviewRow label={t("review.income")} value={formatCents(answers.mine.monthly_take_home_cents + (answers.partner?.monthly_take_home_cents ?? 0), locale, answers.currency)} status={answers.mine.confidence === "estimated" || answers.partner?.confidence === "estimated" ? "estimated" : "confirmed"} t={t} />
-        <ReviewRow label={t("review.otherIncome")} value={formatCents(monthlyIncomeTotal(answers), locale, answers.currency)} status={answers.other_income_sources.length ? "confirmed" : "skipped"} t={t} />
+        <ReviewRow label={t("review.expenses")} value={`${formatCents(model.totals.current, locale, answers.currency)} → ${formatCents(model.totals.interruption, locale, answers.currency)}`} status={answers.expense_mode === "quick" ? answers.quick_expenses.confidence : "confirmed"} t={t} />
+        <ReviewRow label={t("review.income")} value={formatCents(model.monthlyIncomeCents, locale, answers.currency)} status={answers.mine.confidence === "estimated" || answers.partner?.confidence === "estimated" ? "estimated" : "confirmed"} t={t} />
+        <ReviewRow label={t("review.otherIncome")} value={formatCents(model.otherIncomeCents, locale, answers.currency)} status={answers.other_income_sources.length ? "confirmed" : "skipped"} t={t} />
         <ReviewRow label={t("review.investments")} value={formatCents(answers.assets.liquid_investments.cents, locale, answers.currency)} status={answers.assets.liquid_investments.confidence} t={t} />
-        <ReviewRow label={t("review.lastResort")} value={formatCents(excluded, locale, answers.currency)} status={excluded ? "confirmed" : "skipped"} t={t} />
+        <ReviewRow label={t("review.lastResort")} value={formatCents(model.excludedAssetCents, locale, answers.currency)} status={model.excludedAssetCents ? "confirmed" : "skipped"} t={t} />
       </div>
     </>
   );
@@ -1501,6 +1502,7 @@ function IncomeEditor({
   locale,
   location,
   income,
+  estimate,
   onChange,
 }: {
   t: ReturnType<typeof useTranslations>;
@@ -1511,14 +1513,11 @@ function IncomeEditor({
     currency: HouseholdRunwayAnswers["currency"] | null;
   };
   income: IncomeAnswer;
+  estimate: HouseholdRunwayIncomeRenderModel["estimate"];
   onChange: (patch: Partial<IncomeAnswer>) => void;
 }) {
   if (income.employment === "unemployed" || income.employment === "not_working")
     return <InfoBox>{t("income.notAsked")}</InfoBox>;
-  const estimate =
-    income.entered_as === "gross" && income.gross_amount_cents > 0
-      ? estimateMonthlyTakeHome({ country: location.country ?? "US", region: location.region ?? "", amountCents: income.gross_amount_cents, period: income.gross_period, filingStatus: income.tax_filing_status, selfEmployed: income.employment === "self_employed", annualOtherDeductionsCents: income.annual_other_deductions_cents })
-      : null;
   const currency = location.currency ?? "USD";
   return (
     <div className="mt-7">
