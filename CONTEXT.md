@@ -4,6 +4,44 @@ BetterR.Me organizes a person's self-directed work and wellbeing, including task
 
 ## Language
 
+### Household Runway
+
+**Household Runway Plan**:
+A person's revisioned, committed financial inputs for evaluating how their household could withstand an interruption to income.
+_Avoid_: Finance Cushion, saved assessment
+
+**Household Runway Assessment**:
+A calculated evaluation of how long a household's resources could cover essential expenses across one or more income-interruption scenarios and proposed adjustments. It may be calculated from a Household Runway Draft or a Household Runway Plan.
+_Avoid_: Cushion, runway calculation, Plan
+
+**Household Runway Interview**:
+The guided process through which a person supplies and reviews household financial inputs, assesses interruption scenarios, and may create or revise a Household Runway Plan.
+_Avoid_: Wizard, finance form
+
+**Household Runway Draft**:
+The uncommitted, resumable working inputs and progress maintained during a Household Runway Interview; it may coexist with a committed Household Runway Plan.
+_Avoid_: Interview Draft, Unsaved Plan, form state
+
+**Household Runway Plan Adjustment**:
+A provisional What-if overlay used to compare a Household Runway Assessment; it becomes part of a Plan only after the person applies it to the Draft inputs and commits them.
+_Avoid_: Saved adjustment, Plan change
+
+### Calendar
+
+**Calendar Event**:
+A person's full-fidelity calendar entry, including the details and recurrence identity needed to view and edit it.
+_Avoid_: Feed item, overlay item
+
+**Calendar Layer**:
+A selectable category of dated items shown on the calendar.
+_Avoid_: Feed domain
+
+**Calendar Overlay Feed**:
+A date-bounded projection of selected task, habit, and workout Calendar Layers displayed alongside Calendar Events.
+_Avoid_: Unified calendar feed, calendar events feed
+
+### Recurring Tasks
+
 **Recurring Task Series**:
 A user-visible lineage of repeating work that retains its identity across schedule and detail changes.
 _Avoid_: Recurring task, template
