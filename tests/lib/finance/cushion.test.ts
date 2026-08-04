@@ -7,7 +7,6 @@ import {
   expenseTotals,
   normalizeExpenseToMonthly,
   simulateHouseholdRunway,
-  toFinanceCushionView,
   withCurrentLifestyleExpenses,
   type HouseholdRunwayAnswers,
 } from "@/lib/finance/cushion";
@@ -230,31 +229,6 @@ describe("adaptive scenarios", () => {
 });
 
 describe("estimates, drafts, and migration", () => {
-  it("preserves retained cushion inputs as reviewable versioned answers", () => {
-    const view = toFinanceCushionView({
-      id: "plan-1",
-      user_id: "user-1",
-      liquid_resources_cents: 900_000,
-      monthly_essential_expenses_cents: 300_000,
-      monthly_continuing_income_cents: 50_000,
-      answers: null,
-      created_at: "2026-07-01T00:00:00.000Z",
-      updated_at: "2026-07-31T00:00:00.000Z",
-    });
-
-    expect(view.answers).toMatchObject({
-      schema_version: 4,
-      region: "",
-      available_cash: { cents: 900_000, confidence: "confirmed" },
-      expense_mode: "quick",
-      quick_expenses: {
-        current_monthly_cents: 300_000,
-        interruption_monthly_cents: 300_000,
-      },
-      other_income_sources: [{ monthly_cents: 50_000 }],
-    });
-  });
-
   it("separates 2026 US federal, state, Social Security, and Medicare estimates", () => {
     const estimate = estimateMonthlyTakeHome({ country: "US", region: "CA", amountCents: 12_000_000, period: "annual", filingStatus: "single" });
     expect(estimate.annual_federal_income_tax_cents).toBe(1_757_000);

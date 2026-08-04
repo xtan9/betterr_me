@@ -2,12 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   createDefaultRunwayAnswers,
-  toFinanceCushionView,
-  type FinanceCushionView,
+  type HouseholdRunwayAnswers,
 } from "@/lib/finance/cushion";
 import { assessHouseholdRunway } from "@/lib/finance/household-runway-assessment";
 import {
   commitHouseholdRunwayPlan,
+  getFinanceCushion,
+  HouseholdRunwayPersistenceIntegrityError,
   type HouseholdRunwayAtomicCommitInput,
 } from "@/lib/finance/repository";
 
@@ -53,24 +54,36 @@ function input(): HouseholdRunwayAtomicCommitInput {
   };
 }
 
-function plan(inputValue: HouseholdRunwayAtomicCommitInput): FinanceCushionView {
-  const baseline = inputValue.assessment.firstScenario.baseline;
-  return toFinanceCushionView({
+function plan(inputValue: HouseholdRunwayAtomicCommitInput, revision = 1) {
+  return {
     id: "plan-a",
     user_id: "user-a",
-    revision: 1,
-    liquid_resources_cents: baseline.starting_resources_cents,
-    monthly_essential_expenses_cents: baseline.interruption_expenses_cents,
-    monthly_continuing_income_cents:
-      baseline.continuing_monthly_income_cents,
+    revision,
     answers: inputValue.answers,
-    adjustments: inputValue.adjustments,
-    latest_result: inputValue.assessment,
-    model_version: inputValue.assessment.modelVersion,
-    status: "completed",
-    created_at: "2026-07-26T00:00:00.000Z",
+    liquid_resources_cents: 3_000_000,
+    monthly_essential_expenses_cents: 600_000,
+    monthly_continuing_income_cents: 0,
     updated_at: "2026-07-26T00:00:00.000Z",
-  });
+  };
+}
+
+function currentRow(answers: HouseholdRunwayAnswers, revision = 3) {
+  return {
+    revision,
+    answers,
+    liquid_resources_cents: 3_000_000,
+    monthly_essential_expenses_cents: 600_000,
+    monthly_continuing_income_cents: 0,
+    updated_at: "2026-07-26T00:00:00.000Z",
+  };
+}
+
+function readClient(row: unknown) {
+  const maybeSingle = vi.fn().mockResolvedValue({ data: row, error: null });
+  const eq = vi.fn().mockReturnValue({ maybeSingle });
+  const select = vi.fn().mockReturnValue({ eq });
+  const from = vi.fn().mockReturnValue({ select });
+  return { client: { from } as unknown as SupabaseClient, from, select, eq };
 }
 
 function snapshot() {
@@ -86,6 +99,69 @@ function snapshot() {
 }
 
 describe("household runway atomic repository boundary", () => {
+  it("maps a current row to the strict domain Plan and selects only required columns", async () => {
+    const answers = input().answers;
+    const reader = readClient(currentRow(answers));
+
+    await expect(getFinanceCushion(reader.client, "user-a")).resolves.toEqual({
+      revision: 3,
+      inputs: answers,
+    });
+    expect(reader.select).toHaveBeenCalledWith(
+      "revision, answers, liquid_resources_cents, monthly_essential_expenses_cents, monthly_continuing_income_cents, updated_at",
+    );
+  });
+
+  it("reconstructs a genuine legacy scalar row and assigns revision zero only when absent", async () => {
+    const reader = readClient({
+      answers: null,
+      liquid_resources_cents: 900_000,
+      monthly_essential_expenses_cents: 300_000,
+      monthly_continuing_income_cents: 50_000,
+      updated_at: "2026-07-31T00:00:00.000Z",
+    });
+
+    await expect(getFinanceCushion(reader.client, "user-a")).resolves.toMatchObject({
+      revision: 0,
+      inputs: {
+        schema_version: 4,
+        available_cash: { cents: 900_000, confidence: "confirmed" },
+        expense_mode: "quick",
+        quick_expenses: {
+          current_monthly_cents: 300_000,
+          interruption_monthly_cents: 300_000,
+        },
+        other_income_sources: [{ monthly_cents: 50_000 }],
+      },
+    });
+
+    const presentRevision = readClient({
+      ...currentRow(input().answers, 7),
+      answers: null,
+    });
+    await expect(getFinanceCushion(presentRevision.client, "user-a")).resolves.toMatchObject({
+      revision: 7,
+    });
+  });
+
+  it.each([
+    { revision: -1, answers: null },
+    { revision: 1.5, answers: null },
+    { revision: "1", answers: null },
+    { revision: undefined, answers: null },
+    { revision: 1, answers: { schema_version: 4 } },
+    { revision: 1, answers: { ...input().answers, region: "" } },
+  ])("rejects corrupted persisted Plan data: %j", async (corruption) => {
+    const reader = readClient({
+      ...currentRow(input().answers),
+      ...corruption,
+    });
+
+    await expect(getFinanceCushion(reader.client, "user-a")).rejects.toBeInstanceOf(
+      HouseholdRunwayPersistenceIntegrityError,
+    );
+  });
+
   it("calls one authenticated RPC with the complete server assessment", async () => {
     const commit = input();
     const rpc = vi.fn().mockResolvedValue({
@@ -157,6 +233,25 @@ describe("household runway atomic repository boundary", () => {
         commit,
       ),
     ).resolves.toEqual({ success: false, kind: "idempotency_conflict" });
+
+    const invalidTriggerRpc = vi.fn().mockResolvedValue({
+      data: {
+        status: "invalid",
+        type: "invalid_trigger",
+        message: "Snapshot trigger does not match the current Plan state",
+      },
+      error: null,
+    });
+    await expect(
+      commitHouseholdRunwayPlan(
+        { rpc: invalidTriggerRpc } as unknown as SupabaseClient,
+        commit,
+      ),
+    ).resolves.toEqual({
+      success: false,
+      kind: "invalid_trigger",
+      message: "Snapshot trigger does not match the current Plan state",
+    });
   });
 
   it("returns an already-applied RPC outcome as the authoritative replay", async () => {
@@ -181,5 +276,25 @@ describe("household runway atomic repository boundary", () => {
         commit,
       ),
     ).resolves.toMatchObject({ success: true, replayed: true, revision: 1 });
+  });
+
+  it("rejects a committed RPC result when its Plan revision disagrees", async () => {
+    const commit = input();
+    const rpc = vi.fn().mockResolvedValue({
+      data: {
+        status: "committed",
+        type: "success",
+        revision: 1,
+        plan: plan(commit, 2),
+        assessment: commit.assessment,
+        snapshot: snapshot(),
+        snapshots: [snapshot()],
+      },
+      error: null,
+    });
+
+    await expect(
+      commitHouseholdRunwayPlan({ rpc } as unknown as SupabaseClient, commit),
+    ).rejects.toBeInstanceOf(HouseholdRunwayPersistenceIntegrityError);
   });
 });

@@ -46,10 +46,10 @@ export default async function FinanceCushionPage() {
     : [null, []];
   const runway = (
     <HouseholdRunway
-      initialAnswers={cushion?.answers ?? null}
+      initialAnswers={cushion?.inputs ?? null}
       initialPlanRevision={cushion?.revision ?? 0}
       isAuthenticated={Boolean(user)}
-      hasSavedPlan={Boolean(cushion?.answers)}
+      hasSavedPlan={Boolean(cushion?.inputs)}
       initialSnapshots={snapshots}
     />
   );
