@@ -129,6 +129,31 @@ describe("Household Runway browser adapter", () => {
     adapter.dispose();
   });
 
+  it("keeps Location Back ahead of stale URL reconciliation", async () => {
+    const browser = createAdapterEnvironment();
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      createId: () => "interview-1",
+    });
+
+    adapter.start();
+    await settleAdapter();
+    expect(adapter.getSnapshot().screen.kind).toBe("location");
+    vi.mocked(browser.environment.history.back).mockClear();
+    vi.mocked(browser.environment.history.replaceState).mockClear();
+
+    adapter.send({ type: "back" });
+    await settleAdapter();
+
+    expect(adapter.getSnapshot()).toMatchObject({
+      interviewStatus: "not_started",
+      screen: { kind: "landing" },
+    });
+    expect(browser.environment.history.back).toHaveBeenCalledOnce();
+    expect(browser.environment.history.replaceState).not.toHaveBeenCalled();
+    adapter.dispose();
+  });
+
   it("imports a restored device Draft when the URL starts the anonymous Interview", async () => {
     const browser = createAdapterEnvironment(
       "https://betterr.me/finance/cushion?start=1",

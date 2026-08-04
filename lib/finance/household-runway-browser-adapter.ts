@@ -378,8 +378,6 @@ export function createHouseholdRunwayBrowserAdapter(
     } else if (request.action !== "back") {
       initialHrefForProjection = environment?.location.href;
       historyEffectPending = false;
-    } else {
-      historyEffectPending = false;
     }
   };
 
@@ -712,11 +710,21 @@ export function createHouseholdRunwayBrowserAdapter(
       maybeImportRestoredDeviceDraft();
     },
     send: (intent) => {
+      const snapshotBeforeIntent = runtime.getSnapshot();
+      const backChangesHistory =
+        intent.type === "back" &&
+        (snapshotBeforeIntent.interviewStatus === "collecting" ||
+          snapshotBeforeIntent.interviewStatus === "reviewing") &&
+        !(
+          snapshotBeforeIntent.screen.kind === "expenses" &&
+          snapshotBeforeIntent.screen.activeCategory
+        );
       const historyIntent =
         intent.type === "start" ||
         intent.type === "start_new" ||
         intent.type === "resume_draft" ||
         intent.type === "resume_committed_plan" ||
+        backChangesHistory ||
         intent.type === "discard_draft";
       if (!historyIntent) {
         runtime.send(intent);
