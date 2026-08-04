@@ -261,6 +261,26 @@ describe("Household Runway browser adapter", () => {
     adapter.dispose();
   });
 
+  it("does not honor a valid but unreachable stage from a fresh URL", () => {
+    const browser = createAdapterEnvironment(
+      "https://betterr.me/finance/cushion?start=1&stage=expenses",
+    );
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      createId: () => "interview-1",
+    });
+
+    adapter.start();
+
+    expect(adapter.getSnapshot().stage).toBe("location");
+    expect(browser.environment.history.replaceState).toHaveBeenCalledWith(
+      {},
+      "",
+      "/finance/cushion?start=1",
+    );
+    adapter.dispose();
+  });
+
   it("validates Back and Forward through Runtime state instead of browser state", () => {
     const browser = createAdapterEnvironment();
     const adapter = createHouseholdRunwayBrowserAdapter({
@@ -277,6 +297,23 @@ describe("Household Runway browser adapter", () => {
     browser.environment.location.href = "https://betterr.me/finance/cushion?start=1";
     browser.emit("popstate");
     expect(adapter.getSnapshot().interviewStatus).toBe("collecting");
+    adapter.dispose();
+  });
+
+  it("reconciles fragment-only navigation through the private history path", () => {
+    const browser = createAdapterEnvironment();
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      createId: () => "interview-1",
+    });
+    adapter.start();
+
+    browser.environment.location.href =
+      "https://betterr.me/finance/cushion#runway";
+    browser.emit("hashchange");
+
+    expect(adapter.getSnapshot().interviewStatus).toBe("not_started");
+    expect(browser.environment.history.replaceState).not.toHaveBeenCalled();
     adapter.dispose();
   });
 
@@ -324,6 +361,25 @@ describe("Household Runway browser adapter", () => {
     adapter.dispose();
   });
 
+  it("still flushes when the optional locale provider is unavailable", () => {
+    const browser = createAdapterEnvironment();
+    const synchronizeDraft = vi.fn(() => true);
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      createId: () => "interview-1",
+      localeProvider: () => {
+        throw new Error("locale unavailable");
+      },
+      synchronizeDraft,
+    });
+    adapter.start();
+    adapter.send({ type: "select_country", country: "US" });
+
+    expect(() => browser.emit("betterr:before-locale-change")).not.toThrow();
+    expect(synchronizeDraft).toHaveBeenCalledOnce();
+    adapter.dispose();
+  });
+
   it("keeps a failed locale flush failed and ignores its late completion after disposal", async () => {
     const browser = createAdapterEnvironment();
     let resolveSync: ((value: boolean) => void) | undefined;
@@ -359,9 +415,11 @@ describe("Household Runway browser adapter", () => {
     });
     first.start();
     expect(browser.listeners.get("popstate")?.size).toBe(1);
+    expect(browser.listeners.get("hashchange")?.size).toBe(1);
     expect(browser.listeners.get("betterr:before-locale-change")?.size).toBe(1);
     first.dispose();
     expect(browser.listeners.get("popstate")?.size).toBe(0);
+    expect(browser.listeners.get("hashchange")?.size).toBe(0);
     expect(browser.listeners.get("betterr:before-locale-change")?.size).toBe(0);
 
     const second = createHouseholdRunwayBrowserAdapter({
@@ -370,6 +428,7 @@ describe("Household Runway browser adapter", () => {
     });
     second.start();
     expect(browser.listeners.get("popstate")?.size).toBe(1);
+    expect(browser.listeners.get("hashchange")?.size).toBe(1);
     expect(browser.listeners.get("betterr:before-locale-change")?.size).toBe(1);
     second.dispose();
   });
