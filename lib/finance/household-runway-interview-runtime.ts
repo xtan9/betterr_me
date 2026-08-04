@@ -196,6 +196,7 @@ export interface HouseholdRunwayInterviewRuntimePlanResult {
   planRevision: number;
   planInputs: HouseholdRunwayAnswers;
   assessment: SuccessfulHouseholdRunwayAssessment;
+  snapshot?: RunwaySnapshotSummary;
 }
 
 export interface HouseholdRunwayInterviewRuntimeCapabilities {
@@ -638,6 +639,7 @@ export function createHouseholdRunwayInterviewRuntime(
             planRevision: value.planRevision,
             planInputs: value.planInputs,
             assessment: value.assessment,
+            ...(value.snapshot ? { snapshot: value.snapshot } : {}),
           }),
         () =>
           outcomeCommand(createId, now, {

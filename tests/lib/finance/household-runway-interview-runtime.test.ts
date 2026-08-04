@@ -328,7 +328,6 @@ describe("Household Runway Interview Runtime", () => {
     expect(published).toHaveBeenCalledTimes(publicationCount);
     expect(runtime.getSnapshot().lifecycle).toBe("disposed");
   });
-
   it("projects operation status without exposing protocol or retry metadata", async () => {
     const scheduled: (() => void)[] = [];
     const persistPlan = vi.fn(
