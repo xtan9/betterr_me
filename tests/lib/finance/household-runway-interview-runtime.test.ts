@@ -1160,6 +1160,32 @@ describe("Household Runway Interview Runtime", () => {
     expect(runtime.getSnapshot().draft.current).toBe(true);
   });
 
+  it("maps malformed successful Plan responses to a typed recoverable issue", async () => {
+    const scheduled: (() => void)[] = [];
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      schedule: (task) => scheduled.push(task),
+      persistPlan: () =>
+        ({
+          planRevision: Number.NaN,
+          planInputs: {},
+          assessment: {},
+        }) as unknown as HouseholdRunwayInterviewRuntimePlanResult,
+    });
+    runtime.start();
+    driveToReview(runtime);
+    runtime.send({ type: "continue" });
+    runtime.send({ type: "save_plan" });
+    await settle(scheduled);
+
+    expect(runtime.getSnapshot().operations.planPersistence).toEqual({
+      status: "failed",
+      error: "exception",
+    });
+    expect(runtime.getSnapshot().draft.current).toBe(true);
+  });
+
   it("reuses Plan idempotency for an ambiguous revision and changes it for a new revision", async () => {
     const scheduled: (() => void)[] = [];
     const requests: Array<{ idempotencyKey: string }> = [];

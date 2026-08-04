@@ -1262,6 +1262,8 @@ export function createHouseholdRunwayInterviewRuntime(
             !value ||
             typeof value !== "object" ||
             typeof value.planRevision !== "number" ||
+            !Number.isSafeInteger(value.planRevision) ||
+            value.planRevision < 0 ||
             !value.planInputs ||
             typeof value.planInputs !== "object" ||
             !value.assessment ||
