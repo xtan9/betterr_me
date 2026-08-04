@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { getLocalDateString } from "@/lib/utils";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
-import type { DomainCalendarEvent } from "@/lib/calendar/feed-types";
+import type { CalendarDisplayEvent } from "@/lib/calendar/overlay-adapter";
 
 export interface QuickCreateState {
   isOpen: boolean;
@@ -50,7 +50,7 @@ interface UseCalendarEventsResult {
 export function useCalendarEvents(
   dateParam: string,
   handleItemAction: (
-    event: ExpandedCalendarEvent | DomainCalendarEvent,
+    event: ExpandedCalendarEvent | CalendarDisplayEvent,
   ) => void,
   onEventSaved: () => void,
 ): UseCalendarEventsResult {
@@ -98,9 +98,9 @@ export function useCalendarEvents(
 
   const handleEventClick = useCallback(
     (event: ExpandedCalendarEvent) => {
-      // If it's a domain item with actions, execute the action instead of opening dialog
-      const domainEvent = event as DomainCalendarEvent;
-      if (domainEvent._domain && domainEvent._domain !== "events") {
+      // Overlay items execute their typed action instead of opening the event dialog.
+      const overlayEvent = event as CalendarDisplayEvent;
+      if (overlayEvent._layer && overlayEvent._layer !== "events") {
         handleItemAction(event);
         return;
       }

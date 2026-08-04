@@ -51,10 +51,10 @@ describe("EventChip", () => {
     expect(chip.className).toContain("calendar-event");
   });
 
-  it("uses domain color when _domain is set", () => {
+  it("uses Calendar Layer color when _layer is set", () => {
     const event = {
       ...makeEvent(),
-      _domain: "tasks",
+      _layer: "tasks",
       _completed: false,
     } as unknown as ExpandedCalendarEvent;
 
@@ -69,7 +69,7 @@ describe("EventChip", () => {
   it("shows line-through when _completed is true", () => {
     const event = {
       ...makeEvent(),
-      _domain: "tasks",
+      _layer: "tasks",
       _completed: true,
     } as unknown as ExpandedCalendarEvent;
 

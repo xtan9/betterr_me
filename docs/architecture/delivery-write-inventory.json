@@ -405,7 +405,6 @@
       "id": "documented-query-only-persistence-access",
       "paths": [
         "app/api/calendar-events/[id]/route.ts",
-        "app/api/calendar/feed/route.ts",
         "app/api/journal/[id]/links/route.ts",
         "lib/ai/tools/calendar.ts",
         "lib/ai/tools/habits.ts",

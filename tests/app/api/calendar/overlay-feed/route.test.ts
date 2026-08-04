@@ -17,7 +17,7 @@ vi.mock("@/lib/calendar/overlay-feed", async () => {
   return { ...actual, queryCalendarOverlayFeed };
 });
 vi.mock("@/lib/calendar/supabase-overlay-feed", () => ({
-  createSupabaseTaskOverlayCapabilities: createCapabilities,
+  createSupabaseOverlayCapabilities: createCapabilities,
 }));
 vi.mock("@/lib/logger", () => ({ log: { error: logError } }));
 
@@ -85,6 +85,16 @@ describe("GET /api/calendar/overlay-feed", () => {
     await GET(request("/api/calendar/overlay-feed?start_date=2026-04-01&end_date=2026-04-07&layers=workouts&timezone=America%2FLos_Angeles"));
     expect(queryCalendarOverlayFeed).toHaveBeenLastCalledWith(
       expect.objectContaining({ layers: ["workouts"], timezone: "America/Los_Angeles" }),
+      {},
+      expect.any(Object),
+    );
+  });
+
+  it("deduplicates and canonicalizes selected overlay layers before querying", async () => {
+    await GET(request("/api/calendar/overlay-feed?start_date=2026-04-01&end_date=2026-04-07&layers=workouts,tasks,workouts,habits,tasks"));
+
+    expect(queryCalendarOverlayFeed).toHaveBeenLastCalledWith(
+      expect.objectContaining({ layers: ["tasks", "habits", "workouts"] }),
       {},
       expect.any(Object),
     );

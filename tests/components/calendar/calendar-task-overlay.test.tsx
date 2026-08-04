@@ -4,7 +4,7 @@ import {
   habitOverlayItemsToExpandedEvents,
   taskOverlayItemsToExpandedEvents,
   workoutOverlayItemsToExpandedEvents,
-} from "@/lib/calendar/feed-aggregation";
+} from "@/lib/calendar/overlay-adapter";
 
 describe("calendar task overlay adapter", () => {
   it("preserves task identity and completion action while leaving event fields editable", () => {
@@ -24,11 +24,11 @@ describe("calendar task overlay adapter", () => {
 
     expect(event).toMatchObject({
       id: "tasks:task-1",
-      _domain: "tasks",
+      _layer: "tasks",
       _taskAction: { type: "toggle_task_completion", taskId: "task-1" },
       is_virtual: true,
     });
-    expect(event._actions).toBeUndefined();
+    expect(event).not.toHaveProperty("_actions");
   });
 });
 
@@ -54,7 +54,7 @@ describe("calendar habit overlay adapter", () => {
 
     expect(event).toMatchObject({
       id: "habits:habit-1:2026-04-02",
-      _domain: "habits",
+      _layer: "habits",
       _completed: true,
       _habitAction: {
         type: "toggle_habit_completion",
@@ -63,7 +63,7 @@ describe("calendar habit overlay adapter", () => {
       },
       is_virtual: true,
     });
-    expect(event._actions).toBeUndefined();
+    expect(event).not.toHaveProperty("_actions");
   });
 });
 
@@ -85,11 +85,10 @@ describe("calendar workout overlay adapter", () => {
 
     expect(event).toMatchObject({
       id: "workouts:workout-1",
-      _domain: "workouts",
-      _sourceId: "workout-1",
+      _layer: "workouts",
       _workoutAction: { type: "navigate_workout", workoutId: "workout-1" },
       is_virtual: true,
     });
-    expect(event._actions).toBeUndefined();
+    expect(event).not.toHaveProperty("_actions");
   });
 });

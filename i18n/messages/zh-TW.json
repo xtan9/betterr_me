@@ -1576,10 +1576,6 @@
       "email": "電子郵件",
       "remove": "移除提醒"
     },
-    "feed": {
-      "error": "載入日曆項目失敗",
-      "loading": "載入中..."
-    },
     "actions": {
       "markComplete": "標記完成",
       "markIncomplete": "標記未完成",

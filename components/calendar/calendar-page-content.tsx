@@ -26,9 +26,8 @@ import { DayView } from "./day-view";
 import { EventQuickCreate } from "./event-quick-create";
 import { EventDialog } from "./event-dialog";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
-import { overlayItemsToExpandedEvents } from "@/lib/calendar/feed-aggregation";
-import type { DomainCalendarEvent } from "@/lib/calendar/feed-types";
-import type { CalendarOverlayItem } from "@/lib/calendar/overlay-feed";
+import { overlayItemsToExpandedEvents, type CalendarDisplayEvent } from "@/lib/calendar/overlay-adapter";
+import { CALENDAR_OVERLAY_LAYERS, type CalendarOverlayItem } from "@/lib/calendar/overlay-feed";
 import { useLocalization } from "@/lib/hooks/use-localization";
 import { weekStartPreferenceToDay } from "@/lib/preferences/owners";
 
@@ -121,8 +120,7 @@ export function CalendarPageContent() {
   );
 
   const overlayLayers = useMemo(() => {
-    const layers = Array.from(enabledLayers).filter((l) => l === "tasks" || l === "habits" || l === "workouts");
-    return layers.sort().join(",");
+    return CALENDAR_OVERLAY_LAYERS.filter((layer) => enabledLayers.has(layer)).join(",");
   }, [enabledLayers]);
 
   const overlayKey = overlayLayers
@@ -164,56 +162,39 @@ export function CalendarPageContent() {
 
   // --- Inline actions ---
 
-  const handleFeedMutated = useCallback(() => {
-    // Re-fetch native events and the selected overlay layers.
+  const handleOverlayMutated = useCallback(() => {
+    // Re-fetch Calendar Events and the selected overlay layers.
     globalMutate(
       `/api/calendar-events?start_date=${startDate}&end_date=${endDate}`,
     );
     if (overlayKey) globalMutate(overlayKey);
   }, [startDate, endDate, overlayKey, globalMutate]);
 
-  const { dispatch, toggleTask, toggleHabit, navigateWorkout } = useCalendarActions(handleFeedMutated);
+  const { toggleTask, toggleHabit, navigateWorkout } = useCalendarActions(handleOverlayMutated);
 
   const handleItemAction = useCallback(
-    async (event: ExpandedCalendarEvent | DomainCalendarEvent) => {
-      const domainEvent = event as DomainCalendarEvent;
-      if (domainEvent._taskAction) {
-        const result = await toggleTask(domainEvent._taskAction.taskId);
+    async (event: ExpandedCalendarEvent | CalendarDisplayEvent) => {
+      const overlayEvent = event as CalendarDisplayEvent;
+      if (overlayEvent._taskAction) {
+        const result = await toggleTask(overlayEvent._taskAction.taskId);
         if (!result.success) console.error("Calendar task action failed:", result.error);
         return;
       }
-      if (domainEvent._habitAction) {
+      if (overlayEvent._habitAction) {
         const result = await toggleHabit(
-          domainEvent._habitAction.habitId,
-          domainEvent._habitAction.date,
-          !domainEvent._completed,
+          overlayEvent._habitAction.habitId,
+          overlayEvent._habitAction.date,
+          !overlayEvent._completed,
         );
         if (!result.success) console.error("Calendar habit action failed:", result.error);
         return;
       }
-      if (domainEvent._workoutAction) {
-        navigateWorkout(domainEvent._workoutAction.workoutId);
+      if (overlayEvent._workoutAction) {
+        navigateWorkout(overlayEvent._workoutAction.workoutId);
         return;
       }
-      if (!domainEvent._actions?.length || !domainEvent._sourceId) return;
-
-      const action = domainEvent._actions[0];
-      // For habits, extract date from the ID (format: habits:habitId:date)
-      const date = domainEvent._domain === "habits"
-        ? domainEvent.id.split(":")[2]
-        : domainEvent.start_date;
-
-      const result = await dispatch(
-        action,
-        domainEvent._sourceId,
-        date,
-        !domainEvent._completed,
-      );
-      if (!result.success) {
-        console.error("Calendar inline action failed:", result.error);
-      }
     },
-    [dispatch, navigateWorkout, toggleHabit, toggleTask],
+    [navigateWorkout, toggleHabit, toggleTask],
   );
 
   const onEventSavedCallback = useCallback(() => {
@@ -237,13 +218,13 @@ export function CalendarPageContent() {
     handleEventSaved,
   } = useCalendarEvents(dateParam, handleItemAction, onEventSavedCallback);
 
-  // --- Merge calendar events + feed items ---
+  // --- Merge Calendar Events + overlay items ---
 
   const eventsByDate = useMemo(() => {
     const calendarEvents = eventsData?.events ?? [];
 
-    // Convert feed items to pseudo-events for rendering
-    const overlayEvents: DomainCalendarEvent[] = overlayData?.items
+    // Convert overlay items to pseudo-events for rendering
+    const overlayEvents: CalendarDisplayEvent[] = overlayData?.items
       ? overlayItemsToExpandedEvents(overlayData.items)
       : [];
     // Only include calendar events if the events layer is on

@@ -11,7 +11,7 @@ import {
   queryCalendarOverlayFeed,
   type CalendarOverlayLayer,
 } from "@/lib/calendar/overlay-feed";
-import { createSupabaseTaskOverlayCapabilities } from "@/lib/calendar/supabase-overlay-feed";
+import { createSupabaseOverlayCapabilities } from "@/lib/calendar/supabase-overlay-feed";
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ["cookie"],
@@ -45,7 +45,9 @@ function validTimeZone(value: string): boolean {
 function unavailableLayers(
   outcome: Awaited<ReturnType<typeof queryCalendarOverlayFeed>>,
 ) {
-  return outcome.unavailable.map((unavailable) => unavailable.layer);
+  return CALENDAR_OVERLAY_LAYERS.filter((layer) =>
+    outcome.unavailable.some((unavailable) => unavailable.layer === layer),
+  );
 }
 
 /** GET /api/calendar/overlay-feed — selected non-event Calendar Layers. */
@@ -88,14 +90,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "timezone must be a valid IANA timezone" }, { status: 400 });
     }
 
-    const requestedLayers = (layersParam ?? "")
+    const parsedLayers = (layersParam ?? "")
       .split(",")
       .map((layer) => layer.trim())
       .filter(Boolean);
-    const invalidLayers = requestedLayers.filter(
+    const invalidLayers = parsedLayers.filter(
       (layer) => !CALENDAR_OVERLAY_LAYERS.includes(layer as CalendarOverlayLayer),
     );
-    if (requestedLayers.length === 0) {
+    if (parsedLayers.length === 0) {
       return NextResponse.json(
         { error: "At least one overlay layer is required" },
         { status: 400 },
@@ -107,6 +109,7 @@ export async function GET(request: NextRequest) {
         { status: 400 },
       );
     }
+    const requestedLayers = CALENDAR_OVERLAY_LAYERS.filter((layer) => parsedLayers.includes(layer));
 
     const outcome = await queryCalendarOverlayFeed(
       {
@@ -115,7 +118,7 @@ export async function GET(request: NextRequest) {
         layers: requestedLayers as CalendarOverlayLayer[],
         ...(timezone !== null ? { timezone } : {}),
       },
-      createSupabaseTaskOverlayCapabilities(auth.client),
+      createSupabaseOverlayCapabilities(auth.client),
       {
         reportFailure: ({ layer, request: safeRequest, cause }) => {
           log.error("Calendar overlay layer acquisition failed", cause, {

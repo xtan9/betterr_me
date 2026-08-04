@@ -133,7 +133,7 @@ function localBoundaryToUtc(date: string, time: string, timezone: string): strin
   return new Date(exactGuess).toISOString();
 }
 
-export function createSupabaseTaskOverlayCapabilities(
+export function createSupabaseOverlayCapabilities(
   supabase: SupabaseClient,
 ): CalendarOverlayCapabilities {
   const habits: HabitOverlayCapabilities = {
@@ -147,6 +147,3 @@ export function createSupabaseTaskOverlayCapabilities(
     workouts: new SupabaseWorkoutReadPort(supabase),
   };
 }
-
-/** Explicit all-layer factory; the task-named factory remains for compatibility. */
-export const createSupabaseOverlayCapabilities = createSupabaseTaskOverlayCapabilities;
