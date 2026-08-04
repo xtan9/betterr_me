@@ -7,12 +7,12 @@ import {
   createHouseholdRunwayInterview,
   type HouseholdRunwayInterviewDraft,
   type HouseholdRunwayInterviewState,
-} from "@/lib/finance/household-runway-interview";
+} from "@/lib/finance/internal/household-runway-interview";
 import {
   HOUSEHOLD_RUNWAY_DRAFT_TTL_MS,
   decodeHouseholdRunwayDraft,
   encodeHouseholdRunwayDraft,
-} from "@/lib/finance/household-runway-draft-codec";
+} from "@/lib/finance/internal/household-runway-draft-codec";
 
 const NOW = new Date("2026-08-02T15:00:00.000Z");
 

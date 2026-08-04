@@ -5,7 +5,7 @@ import {
   dispatchHouseholdRunwayInterview,
   restoreHouseholdRunwayInterview,
   type HouseholdRunwayInterviewCommand,
-} from "@/lib/finance/household-runway-interview";
+} from "@/lib/finance/internal/household-runway-interview";
 
 type CommandPayload =
   | { type: "start"; interviewId: string }

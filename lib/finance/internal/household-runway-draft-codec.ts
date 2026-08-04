@@ -22,7 +22,7 @@ import {
   type HouseholdRunwayInterviewStageStatus,
   type HouseholdRunwayInterviewState,
   type HouseholdRunwayInterviewStatus,
-} from "@/lib/finance/household-runway-interview";
+} from "@/lib/finance/internal/household-runway-interview";
 
 export const HOUSEHOLD_RUNWAY_DRAFT_CODEC_VERSION = 1 as const;
 export const HOUSEHOLD_RUNWAY_DRAFT_TTL_MS = 30 * 24 * 60 * 60 * 1000;

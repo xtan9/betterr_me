@@ -5,7 +5,7 @@ import {
   encodeHouseholdRunwayDraft,
   type HouseholdRunwayDraftCodecErrorCode,
   type HouseholdRunwayDraftState,
-} from "@/lib/finance/household-runway-draft-codec";
+} from "@/lib/finance/internal/household-runway-draft-codec";
 
 const LEGACY_DRAFT_STORAGE_KEYS = [
   "betterr.household-runway.v2",

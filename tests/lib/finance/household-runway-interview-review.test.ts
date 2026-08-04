@@ -11,7 +11,7 @@ import {
   type HouseholdRunwayInterviewCommand,
   type HouseholdRunwayInterviewCommandInput,
   type HouseholdRunwayInterviewState,
-} from "@/lib/finance/household-runway-interview";
+} from "@/lib/finance/internal/household-runway-interview";
 
 const occurredAt = "2026-08-02T15:00:00.000Z";
 
