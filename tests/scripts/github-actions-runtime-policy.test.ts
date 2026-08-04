@@ -176,6 +176,12 @@ updates:
     expect(workflow).toContain("checked_out_sha=\"$(git rev-parse HEAD)\"");
     expect(workflow).toContain("inputs.commit_sha || github.event.workflow_run.head_sha || github.sha");
     expect(workflow).toContain(
+      "group: vercel-${{ inputs.target || 'production' }}-${{ (inputs.target || 'production') == 'preview' && (inputs.commit_sha || github.event.workflow_run.head_sha || github.sha) || 'shared' }}",
+    );
+    expect(workflow).toContain(
+      "summary: `The exact commit ${process.env.DEPLOY_SHA} was used for the preview deployment.`,",
+    );
+    expect(workflow).toContain(
       "if: github.event_name == 'workflow_dispatch' && inputs.target == 'production'",
     );
 

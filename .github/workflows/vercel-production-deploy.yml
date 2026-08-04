@@ -15,7 +15,7 @@ on:
           - preview
           - production
       commit_sha:
-        description: Commit or branch to deploy; defaults to the workflow commit
+        description: Exact commit SHA to deploy; defaults to the workflow commit
         required: false
         type: string
       pull_request_number:
@@ -29,7 +29,7 @@ on:
         type: boolean
 
 concurrency:
-  group: vercel-${{ inputs.target || 'production' }}-${{ inputs.commit_sha || github.event.workflow_run.head_sha || github.sha }}
+  group: vercel-${{ inputs.target || 'production' }}-${{ (inputs.target || 'production') == 'preview' && (inputs.commit_sha || github.event.workflow_run.head_sha || github.sha) || 'shared' }}
   cancel-in-progress: false
 
 permissions:
@@ -353,6 +353,7 @@ jobs:
         env:
           CHECK_RUN_ID: ${{ steps.preview-policy.outputs.check_run_id }}
           DEPLOYMENT_STATUS: ${{ job.status }}
+          DEPLOY_SHA: ${{ env.DEPLOY_SHA }}
         with:
           script: |
             const conclusion = process.env.DEPLOYMENT_STATUS === 'success'
@@ -366,6 +367,6 @@ jobs:
               conclusion,
               output: {
                 title: `Preview deployment ${conclusion}`,
-                summary: `The exact commit ${process.env.GITHUB_SHA} was used for the preview deployment.`,
+                summary: `The exact commit ${process.env.DEPLOY_SHA} was used for the preview deployment.`,
               },
             });
