@@ -179,7 +179,6 @@ export function CalendarPageContent() {
       const domainEvent = event as DomainCalendarEvent;
       if (domainEvent._taskAction) {
         const result = await toggleTask(domainEvent._taskAction.taskId);
-        if (result.success && overlayKey) globalMutate(overlayKey);
         if (!result.success) console.error("Calendar task action failed:", result.error);
         return;
       }
@@ -189,7 +188,6 @@ export function CalendarPageContent() {
           domainEvent._habitAction.date,
           !domainEvent._completed,
         );
-        if (result.success && overlayKey) globalMutate(overlayKey);
         if (!result.success) console.error("Calendar habit action failed:", result.error);
         return;
       }
@@ -215,7 +213,7 @@ export function CalendarPageContent() {
         console.error("Calendar inline action failed:", result.error);
       }
     },
-    [dispatch, globalMutate, navigateWorkout, overlayKey, toggleHabit, toggleTask],
+    [dispatch, navigateWorkout, toggleHabit, toggleTask],
   );
 
   const onEventSavedCallback = useCallback(() => {

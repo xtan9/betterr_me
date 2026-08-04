@@ -160,7 +160,7 @@ describe("CalendarPageContent task overlay failure seam", () => {
     expect(screen.getByTestId("day-view")).toBeInTheDocument();
     expect(screen.getByText("workoutOverlay.unavailable")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "workoutOverlay.retry" }));
-    expect(state.mutate).toHaveBeenCalledWith(expect.stringContaining("/api/calendar/overlay-feed"));
+    expect(state.mutate).toHaveBeenCalledWith(expect.stringContaining("layers=habits,tasks,workouts"));
 
     fireEvent.click(screen.getByTestId("invoke-workout-action"));
     await waitFor(() => {

@@ -73,11 +73,9 @@ export interface WorkoutReadPort {
 export type WorkoutOverlayCapabilities = WorkoutReadPort;
 
 /** Combined capabilities used by the selected overlay layers. */
-export interface CalendarOverlayCapabilities {
-  coverage?: TaskCoveragePort;
-  read?: TaskReadPort;
-  habits?: HabitOverlayCapabilities;
-  workouts?: WorkoutOverlayCapabilities;
+export interface CalendarOverlayCapabilities extends TaskOverlayCapabilities {
+  habits: HabitOverlayCapabilities;
+  workouts: WorkoutOverlayCapabilities;
 }
 
 export interface TaskOverlayAction {
