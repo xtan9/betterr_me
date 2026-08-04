@@ -11,9 +11,11 @@ import type { SuccessfulHouseholdRunwayAssessment } from "@/lib/finance/househol
 import {
   createHouseholdRunwayInterview,
   dispatchHouseholdRunwayInterview,
+  householdRunwayDraftDiffersFromPlan,
   type HouseholdRunwayInterviewCommand,
   type HouseholdRunwayInterviewCommandInput,
   type HouseholdRunwayInterviewEffect,
+  type HouseholdRunwayInterviewInitialization,
   type HouseholdRunwayInterviewRenderModel,
   type HouseholdRunwayInterviewStage,
   type HouseholdRunwayInterviewState,
@@ -23,6 +25,7 @@ import {
   type HouseholdRunwayPlan,
   type HouseholdRunwayValidationIssue,
 } from "@/lib/finance/household-runway-interview";
+import type { HouseholdRunwayDraftState } from "@/lib/finance/household-runway-draft-codec";
 
 export type HouseholdRunwayInterviewRuntimeIssueCode =
   | "country_required"
@@ -36,7 +39,9 @@ export type HouseholdRunwayInterviewRuntimeIssueCode =
   | "draft_timestamp_required"
   | "plan_input_invalid"
   | "assessment_required"
-  | "plan_adjustment_pending";
+  | "plan_adjustment_pending"
+  | "draft_recovery"
+  | "confirmation_unavailable";
 
 export interface HouseholdRunwayInterviewRuntimeIssue {
   readonly code: HouseholdRunwayInterviewRuntimeIssueCode;
@@ -173,9 +178,39 @@ export interface HouseholdRunwayInterviewRuntimeSnapshot {
   readonly stage: HouseholdRunwayInterviewStage | null;
   readonly screen: HouseholdRunwayInterviewRuntimeScreen;
   readonly derived: HouseholdRunwayInterviewRuntimeDeepReadonly<HouseholdRunwayInterviewRuntimeDerivedFacts>;
+  readonly plan: HouseholdRunwayInterviewRuntimePlanFacts;
+  readonly draft: HouseholdRunwayInterviewRuntimeDraftFacts;
   readonly issues: readonly HouseholdRunwayInterviewRuntimeIssue[];
   readonly operations: HouseholdRunwayInterviewRuntimeOperations;
+  readonly confirmation: HouseholdRunwayInterviewRuntimeConfirmation;
   readonly affordances: Readonly<HouseholdRunwayInterviewRuntimeAffordances>;
+}
+
+export interface HouseholdRunwayInterviewRuntimeDraftFacts {
+  readonly current: boolean;
+  readonly stored: boolean;
+  readonly session: boolean;
+  readonly device: boolean;
+  readonly deviceStorageConsent: boolean;
+}
+
+export interface HouseholdRunwayInterviewRuntimePlanFacts {
+  readonly exists: boolean;
+  readonly revision: number | null;
+}
+
+export type HouseholdRunwayInterviewRuntimeConfirmationAction =
+  | "start_new"
+  | "discard_draft"
+  | "clear_device_draft";
+
+export interface HouseholdRunwayInterviewRuntimeConfirmation {
+  readonly status: "idle" | "pending";
+  readonly action?: HouseholdRunwayInterviewRuntimeConfirmationAction;
+}
+
+export interface HouseholdRunwayInterviewRuntimeConfirmationRequest {
+  readonly action: HouseholdRunwayInterviewRuntimeConfirmationAction;
 }
 
 export interface HouseholdRunwayInterviewRuntimeDraftRequest {
@@ -206,6 +241,12 @@ export interface HouseholdRunwayInterviewRuntimeCapabilities {
   now?: () => string;
   /** External work is scheduled after the synchronous snapshot transition. */
   schedule?: (task: () => void) => void;
+  /** Restores decoded Draft/Plan state. Storage keys and codec envelopes stay private to the host. */
+  restore?: () => unknown | PromiseLike<unknown>;
+  /** Provides semantic confirmation for destructive user intents. */
+  confirm?: (
+    request: HouseholdRunwayInterviewRuntimeConfirmationRequest,
+  ) => boolean | Promise<boolean>;
   navigate?: (request: {
     action: "push" | "replace" | "back";
     destination: "landing" | "interview";
@@ -250,10 +291,48 @@ export interface HouseholdRunwayInterviewRuntime {
 
 type RuntimeMessage =
   | { type: "start" }
-  | { type: "intent"; intent: HouseholdRunwayInterviewIntent }
-  | { type: "outcome"; command: HouseholdRunwayInterviewCommand };
+  | { type: "restored"; payload?: unknown; failed?: boolean }
+  | { type: "intent"; intent: HouseholdRunwayInterviewIntent; confirmed?: boolean }
+  | { type: "outcome"; command: HouseholdRunwayInterviewCommand }
+  | { type: "synchronize_draft"; retryFailed: boolean }
+  | {
+      type: "confirmation";
+      id: string;
+      action: HouseholdRunwayInterviewRuntimeConfirmationAction;
+      accepted: boolean;
+      failed?: boolean;
+    };
 
 type MaybePromise<T> = T | PromiseLike<T>;
+
+type RuntimeStoredDraft = {
+  state: HouseholdRunwayDraftState;
+  expiresAt?: string;
+};
+
+type RuntimeRestorePayload = {
+  session?:
+    | { status: "missing" }
+    | { status: "restored"; state: HouseholdRunwayDraftState; expiresAt?: string }
+    | { status: "rejected"; code?: string };
+  device?:
+    | { status: "missing" }
+    | { status: "restored"; state: HouseholdRunwayDraftState; expiresAt?: string }
+    | { status: "rejected"; code?: string };
+  deviceStorageConsent?: boolean;
+};
+
+interface RuntimeStorageFacts {
+  session: boolean;
+  device: boolean;
+  deviceStorageConsent: boolean;
+}
+
+const EMPTY_STORAGE_FACTS: RuntimeStorageFacts = {
+  session: false,
+  device: false,
+  deviceStorageConsent: false,
+};
 
 const runtimeIntentTypeSet = new Set<string>(RUNTIME_INTENT_TYPES);
 
@@ -401,9 +480,55 @@ function publicIssueFor(
   return issue ? { code: issue.code } : null;
 }
 
+function isDraftState(value: unknown): value is HouseholdRunwayDraftState {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<HouseholdRunwayDraftState>;
+  return Boolean(
+    candidate.draft &&
+      typeof candidate.draft === "object" &&
+      (candidate.status === "not_started" ||
+        candidate.status === "collecting" ||
+        candidate.status === "reviewing" ||
+        candidate.status === "completed") &&
+      (candidate.stage === null || typeof candidate.stage === "string"),
+  );
+}
+
+function storedDraftFrom(
+  value: RuntimeRestorePayload["session"] | RuntimeRestorePayload["device"] | undefined,
+): RuntimeStoredDraft | null {
+  return value?.status === "restored" && isDraftState(value.state)
+    ? { state: value.state, ...(value.expiresAt ? { expiresAt: value.expiresAt } : {}) }
+    : null;
+}
+
+function restorePayloadFrom(value: unknown): RuntimeRestorePayload {
+  if (!value || typeof value !== "object") return {};
+  return value as RuntimeRestorePayload;
+}
+
+function draftFactsFor(
+  state: HouseholdRunwayInterviewState,
+  storage: RuntimeStorageFacts,
+): HouseholdRunwayInterviewRuntimeDraftFacts {
+  return {
+    current:
+      state.status !== "not_started" ||
+      state.draft.revision > 0 ||
+      state.draft.interviewId !== null,
+    stored: storage.session || storage.device,
+    session: storage.session,
+    device: storage.device,
+    deviceStorageConsent: storage.deviceStorageConsent,
+  };
+}
+
 function snapshotFor(
   state: HouseholdRunwayInterviewState,
   lifecycle: HouseholdRunwayInterviewRuntimeLifecycle,
+  storage: RuntimeStorageFacts = EMPTY_STORAGE_FACTS,
+  runtimeIssues: readonly HouseholdRunwayInterviewRuntimeIssue[] = [],
+  confirmation: HouseholdRunwayInterviewRuntimeConfirmation = { status: "idle" },
 ): HouseholdRunwayInterviewRuntimeSnapshot {
   const screen = state.renderModel;
   const issue =
@@ -418,8 +543,14 @@ function snapshotFor(
       planInputs: clonePublicValue(state.planInputs),
       assessment: clonePublicValue(state.assessment),
     },
-    issues: issue ? [publicIssueFor(issue)!] : [],
+    plan: {
+      exists: state.committedPlan !== null,
+      revision: state.committedPlan?.revision ?? null,
+    },
+    draft: draftFactsFor(state, storage),
+    issues: [...runtimeIssues, ...(issue ? [publicIssueFor(issue)!] : [])],
     operations: publicOperationsFor(state),
+    confirmation,
     affordances: affordancesFor(state, lifecycle),
   });
 }
@@ -442,14 +573,22 @@ export function createHouseholdRunwayInterviewRuntime(
   let lifecycle: HouseholdRunwayInterviewRuntimeLifecycle = "idle";
   let started = false;
   let disposed = false;
-  let snapshot = snapshotFor(state, lifecycle);
+  let storageFacts: RuntimeStorageFacts = { ...EMPTY_STORAGE_FACTS };
+  let runtimeIssues: HouseholdRunwayInterviewRuntimeIssue[] = [];
+  let confirmation: HouseholdRunwayInterviewRuntimeConfirmation = { status: "idle" };
+  let pendingConfirmationIntent: HouseholdRunwayInterviewIntent | null = null;
+  let pendingConfirmationId: string | null = null;
+  let restoredStartStage: HouseholdRunwayInterviewStage | undefined;
+  let draftSyncScheduled = false;
+  let draftSyncAttempt = 0;
+  let snapshot = snapshotFor(state, lifecycle, storageFacts, runtimeIssues, confirmation);
   let draining = false;
   const messages: RuntimeMessage[] = [];
   const listeners = new Set<() => void>();
 
   const publish = () => {
     if (disposed) return;
-    const next = snapshotFor(state, lifecycle);
+    const next = snapshotFor(state, lifecycle, storageFacts, runtimeIssues, confirmation);
     if (snapshotSignature(next) === snapshotSignature(snapshot)) return;
     snapshot = next;
     for (const listener of [...listeners]) {
@@ -482,6 +621,120 @@ export function createHouseholdRunwayInterviewRuntime(
     if (!disposed) enqueue({ type: "outcome", command: createCommand() });
   };
 
+  const applyRestoration = (payload: unknown, failed: boolean) => {
+    const restored = restorePayloadFrom(payload);
+    const session = storedDraftFrom(restored.session);
+    const device = storedDraftFrom(restored.device);
+    storageFacts = {
+      session: session !== null,
+      device: device !== null,
+      deviceStorageConsent: restored.deviceStorageConsent === true,
+    };
+    if (
+      failed ||
+      restored.session?.status === "rejected" ||
+      restored.device?.status === "rejected"
+    ) {
+      runtimeIssues = [{ code: "draft_recovery" }];
+    }
+
+    const selected =
+      session && device
+        ? session.state.draft.revision > device.state.draft.revision
+          ? session
+          : device
+        : session ?? device;
+    if (!selected) return;
+
+    const committedPlan = options.initialPlan ?? null;
+    const differsFromPlan = Boolean(
+      committedPlan &&
+        householdRunwayDraftDiffersFromPlan(
+          selected.state.draft,
+          committedPlan,
+          selected.state.status,
+          selected.state.stage,
+        ),
+    );
+    const initialization: HouseholdRunwayInterviewInitialization = {
+      status: "not_started",
+      stage: null,
+      draft: selected.state.draft,
+      committedPlan,
+      resumeChoice:
+        differsFromPlan && committedPlan
+          ? {
+              draftStatus: selected.state.status,
+              draftStage: selected.state.stage,
+              recommended:
+                selected.state.draft.revision >= committedPlan.revision
+                  ? "draft"
+                  : "plan",
+            }
+          : null,
+    };
+    state = createHouseholdRunwayInterview(initialization);
+    if (!differsFromPlan) {
+      restoredStartStage =
+        selected.state.status === "completed"
+          ? "result"
+          : selected.state.stage === "result"
+            ? "result"
+            : selected.state.stage ?? undefined;
+    }
+  };
+
+  const completeStartup = () => {
+    if (disposed) return;
+    if (state.status === "not_started" && !state.resumeChoice) {
+      const interviewId = createId();
+      applyCommand(
+        {
+          type: "start",
+          interviewId,
+          ...(restoredStartStage ? { stage: restoredStartStage } : {}),
+          commandId: `start:${interviewId}`,
+          occurredAt: now(),
+        },
+        false,
+      );
+    }
+    lifecycle = "ready";
+    publish();
+  };
+
+  const beginRestoration = () => {
+    if (!options.restore) {
+      completeStartup();
+      return;
+    }
+    try {
+      queueMicrotask(() => {
+        if (disposed) return;
+        try {
+          schedule(() => {
+            if (disposed) return;
+            let result: MaybePromise<unknown>;
+            try {
+              result = options.restore!();
+            } catch {
+              enqueue({ type: "restored", failed: true });
+              return;
+            }
+            Promise.resolve(result).then(
+              (value) => enqueue({ type: "restored", payload: value }),
+              () => enqueue({ type: "restored", failed: true }),
+            );
+          });
+        } catch {
+          enqueue({ type: "restored", failed: true });
+        }
+      });
+    } catch {
+      enqueue({ type: "restored", failed: true });
+    }
+  };
+
   const invoke = <T>(
     task: (() => MaybePromise<T>) | undefined,
     onSuccess: (value: T) => HouseholdRunwayInterviewCommand,
@@ -502,6 +755,10 @@ export function createHouseholdRunwayInterviewRuntime(
       (value) => enqueueOutcome(() => onSuccess(value)),
       () => enqueueOutcome(onFailure),
     );
+  };
+
+  const updateStorageFacts = (next: Partial<RuntimeStorageFacts>) => {
+    storageFacts = { ...storageFacts, ...next };
   };
 
   const executeEffect = (effect: HouseholdRunwayInterviewEffect) => {
@@ -538,11 +795,17 @@ export function createHouseholdRunwayInterviewRuntime(
                 correlationId: effect.correlationId,
                 error: "storage_unavailable",
               })
-            : outcomeCommand(createId, now, {
-                type: "draft_synchronization_succeeded",
-                sourceRevision: effect.sourceRevision,
-                correlationId: effect.correlationId,
-              }),
+            : (() => {
+                updateStorageFacts({
+                  session: true,
+                  device: storageFacts.deviceStorageConsent,
+                });
+                return outcomeCommand(createId, now, {
+                  type: "draft_synchronization_succeeded",
+                  sourceRevision: effect.sourceRevision,
+                  correlationId: effect.correlationId,
+                });
+              })(),
         () =>
           outcomeCommand(createId, now, {
             type: "draft_synchronization_failed",
@@ -571,12 +834,19 @@ export function createHouseholdRunwayInterviewRuntime(
                 correlationId: effect.correlationId,
                 error: "storage_unavailable",
               })
-            : outcomeCommand(createId, now, {
-                type: "draft_device_operation_succeeded",
-                action,
-                sourceRevision: effect.sourceRevision,
-                correlationId: effect.correlationId,
-              }),
+            : (() => {
+                updateStorageFacts(
+                  action === "remember"
+                    ? { session: true, device: true, deviceStorageConsent: true }
+                    : { session: true, device: false },
+                );
+                return outcomeCommand(createId, now, {
+                  type: "draft_device_operation_succeeded",
+                  action,
+                  sourceRevision: effect.sourceRevision,
+                  correlationId: effect.correlationId,
+                });
+              })(),
         () =>
           outcomeCommand(createId, now, {
             type: "draft_device_operation_failed",
@@ -602,12 +872,19 @@ export function createHouseholdRunwayInterviewRuntime(
                 correlationId: effect.correlationId,
                 error: "storage_unavailable",
               })
-            : outcomeCommand(createId, now, {
-                type: "draft_device_operation_succeeded",
-                action: "clear",
-                sourceRevision: effect.sourceRevision,
-                correlationId: effect.correlationId,
-              }),
+            : (() => {
+                updateStorageFacts(
+                  effect.scope === "all"
+                    ? { session: false, device: false, deviceStorageConsent: false }
+                    : { device: false, deviceStorageConsent: false },
+                );
+                return outcomeCommand(createId, now, {
+                  type: "draft_device_operation_succeeded",
+                  action: "clear",
+                  sourceRevision: effect.sourceRevision,
+                  correlationId: effect.correlationId,
+                });
+              })(),
         () =>
           outcomeCommand(createId, now, {
             type: "draft_device_operation_failed",
@@ -716,6 +993,98 @@ export function createHouseholdRunwayInterviewRuntime(
     }
   };
 
+  const draftSynchronizationEligible = () =>
+    !state.resumeChoice &&
+    (state.status !== "not_started" ||
+      state.draft.interviewId !== null ||
+      (storageFacts.session || storageFacts.device));
+
+  const scheduleDraftSynchronization = (retryFailed: boolean) => {
+    if (!options.synchronizeDraft || !draftSynchronizationEligible() || draftSyncScheduled) return;
+    const status = state.operations.draftSynchronization.status;
+    if (status !== "dirty" && !(retryFailed && status === "failed")) return;
+    draftSyncScheduled = true;
+    try {
+      queueMicrotask(() => {
+        draftSyncScheduled = false;
+        if (disposed || !draftSynchronizationEligible()) return;
+        const currentStatus = state.operations.draftSynchronization.status;
+        if (
+          currentStatus !== "dirty" &&
+          !(retryFailed && currentStatus === "failed")
+        ) {
+          return;
+        }
+        enqueue({ type: "synchronize_draft", retryFailed });
+      });
+    } catch {
+      draftSyncScheduled = false;
+    }
+  };
+
+  const requiresConfirmation = (
+    intent: HouseholdRunwayInterviewIntent,
+  ): HouseholdRunwayInterviewRuntimeConfirmationAction | null => {
+    if (intent.type === "start_new") {
+      const hasDraftOnLanding =
+        state.renderModel.kind === "landing" && state.renderModel.hasDraft;
+      const hasCurrentProgress = state.draft.revision > 1;
+      return state.resumeChoice || hasDraftOnLanding || hasCurrentProgress
+        ? "start_new"
+        : null;
+    }
+    if (intent.type === "discard_draft") {
+      return state.status !== "not_started" ||
+        storageFacts.session ||
+        storageFacts.device
+        ? "discard_draft"
+        : null;
+    }
+    if (intent.type === "clear_device_draft") {
+      return storageFacts.device || storageFacts.deviceStorageConsent
+        ? "clear_device_draft"
+        : null;
+    }
+    return null;
+  };
+
+  const beginConfirmation = (
+    action: HouseholdRunwayInterviewRuntimeConfirmationAction,
+    intent: HouseholdRunwayInterviewIntent,
+  ) => {
+    if (confirmation.status === "pending" || disposed) return;
+    const id = `${action}:${createId()}`;
+    pendingConfirmationIntent = intent;
+    pendingConfirmationId = id;
+    confirmation = { status: "pending", action };
+    publish();
+    try {
+      queueMicrotask(() => {
+        if (disposed) return;
+        if (!options.confirm) {
+          enqueue({ type: "confirmation", id, action, accepted: false, failed: true });
+          return;
+        }
+        let result: MaybePromise<boolean> = false;
+        try {
+          result = options.confirm({ action });
+        } catch {
+          enqueue({ type: "confirmation", id, action, accepted: false, failed: true });
+          return;
+        }
+        Promise.resolve(result).then(
+          (accepted) => enqueue({ type: "confirmation", id, action, accepted }),
+          () => enqueue({ type: "confirmation", id, action, accepted: false, failed: true }),
+        );
+      });
+    } catch {
+      pendingConfirmationIntent = null;
+      pendingConfirmationId = null;
+      confirmation = { status: "idle" };
+      publish();
+    }
+  };
+
   const duplicatePendingIntent = (intent: HouseholdRunwayInterviewIntent) => {
     if (
       intent.type === "save_plan" &&
@@ -793,26 +1162,67 @@ export function createHouseholdRunwayInterviewRuntime(
       started = true;
       lifecycle = "initializing";
       publish();
-      const interviewId = createId();
-      applyCommand(
-        {
-          type: "start",
-          interviewId,
-          commandId: `start:${interviewId}`,
-          occurredAt: now(),
-        },
-        false,
-      );
-      lifecycle = "ready";
+      beginRestoration();
+      return;
+    }
+    if (message.type === "restored") {
+      if (!started || disposed || lifecycle !== "initializing") return;
+      applyRestoration(message.payload, message.failed === true);
+      completeStartup();
+      return;
+    }
+    if (message.type === "confirmation") {
+      if (
+        disposed ||
+        confirmation.status !== "pending" ||
+        pendingConfirmationId !== message.id ||
+        confirmation.action !== message.action
+      ) {
+        return;
+      }
+      const intent = pendingConfirmationIntent;
+      pendingConfirmationIntent = null;
+      pendingConfirmationId = null;
+      if (message.failed) runtimeIssues = [{ code: "confirmation_unavailable" }];
+      confirmation = { status: "idle" };
       publish();
+      if (message.accepted && intent) {
+        enqueue({ type: "intent", intent, confirmed: true });
+      }
+      return;
+    }
+    if (message.type === "synchronize_draft") {
+      if (
+        !draftSynchronizationEligible() ||
+        (state.operations.draftSynchronization.status !== "dirty" &&
+          !(message.retryFailed &&
+            state.operations.draftSynchronization.status === "failed"))
+      ) {
+        return;
+      }
+      const command = {
+        type: "synchronize_draft" as const,
+        commandId: `synchronize_draft:${state.draft.revision}:${++draftSyncAttempt}`,
+        occurredAt: now(),
+      };
+      applyCommand(command, true);
       return;
     }
     if (message.type === "outcome") {
       applyCommand(message.command, true);
+      scheduleDraftSynchronization(false);
       return;
     }
+    if (confirmation.status === "pending") return;
     const commandType = message.intent.type;
     if (duplicatePendingIntent(message.intent)) return;
+    const confirmationAction = message.confirmed
+      ? null
+      : requiresConfirmation(message.intent);
+    if (confirmationAction) {
+      beginConfirmation(confirmationAction, message.intent);
+      return;
+    }
     const commandInput =
       message.intent.type === "start_new" || message.intent.type === "resume_draft"
         ? { ...message.intent, interviewId: createId() }
@@ -822,6 +1232,7 @@ export function createHouseholdRunwayInterviewRuntime(
       ...commandMetadata(createId, now, commandType),
     } as HouseholdRunwayInterviewCommand;
     applyCommand(command, true);
+    scheduleDraftSynchronization(true);
   }
 
   return {
@@ -844,7 +1255,9 @@ export function createHouseholdRunwayInterviewRuntime(
       lifecycle = "disposed";
       listeners.clear();
       messages.length = 0;
-      snapshot = snapshotFor(state, lifecycle);
+      pendingConfirmationIntent = null;
+      pendingConfirmationId = null;
+      snapshot = snapshotFor(state, lifecycle, storageFacts, runtimeIssues, confirmation);
     },
   };
 }

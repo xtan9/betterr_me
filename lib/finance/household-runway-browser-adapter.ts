@@ -89,6 +89,29 @@ export function readHouseholdRunwayBrowserStorage(): HouseholdRunwayBrowserStora
 }
 
 /**
+ * Supplies the Runtime's opaque restoration capability without exposing the
+ * storage keys, envelope, or codec result to presentation code.
+ */
+export function restoreHouseholdRunwayBrowserRuntime(): unknown {
+  const storage = readHouseholdRunwayBrowserStorage();
+  const source = (result: HouseholdRunwayDraftStorageReadResult) =>
+    result.status === "empty"
+      ? { status: "missing" as const }
+      : result.status === "restored"
+        ? {
+            status: "restored" as const,
+            state: result.state,
+            expiresAt: result.expiresAt,
+          }
+        : { status: "rejected" as const, code: result.code };
+  return {
+    session: source(storage.session),
+    device: source(storage.device),
+    deviceStorageConsent: storage.deviceStorageConsent,
+  };
+}
+
+/**
  * URL/history is a projection of Interview state. A browser event becomes a
  * semantic command; the browser adapter never decides how the Interview
  * state should change.
