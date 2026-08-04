@@ -167,6 +167,7 @@ export function restoreHouseholdRunwayBrowserRuntime(): unknown {
             status: "restored" as const,
             state: result.state,
             expiresAt: result.expiresAt,
+            source: result.source,
           }
         : { status: "rejected" as const, code: result.code };
   return {

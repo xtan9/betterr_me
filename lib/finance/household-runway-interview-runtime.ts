@@ -384,16 +384,27 @@ type MaybePromise<T> = T | PromiseLike<T>;
 type RuntimeStoredDraft = {
   state: HouseholdRunwayDraftState;
   expiresAt?: string;
+  source: "session" | "device";
 };
 
 type RuntimeRestorePayload = {
   session?:
     | { status: "missing" }
-    | { status: "restored"; state: HouseholdRunwayDraftState; expiresAt?: string }
+    | {
+        status: "restored";
+        state: HouseholdRunwayDraftState;
+        expiresAt?: string;
+        source?: "session" | "device";
+      }
     | { status: "rejected"; code?: string };
   device?:
     | { status: "missing" }
-    | { status: "restored"; state: HouseholdRunwayDraftState; expiresAt?: string }
+    | {
+        status: "restored";
+        state: HouseholdRunwayDraftState;
+        expiresAt?: string;
+        source?: "session" | "device";
+      }
     | { status: "rejected"; code?: string };
   deviceStorageConsent?: boolean;
   plan?:
@@ -599,9 +610,14 @@ function isDraftState(value: unknown): value is HouseholdRunwayDraftState {
 
 function storedDraftFrom(
   value: RuntimeRestorePayload["session"] | RuntimeRestorePayload["device"] | undefined,
+  fallbackSource: "session" | "device",
 ): RuntimeStoredDraft | null {
   return value?.status === "restored" && isDraftState(value.state)
-    ? { state: value.state, ...(value.expiresAt ? { expiresAt: value.expiresAt } : {}) }
+    ? {
+        state: value.state,
+        source: value.source ?? fallbackSource,
+        ...(value.expiresAt ? { expiresAt: value.expiresAt } : {}),
+      }
     : null;
 }
 
@@ -775,11 +791,11 @@ export function createHouseholdRunwayInterviewRuntime(
 
   const applyRestoration = (payload: unknown, failed: boolean) => {
     const restored = restorePayloadFrom(payload);
-    const session = storedDraftFrom(restored.session);
-    const device = storedDraftFrom(restored.device);
+    const session = storedDraftFrom(restored.session, "session");
+    const device = storedDraftFrom(restored.device, "device");
     storageFacts = {
-      session: session !== null,
-      device: device !== null,
+      session: session?.source === "session",
+      device: device?.source === "device",
       deviceStorageConsent: restored.deviceStorageConsent === true,
     };
     if (

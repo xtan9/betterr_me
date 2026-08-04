@@ -6,10 +6,12 @@ import {
   executeHouseholdRunwayBrowserEffect,
   householdRunwayHistoryProjectionCommand,
   readHouseholdRunwayBrowserStorage,
+  restoreHouseholdRunwayBrowserRuntime,
   type HouseholdRunwayBrowserEnvironment,
 } from "@/lib/finance/household-runway-browser-adapter";
 import { createHouseholdRunwayInterview } from "@/lib/finance/household-runway-interview";
 import { createDefaultRunwayAnswers } from "@/lib/finance/cushion";
+import { rememberHouseholdRunwayDraft } from "@/lib/finance/runway-draft-client";
 
 function createEnvironment() {
   const history = {
@@ -155,25 +157,20 @@ describe("Household Runway browser adapter", () => {
     const restored = createHouseholdRunwayInterview();
     restored.draft.revision = 1;
     restored.draft.interviewId = "stored-interview";
-    const importDraft = vi.fn(() => true);
+    sessionStorage.clear();
+    localStorage.clear();
+    rememberHouseholdRunwayDraft({
+      status: "collecting",
+      stage: "location",
+      draft: restored.draft,
+    });
+    sessionStorage.clear();
     const adapter = createHouseholdRunwayBrowserAdapter({
       environment: browser.environment,
       authenticated: false,
       autoStart: false,
       createId: () => "interview-1",
-      importDraft,
-      restore: async () => ({
-        device: {
-          status: "restored" as const,
-          state: {
-            status: "collecting" as const,
-            stage: "location" as const,
-            draft: restored.draft,
-          },
-        },
-        deviceStorageConsent: true,
-      }),
-      synchronizeDraft: () => true,
+      restore: restoreHouseholdRunwayBrowserRuntime,
     });
 
     adapter.start();
@@ -182,11 +179,13 @@ describe("Household Runway browser adapter", () => {
     }
 
     expect(adapter.getSnapshot().screen.kind).toBe("location");
-    expect(importDraft).toHaveBeenCalledOnce();
     expect(adapter.getSnapshot().operations.deviceDraft).toEqual({
       status: "succeeded",
     });
+    expect(localStorage.getItem("betterr.household-runway.interview.v2")).toBeNull();
     adapter.dispose();
+    sessionStorage.clear();
+    localStorage.clear();
   });
 
   it("keeps a destructive navigation command ahead of URL reconciliation", async () => {
