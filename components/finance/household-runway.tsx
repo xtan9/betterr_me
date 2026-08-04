@@ -42,9 +42,6 @@ import {
   type ExpenseItemType,
 } from "@/lib/finance/runway-expenses";
 import {
-  HOUSEHOLD_RUNWAY_DRAFT_TTL_MS,
-} from "@/lib/finance/internal/household-runway-draft-codec";
-import {
   RUNWAY_REGIONS,
   normalizeRunwayLocale,
   runwayRegionLabel,
@@ -52,9 +49,10 @@ import {
 import {
   type HouseholdRunwayInterviewIntent,
   type HouseholdRunwayInterviewRuntimeScreen,
+  HOUSEHOLD_RUNWAY_DRAFT_RETENTION_DAYS,
+  type HouseholdRunwayReportPresentation,
 } from "@/lib/finance/household-runway-interview-runtime";
 import type { HouseholdRunwayBrowserReportPresentation } from "@/lib/finance/household-runway-browser-adapter";
-import type { HouseholdRunwayReportPresentation } from "@/lib/finance/household-runway-download";
 import { useHouseholdRunwayRuntime } from "@/lib/finance/household-runway-react-adapter";
 
 const OPTIONAL_STEPS = new Set<RunwayStepId>([
@@ -503,7 +501,7 @@ function DraftStorageControl({
             data-testid="runway-expiry-disclosure"
           >
             {t("privacy.expiryDisclosure", {
-              days: Math.round(HOUSEHOLD_RUNWAY_DRAFT_TTL_MS / 86_400_000),
+              days: HOUSEHOLD_RUNWAY_DRAFT_RETENTION_DAYS,
             })}
           </p>
         ) : null}

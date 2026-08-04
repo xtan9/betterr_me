@@ -7,10 +7,7 @@ import type {
 import { HOUSEHOLD_RUNWAY_INTERVIEW_STAGE_IDS } from "@/lib/finance/internal/household-runway-interview";
 import type { HouseholdRunwayAnswers, RunwaySnapshotSummary } from "@/lib/finance/cushion";
 import type { SuccessfulHouseholdRunwayAssessment } from "@/lib/finance/household-runway-assessment";
-import {
-  downloadHouseholdRunwayAssessment,
-  type HouseholdRunwayReportPresentation,
-} from "@/lib/finance/household-runway-download";
+import { downloadHouseholdRunwayAssessment } from "@/lib/finance/internal/household-runway-download";
 import {
   clearHouseholdRunwayDeviceDraft,
   clearHouseholdRunwayDraft,
@@ -20,17 +17,17 @@ import {
   readHouseholdRunwayDeviceDraft,
   readHouseholdRunwayDraft,
   rememberHouseholdRunwayDraft,
-} from "@/lib/finance/runway-draft-client";
+} from "@/lib/finance/internal/runway-draft-client";
 import {
   runwayAttribution,
   trackRunwayEvent,
 } from "@/lib/finance/runway-analytics-client";
-import type { HouseholdRunwayDraftStorageReadResult } from "@/lib/finance/runway-draft-client";
+import type { HouseholdRunwayDraftStorageReadResult } from "@/lib/finance/internal/runway-draft-client";
 import type { HouseholdRunwayDraftState } from "@/lib/finance/internal/household-runway-draft-codec";
 import {
   dispatchHouseholdRunwayRuntimeEnvironment,
   type HouseholdRunwayInterviewRuntimeEnvironmentMessage,
-} from "@/lib/finance/household-runway-runtime-environment";
+} from "@/lib/finance/internal/household-runway-runtime-environment";
 import {
   createHouseholdRunwayInterviewRuntime,
   type HouseholdRunwayInterviewRuntime,
@@ -39,6 +36,7 @@ import {
   type HouseholdRunwayInterviewRuntimePlanRequest,
   type HouseholdRunwayInterviewRuntimeReportRequest,
   type HouseholdRunwayInterviewRuntimeOptions,
+  type HouseholdRunwayReportPresentation,
 } from "@/lib/finance/household-runway-interview-runtime";
 import type { RunwayLocale } from "@/lib/finance/runway-regions";
 

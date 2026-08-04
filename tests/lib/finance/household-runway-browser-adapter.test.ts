@@ -11,7 +11,7 @@ import {
 } from "@/lib/finance/household-runway-browser-adapter";
 import { createHouseholdRunwayInterview } from "@/lib/finance/internal/household-runway-interview";
 import { createDefaultRunwayAnswers } from "@/lib/finance/cushion";
-import { rememberHouseholdRunwayDraft } from "@/lib/finance/runway-draft-client";
+import { rememberHouseholdRunwayDraft } from "@/lib/finance/internal/runway-draft-client";
 
 function createEnvironment() {
   const history = {

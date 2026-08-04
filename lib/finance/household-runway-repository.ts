@@ -16,7 +16,7 @@ import {
 import {
   migrateRunwayAnswers,
   validateCurrentRunwayAnswers,
-} from "@/lib/finance/runway-answer-migrations";
+} from "@/lib/finance/internal/runway-answer-migrations";
 
 export type HouseholdRunwaySnapshotTrigger =
   | "completed"

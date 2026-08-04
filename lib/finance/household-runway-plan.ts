@@ -1,5 +1,5 @@
 import type { HouseholdRunwayAnswers } from "@/lib/finance/cushion";
-import { validateCurrentRunwayAnswers } from "@/lib/finance/runway-answer-migrations";
+import { validateCurrentRunwayAnswers } from "@/lib/finance/internal/runway-answer-migrations";
 
 /** The only committed Household Runway data exposed to domain callers. */
 export interface HouseholdRunwayPlan {
