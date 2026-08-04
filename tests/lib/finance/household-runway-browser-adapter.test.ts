@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { assessHouseholdRunway } from "@/lib/finance/household-runway-assessment";
 import {
   applyHouseholdRunwayBrowserEffect,
+  createHouseholdRunwayBrowserAdapter,
   executeHouseholdRunwayBrowserEffect,
   householdRunwayHistoryProjectionCommand,
   readHouseholdRunwayBrowserStorage,
@@ -43,7 +44,216 @@ function successfulAssessment() {
   return outcome;
 }
 
+function createAdapterEnvironment(href = "https://betterr.me/finance/cushion?start=1") {
+  const listeners = new Map<string, Set<() => void>>();
+  const frames = new Map<number, () => void>();
+  let nextFrame = 1;
+  const environment: HouseholdRunwayBrowserEnvironment = {
+    location: { href },
+    history: {
+      back: vi.fn(),
+      pushState: vi.fn((_data, _unused, url) => {
+        if (url) environment.location.href = new URL(String(url), environment.location.href).href;
+      }),
+      replaceState: vi.fn((_data, _unused, url) => {
+        if (url) environment.location.href = new URL(String(url), environment.location.href).href;
+      }),
+    },
+    document: { getElementById: vi.fn(() => ({ focus: vi.fn() })) },
+    requestAnimationFrame: vi.fn((callback) => {
+      const id = nextFrame++;
+      frames.set(id, callback);
+      return id;
+    }),
+    cancelAnimationFrame: vi.fn((id) => frames.delete(id)),
+    addEventListener: vi.fn((type, listener) => {
+      const current = listeners.get(type) ?? new Set<() => void>();
+      current.add(listener);
+      listeners.set(type, current);
+    }),
+    removeEventListener: vi.fn((type, listener) => {
+      listeners.get(type)?.delete(listener);
+    }),
+  };
+  return {
+    environment,
+    emit(type: string) {
+      listeners.get(type)?.forEach((listener) => listener());
+    },
+    runFrames() {
+      for (const [id, callback] of [...frames]) {
+        frames.delete(id);
+        callback();
+      }
+    },
+    listeners,
+    frames,
+  };
+}
+
 describe("Household Runway browser adapter", () => {
+  it("projects the initial destination and repairs an impossible requested stage", () => {
+    const browser = createAdapterEnvironment(
+      "https://betterr.me/finance/cushion?stage=expenses",
+    );
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      createId: () => "interview-1",
+    });
+
+    adapter.start();
+
+    expect(adapter.getSnapshot()).toMatchObject({
+      interviewStatus: "not_started",
+      stage: null,
+      screen: { kind: "landing" },
+    });
+    expect(browser.environment.history.replaceState).toHaveBeenCalledWith(
+      {},
+      "",
+      "/finance/cushion",
+    );
+    adapter.dispose();
+  });
+
+  it("validates Back and Forward through Runtime state instead of browser state", () => {
+    const browser = createAdapterEnvironment();
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      createId: () => "interview-1",
+    });
+    adapter.start();
+
+    expect(adapter.getSnapshot().interviewStatus).toBe("collecting");
+    browser.environment.location.href = "https://betterr.me/finance/cushion";
+    browser.emit("popstate");
+    expect(adapter.getSnapshot().interviewStatus).toBe("not_started");
+
+    browser.environment.location.href = "https://betterr.me/finance/cushion?start=1";
+    browser.emit("popstate");
+    expect(adapter.getSnapshot().interviewStatus).toBe("collecting");
+    adapter.dispose();
+  });
+
+  it("flushes the latest eligible Draft synchronously on locale change", () => {
+    const browser = createAdapterEnvironment();
+    const synchronizeDraft = vi.fn(() => true);
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      createId: () => "interview-1",
+      synchronizeDraft,
+    });
+    adapter.start();
+    adapter.send({ type: "select_country", country: "US" });
+
+    browser.emit("betterr:before-locale-change");
+
+    expect(synchronizeDraft).toHaveBeenCalledWith({
+      status: "collecting",
+      stage: "location",
+      answers: expect.objectContaining({ country: "US" }),
+    });
+    expect(adapter.getSnapshot().operations.draftSynchronization).toEqual({
+      status: "succeeded",
+    });
+    adapter.dispose();
+  });
+
+  it("keeps a failed locale flush failed and ignores its late completion after disposal", async () => {
+    const browser = createAdapterEnvironment();
+    let resolveSync: ((value: boolean) => void) | undefined;
+    const synchronizeDraft = vi.fn(
+      () => new Promise<boolean>((resolve) => { resolveSync = resolve; }),
+    );
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      createId: () => "interview-1",
+      synchronizeDraft,
+    });
+    adapter.start();
+    adapter.send({ type: "select_country", country: "US" });
+    browser.emit("betterr:before-locale-change");
+
+    expect(adapter.getSnapshot().operations.draftSynchronization).toEqual({
+      status: "pending",
+    });
+    adapter.dispose();
+    resolveSync?.(false);
+    await Promise.resolve();
+    expect(adapter.getSnapshot().operations.draftSynchronization).toEqual({
+      status: "pending",
+    });
+  });
+
+  it("removes subscriptions and cancellable focus work, allowing an independent remount", () => {
+    const browser = createAdapterEnvironment();
+    const first = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      createId: () => "first",
+      schedule: (task) => task(),
+    });
+    first.start();
+    expect(browser.listeners.get("popstate")?.size).toBe(1);
+    expect(browser.listeners.get("betterr:before-locale-change")?.size).toBe(1);
+    first.dispose();
+    expect(browser.listeners.get("popstate")?.size).toBe(0);
+    expect(browser.listeners.get("betterr:before-locale-change")?.size).toBe(0);
+
+    const second = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      createId: () => "second",
+    });
+    second.start();
+    expect(browser.listeners.get("popstate")?.size).toBe(1);
+    expect(browser.listeners.get("betterr:before-locale-change")?.size).toBe(1);
+    second.dispose();
+  });
+
+  it("maps subscription failures to typed outcomes without throwing", () => {
+    const outcomes: unknown[] = [];
+    const browser = createAdapterEnvironment();
+    browser.environment.addEventListener = () => {
+      throw new Error("subscription unavailable");
+    };
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      onOutcome: (outcome) => outcomes.push(outcome),
+    });
+
+    expect(() => adapter.start()).not.toThrow();
+    expect(outcomes).toContainEqual({
+      type: "subscription",
+      event: "history",
+      outcome: "unavailable",
+    });
+    expect(outcomes).toContainEqual({
+      type: "subscription",
+      event: "locale",
+      outcome: "unavailable",
+    });
+    adapter.dispose();
+  });
+
+  it("maps scheduling failures to typed outcomes without leaking the exception", async () => {
+    const outcomes: unknown[] = [];
+    const browser = createAdapterEnvironment();
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      schedule: () => {
+        throw new Error("scheduler unavailable");
+      },
+      onOutcome: (outcome) => outcomes.push(outcome),
+    });
+
+    expect(() => adapter.start()).not.toThrow();
+    await Promise.resolve();
+    expect(outcomes).toContainEqual({
+      type: "schedule",
+      outcome: "unavailable",
+    });
+    adapter.dispose();
+  });
+
   it("translates URL projections into typed semantic commands", () => {
     expect(
       householdRunwayHistoryProjectionCommand({

@@ -26,6 +26,11 @@ import {
   type HouseholdRunwayValidationIssue,
 } from "@/lib/finance/household-runway-interview";
 import type { HouseholdRunwayDraftState } from "@/lib/finance/household-runway-draft-codec";
+import {
+  registerHouseholdRunwayRuntimeEnvironment,
+  unregisterHouseholdRunwayRuntimeEnvironment,
+  type HouseholdRunwayInterviewRuntimeEnvironmentMessage,
+} from "@/lib/finance/household-runway-runtime-environment";
 
 export type HouseholdRunwayInterviewRuntimeIssueCode =
   | "country_required"
@@ -355,6 +360,10 @@ type RuntimeMessage =
   | { type: "start" }
   | { type: "restored"; payload?: unknown; failed?: boolean }
   | { type: "plan_restored"; payload?: unknown; failed?: boolean }
+  | {
+      type: "environment";
+      message: HouseholdRunwayInterviewRuntimeEnvironmentMessage;
+    }
   | { type: "intent"; intent: HouseholdRunwayInterviewIntent; confirmed?: boolean }
   | { type: "outcome"; command: HouseholdRunwayInterviewCommand }
   | { type: "synchronize_draft"; retryFailed: boolean }
@@ -973,6 +982,7 @@ export function createHouseholdRunwayInterviewRuntime(
     task: (() => MaybePromise<T>) | undefined,
     onSuccess: (value: T) => HouseholdRunwayInterviewCommand,
     onFailure: () => HouseholdRunwayInterviewCommand,
+    synchronous = false,
   ) => {
     let result: MaybePromise<T>;
     try {
@@ -985,17 +995,29 @@ export function createHouseholdRunwayInterviewRuntime(
       enqueueOutcome(onFailure);
       return;
     }
-    Promise.resolve(result).then(
-      (value) => enqueueOutcome(() => onSuccess(value)),
-      () => enqueueOutcome(onFailure),
-    );
+    const isPromiseLike =
+      result &&
+      typeof result === "object" &&
+      "then" in result &&
+      typeof result.then === "function";
+    if (!synchronous || isPromiseLike) {
+      Promise.resolve(result).then(
+        (value) => enqueueOutcome(() => onSuccess(value)),
+        () => enqueueOutcome(onFailure),
+      );
+      return;
+    }
+    enqueueOutcome(() => onSuccess(result as T));
   };
 
   const updateStorageFacts = (next: Partial<RuntimeStorageFacts>) => {
     storageFacts = { ...storageFacts, ...next };
   };
 
-  const executeEffect = (effect: HouseholdRunwayInterviewEffect) => {
+  const executeEffect = (
+    effect: HouseholdRunwayInterviewEffect,
+    synchronous = false,
+  ) => {
     if (disposed) return;
     if (effect.type === "history") {
       try {
@@ -1047,6 +1069,7 @@ export function createHouseholdRunwayInterviewRuntime(
             correlationId: effect.correlationId,
             error: "storage_unavailable",
           }),
+        synchronous,
       );
       return;
     }
@@ -1305,8 +1328,15 @@ export function createHouseholdRunwayInterviewRuntime(
     }
   };
 
-  const scheduleEffects = (effects: readonly HouseholdRunwayInterviewEffect[]) => {
+  const scheduleEffects = (
+    effects: readonly HouseholdRunwayInterviewEffect[],
+    immediately = false,
+  ) => {
     if (effects.length === 0 || disposed) return;
+    if (immediately) {
+      for (const effect of effects) executeEffect(effect, true);
+      return;
+    }
     try {
       queueMicrotask(() => {
         if (disposed) return;
@@ -1466,6 +1496,7 @@ export function createHouseholdRunwayInterviewRuntime(
   const applyCommand = (
     command: HouseholdRunwayInterviewCommand,
     publishSnapshot: boolean,
+    immediately = false,
   ) => {
     if (disposed) return;
     try {
@@ -1495,7 +1526,7 @@ export function createHouseholdRunwayInterviewRuntime(
       if (publishSnapshot && !introducedStaleResult(previousState, result.state)) {
         publish();
       }
-      scheduleEffects(result.effects);
+      scheduleEffects(result.effects, immediately);
     } catch {
       // Malformed runtime values are safe no-ops at the facade boundary.
     }
@@ -1524,6 +1555,33 @@ export function createHouseholdRunwayInterviewRuntime(
       if (!started || disposed || lifecycle !== "initializing") return;
       applyPlanRestoration(message.payload, message.failed === true);
       finishStartupPart();
+      return;
+    }
+    if (message.type === "environment") {
+      if (!started || disposed || lifecycle !== "ready") return;
+      if (message.message.type === "locale_changed") {
+        if (!draftSynchronizationEligible()) return;
+        const status = state.operations.draftSynchronization.status;
+        if (status !== "dirty" && status !== "failed") return;
+        applyCommand(
+          {
+            type: "synchronize_draft",
+            commandId: `synchronize_draft:${state.draft.revision}:${++draftSyncAttempt}`,
+            occurredAt: now(),
+          },
+          true,
+          true,
+        );
+        return;
+      }
+      const command = {
+        ...message.message,
+        ...(message.message.destination === "interview"
+          ? { interviewId: createId() }
+          : {}),
+        ...commandMetadata(createId, now, "history_projection_changed"),
+      } as HouseholdRunwayInterviewCommand;
+      applyCommand(command, true);
       return;
     }
     if (message.type === "confirmation") {
@@ -1590,7 +1648,7 @@ export function createHouseholdRunwayInterviewRuntime(
     scheduleDraftSynchronization(true);
   }
 
-  return {
+  const runtime: HouseholdRunwayInterviewRuntime = {
     getSnapshot: () => snapshot,
     subscribe(listener) {
       if (disposed) return () => undefined;
@@ -1620,6 +1678,12 @@ export function createHouseholdRunwayInterviewRuntime(
         confirmation,
         assessmentHistory,
       );
+      unregisterHouseholdRunwayRuntimeEnvironment(runtime);
     },
   };
+
+  registerHouseholdRunwayRuntimeEnvironment(runtime, (message) => {
+    if (!disposed) enqueue({ type: "environment", message });
+  });
+  return runtime;
 }
