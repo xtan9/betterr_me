@@ -213,7 +213,6 @@ export function HouseholdRunway({
   const activeExpenseCategory =
     renderModel.kind === "expenses" ? renderModel.activeCategory : null;
   const deviceStorageConsent = snapshot.draft.deviceStorageConsent;
-  const planExists = snapshot.plan.exists;
   const snapshots = snapshot.assessmentHistory;
   const draftSyncOperation = snapshot.operations.draftSynchronization;
   const draftSyncState =
@@ -227,7 +226,7 @@ export function HouseholdRunway({
     planOperation.status === "pending"
       ? "saving"
       : planOperation.status === "succeeded" ||
-          (planExists && !snapshot.draft.current)
+          snapshot.plan.current
         ? "saved"
         : planOperation.status === "failed"
           ? "failed"

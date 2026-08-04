@@ -193,7 +193,7 @@ describe("Household Runway Interview Runtime", () => {
       canContinue: false,
     });
     expect(snapshot.derived).toEqual({ planInputs: null, assessment: null });
-    expect(snapshot.plan).toEqual({ exists: false });
+    expect(snapshot.plan).toEqual({ exists: false, current: false });
     expect(snapshot.draft).toEqual({
       current: true,
       stored: false,
@@ -963,6 +963,7 @@ describe("Household Runway Interview Runtime", () => {
       lifecycle: "ready",
       interviewStatus: "not_started",
       screen: { kind: "resume_choice", recommended: "draft" },
+      plan: { exists: true, current: false },
       draft: { device: true, deviceStorageConsent: true },
     });
     expect(runtime.getSnapshot().screen).not.toHaveProperty("draftRevision");
@@ -974,6 +975,7 @@ describe("Household Runway Interview Runtime", () => {
     expect(runtime.getSnapshot()).toMatchObject({
       interviewStatus: "completed",
       screen: { kind: "stage", stage: "result" },
+      plan: { exists: true, current: true },
     });
   });
 
@@ -1071,7 +1073,7 @@ describe("Household Runway Interview Runtime", () => {
     expect(runtime.getSnapshot()).toMatchObject({
       lifecycle: "ready",
       interviewStatus: "completed",
-      plan: { exists: true, inputs: planInputs },
+      plan: { exists: true, current: true, inputs: planInputs },
       assessmentHistory: [history],
     });
   });
@@ -1115,7 +1117,7 @@ describe("Household Runway Interview Runtime", () => {
     });
     cleared.start();
     await settle([]);
-    expect(cleared.getSnapshot().plan).toEqual({ exists: false });
+    expect(cleared.getSnapshot().plan).toEqual({ exists: false, current: false });
   });
 
   it("publishes a successful Plan save with authoritative Plan and Assessment history", async () => {
@@ -1166,7 +1168,7 @@ describe("Household Runway Interview Runtime", () => {
     expect(Object.getOwnPropertyDescriptor(request, "idempotencyKey")?.enumerable).toBe(false);
     expect(request.idempotencyKey).toBe(request.snapshotActionId);
     expect(runtime.getSnapshot()).toMatchObject({
-      plan: { exists: true },
+      plan: { exists: true, current: true },
       assessmentHistory: [history],
       operations: { planPersistence: { status: "succeeded" } },
     });

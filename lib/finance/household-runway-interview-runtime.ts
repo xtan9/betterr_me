@@ -31,6 +31,7 @@ import {
   createHouseholdRunwayInterview,
   dispatchHouseholdRunwayInterview,
   householdRunwayDraftDiffersFromPlan,
+  householdRunwayDraftMatchesPlanContent,
   type HouseholdRunwayInterviewCommand,
   type HouseholdRunwayInterviewCommandInput,
   type HouseholdRunwayInterviewEffect,
@@ -408,6 +409,8 @@ export interface HouseholdRunwayInterviewRuntimeDraftFacts {
 
 export interface HouseholdRunwayInterviewRuntimePlanFacts {
   readonly exists: boolean;
+  /** Whether the active completed result still matches the committed Plan. */
+  readonly current: boolean;
   readonly inputs?: HouseholdRunwayAnswers;
 }
 
@@ -1094,6 +1097,14 @@ function snapshotFor(
     },
     plan: {
       exists: state.committedPlan !== null,
+      current:
+        state.committedPlan !== null &&
+        householdRunwayDraftMatchesPlanContent(
+          state.draft,
+          state.committedPlan,
+          state.status,
+          state.stage,
+        ),
       ...(state.committedPlan
         ? { inputs: clonePublicValue(state.committedPlan.inputs) }
         : {}),
