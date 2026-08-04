@@ -4499,13 +4499,15 @@ function completeAnalytics(
     return ignored(state, command, "operation_not_pending");
   }
   const succeeded = command.type === "analytics_succeeded";
+  const stale = state.draft.revision !== command.sourceRevision;
+  const error = stale ? "stale_result" : succeeded ? null : "analytics_failed";
   return transition(
     state,
     {
       ...snapshotOf(state),
       operations: {
         ...state.operations,
-        analytics: succeeded
+        analytics: error === null
           ? {
               status: "succeeded",
               sourceRevision: command.sourceRevision,
@@ -4515,15 +4517,15 @@ function completeAnalytics(
               status: "failed",
               sourceRevision: command.sourceRevision,
               correlationId: command.correlationId,
-              error: "analytics_failed",
+              error,
             },
       },
     },
     [
-      event(command, succeeded ? "analytics_recorded" : "analytics_failed", {
+      event(command, error === null ? "analytics_recorded" : "analytics_failed", {
         sourceRevision: command.sourceRevision,
         correlationId: command.correlationId,
-        ...(succeeded ? {} : { error: "analytics_failed" }),
+        ...(error ? { error } : {}),
       }),
     ],
     [],

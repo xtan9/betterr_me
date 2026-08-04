@@ -1512,6 +1512,12 @@ export function createHouseholdRunwayInterviewRuntime(
       return true;
     }
     if (
+      intent.type === "request_analytics" &&
+      state.operations.analytics.status === "pending"
+    ) {
+      return true;
+    }
+    if (
       (intent.type === "remember_draft" || intent.type === "import_draft") &&
       state.operations.deviceDraft.status === "pending" &&
       state.operations.deviceDraft.action ===

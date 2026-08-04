@@ -459,6 +459,42 @@ describe("Household Runway Interview Runtime", () => {
     });
   });
 
+  it("coalesces duplicate analytics intents and ignores stale analytics outcomes", async () => {
+    const scheduled: (() => void)[] = [];
+    let resolveAnalytics: ((value: boolean) => void) | undefined;
+    const trackAnalytics = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveAnalytics = resolve;
+        }),
+    );
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: (() => {
+        let id = 0;
+        return () => `interview-${++id}`;
+      })(),
+      schedule: (task) => scheduled.push(task),
+      trackAnalytics,
+    });
+    runtime.start();
+    driveToReview(runtime);
+    runtime.send({ type: "continue" });
+    await settle(scheduled);
+
+    runtime.send({ type: "request_analytics", eventName: "completed", stage: "result" });
+    runtime.send({ type: "request_analytics", eventName: "completed", stage: "result" });
+    await settle(scheduled);
+    expect(trackAnalytics).toHaveBeenCalledOnce();
+
+    runtime.send({ type: "edit_completed_plan" });
+    resolveAnalytics?.(true);
+    await settle(scheduled);
+    runtime.dispose();
+
+    expect(runtime.getSnapshot().operations.analytics).toEqual({ status: "idle" });
+  });
+
   it("ignores a late report result after the Assessment has changed and after disposal", async () => {
     const scheduled: (() => void)[] = [];
     let resolveReport: ((value: boolean) => void) | undefined;
