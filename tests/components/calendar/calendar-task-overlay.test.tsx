@@ -6,7 +6,7 @@ import {
   calendarEventToDisplayItem,
   groupCalendarDisplayItemsByDate,
   overlayItemsToDisplayItems,
-} from "@/lib/calendar/overlay-adapter";
+} from "@/lib/calendar/display";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 import type {
   CalendarOverlayItem,
@@ -96,7 +96,7 @@ describe("Calendar display adapter", () => {
   it("lets Calendar views render an overlay without a fabricated Calendar Event", () => {
     const [item] = overlayItemsToDisplayItems([taskItem()]);
 
-    render(<EventChip event={item} />);
+    render(<EventChip item={item} />);
 
     expect(screen.getByTitle("Task")).toBeInTheDocument();
     expect(item).toMatchObject({
@@ -150,7 +150,7 @@ describe("Calendar display adapter", () => {
 
     render(
       <EventBlock
-        event={item}
+        item={item}
         top={100}
         height={48}
         left="0%"

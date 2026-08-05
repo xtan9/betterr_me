@@ -13,7 +13,7 @@ const lifecycleBoundarySources = [
   "app/api/calendar/overlay-feed/route.ts",
   "lib/calendar/overlay-feed.ts",
   "lib/calendar/supabase-overlay-feed.ts",
-  "lib/calendar/overlay-adapter.ts",
+  "lib/calendar/display.ts",
   "lib/ai/tools/tasks.ts",
   "lib/recurring-tasks/creation.ts",
   "lib/recurring-tasks/supabase-occurrence-adapter.ts",

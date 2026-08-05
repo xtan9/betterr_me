@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { WeekView } from "@/components/calendar/week-view";
-import type { CalendarDisplayItem } from "@/lib/calendar/overlay-adapter";
+import type { CalendarDisplayItem } from "@/lib/calendar/display";
 
 // Mock next-intl
 vi.mock("next-intl", () => ({
@@ -16,7 +16,7 @@ vi.mock("next-intl", () => ({
 Element.prototype.scrollTo = vi.fn();
 
 describe("WeekView", () => {
-  const emptyEvents = new Map<string, CalendarDisplayItem[]>();
+  const emptyDisplayItems = new Map<string, CalendarDisplayItem[]>();
   const today = "2026-04-01";
   // April 1, 2026 is a Wednesday
   const currentDate = new Date(2026, 3, 1);
@@ -35,7 +35,7 @@ describe("WeekView", () => {
       <WeekView
         currentDate={currentDate}
         weekStartDay={0}
-        events={emptyEvents}
+        displayItems={emptyDisplayItems}
         today={today}
       />,
     );
@@ -51,7 +51,7 @@ describe("WeekView", () => {
       <WeekView
         currentDate={currentDate}
         weekStartDay={0}
-        events={emptyEvents}
+        displayItems={emptyDisplayItems}
         today={today}
       />,
     );
@@ -66,7 +66,7 @@ describe("WeekView", () => {
       <WeekView
         currentDate={currentDate}
         weekStartDay={0}
-        events={emptyEvents}
+        displayItems={emptyDisplayItems}
         today={today}
       />,
     );
@@ -84,7 +84,7 @@ describe("WeekView", () => {
       <WeekView
         currentDate={currentDate}
         weekStartDay={0}
-        events={emptyEvents}
+        displayItems={emptyDisplayItems}
         today={today}
       />,
     );
@@ -97,7 +97,7 @@ describe("WeekView", () => {
       <WeekView
         currentDate={currentDate}
         weekStartDay={0}
-        events={emptyEvents}
+        displayItems={emptyDisplayItems}
         today={today}
       />,
     );

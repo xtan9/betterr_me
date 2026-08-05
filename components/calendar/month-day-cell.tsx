@@ -2,13 +2,13 @@
 
 import { useTranslations } from "next-intl";
 import { EventChip } from "./event-chip";
-import type { CalendarDisplayItem } from "@/lib/calendar/overlay-adapter";
+import type { CalendarDisplayItem } from "@/lib/calendar/display";
 
-const MAX_VISIBLE_EVENTS = 3;
+const MAX_VISIBLE_ITEMS = 3;
 
 interface MonthDayCellProps {
   date: Date;
-  events: CalendarDisplayItem[];
+  displayItems: CalendarDisplayItem[];
   isToday: boolean;
   isOutsideMonth: boolean;
   onClick: () => void;
@@ -16,15 +16,15 @@ interface MonthDayCellProps {
 
 export function MonthDayCell({
   date,
-  events,
+  displayItems,
   isToday,
   isOutsideMonth,
   onClick,
 }: MonthDayCellProps) {
   const t = useTranslations("calendar");
   const dayNumber = date.getDate();
-  const visibleEvents = events.slice(0, MAX_VISIBLE_EVENTS);
-  const overflowCount = events.length - MAX_VISIBLE_EVENTS;
+  const visibleDisplayItems = displayItems.slice(0, MAX_VISIBLE_ITEMS);
+  const overflowCount = displayItems.length - MAX_VISIBLE_ITEMS;
 
   return (
     <div
@@ -65,8 +65,8 @@ export function MonthDayCell({
 
       {/* Event chips */}
       <div className="space-y-0.5">
-        {visibleEvents.map((event) => (
-          <EventChip key={event.id} event={event} />
+        {visibleDisplayItems.map((item) => (
+          <EventChip key={item.id} item={item} />
         ))}
       </div>
 

@@ -4,11 +4,11 @@ import { useMemo } from "react";
 import { useLocale } from "next-intl";
 import { getLocalDateString } from "@/lib/utils";
 import { MonthDayCell } from "./month-day-cell";
-import type { CalendarDisplayItem } from "@/lib/calendar/overlay-adapter";
+import type { CalendarDisplayItem } from "@/lib/calendar/display";
 
 interface MonthGridProps {
   dates: Date[];
-  events: Map<string, CalendarDisplayItem[]>;
+  displayItems: Map<string, CalendarDisplayItem[]>;
   currentMonth: number;
   today: string;
   onDayClick: (date: Date) => void;
@@ -17,7 +17,7 @@ interface MonthGridProps {
 
 export function MonthGrid({
   dates,
-  events,
+  displayItems,
   currentMonth,
   today,
   onDayClick,
@@ -55,7 +55,7 @@ export function MonthGrid({
       <div className="grid grid-cols-7 flex-1 border-l border-t border-border">
         {dates.map((date) => {
           const dateStr = getLocalDateString(date);
-          const dayEvents = events.get(dateStr) || [];
+          const dayItems = displayItems.get(dateStr) || [];
           const isToday = dateStr === today;
           const isOutsideMonth = date.getMonth() !== currentMonth;
 
@@ -63,7 +63,7 @@ export function MonthGrid({
             <MonthDayCell
               key={dateStr}
               date={date}
-              events={dayEvents}
+              displayItems={dayItems}
               isToday={isToday}
               isOutsideMonth={isOutsideMonth}
               onClick={() => onDayClick(date)}

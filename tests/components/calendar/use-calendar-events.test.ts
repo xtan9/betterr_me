@@ -1,10 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useCalendarEvents } from "@/components/calendar/use-calendar-events";
-import {
-  calendarEventToDisplayItem,
-  overlayItemsToDisplayItems,
-} from "@/lib/calendar/overlay-adapter";
+import { calendarEventToDisplayItem } from "@/lib/calendar/display";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 
 function makeEvent(id: string): ExpandedCalendarEvent {
@@ -37,7 +34,7 @@ function makeEvent(id: string): ExpandedCalendarEvent {
 describe("useCalendarEvents", () => {
   it("initializes with no quickCreate or eventDialog", () => {
     const { result } = renderHook(() =>
-      useCalendarEvents("2026-04-12", vi.fn(), vi.fn()),
+      useCalendarEvents("2026-04-12", vi.fn()),
     );
 
     expect(result.current.quickCreate).toBeNull();
@@ -47,7 +44,7 @@ describe("useCalendarEvents", () => {
 
   it("opens quickCreate with +30 min end time from a time-slot click", () => {
     const { result } = renderHook(() =>
-      useCalendarEvents("2026-04-12", vi.fn(), vi.fn()),
+      useCalendarEvents("2026-04-12", vi.fn()),
     );
 
     act(() => {
@@ -65,7 +62,7 @@ describe("useCalendarEvents", () => {
 
   it("wraps end time past midnight when slot is at 23:45", () => {
     const { result } = renderHook(() =>
-      useCalendarEvents("2026-04-12", vi.fn(), vi.fn()),
+      useCalendarEvents("2026-04-12", vi.fn()),
     );
 
     act(() => {
@@ -77,7 +74,7 @@ describe("useCalendarEvents", () => {
 
   it("opens quickCreate from drag-select with explicit start/end", () => {
     const { result } = renderHook(() =>
-      useCalendarEvents("2026-04-12", vi.fn(), vi.fn()),
+      useCalendarEvents("2026-04-12", vi.fn()),
     );
 
     act(() => {
@@ -98,61 +95,28 @@ describe("useCalendarEvents", () => {
   });
 
   it("opens the event dialog when clicking a Calendar Event display item", () => {
-    const handleItemAction = vi.fn();
     const { result } = renderHook(() =>
-      useCalendarEvents("2026-04-12", handleItemAction, vi.fn()),
+      useCalendarEvents("2026-04-12", vi.fn()),
     );
 
     const ev = calendarEventToDisplayItem(makeEvent("e1"));
     act(() => result.current.handleEventClick(ev));
 
     expect(result.current.eventDialog).toMatchObject({ isOpen: true, event: ev.event });
-    expect(handleItemAction).not.toHaveBeenCalled();
-  });
-
-  it("delegates to handleItemAction for domain items (non-events)", () => {
-    const handleItemAction = vi.fn();
-    const { result } = renderHook(() =>
-      useCalendarEvents("2026-04-12", handleItemAction, vi.fn()),
-    );
-
-    const [ev] = overlayItemsToDisplayItems([{
-      layer: "habits",
-      kind: "habit",
-      id: "habits:habit-1:2026-04-12",
-      habitId: "habit-1",
-      title: "Read",
-      date: "2026-04-12",
-      startTime: null,
-      endTime: null,
-      allDay: true,
-      completed: true,
-      action: {
-        type: "toggle_habit_completion",
-        habitId: "habit-1",
-        date: "2026-04-12",
-      },
-    }]);
-    act(() => result.current.handleEventClick(ev));
-
-    expect(handleItemAction).toHaveBeenCalledWith(ev);
-    expect(result.current.eventDialog).toBeNull();
   });
 
   it("keeps Calendar Event display items on the editing path", () => {
-    const handleItemAction = vi.fn();
     const { result } = renderHook(() =>
-      useCalendarEvents("2026-04-12", handleItemAction, vi.fn()),
+      useCalendarEvents("2026-04-12", vi.fn()),
     );
     const ev = calendarEventToDisplayItem(makeEvent("e"));
     act(() => result.current.handleEventClick(ev));
     expect(result.current.eventDialog?.isOpen).toBe(true);
-    expect(handleItemAction).not.toHaveBeenCalled();
   });
 
   it("handleNewEvent opens dialog prefilled with dateParam", () => {
     const { result } = renderHook(() =>
-      useCalendarEvents("2026-04-12", vi.fn(), vi.fn()),
+      useCalendarEvents("2026-04-12", vi.fn()),
     );
 
     act(() => result.current.handleNewEvent());
@@ -165,7 +129,7 @@ describe("useCalendarEvents", () => {
 
   it("handleQuickCreateMoreOptions closes quickCreate and opens dialog with prefill", () => {
     const { result } = renderHook(() =>
-      useCalendarEvents("2026-04-12", vi.fn(), vi.fn()),
+      useCalendarEvents("2026-04-12", vi.fn()),
     );
 
     act(() => {
@@ -185,7 +149,7 @@ describe("useCalendarEvents", () => {
 
   it("handleQuickCreateMoreOptions does nothing when no quickCreate is active", () => {
     const { result } = renderHook(() =>
-      useCalendarEvents("2026-04-12", vi.fn(), vi.fn()),
+      useCalendarEvents("2026-04-12", vi.fn()),
     );
 
     act(() => result.current.handleQuickCreateMoreOptions("Nope"));
@@ -195,7 +159,7 @@ describe("useCalendarEvents", () => {
   it("returns onEventSaved reference as handleEventSaved", () => {
     const onSaved = vi.fn();
     const { result } = renderHook(() =>
-      useCalendarEvents("2026-04-12", vi.fn(), onSaved),
+      useCalendarEvents("2026-04-12", onSaved),
     );
     result.current.handleEventSaved();
     expect(onSaved).toHaveBeenCalledTimes(1);

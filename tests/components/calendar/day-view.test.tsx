@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { DayView } from "@/components/calendar/day-view";
-import type { CalendarDisplayItem } from "@/lib/calendar/overlay-adapter";
+import type { CalendarDisplayItem } from "@/lib/calendar/display";
 
 // Mock next-intl
 vi.mock("next-intl", () => ({
@@ -16,7 +16,7 @@ vi.mock("next-intl", () => ({
 Element.prototype.scrollTo = vi.fn();
 
 describe("DayView", () => {
-  const emptyEvents = new Map<string, CalendarDisplayItem[]>();
+  const emptyDisplayItems = new Map<string, CalendarDisplayItem[]>();
   const today = "2026-04-01";
   const currentDate = new Date(2026, 3, 1); // Wednesday
 
@@ -31,7 +31,7 @@ describe("DayView", () => {
 
   it("renders single day column header", () => {
     const { container } = render(
-      <DayView currentDate={currentDate} events={emptyEvents} today={today} />,
+      <DayView currentDate={currentDate} displayItems={emptyDisplayItems} today={today} />,
     );
     // Header grid has time gutter spacer + 1 day column = 2 children
     const headerGrid = container.querySelector(".grid.border-b");
@@ -41,7 +41,7 @@ describe("DayView", () => {
 
   it("header shows full weekday name", () => {
     render(
-      <DayView currentDate={currentDate} events={emptyEvents} today={today} />,
+      <DayView currentDate={currentDate} displayItems={emptyDisplayItems} today={today} />,
     );
     // April 1, 2026 is Wednesday — Intl.DateTimeFormat with weekday: "long"
     expect(screen.getByText("Wednesday")).toBeInTheDocument();
@@ -49,7 +49,7 @@ describe("DayView", () => {
 
   it("today's date number has primary styling", () => {
     render(
-      <DayView currentDate={currentDate} events={emptyEvents} today={today} />,
+      <DayView currentDate={currentDate} displayItems={emptyDisplayItems} today={today} />,
     );
     // Date number "1" should have bg-primary
     const dateNumbers = screen.getAllByText("1");
@@ -62,7 +62,7 @@ describe("DayView", () => {
   it("non-today date number does not have primary styling", () => {
     const tomorrow = new Date(2026, 3, 2);
     render(
-      <DayView currentDate={tomorrow} events={emptyEvents} today={today} />,
+      <DayView currentDate={tomorrow} displayItems={emptyDisplayItems} today={today} />,
     );
     const dateNumber = screen.getByText("2");
     expect(dateNumber.className).not.toContain("bg-primary");
@@ -70,7 +70,7 @@ describe("DayView", () => {
 
   it("renders TimeGrid component", () => {
     render(
-      <DayView currentDate={currentDate} events={emptyEvents} today={today} />,
+      <DayView currentDate={currentDate} displayItems={emptyDisplayItems} today={today} />,
     );
     // TimeGrid renders hour labels
     expect(screen.getByText("1 AM")).toBeInTheDocument();

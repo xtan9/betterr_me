@@ -2,11 +2,11 @@ import { memo } from "react";
 import type {
   CalendarDisplayItem,
   CalendarLayer,
-} from "@/lib/calendar/overlay-adapter";
-import { CALENDAR_LAYER_COLORS } from "@/lib/calendar/overlay-adapter";
+} from "@/lib/calendar/display";
+import { CALENDAR_LAYER_COLORS } from "@/lib/calendar/display";
 
 interface EventBlockProps {
-  event: CalendarDisplayItem;
+  item: CalendarDisplayItem;
   /** Top offset in pixels from the grid top */
   top: number;
   /** Height in pixels (proportional to duration) */
@@ -16,7 +16,7 @@ interface EventBlockProps {
   /** CSS width percentage (e.g., "100%", "50%") for overlap column sizing */
   width: string;
   /** Callback when the block is clicked */
-  onClick?: (event: CalendarDisplayItem) => void;
+  onClick?: (item: CalendarDisplayItem) => void;
 }
 
 function formatTimeRange(start: string | null, end: string | null): string {
@@ -28,27 +28,27 @@ function formatTimeRange(start: string | null, end: string | null): string {
 }
 
 export const EventBlock = memo(function EventBlock({
-  event,
+  item,
   top,
   height,
   left,
   width,
   onClick,
 }: EventBlockProps) {
-  const layer: CalendarLayer = event.kind === "overlay" ? event.layer : "events";
-  const isCompleted = event.kind === "overlay" && event.completed;
+  const layer: CalendarLayer = item.kind === "overlay" ? item.layer : "events";
+  const isCompleted = item.kind === "overlay" && item.completed;
 
-  const hasCustomColor = !!event.color;
+  const hasCustomColor = !!item.color;
   const hasLayerColor = layer !== "events" && CALENDAR_LAYER_COLORS[layer];
   const isShort = height < 30;
 
   const bgStyle = hasCustomColor
-    ? { backgroundColor: `${event.color}20` }
+    ? { backgroundColor: `${item.color}20` }
     : hasLayerColor
       ? { backgroundColor: `hsl(var(${CALENDAR_LAYER_COLORS[layer!].muted}))` }
       : {};
-  const borderStyle = hasCustomColor && event.color
-    ? { borderLeftColor: event.color }
+  const borderStyle = hasCustomColor && item.color
+    ? { borderLeftColor: item.color }
     : hasLayerColor
       ? { borderLeftColor: `hsl(var(${CALENDAR_LAYER_COLORS[layer!].main}))` }
       : {};
@@ -74,17 +74,17 @@ export const EventBlock = memo(function EventBlock({
       }}
       onClick={(e) => {
         e.stopPropagation();
-        onClick?.(event);
+        onClick?.(item);
       }}
-      title={event.title}
+      title={item.title}
     >
       {isShort ? (
-        <span className="truncate block">{event.title}</span>
+        <span className="truncate block">{item.title}</span>
       ) : (
         <>
-          <span className="font-medium truncate block">{event.title}</span>
+          <span className="font-medium truncate block">{item.title}</span>
           <span className="text-muted-foreground truncate block">
-            {formatTimeRange(event.start_time, event.end_time)}
+            {formatTimeRange(item.start_time, item.end_time)}
           </span>
         </>
       )}
