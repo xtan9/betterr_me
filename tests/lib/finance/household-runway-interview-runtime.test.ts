@@ -1,9 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  createHouseholdRunwayInterviewRuntime,
-  type HouseholdRunwayInterviewRuntimePlanResult,
+  createHouseholdRunwayInterviewRuntime as createPublicHouseholdRunwayInterviewRuntime,
   type HouseholdRunwayInterviewRuntimeSnapshot,
 } from "@/lib/finance/household-runway-interview-runtime";
+import {
+  createHouseholdRunwayInterviewRuntimeWithCapabilities as createHouseholdRunwayInterviewRuntime,
+  type HouseholdRunwayInterviewRuntimeDraftRequest,
+  type HouseholdRunwayInterviewRuntimePlanRequest,
+  type HouseholdRunwayInterviewRuntimePlanResult,
+} from "@/lib/finance/internal/household-runway-interview-runtime";
 import { createHouseholdRunwayInterview } from "@/lib/finance/internal/household-runway-interview";
 import type { RunwaySnapshotSummary } from "@/lib/finance/cushion";
 
@@ -1139,15 +1144,13 @@ describe("Household Runway Interview Runtime", () => {
       model_version: "4.0.0",
       created_at: now,
     };
-    const requests: unknown[] = [];
+    const requests: HouseholdRunwayInterviewRuntimePlanRequest[] = [];
     const runtime = createHouseholdRunwayInterviewRuntime({
       now: () => now,
       createId: () => "interview-1",
       schedule: (task) => scheduled.push(task),
       persistPlan: (request) => {
-        requests.push(
-          request as unknown as { idempotencyKey: string },
-        );
+        requests.push(request);
         return Promise.resolve({
           planRevision: 3,
           planInputs: request.inputs,
@@ -1166,14 +1169,10 @@ describe("Household Runway Interview Runtime", () => {
     await settle(scheduled);
 
     expect(requests).toHaveLength(1);
-    const request = requests[0] as Record<string, unknown> & {
-      idempotencyKey: string;
-      snapshotActionId: string;
-    };
+    const request = requests[0]!;
     expect(request).toMatchObject({ expectedPlanRevision: 0 });
-    expect(Object.keys(request)).not.toContain("idempotencyKey");
-    expect(Object.keys(request)).not.toContain("snapshotActionId");
-    expect(Object.getOwnPropertyDescriptor(request, "idempotencyKey")?.enumerable).toBe(false);
+    expect(Object.keys(request)).toContain("idempotencyKey");
+    expect(Object.keys(request)).toContain("snapshotActionId");
     expect(request.idempotencyKey).toBe(request.snapshotActionId);
     expect(runtime.getSnapshot()).toMatchObject({
       plan: { exists: true, current: true },
@@ -1185,7 +1184,7 @@ describe("Household Runway Interview Runtime", () => {
 
   it("uses UUID persistence identities when randomUUID is unavailable", async () => {
     const scheduled: (() => void)[] = [];
-    const requests: Array<{ idempotencyKey: string; snapshotActionId: string }> = [];
+    const requests: HouseholdRunwayInterviewRuntimePlanRequest[] = [];
     vi.stubGlobal("crypto", undefined);
 
     try {
@@ -1193,12 +1192,7 @@ describe("Household Runway Interview Runtime", () => {
         now: () => now,
         schedule: (task) => scheduled.push(task),
         persistPlan: (request) => {
-          requests.push(
-            request as unknown as {
-              idempotencyKey: string;
-              snapshotActionId: string;
-            },
-          );
+          requests.push(request);
           return { success: false as const, error: "network" as const };
         },
       });
@@ -1251,15 +1245,17 @@ describe("Household Runway Interview Runtime", () => {
   });
 
   it("publishes a typed unavailable outcome when Plan persistence is not supplied", async () => {
-    const runtime = createHouseholdRunwayInterviewRuntime({
+    const scheduled: (() => void)[] = [];
+    const runtime = createPublicHouseholdRunwayInterviewRuntime({
       now: () => now,
       createId: () => "interview-1",
+      schedule: (task) => scheduled.push(task),
     });
     runtime.start();
     driveToReview(runtime);
     runtime.send({ type: "continue" });
     runtime.send({ type: "save_plan" });
-    await settle([]);
+    await settle(scheduled);
 
     expect(runtime.getSnapshot().operations.planPersistence).toEqual({
       status: "failed",
@@ -1319,7 +1315,7 @@ describe("Household Runway Interview Runtime", () => {
 
   it("reuses Plan idempotency for an ambiguous revision and changes it for a new revision", async () => {
     const scheduled: (() => void)[] = [];
-    const requests: Array<{ idempotencyKey: string }> = [];
+    const requests: HouseholdRunwayInterviewRuntimePlanRequest[] = [];
     const runtime = createHouseholdRunwayInterviewRuntime({
       now: () => now,
       createId: (() => {
@@ -1328,9 +1324,7 @@ describe("Household Runway Interview Runtime", () => {
       })(),
       schedule: (task) => scheduled.push(task),
       persistPlan: (request) => {
-        requests.push(
-          request as unknown as { idempotencyKey: string },
-        );
+        requests.push(request);
         return { success: false as const, error: "network" as const };
       },
     });
@@ -1358,7 +1352,7 @@ describe("Household Runway Interview Runtime", () => {
     const scheduled: (() => void)[] = [];
     const completions: Array<(value: boolean) => void> = [];
     const synchronizeDraft = vi.fn(
-      () =>
+      (_request: HouseholdRunwayInterviewRuntimeDraftRequest) =>
         new Promise<boolean>((resolve) => {
           completions.push(resolve);
         }),
@@ -1375,6 +1369,18 @@ describe("Household Runway Interview Runtime", () => {
     await settle(scheduled);
 
     expect(synchronizeDraft).toHaveBeenCalledTimes(1);
+    const firstDraftRequest = synchronizeDraft.mock.calls[0]![0];
+    expect(firstDraftRequest).toMatchObject({
+      status: "reviewing",
+      stage: "review",
+      draft: {
+        interviewId: "interview-1",
+        revision: expect.any(Number),
+        answers: expect.objectContaining({ country: "US", region: "CA" }),
+        stageStatus: expect.objectContaining({ location: "completed" }),
+      },
+    });
+    expect(Object.keys(firstDraftRequest)).toEqual(["status", "stage", "draft"]);
     runtime.send({ type: "continue" });
     runtime.send({
       type: "set_plan_adjustment",

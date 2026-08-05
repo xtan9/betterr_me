@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  createHouseholdRunwayBrowserAdapter,
+  createHouseholdRunwayBrowserAdapterWithCapabilities as createHouseholdRunwayBrowserAdapter,
   type HouseholdRunwayBrowserEnvironment,
-} from "@/lib/finance/household-runway-browser-adapter";
+} from "@/lib/finance/internal/household-runway-browser-adapter";
 import { createHouseholdRunwayInterview } from "@/lib/finance/internal/household-runway-interview";
 import { rememberHouseholdRunwayDraft } from "@/lib/finance/internal/runway-draft-client";
+import type { HouseholdRunwayInterviewRuntime } from "@/lib/finance/household-runway-interview-runtime";
 
 function createAdapterEnvironment(
   href = "https://betterr.me/finance/cushion?start=1",
@@ -68,6 +69,37 @@ async function settleAdapter() {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     await Promise.resolve();
   }
+}
+
+function driveToCompletedAssessment(runtime: HouseholdRunwayInterviewRuntime) {
+  runtime.send({ type: "select_country", country: "US" });
+  runtime.send({ type: "select_region", region: "CA" });
+  runtime.send({ type: "select_currency", currency: "USD" });
+  runtime.send({ type: "continue" });
+  runtime.send({ type: "set_household", sharesFinances: false });
+  runtime.send({ type: "continue" });
+  runtime.send({ type: "set_employment", person: "mine", employment: "unemployed" });
+  runtime.send({ type: "continue" });
+  runtime.send({ type: "skip" });
+  runtime.send({
+    type: "set_cash",
+    value: { cents: 3_000_000, confidence: "confirmed" },
+  });
+  runtime.send({ type: "continue" });
+  runtime.send({ type: "skip" });
+  runtime.send({ type: "set_expense_mode", mode: "quick" });
+  runtime.send({
+    type: "set_quick_expenses",
+    patch: { current_monthly_cents: 600_000 },
+  });
+  runtime.send({ type: "continue" });
+  runtime.send({
+    type: "set_reduction",
+    target: { kind: "quick" },
+    interruptionMonthlyCents: 400_000,
+  });
+  runtime.send({ type: "continue" });
+  runtime.send({ type: "continue" });
 }
 
 describe("Household Runway browser adapter", () => {
@@ -362,7 +394,9 @@ describe("Household Runway browser adapter", () => {
     expect(synchronizeDraft).toHaveBeenCalledWith({
       status: "collecting",
       stage: "location",
-      answers: expect.objectContaining({ country: "US" }),
+      draft: expect.objectContaining({
+        answers: expect.objectContaining({ country: "US" }),
+      }),
     });
     expect(adapter.getSnapshot().operations.draftSynchronization).toEqual({
       status: "succeeded",
@@ -474,5 +508,65 @@ describe("Household Runway browser adapter", () => {
       stage: "result",
     });
     adapter.dispose();
+  });
+
+  it("translates a typed Plan request directly to the existing HTTP contract", async () => {
+    sessionStorage.clear();
+    localStorage.clear();
+    const browser = createAdapterEnvironment();
+    let nextId = 0;
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      createId: () => `id-${++nextId}`,
+    });
+    adapter.start();
+    await settleAdapter();
+    driveToCompletedAssessment(adapter);
+    await settleAdapter();
+
+    const assessment = adapter.getSnapshot().derived.assessment!;
+    const fetchPlan = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as {
+        answers: unknown;
+      };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          revision: 1,
+          plan: { answers: body.answers },
+          assessment,
+          snapshots: [],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchPlan);
+
+    try {
+      adapter.send({ type: "save_plan" });
+      await settleAdapter();
+
+      expect(fetchPlan).toHaveBeenCalledOnce();
+      const [url, init] = fetchPlan.mock.calls[0]!;
+      expect(url).toBe("/api/finance/cushion");
+      expect(init).toMatchObject({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      expect(body).toMatchObject({
+        status: "completed",
+        expected_revision: 0,
+        snapshot_trigger: "completed",
+      });
+      expect(body.idempotency_key).toEqual(expect.any(String));
+      expect(body.snapshot_action_id).toBe(body.idempotency_key);
+      expect(adapter.getSnapshot().operations.planPersistence).toEqual({
+        status: "succeeded",
+      });
+    } finally {
+      adapter.dispose();
+      vi.unstubAllGlobals();
+    }
   });
 });
