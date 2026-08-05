@@ -88,7 +88,7 @@ export function computeOverlapColumns(
 
   // For each display item, find the first available column
   const columns: {
-    eventId: string;
+    itemId: string;
     column: number;
     startMin: number;
     endMin: number;
@@ -107,7 +107,7 @@ export function computeOverlapColumns(
     ) {
       col++;
     }
-    columns.push({ eventId: item.id, column: col, startMin, endMin });
+    columns.push({ itemId: item.id, column: col, startMin, endMin });
   }
 
   // Determine total columns per overlap group
@@ -117,7 +117,7 @@ export function computeOverlapColumns(
       (c) => c.startMin < entry.endMin && c.endMin > entry.startMin,
     );
     const maxCol = Math.max(...overlapping.map((c) => c.column)) + 1;
-    result.set(entry.eventId, {
+    result.set(entry.itemId, {
       column: entry.column,
       totalColumns: maxCol,
     });
