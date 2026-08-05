@@ -3,11 +3,15 @@ import { describe, expect, it, vi } from "vitest";
 import {
   queryCalendarOverlayFeed,
   type CalendarOverlayCapabilities,
-  type HabitOverlayCapabilities,
-  type TaskOverlayCapabilities,
-  type WorkoutOverlayCapabilities,
 } from "@/lib/calendar/overlay-feed";
 import type { Habit, HabitLog, Task, Workout } from "@/lib/db/types";
+
+type TaskOverlayCapabilities = Pick<
+  CalendarOverlayCapabilities,
+  "coverage" | "read"
+>;
+type HabitOverlayCapabilities = CalendarOverlayCapabilities["habits"];
+type WorkoutOverlayCapabilities = CalendarOverlayCapabilities["workouts"];
 
 const request = {
   userId: "user-1",
@@ -88,7 +92,7 @@ function workout(overrides: Partial<Workout> = {}): Workout {
   };
 }
 
-function capabilities(overrides: Partial<TaskOverlayCapabilities> = {}): TaskOverlayCapabilities {
+function taskCapabilities(overrides: Partial<TaskOverlayCapabilities> = {}): TaskOverlayCapabilities {
   return {
     coverage: { ensureThrough: vi.fn().mockResolvedValue({ status: "complete" }) },
     read: { read: vi.fn().mockResolvedValue([]) },
@@ -117,16 +121,53 @@ function allCapabilities(
   workoutOverrides: Partial<WorkoutOverlayCapabilities> = {},
 ): CalendarOverlayCapabilities {
   return {
-    ...capabilities(taskOverrides),
+    ...taskCapabilities(taskOverrides),
     habits: habitCapabilities(habitOverrides),
     workouts: workoutCapabilities(workoutOverrides),
   };
 }
 
 describe("queryCalendarOverlayFeed", () => {
-  it("ensures coverage through the inclusive requested end before reading tasks", async () => {
+  it("rejects an incomplete capability composition before starting acquisition", async () => {
+    const coverage = vi.fn().mockResolvedValue({ status: "complete" });
+    const complete = allCapabilities({ coverage: { ensureThrough: coverage } });
+    const incomplete = {
+      ...complete,
+      habits: undefined,
+    } as unknown as CalendarOverlayCapabilities;
+
+    await expect(queryCalendarOverlayFeed(
+      { ...request, layers: ["tasks"] },
+      incomplete,
+    )).rejects.toThrow("Calendar Overlay capabilities are incomplete");
+    expect(coverage).not.toHaveBeenCalled();
+  });
+
+  it("does not call complete aggregate capabilities for unselected layers", async () => {
+    const activeHabits = vi.fn();
+    const completionLogs = vi.fn();
+    const workouts = vi.fn();
+
+    await queryCalendarOverlayFeed(
+      { ...request, layers: ["tasks"] },
+      allCapabilities(
+        {},
+        {
+          activeHabits: { read: activeHabits },
+          completionLogs: { read: completionLogs },
+        },
+        { read: workouts },
+      ),
+    );
+
+    expect(activeHabits).not.toHaveBeenCalled();
+    expect(completionLogs).not.toHaveBeenCalled();
+    expect(workouts).not.toHaveBeenCalled();
+  });
+
+  it("ensures the Coverage Horizon through the inclusive requested end before reading tasks", async () => {
     const order: string[] = [];
-    const caps = capabilities({
+    const caps = allCapabilities({
       coverage: { ensureThrough: vi.fn(async (value) => {
         order.push(`coverage:${value.range.to}`);
         return { status: "complete" as const };
@@ -145,7 +186,7 @@ describe("queryCalendarOverlayFeed", () => {
 
   it("skips task reads and reports exactly one stable coverage diagnostic", async () => {
     const read = vi.fn();
-    const caps = capabilities({
+    const caps = allCapabilities({
       coverage: {
         ensureThrough: vi.fn().mockResolvedValue({
           status: "partial",
@@ -173,7 +214,7 @@ describe("queryCalendarOverlayFeed", () => {
     const cause = new Error("coverage down");
     const reportFailure = vi.fn();
     const read = vi.fn();
-    const caps = capabilities({
+    const caps = allCapabilities({
       coverage: { ensureThrough: vi.fn().mockRejectedValue(cause) },
       read: { read },
     });
@@ -202,7 +243,7 @@ describe("queryCalendarOverlayFeed", () => {
   it("reports a generic task acquisition failure once without exposing its cause", async () => {
     const cause = new Error("secret database details");
     const reportFailure = vi.fn();
-    const caps = capabilities({
+    const caps = allCapabilities({
       read: { read: vi.fn().mockRejectedValue(cause) },
     });
 
@@ -232,7 +273,7 @@ describe("queryCalendarOverlayFeed", () => {
     });
     const result = await queryCalendarOverlayFeed(
       { ...request, layers: ["tasks"] },
-      capabilities({ read: { read: vi.fn().mockRejectedValue(new Error("database unavailable")) } }),
+      allCapabilities({ read: { read: vi.fn().mockRejectedValue(new Error("database unavailable")) } }),
       { reportFailure },
     );
 
@@ -245,7 +286,7 @@ describe("queryCalendarOverlayFeed", () => {
   });
 
   it("returns a successful empty task result and a typed completion action", async () => {
-    const caps = capabilities({
+    const caps = allCapabilities({
       read: { read: vi.fn().mockResolvedValue([task(), task({
         id: "task-2",
         title: "Timed task",
@@ -273,7 +314,7 @@ describe("queryCalendarOverlayFeed", () => {
 
     const empty = await queryCalendarOverlayFeed(
       { ...request, layers: ["tasks"] },
-      capabilities(),
+      allCapabilities(),
     );
     expect(empty).toEqual({ status: "complete", items: [], unavailable: [] });
   });

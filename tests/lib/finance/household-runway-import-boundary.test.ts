@@ -83,6 +83,39 @@ describe("Household Runway Runtime import boundary", () => {
     );
     expect(source).not.toMatch(/export type HouseholdRunwayInterviewCommand/);
   });
+
+  it("keeps capability composition and complete persistence requests behind internal modules", () => {
+    const runtimeFacade = readFileSync(
+      resolve(root, "lib/finance/household-runway-interview-runtime.ts"),
+      "utf8",
+    );
+    const runtimeComposition = readFileSync(
+      resolve(root, "lib/finance/internal/household-runway-interview-runtime.ts"),
+      "utf8",
+    );
+    const browserFacade = readFileSync(
+      resolve(root, "lib/finance/household-runway-browser-adapter.ts"),
+      "utf8",
+    );
+    const browserComposition = readFileSync(
+      resolve(root, "lib/finance/internal/household-runway-browser-adapter.ts"),
+      "utf8",
+    );
+
+    expect(runtimeFacade).not.toMatch(
+      /export (?:type|interface) HouseholdRunwayInterviewRuntimeCapabilities/,
+    );
+    expect(runtimeFacade).not.toMatch(
+      /export (?:type|interface) HouseholdRunwayInterviewRuntime(?:Draft|Plan|Report)(?:Request|Outcome)/,
+    );
+    expect(runtimeComposition).not.toMatch(/Object\.definePropert/);
+    expect(browserFacade).not.toMatch(/extends HouseholdRunwayInterviewRuntimeOptions/);
+    expect(browserComposition).not.toMatch(/executeHouseholdRunwayBrowserEffect/);
+    expect(browserComposition).not.toMatch(/HouseholdRunwayInterviewCommand/);
+    expect(browserComposition).not.toMatch(
+      /as HouseholdRunwayBrowser(?:DraftCapability|InternalPlan)Request/,
+    );
+  });
 });
 
 function walk(directory: string): string[] {
