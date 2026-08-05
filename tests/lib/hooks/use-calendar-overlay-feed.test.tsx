@@ -138,6 +138,23 @@ describe("useCalendarOverlayFeed", () => {
     expect(second.result.current.state.unavailableLayers).toEqual(["tasks", "workouts"]);
   });
 
+  it.each([
+    ["an invalid local date", { items: [taskItem({ date: "2026-02-30" })] }],
+    ["an item from an unselected layer", { items: [taskItem({ layer: "habits" })] }],
+    ["an item from an unavailable layer", { items: [taskItem()], unavailableLayers: ["tasks"] }],
+    ["an action identity mismatch", { items: [taskItem({ taskId: "task-2" })] }],
+  ])("fails closed for %s", async (_reason, body) => {
+    fetchMock.mockResolvedValue(response(body));
+
+    const { result } = renderHook(() =>
+      useCalendarOverlayFeed({ range, layers: ["tasks", "habits"] }),
+    );
+
+    await waitFor(() => expect(result.current.state.status).toBe("failed"));
+    expect(result.current.state.items).toEqual([]);
+    expect(result.current.state.unavailableLayers).toEqual(["tasks", "habits"]);
+  });
+
   it("retains only prior items in the current range and selected layers while loading", async () => {
     const nextRequest = deferred<Response>();
     fetchMock
@@ -179,6 +196,28 @@ describe("useCalendarOverlayFeed", () => {
       nextRequest.resolve(response({ items: [] }));
     });
     await waitFor(() => expect(result.current.state.status).toBe("complete"));
+  });
+
+  it("exposes empty selection as idle immediately without retaining prior state", async () => {
+    fetchMock.mockResolvedValue(response({ items: [taskItem()] }));
+
+    const { result, rerender } = renderHook<
+      ReturnType<typeof useCalendarOverlayFeed>,
+      { layers: readonly ("tasks" | "habits")[] }
+    >(
+      ({ layers }) => useCalendarOverlayFeed({ range, layers }),
+      { initialProps: { layers: ["tasks"] } },
+    );
+
+    await waitFor(() => expect(result.current.state.status).toBe("complete"));
+    rerender({ layers: [] });
+
+    expect(result.current.state).toEqual({
+      status: "idle",
+      items: [],
+      unavailableLayers: [],
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("allows only one retry request in flight", async () => {

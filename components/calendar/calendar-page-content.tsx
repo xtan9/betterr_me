@@ -14,6 +14,7 @@ import {
   getDayDateRange,
 } from "@/lib/calendar/date-utils";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useCalendarActions } from "@/hooks/use-calendar-actions";
 import { useCalendarNavigation } from "./use-calendar-navigation";
 import { useCalendarEvents } from "./use-calendar-events";
 import { CalendarHeader } from "./calendar-header";
@@ -135,6 +136,7 @@ export function CalendarPageContent() {
     range: { from: startDate, to: endDate },
     layers: overlayLayers,
   });
+  const { retry: retryOverlayFeed } = overlayFeed;
 
   const unavailableOverlayNotices = useMemo(() => {
     const unavailableLayers = new Set(overlayFeed.state.unavailableLayers);
@@ -151,12 +153,34 @@ export function CalendarPageContent() {
     if (eventsError) console.error("Failed to fetch calendar events:", eventsError);
   }, [eventsError]);
 
+  const handleOverlayMutated = useCallback(() => {
+    globalMutate(
+      `/api/calendar-events?start_date=${startDate}&end_date=${endDate}`,
+    );
+    void retryOverlayFeed();
+  }, [endDate, globalMutate, retryOverlayFeed, startDate]);
+
+  const { toggleTask, toggleHabit, navigateWorkout } = useCalendarActions(handleOverlayMutated);
+
   const handleOverlayItemAction = useCallback(
     async (item: CalendarOverlayDisplayItem) => {
-      const result = await overlayFeed.dispatchAction(item);
-      if (!result.success) console.error("Calendar overlay action failed");
+      if (item.action.type === "toggle_task_completion") {
+        const result = await toggleTask(item.action.taskId);
+        if (!result.success) console.error("Calendar task action failed:", result.error);
+        return;
+      }
+      if (item.action.type === "toggle_habit_completion") {
+        const result = await toggleHabit(
+          item.action.habitId,
+          item.action.date,
+          !item.completed,
+        );
+        if (!result.success) console.error("Calendar habit action failed:", result.error);
+        return;
+      }
+      navigateWorkout(item.action.workoutId);
     },
-    [overlayFeed],
+    [navigateWorkout, toggleHabit, toggleTask],
   );
 
   const onEventSavedCallback = useCallback(() => {

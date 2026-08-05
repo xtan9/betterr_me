@@ -8,11 +8,15 @@ const state = vi.hoisted(() => ({
       unavailableLayers: ["tasks", "habits", "workouts"] as string[],
     },
     retry: vi.fn().mockResolvedValue(undefined),
-    dispatchAction: vi.fn().mockResolvedValue({ success: true }),
   },
   overlaySelections: [] as { range: unknown; layers: unknown }[],
   mutate: vi.fn().mockResolvedValue(undefined),
   replace: vi.fn(),
+  actions: {
+    toggleTask: vi.fn().mockResolvedValue({ success: true }),
+    toggleHabit: vi.fn().mockResolvedValue({ success: true }),
+    navigateWorkout: vi.fn(),
+  },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -65,6 +69,9 @@ vi.mock("@/lib/hooks/use-localization", () => ({
   useLocalization: () => ({ weekStart: "monday", isLoading: false }),
 }));
 vi.mock("@/hooks/use-keyboard-shortcuts", () => ({ useKeyboardShortcuts: vi.fn() }));
+vi.mock("@/hooks/use-calendar-actions", () => ({
+  useCalendarActions: () => state.actions,
+}));
 vi.mock("@/components/calendar/use-calendar-navigation", () => ({
   useCalendarNavigation: () => ({
     view: "day",
@@ -172,7 +179,11 @@ describe("CalendarPageContent task overlay failure seam", () => {
     state.overlay = {
       state: { status: "failed", items: [], unavailableLayers: ["tasks", "habits", "workouts"] },
       retry: vi.fn().mockResolvedValue(undefined),
-      dispatchAction: vi.fn().mockResolvedValue({ success: true }),
+    };
+    state.actions = {
+      toggleTask: vi.fn().mockResolvedValue({ success: true }),
+      toggleHabit: vi.fn().mockResolvedValue({ success: true }),
+      navigateWorkout: vi.fn(),
     };
     state.overlaySelections = [];
   });
@@ -225,7 +236,6 @@ describe("CalendarPageContent task overlay failure seam", () => {
     state.overlay = {
       state: { status: "degraded", items: [], unavailableLayers: ["habits"] },
       retry: vi.fn().mockResolvedValue(undefined),
-      dispatchAction: vi.fn().mockResolvedValue({ success: true }),
     };
 
     render(<CalendarPageContent />);
@@ -240,17 +250,13 @@ describe("CalendarPageContent task overlay failure seam", () => {
     state.overlay = {
       state: { status: "complete", items: [], unavailableLayers: [] },
       retry: vi.fn().mockResolvedValue(undefined),
-      dispatchAction: vi.fn().mockResolvedValue({ success: true }),
     };
 
     render(<CalendarPageContent />);
     fireEvent.click(screen.getByTestId("invoke-habit-action"));
 
     await waitFor(() => {
-      expect(state.overlay.dispatchAction).toHaveBeenCalledWith(expect.objectContaining({
-        layer: "habits",
-        action: { type: "toggle_habit_completion", habitId: "habit-1", date: "2026-04-02" },
-      }));
+      expect(state.actions.toggleHabit).toHaveBeenCalledWith("habit-1", "2026-04-02", false);
     });
   });
 
@@ -258,21 +264,21 @@ describe("CalendarPageContent task overlay failure seam", () => {
     state.overlay = {
       state: { status: "complete", items: [], unavailableLayers: [] },
       retry: vi.fn().mockResolvedValue(undefined),
-      dispatchAction: vi.fn().mockResolvedValue({ success: true }),
     };
 
     render(<CalendarPageContent />);
     fireEvent.click(screen.getByTestId("invoke-calendar-event"));
 
     expect(screen.getByTestId("calendar-event-dialog")).toBeInTheDocument();
-    expect(state.overlay.dispatchAction).not.toHaveBeenCalled();
+    expect(state.actions.toggleTask).not.toHaveBeenCalled();
+    expect(state.actions.toggleHabit).not.toHaveBeenCalled();
+    expect(state.actions.navigateWorkout).not.toHaveBeenCalled();
   });
 
   it("keeps the calendar visible, localizes workout degradation, and dispatches workout navigation", async () => {
     state.overlay = {
       state: { status: "degraded", items: [], unavailableLayers: ["workouts"] },
       retry: vi.fn().mockResolvedValue(undefined),
-      dispatchAction: vi.fn().mockResolvedValue({ success: true }),
     };
 
     render(<CalendarPageContent />);
@@ -284,10 +290,7 @@ describe("CalendarPageContent task overlay failure seam", () => {
 
     fireEvent.click(screen.getByTestId("invoke-workout-action"));
     await waitFor(() => {
-      expect(state.overlay.dispatchAction).toHaveBeenCalledWith(expect.objectContaining({
-        layer: "workouts",
-        action: { type: "navigate_workout", workoutId: "workout-1" },
-      }));
+      expect(state.actions.navigateWorkout).toHaveBeenCalledWith("workout-1");
     });
   });
 });

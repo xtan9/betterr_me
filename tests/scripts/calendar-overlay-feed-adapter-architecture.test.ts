@@ -13,7 +13,6 @@ describe("Calendar Overlay Feed client boundary", () => {
     expect(page).toContain("useCalendarOverlayFeed");
     expect(page).not.toContain("/api/calendar/overlay-feed");
     expect(page).not.toContain("overlayItemsToDisplayItems");
-    expect(page).not.toContain("useCalendarActions");
     expect(page).toContain("/api/calendar-events");
 
     expect(adapter).toContain("Intl.DateTimeFormat().resolvedOptions().timeZone");

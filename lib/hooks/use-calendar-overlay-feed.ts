@@ -1,10 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { z } from "zod";
 
-import { setHabitCompletion } from "@/lib/hooks/use-habit-toggle";
 import {
   overlayItemsToDisplayItems,
   type CalendarOverlayDisplayItem,
@@ -36,10 +34,6 @@ export type CalendarOverlayFeedState =
   | (CalendarOverlayFeedStateBase & { status: "complete" })
   | (CalendarOverlayFeedStateBase & { status: "degraded" })
   | (CalendarOverlayFeedStateBase & { status: "failed" });
-
-export type CalendarOverlayActionResult =
-  | { success: true }
-  | { success: false };
 
 const layerSchema = z.enum(CALENDAR_OVERLAY_LAYERS);
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -185,7 +179,6 @@ function selectedUnavailableLayers(
 }
 
 export function useCalendarOverlayFeed({ range, layers }: CalendarOverlayFeedSelection) {
-  const router = useRouter();
   const selectedLayers = useMemo(() => normalizeLayers(layers), [layers]);
   const layersKey = selectedLayers.join(",");
   const selectionKey = `${range.from}:${range.to}:${layersKey}`;
@@ -306,32 +299,10 @@ export function useCalendarOverlayFeed({ range, layers }: CalendarOverlayFeedSel
     }
   }, [startRequest]);
 
-  const dispatchAction = useCallback(async (
-    item: CalendarOverlayDisplayItem,
-  ): Promise<CalendarOverlayActionResult> => {
-    try {
-      if (item.layer === "tasks") {
-        const result = await fetch(`/api/tasks/${item.action.taskId}/toggle`, { method: "POST" });
-        if (!result.ok) return { success: false };
-        void startRequest();
-        return { success: true };
-      }
-      if (item.layer === "habits") {
-        await setHabitCompletion(item.action.habitId, !item.completed, item.action.date);
-        void startRequest();
-        return { success: true };
-      }
-      router.push(`/workouts/${item.action.workoutId}`);
-      return { success: true };
-    } catch {
-      return { success: false };
-    }
-  }, [router, startRequest]);
-
+  const exposedState = selectedLayers.length === 0 ? IDLE_STATE : state;
   return {
-    state,
+    state: exposedState,
     retry,
     isRetrying,
-    dispatchAction,
   };
 }
