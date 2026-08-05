@@ -14,7 +14,6 @@ import {
   getDayDateRange,
 } from "@/lib/calendar/date-utils";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
-import { useCalendarActions } from "@/hooks/use-calendar-actions";
 import { useCalendarNavigation } from "./use-calendar-navigation";
 import { useCalendarEvents } from "./use-calendar-events";
 import { CalendarHeader } from "./calendar-header";
@@ -30,24 +29,18 @@ import {
   groupCalendarDisplayItemsByDate,
   type CalendarDisplayItem,
   type CalendarLayer,
-  overlayItemsToDisplayItems,
   type CalendarOverlayDisplayItem,
 } from "@/lib/calendar/display";
 import {
   CALENDAR_OVERLAY_LAYERS,
-  type CalendarOverlayItem,
   type CalendarOverlayLayer,
 } from "@/lib/calendar/overlay-feed";
+import { useCalendarOverlayFeed } from "@/lib/hooks/use-calendar-overlay-feed";
 import { useLocalization } from "@/lib/hooks/use-localization";
 import { weekStartPreferenceToDay } from "@/lib/preferences/owners";
 
 interface EventsResponse {
   events: ExpandedCalendarEvent[];
-}
-
-interface OverlayResponse {
-  items: CalendarOverlayItem[];
-  unavailableLayers?: CalendarOverlayLayer[];
 }
 
 type OverlayNoticeTranslationKey = "taskOverlay" | "habitOverlay" | "workoutOverlay";
@@ -134,86 +127,36 @@ export function CalendarPageContent() {
     { keepPreviousData: true },
   );
 
-  // The overlay owns local-date projection for every non-event layer.
-  const userTimezone = useMemo(
-    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
-    [],
+  const overlayLayers = useMemo(
+    () => CALENDAR_OVERLAY_LAYERS.filter((layer) => enabledLayers.has(layer)),
+    [enabledLayers],
   );
-
-  const overlayLayers = useMemo(() => {
-    return CALENDAR_OVERLAY_LAYERS.filter((layer) => enabledLayers.has(layer)).join(",");
-  }, [enabledLayers]);
-
-  const overlayKey = overlayLayers
-    ? `/api/calendar/overlay-feed?start_date=${startDate}&end_date=${endDate}&layers=${overlayLayers}&timezone=${encodeURIComponent(userTimezone)}`
-    : null;
-
-  const {
-    data: overlayData,
-    error: overlayError,
-  } = useSWR<OverlayResponse>(overlayKey, fetcher, { keepPreviousData: true });
-
-  const [isRetryingOverlay, setIsRetryingOverlay] = useState(false);
-  const retryOverlay = useCallback(async () => {
-    if (!overlayKey) return;
-    setIsRetryingOverlay(true);
-    try {
-      await globalMutate(overlayKey);
-    } finally {
-      setIsRetryingOverlay(false);
-    }
-  }, [globalMutate, overlayKey]);
+  const overlayFeed = useCalendarOverlayFeed({
+    range: { from: startDate, to: endDate },
+    layers: overlayLayers,
+  });
 
   const unavailableOverlayNotices = useMemo(() => {
-    const unavailableLayers = new Set(overlayData?.unavailableLayers ?? []);
+    const unavailableLayers = new Set(overlayFeed.state.unavailableLayers);
 
     return OVERLAY_NOTICE_DEFINITIONS.filter(
       ({ layer }) =>
         enabledLayers.has(layer) &&
-        (Boolean(overlayError) || unavailableLayers.has(layer)),
+        unavailableLayers.has(layer),
     );
-  }, [enabledLayers, overlayData?.unavailableLayers, overlayError]);
+  }, [enabledLayers, overlayFeed.state.unavailableLayers]);
 
   // Log SWR fetch errors for debugging
   useEffect(() => {
     if (eventsError) console.error("Failed to fetch calendar events:", eventsError);
-    if (overlayError) console.error("Failed to fetch calendar overlay:", overlayError);
-  }, [eventsError, overlayError]);
-
-  // --- Inline actions ---
-
-  const handleOverlayMutated = useCallback(() => {
-    // Re-fetch Calendar Events and the selected overlay layers.
-    globalMutate(
-      `/api/calendar-events?start_date=${startDate}&end_date=${endDate}`,
-    );
-    if (overlayKey) globalMutate(overlayKey);
-  }, [startDate, endDate, overlayKey, globalMutate]);
-
-  const { toggleTask, toggleHabit, navigateWorkout } = useCalendarActions(handleOverlayMutated);
+  }, [eventsError]);
 
   const handleOverlayItemAction = useCallback(
     async (item: CalendarOverlayDisplayItem) => {
-      if (item.action.type === "toggle_task_completion") {
-        const result = await toggleTask(item.action.taskId);
-        if (!result.success) console.error("Calendar task action failed:", result.error);
-        return;
-      }
-      if (item.action.type === "toggle_habit_completion") {
-        const result = await toggleHabit(
-          item.action.habitId,
-          item.action.date,
-          !item.completed,
-        );
-        if (!result.success) console.error("Calendar habit action failed:", result.error);
-        return;
-      }
-      if (item.action.type === "navigate_workout") {
-        navigateWorkout(item.action.workoutId);
-        return;
-      }
+      const result = await overlayFeed.dispatchAction(item);
+      if (!result.success) console.error("Calendar overlay action failed");
     },
-    [navigateWorkout, toggleHabit, toggleTask],
+    [overlayFeed],
   );
 
   const onEventSavedCallback = useCallback(() => {
@@ -253,10 +196,7 @@ export function CalendarPageContent() {
   const displayItemsByDate = useMemo(() => {
     const calendarEvents = eventsData?.events ?? [];
 
-    // Adapt selected Calendar Overlay Feed items for the Calendar views.
-    const overlayItems = overlayData?.items
-      ? overlayItemsToDisplayItems(overlayData.items)
-      : [];
+    // Compose Calendar Events with the adapter's flat overlay display items.
     // Only include calendar events if the events layer is on
     const visibleCalendarEvents = enabledLayers.has("events")
       ? calendarEvents.map(calendarEventToDisplayItem)
@@ -264,11 +204,11 @@ export function CalendarPageContent() {
 
     const allItems = [
       ...visibleCalendarEvents,
-      ...overlayItems,
+      ...overlayFeed.state.items,
     ];
 
     return groupCalendarDisplayItemsByDate(allItems);
-  }, [eventsData?.events, overlayData?.items, enabledLayers]);
+  }, [eventsData?.events, overlayFeed.state.items, enabledLayers]);
 
   // Compute grid dates
   const gridDates = useMemo(
@@ -392,11 +332,11 @@ export function CalendarPageContent() {
                 <span>{t(`${translationKey}.unavailable`)}</span>
                 <button
                   type="button"
-                  onClick={retryOverlay}
-                  disabled={isRetryingOverlay}
-                  aria-busy={isRetryingOverlay}
+                  onClick={overlayFeed.retry}
+                  disabled={overlayFeed.isRetrying}
+                  aria-busy={overlayFeed.isRetrying}
                 >
-                  {isRetryingOverlay ? t("retrying") : t(`${translationKey}.retry`)}
+                  {overlayFeed.isRetrying ? t("retrying") : t(`${translationKey}.retry`)}
                 </button>
               </div>
             ))}
