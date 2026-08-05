@@ -1,13 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  SupabaseActiveHabitReadPort,
-  SupabaseHabitCompletionLogReadPort,
-  SupabaseTaskCoveragePort,
-  SupabaseTaskReadPort,
-  SupabaseWorkoutReadPort,
-} from "@/lib/calendar/supabase-overlay-feed";
+import * as supabaseOverlayFeed from "@/lib/calendar/supabase-overlay-feed";
 
 const { ensureRecurringTaskCoverageThrough } = vi.hoisted(() => ({
   ensureRecurringTaskCoverageThrough: vi.fn(),
@@ -16,6 +10,11 @@ const { ensureRecurringTaskCoverageThrough } = vi.hoisted(() => ({
 vi.mock("@/lib/recurring-tasks/coverage", () => ({
   ensureRecurringTaskCoverageThrough,
 }));
+
+const request = {
+  userId: "user-1",
+  range: { from: "2026-04-01", to: "2026-04-07" },
+};
 
 function queryBuilder(result: { data: unknown; error: unknown }) {
   const builder: Record<string, unknown> = {};
@@ -26,90 +25,100 @@ function queryBuilder(result: { data: unknown; error: unknown }) {
   return builder;
 }
 
-describe("Supabase task overlay capabilities", () => {
-  it("maps coverage through the requested inclusive end", async () => {
+function supabaseFor(builders: Record<string, ReturnType<typeof queryBuilder>>) {
+  const client = {
+    from: vi.fn((table: string) => builders[table]),
+  };
+  return { client, supabase: client as unknown as SupabaseClient };
+}
+
+describe("querySupabaseCalendarOverlayFeed", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
     ensureRecurringTaskCoverageThrough.mockResolvedValue({
       status: "complete",
       failedSeriesIds: [],
     });
-    const supabase = {} as never;
+  });
 
-    await expect(new SupabaseTaskCoveragePort(supabase).ensureThrough({
-      userId: "user-1",
-      range: { from: "2026-04-01", to: "2026-04-07" },
-    })).resolves.toEqual({ status: "complete" });
+  it("is the adapter's only runtime export", () => {
+    expect(Object.keys(supabaseOverlayFeed)).toEqual([
+      "querySupabaseCalendarOverlayFeed",
+    ]);
+  });
+
+  it("ensures the Coverage Horizon and reads owner-scoped tasks in the inclusive range", async () => {
+    const tasks = queryBuilder({ data: [], error: null });
+    const { client, supabase } = supabaseFor({ tasks });
+
+    await expect(supabaseOverlayFeed.querySupabaseCalendarOverlayFeed(
+      { ...request, layers: ["tasks"] },
+      supabase,
+    )).resolves.toEqual({ status: "complete", items: [], unavailable: [] });
+
     expect(ensureRecurringTaskCoverageThrough).toHaveBeenCalledWith(
       supabase,
       "user-1",
       "2026-04-01",
       "2026-04-07",
     );
+    expect(client.from).toHaveBeenCalledWith("tasks");
+    expect(tasks.select).toHaveBeenCalledWith("*");
+    expect(tasks.eq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(tasks.not).toHaveBeenCalledWith("due_date", "is", null);
+    expect(tasks.gte).toHaveBeenCalledWith("due_date", "2026-04-01");
+    expect(tasks.lte).toHaveBeenCalledWith("due_date", "2026-04-07");
+    expect(tasks.order).toHaveBeenNthCalledWith(1, "due_date", { ascending: true });
+    expect(tasks.order).toHaveBeenNthCalledWith(2, "due_time", { ascending: true });
   });
 
-  it("reads only owner-scoped tasks whose due dates are in the inclusive range", async () => {
-    const builder = queryBuilder({ data: [], error: null });
-    const supabaseObject = { from: vi.fn(() => builder) };
-    const supabase = supabaseObject as unknown as SupabaseClient;
+  it("reads active habits and completed logs as one owner-scoped layer", async () => {
+    const habits = queryBuilder({ data: [], error: null });
+    const habitLogs = queryBuilder({ data: [], error: null });
+    const { client, supabase } = supabaseFor({ habits, habit_logs: habitLogs });
 
-    await expect(new SupabaseTaskReadPort(supabase).read({
-      userId: "user-1",
-      range: { from: "2026-04-01", to: "2026-04-07" },
-    })).resolves.toEqual([]);
+    await expect(supabaseOverlayFeed.querySupabaseCalendarOverlayFeed(
+      { ...request, layers: ["habits"] },
+      supabase,
+    )).resolves.toEqual({ status: "complete", items: [], unavailable: [] });
 
-    expect(supabaseObject.from).toHaveBeenCalledWith("tasks");
-    expect(builder.eq).toHaveBeenCalledWith("user_id", "user-1");
-    expect(builder.not).toHaveBeenCalledWith("due_date", "is", null);
-    expect(builder.gte).toHaveBeenCalledWith("due_date", "2026-04-01");
-    expect(builder.lte).toHaveBeenCalledWith("due_date", "2026-04-07");
+    expect(client.from).toHaveBeenCalledWith("habits");
+    expect(habits.select).toHaveBeenCalledWith("*");
+    expect(habits.eq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(habits.eq).toHaveBeenCalledWith("status", "active");
+    expect(client.from).toHaveBeenCalledWith("habit_logs");
+    expect(habitLogs.select).toHaveBeenCalledWith("*");
+    expect(habitLogs.eq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(habitLogs.eq).toHaveBeenCalledWith("completed", true);
+    expect(habitLogs.gte).toHaveBeenCalledWith("logged_date", "2026-04-01");
+    expect(habitLogs.lte).toHaveBeenCalledWith("logged_date", "2026-04-07");
   });
 
-  it("reads owner-scoped active habits through a separate capability", async () => {
-    const builder = queryBuilder({ data: [], error: null });
-    const supabaseObject = { from: vi.fn(() => builder) };
-    const supabase = supabaseObject as unknown as SupabaseClient;
+  it("reads owner-scoped non-active workouts using timezone-correct UTC boundaries", async () => {
+    const workouts = queryBuilder({ data: [], error: null });
+    const { client, supabase } = supabaseFor({ workouts });
 
-    await expect(new SupabaseActiveHabitReadPort(supabase).read({
-      userId: "user-1",
-      range: { from: "2026-04-01", to: "2026-04-07" },
-    })).resolves.toEqual([]);
+    await expect(supabaseOverlayFeed.querySupabaseCalendarOverlayFeed(
+      {
+        ...request,
+        layers: ["workouts"],
+        timezone: "America/Los_Angeles",
+      },
+      supabase,
+    )).resolves.toEqual({ status: "complete", items: [], unavailable: [] });
 
-    expect(supabaseObject.from).toHaveBeenCalledWith("habits");
-    expect(builder.eq).toHaveBeenCalledWith("user_id", "user-1");
-    expect(builder.eq).toHaveBeenCalledWith("status", "active");
-  });
-
-  it("reads owner-scoped completed logs only in the requested date range", async () => {
-    const builder = queryBuilder({ data: [], error: null });
-    const supabaseObject = { from: vi.fn(() => builder) };
-    const supabase = supabaseObject as unknown as SupabaseClient;
-
-    await expect(new SupabaseHabitCompletionLogReadPort(supabase).read({
-      userId: "user-1",
-      range: { from: "2026-04-01", to: "2026-04-07" },
-    })).resolves.toEqual([]);
-
-    expect(supabaseObject.from).toHaveBeenCalledWith("habit_logs");
-    expect(builder.eq).toHaveBeenCalledWith("user_id", "user-1");
-    expect(builder.eq).toHaveBeenCalledWith("completed", true);
-    expect(builder.gte).toHaveBeenCalledWith("logged_date", "2026-04-01");
-    expect(builder.lte).toHaveBeenCalledWith("logged_date", "2026-04-07");
-  });
-
-  it("reads owner-scoped non-active workouts within the requested date range", async () => {
-    const builder = queryBuilder({ data: [], error: null });
-    const supabaseObject = { from: vi.fn(() => builder) };
-    const supabase = supabaseObject as unknown as SupabaseClient;
-
-    await expect(new SupabaseWorkoutReadPort(supabase).read({
-      userId: "user-1",
-      range: { from: "2026-04-01", to: "2026-04-07" },
-      timezone: "America/Los_Angeles",
-    })).resolves.toEqual([]);
-
-    expect(supabaseObject.from).toHaveBeenCalledWith("workouts");
-    expect(builder.eq).toHaveBeenCalledWith("user_id", "user-1");
-    expect(builder.neq).toHaveBeenCalledWith("status", "in_progress");
-    expect(builder.gte).toHaveBeenCalledWith("started_at", "2026-04-01T07:00:00.000Z");
-    expect(builder.lte).toHaveBeenCalledWith("started_at", "2026-04-08T06:59:59.000Z");
+    expect(client.from).toHaveBeenCalledWith("workouts");
+    expect(workouts.select).toHaveBeenCalledWith("*");
+    expect(workouts.eq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(workouts.neq).toHaveBeenCalledWith("status", "in_progress");
+    expect(workouts.gte).toHaveBeenCalledWith(
+      "started_at",
+      "2026-04-01T07:00:00.000Z",
+    );
+    expect(workouts.lte).toHaveBeenCalledWith(
+      "started_at",
+      "2026-04-08T06:59:59.000Z",
+    );
+    expect(workouts.order).toHaveBeenCalledWith("started_at", { ascending: true });
   });
 });

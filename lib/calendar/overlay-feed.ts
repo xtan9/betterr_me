@@ -28,15 +28,15 @@ export type TaskCoverageResult =
   | TaskCoverageUnavailable;
 
 /** The minimum task capabilities needed by the framework-free application query. */
-export interface TaskCoveragePort {
+interface TaskCoveragePort {
   ensureThrough(request: TaskOverlayRequest): Promise<TaskCoverageResult>;
 }
 
-export interface TaskReadPort {
+interface TaskReadPort {
   read(request: TaskOverlayRequest): Promise<Task[]>;
 }
 
-export interface TaskOverlayCapabilities {
+interface TaskOverlayCapabilities {
   coverage: TaskCoveragePort;
   read: TaskReadPort;
 }
@@ -46,16 +46,16 @@ export interface HabitOverlayRequest {
   range: LocalDateRange;
 }
 
-export interface ActiveHabitReadPort {
+interface ActiveHabitReadPort {
   read(request: HabitOverlayRequest): Promise<Habit[]>;
 }
 
-export interface HabitCompletionLogReadPort {
+interface HabitCompletionLogReadPort {
   read(request: HabitOverlayRequest): Promise<HabitLog[]>;
 }
 
 /** The minimum separate reads needed to acquire the habit layer. */
-export interface HabitOverlayCapabilities {
+interface HabitOverlayCapabilities {
   activeHabits: ActiveHabitReadPort;
   completionLogs: HabitCompletionLogReadPort;
 }
@@ -66,11 +66,11 @@ export interface WorkoutOverlayRequest {
   timezone: string;
 }
 
-export interface WorkoutReadPort {
+interface WorkoutReadPort {
   read(request: WorkoutOverlayRequest): Promise<Workout[]>;
 }
 
-export type WorkoutOverlayCapabilities = WorkoutReadPort;
+type WorkoutOverlayCapabilities = WorkoutReadPort;
 
 /** Combined capabilities used by the selected overlay layers. */
 export interface CalendarOverlayCapabilities extends TaskOverlayCapabilities {
@@ -170,6 +170,13 @@ export interface OverlayFailureReport {
 
 export interface CalendarOverlayQueryOptions {
   reportFailure?: (report: OverlayFailureReport) => void;
+}
+
+export interface CalendarOverlayQueryInput {
+  userId: string;
+  range: LocalDateRange;
+  layers: readonly CalendarOverlayLayer[];
+  timezone?: string;
 }
 
 export type CalendarOverlayQueryOutcome =
@@ -328,17 +335,28 @@ function reportFailure(
   }
 }
 
+function assertCompleteCapabilities(
+  capabilities: CalendarOverlayCapabilities,
+): void {
+  const operations = [
+    capabilities?.coverage?.ensureThrough,
+    capabilities?.read?.read,
+    capabilities?.habits?.activeHabits?.read,
+    capabilities?.habits?.completionLogs?.read,
+    capabilities?.workouts?.read,
+  ];
+  if (operations.some((operation) => typeof operation !== "function")) {
+    throw new TypeError("Calendar Overlay capabilities are incomplete");
+  }
+}
+
 /** Query selected Calendar Overlay Layers without depending on HTTP or a framework. */
 export async function queryCalendarOverlayFeed(
-  input: {
-    userId: string;
-    range: LocalDateRange;
-    layers: readonly CalendarOverlayLayer[];
-    timezone?: string;
-  },
-  capabilities: TaskOverlayCapabilities | CalendarOverlayCapabilities | WorkoutOverlayCapabilities,
+  input: CalendarOverlayQueryInput,
+  capabilities: CalendarOverlayCapabilities,
   options: CalendarOverlayQueryOptions = {},
 ): Promise<CalendarOverlayQueryOutcome> {
+  assertCompleteCapabilities(capabilities);
   const selectedLayers = [...new Set(input.layers)];
   const request: TaskOverlayRequest = {
     userId: input.userId,
@@ -347,20 +365,9 @@ export async function queryCalendarOverlayFeed(
 
   const taskAcquisition = selectedLayers.includes("tasks")
     ? (async (): Promise<{ items: CalendarOverlayItem[]; unavailable: OverlayUnavailable[]; available: boolean }> => {
-        const taskCapabilities = "coverage" in capabilities && "read" in capabilities
-          ? capabilities
-          : undefined;
-        if (!taskCapabilities?.coverage || !taskCapabilities.read) {
-          reportFailure(options, {
-            layer: "tasks",
-            request,
-            cause: new Error("Task overlay capabilities are unavailable"),
-          });
-          return { items: [], available: false, unavailable: [{ layer: "tasks", code: "unavailable" }] };
-        }
         let coverage: TaskCoverageResult;
         try {
-          coverage = await taskCapabilities.coverage.ensureThrough(request);
+          coverage = await capabilities.coverage.ensureThrough(request);
         } catch (cause) {
           reportFailure(options, { layer: "tasks", request, cause });
           return {
@@ -387,7 +394,7 @@ export async function queryCalendarOverlayFeed(
         }
 
         try {
-          const tasks = await taskCapabilities.read.read(request);
+          const tasks = await capabilities.read.read(request);
           return {
             items: sortItems(tasks.map(taskItem).filter((item): item is TaskOverlayItem => item !== null)),
             unavailable: [],
@@ -404,10 +411,8 @@ export async function queryCalendarOverlayFeed(
     ? (async (): Promise<{ items: CalendarOverlayItem[]; unavailable: OverlayUnavailable[]; available: boolean }> => {
         const habitRequest: HabitOverlayRequest = { userId: input.userId, range: input.range };
         try {
-          const habitCapabilities = "habits" in capabilities ? capabilities.habits : undefined;
-          if (!habitCapabilities) throw new Error("Habit overlay capabilities are unavailable");
-          const activeHabits = habitCapabilities.activeHabits.read(habitRequest);
-          const completionLogs = habitCapabilities.completionLogs.read(habitRequest);
+          const activeHabits = capabilities.habits.activeHabits.read(habitRequest);
+          const completionLogs = capabilities.habits.completionLogs.read(habitRequest);
           const [habits, logs] = await Promise.all([activeHabits, completionLogs]);
           return {
             items: habitItems(habits, logs, input.range),
@@ -427,15 +432,9 @@ export async function queryCalendarOverlayFeed(
 
   const workoutAcquisition = selectedLayers.includes("workouts")
     ? (async (): Promise<{ items: CalendarOverlayItem[]; unavailable: OverlayUnavailable[]; available: boolean }> => {
-        const workoutCapabilities = "workouts" in capabilities
-          ? capabilities.workouts
-          : "read" in capabilities && !("coverage" in capabilities)
-            ? capabilities
-            : undefined;
         const timezone = input.timezone ?? "UTC";
         try {
-          if (!workoutCapabilities) throw new Error("Workout overlay capabilities are unavailable");
-          const workouts = await workoutCapabilities.read({
+          const workouts = await capabilities.workouts.read({
             userId: input.userId,
             range: input.range,
             timezone,

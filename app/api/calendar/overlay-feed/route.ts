@@ -8,10 +8,10 @@ import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { log } from "@/lib/logger";
 import {
   CALENDAR_OVERLAY_LAYERS,
-  queryCalendarOverlayFeed,
   type CalendarOverlayLayer,
+  type CalendarOverlayQueryOutcome,
 } from "@/lib/calendar/overlay-feed";
-import { createSupabaseOverlayCapabilities } from "@/lib/calendar/supabase-overlay-feed";
+import { querySupabaseCalendarOverlayFeed } from "@/lib/calendar/supabase-overlay-feed";
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ["cookie"],
@@ -43,7 +43,7 @@ function validTimeZone(value: string): boolean {
 }
 
 function unavailableLayers(
-  outcome: Awaited<ReturnType<typeof queryCalendarOverlayFeed>>,
+  outcome: CalendarOverlayQueryOutcome,
 ) {
   return CALENDAR_OVERLAY_LAYERS.filter((layer) =>
     outcome.unavailable.some((unavailable) => unavailable.layer === layer),
@@ -111,14 +111,14 @@ export async function GET(request: NextRequest) {
     }
     const requestedLayers = CALENDAR_OVERLAY_LAYERS.filter((layer) => parsedLayers.includes(layer));
 
-    const outcome = await queryCalendarOverlayFeed(
+    const outcome = await querySupabaseCalendarOverlayFeed(
       {
         userId: auth.principal.userId,
         range: { from: startDate, to: endDate },
         layers: requestedLayers as CalendarOverlayLayer[],
         ...(timezone !== null ? { timezone } : {}),
       },
-      createSupabaseOverlayCapabilities(auth.client),
+      auth.client,
       {
         reportFailure: ({ layer, request: safeRequest, cause }) => {
           log.error("Calendar overlay layer acquisition failed", cause, {
