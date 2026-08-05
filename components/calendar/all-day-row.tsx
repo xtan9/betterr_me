@@ -3,35 +3,35 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { EventChip } from "./event-chip";
-import type { CalendarDisplayItem } from "@/lib/calendar/overlay-adapter";
+import type { CalendarDisplayItem } from "@/lib/calendar/display";
 import { getLocalDateString } from "@/lib/utils";
 
 interface AllDayRowProps {
   /** Array of dates (columns) in the grid */
   dates: Date[];
-  /** Map of date string -> events for that date */
-  events: Map<string, CalendarDisplayItem[]>;
-  /** Callback when an event is clicked */
-  onEventClick?: (event: CalendarDisplayItem) => void;
+  /** Map of date string -> display items for that date */
+  displayItems: Map<string, CalendarDisplayItem[]>;
+  /** Callback when a display item is clicked */
+  onDisplayItemClick?: (item: CalendarDisplayItem) => void;
 }
 
 const MAX_VISIBLE = 3;
 
-export function AllDayRow({ dates, events, onEventClick }: AllDayRowProps) {
+export function AllDayRow({ dates, displayItems, onDisplayItemClick }: AllDayRowProps) {
   const t = useTranslations("calendar");
   const [expanded, setExpanded] = useState(false);
 
-  // Filter all-day events for each date
+  // Filter all-day display items for each date
   const allDayByDate = dates.map((date) => {
     const dateStr = getLocalDateString(date);
-    const dayEvents = events.get(dateStr) || [];
-    return dayEvents.filter((e) => e.start_time === null);
+    const dayItems = displayItems.get(dateStr) || [];
+    return dayItems.filter((item) => item.start_time === null);
   });
 
   // Check if any column has overflow
   const hasOverflow = allDayByDate.some((items) => items.length > MAX_VISIBLE);
 
-  // If no all-day events at all, don't render the row
+  // If no all-day display items exist, don't render the row
   if (allDayByDate.every((items) => items.length === 0)) {
     return null;
   }
@@ -61,20 +61,20 @@ export function AllDayRow({ dates, events, onEventClick }: AllDayRowProps) {
               key={colIdx}
               className="px-1 py-1 space-y-0.5 border-r border-border last:border-r-0 min-h-[28px]"
             >
-              {visible.map((event) => (
+              {visible.map((item) => (
                 <div
-                  key={event.id}
+                  key={item.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => onEventClick?.(event)}
+                  onClick={() => onDisplayItemClick?.(item)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
-                      onEventClick?.(event);
+                      onDisplayItemClick?.(item);
                     }
                   }}
                   className="cursor-pointer"
                 >
-                  <EventChip event={event} />
+                  <EventChip item={item} />
                 </div>
               ))}
               {!expanded && remaining > 0 && (

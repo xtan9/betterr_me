@@ -79,13 +79,28 @@ vi.mock("@/components/calendar/calendar-sidebar", () => ({
 vi.mock("@/components/calendar/month-grid", () => ({ MonthGrid: () => <div /> }));
 vi.mock("@/components/calendar/week-view", () => ({ WeekView: () => <div /> }));
 vi.mock("@/components/calendar/day-view", () => ({
-  DayView: ({ onEventClick }: { onEventClick: (event: unknown) => void }) => (
+  DayView: ({ onDisplayItemClick }: { onDisplayItemClick: (item: unknown) => void }) => (
     <>
       <div data-testid="day-view" />
       <button
         type="button"
+        data-testid="invoke-calendar-event"
+        onClick={() => onDisplayItemClick({
+          kind: "event",
+          id: "event-1",
+          title: "Appointment",
+          start_date: "2026-04-02",
+          end_date: "2026-04-02",
+          start_time: null,
+          end_time: null,
+          color: null,
+          event: { id: "event-1" },
+        })}
+      />
+      <button
+        type="button"
         data-testid="invoke-habit-action"
-        onClick={() => onEventClick({
+        onClick={() => onDisplayItemClick({
           kind: "overlay",
           id: "habits:habit-1:2026-04-02",
           title: "Read",
@@ -106,7 +121,7 @@ vi.mock("@/components/calendar/day-view", () => ({
       <button
         type="button"
         data-testid="invoke-workout-action"
-        onClick={() => onEventClick({
+        onClick={() => onDisplayItemClick({
           kind: "overlay",
           id: "workouts:workout-1",
           title: "Morning lift",
@@ -127,7 +142,10 @@ vi.mock("@/components/calendar/day-view", () => ({
   ),
 }));
 vi.mock("@/components/calendar/event-quick-create", () => ({ EventQuickCreate: () => null }));
-vi.mock("@/components/calendar/event-dialog", () => ({ EventDialog: () => null }));
+vi.mock("@/components/calendar/event-dialog", () => ({
+  EventDialog: ({ isOpen }: { isOpen: boolean }) =>
+    isOpen ? <div data-testid="calendar-event-dialog" /> : null,
+}));
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { CalendarPageContent } from "@/components/calendar/calendar-page-content";
@@ -210,6 +228,18 @@ describe("CalendarPageContent task overlay failure seam", () => {
     await waitFor(() => {
       expect(state.actions.toggleHabit).toHaveBeenCalledWith("habit-1", "2026-04-02", false);
     });
+  });
+
+  it("keeps Calendar Event interaction on the Calendar Event path", () => {
+    state.overlay = { data: { items: [] }, error: null };
+
+    render(<CalendarPageContent />);
+    fireEvent.click(screen.getByTestId("invoke-calendar-event"));
+
+    expect(screen.getByTestId("calendar-event-dialog")).toBeInTheDocument();
+    expect(state.actions.toggleTask).not.toHaveBeenCalled();
+    expect(state.actions.toggleHabit).not.toHaveBeenCalled();
+    expect(state.actions.navigateWorkout).not.toHaveBeenCalled();
   });
 
   it("keeps the calendar visible, localizes workout degradation, and dispatches workout navigation", async () => {

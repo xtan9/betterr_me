@@ -1,11 +1,11 @@
 import type {
   CalendarDisplayItem,
   CalendarLayer,
-} from "@/lib/calendar/overlay-adapter";
-import { CALENDAR_LAYER_COLORS } from "@/lib/calendar/overlay-adapter";
+} from "@/lib/calendar/display";
+import { CALENDAR_LAYER_COLORS } from "@/lib/calendar/display";
 
 interface EventChipProps {
-  event: CalendarDisplayItem;
+  item: CalendarDisplayItem;
 }
 
 /**
@@ -15,21 +15,21 @@ function formatTime(time: string): string {
   return time.slice(0, 5);
 }
 
-export function EventChip({ event }: EventChipProps) {
-  const layer: CalendarLayer = event.kind === "overlay" ? event.layer : "events";
-  const isCompleted = event.kind === "overlay" && event.completed;
+export function EventChip({ item }: EventChipProps) {
+  const layer: CalendarLayer = item.kind === "overlay" ? item.layer : "events";
+  const isCompleted = item.kind === "overlay" && item.completed;
 
   // Use custom color if set, otherwise use domain or default
-  const hasCustomColor = !!event.color;
+  const hasCustomColor = !!item.color;
   const hasLayerColor = layer !== "events" && CALENDAR_LAYER_COLORS[layer];
 
   const bgStyle = hasCustomColor
-    ? { backgroundColor: `${event.color}20` }
+    ? { backgroundColor: `${item.color}20` }
     : hasLayerColor
       ? { backgroundColor: `hsl(var(${CALENDAR_LAYER_COLORS[layer!].muted}))` }
       : {};
-  const borderStyle = hasCustomColor && event.color
-    ? { borderLeftColor: event.color }
+  const borderStyle = hasCustomColor && item.color
+    ? { borderLeftColor: item.color }
     : hasLayerColor
       ? { borderLeftColor: `hsl(var(${CALENDAR_LAYER_COLORS[layer!].main}))` }
       : {};
@@ -49,14 +49,14 @@ export function EventChip({ event }: EventChipProps) {
         ${isCompleted ? "line-through opacity-60" : ""}
       `}
       style={{ ...bgStyle, ...borderStyle }}
-      title={event.title}
+      title={item.title}
     >
-      {event.start_time && (
+      {item.start_time && (
         <span className="text-muted-foreground shrink-0">
-          {formatTime(event.start_time)}
+          {formatTime(item.start_time)}
         </span>
       )}
-      <span className="truncate">{event.title}</span>
+      <span className="truncate">{item.title}</span>
     </div>
   );
 }

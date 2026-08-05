@@ -1,7 +1,7 @@
 import {
   calendarEventToDisplayItem,
   type CalendarDisplayItem,
-} from "@/lib/calendar/overlay-adapter";
+} from "@/lib/calendar/display";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 
 export function toDisplayItems(

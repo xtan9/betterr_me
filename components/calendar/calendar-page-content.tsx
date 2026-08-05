@@ -28,9 +28,11 @@ import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 import {
   calendarEventToDisplayItem,
   groupCalendarDisplayItemsByDate,
+  type CalendarDisplayItem,
+  type CalendarLayer,
   overlayItemsToDisplayItems,
   type CalendarOverlayDisplayItem,
-} from "@/lib/calendar/overlay-adapter";
+} from "@/lib/calendar/display";
 import {
   CALENDAR_OVERLAY_LAYERS,
   type CalendarOverlayItem,
@@ -96,11 +98,11 @@ export function CalendarPageContent() {
   }, []); // Run once on mount only
 
   // --- Layer state (lifted from sidebar) ---
-  const [enabledLayers, setEnabledLayers] = useState<Set<string>>(
-    new Set(["events", "tasks", "habits", "workouts"]),
+  const [enabledLayers, setEnabledLayers] = useState<Set<CalendarLayer>>(
+    new Set<CalendarLayer>(["events", "tasks", "habits", "workouts"]),
   );
 
-  const toggleLayer = useCallback((key: string) => {
+  const toggleLayer = useCallback((key: CalendarLayer) => {
     setEnabledLayers((prev) => {
       const next = new Set(prev);
       if (next.has(key)) {
@@ -190,7 +192,7 @@ export function CalendarPageContent() {
 
   const { toggleTask, toggleHabit, navigateWorkout } = useCalendarActions(handleOverlayMutated);
 
-  const handleItemAction = useCallback(
+  const handleOverlayItemAction = useCallback(
     async (item: CalendarOverlayDisplayItem) => {
       if (item.action.type === "toggle_task_completion") {
         const result = await toggleTask(item.action.taskId);
@@ -233,11 +235,22 @@ export function CalendarPageContent() {
     handleNewEvent,
     handleQuickCreateMoreOptions,
     handleEventSaved,
-  } = useCalendarEvents(dateParam, handleItemAction, onEventSavedCallback);
+  } = useCalendarEvents(dateParam, onEventSavedCallback);
+
+  const handleDisplayItemClick = useCallback(
+    (item: CalendarDisplayItem) => {
+      if (item.kind === "event") {
+        handleEventClick(item);
+        return;
+      }
+      handleOverlayItemAction(item);
+    },
+    [handleEventClick, handleOverlayItemAction],
+  );
 
   // --- Merge Calendar Events + overlay items ---
 
-  const eventsByDate = useMemo(() => {
+  const displayItemsByDate = useMemo(() => {
     const calendarEvents = eventsData?.events ?? [];
 
     // Adapt selected Calendar Overlay Feed items for the Calendar views.
@@ -342,7 +355,7 @@ export function CalendarPageContent() {
             ) : view === "month" ? (
               <MonthGrid
                 dates={gridDates}
-                events={eventsByDate}
+                displayItems={displayItemsByDate}
                 currentMonth={month}
                 today={today}
                 onDayClick={handleDayClick}
@@ -352,20 +365,20 @@ export function CalendarPageContent() {
               <WeekView
                 currentDate={currentDate}
                 weekStartDay={weekStartDay}
-                events={eventsByDate}
+                displayItems={displayItemsByDate}
                 today={today}
                 onTimeSlotClick={handleTimeSlotClick}
                 onDragSelect={handleDragSelect}
-                onEventClick={handleEventClick}
+                onDisplayItemClick={handleDisplayItemClick}
               />
             ) : (
               <DayView
                 currentDate={currentDate}
-                events={eventsByDate}
+                displayItems={displayItemsByDate}
                 today={today}
                 onTimeSlotClick={handleTimeSlotClick}
                 onDragSelect={handleDragSelect}
-                onEventClick={handleEventClick}
+                onDisplayItemClick={handleDisplayItemClick}
                 onNavigateNext={goToNext}
                 onNavigatePrev={goToPrev}
               />

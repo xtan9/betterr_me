@@ -5,7 +5,7 @@ import { getLocalDateString } from "@/lib/utils";
 import { EventBlock } from "./event-block";
 import { AllDayRow } from "./all-day-row";
 import { CurrentTimeIndicator } from "./current-time-indicator";
-import type { CalendarDisplayItem } from "@/lib/calendar/overlay-adapter";
+import type { CalendarDisplayItem } from "@/lib/calendar/display";
 
 export const HOUR_HEIGHT = 48; // pixels per hour
 const TOTAL_HOURS = 24;
@@ -15,8 +15,8 @@ const SCROLL_TO_HOUR = 8; // Scroll to 8 AM on mount
 interface TimeGridProps {
   /** Array of dates to display as columns (1 for day, 7 for week) */
   dates: Date[];
-  /** Map of date string -> events for that date */
-  events: Map<string, CalendarDisplayItem[]>;
+  /** Map of date string -> display items for that date */
+  displayItems: Map<string, CalendarDisplayItem[]>;
   /** Today's date string (YYYY-MM-DD) for highlighting and current time indicator */
   today: string;
   /** Callback when a time slot is clicked */
@@ -32,8 +32,8 @@ interface TimeGridProps {
     endTime: string,
     position: { x: number; y: number },
   ) => void;
-  /** Callback when an event block is clicked */
-  onEventClick?: (event: CalendarDisplayItem) => void;
+  /** Callback when a display item is clicked */
+  onDisplayItemClick?: (item: CalendarDisplayItem) => void;
 }
 
 // --- Helper functions ---
@@ -44,11 +44,11 @@ export function timeToMinutes(time: string): number {
   return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
 }
 
-/** Returns event duration in minutes (default 60 if no end_time, minimum 0) */
-function getDurationMinutes(event: CalendarDisplayItem): number {
-  if (!event.start_time) return 60;
-  const startMin = timeToMinutes(event.start_time);
-  const endMin = event.end_time ? timeToMinutes(event.end_time) : startMin + 60;
+/** Returns display item duration in minutes (default 60 if no end_time, minimum 0) */
+function getDurationMinutes(item: CalendarDisplayItem): number {
+  if (!item.start_time) return 60;
+  const startMin = timeToMinutes(item.start_time);
+  const endMin = item.end_time ? timeToMinutes(item.end_time) : startMin + 60;
   return Math.max(endMin - startMin, 0);
 }
 
@@ -73,31 +73,31 @@ function snapTo15(minutes: number): number {
 }
 
 /**
- * Computes side-by-side column assignments for overlapping events.
- * Google Calendar style: overlapping events share equal-width columns.
+ * Computes side-by-side column assignments for overlapping display items.
+ * Google Calendar style: overlapping display items share equal-width columns.
  */
 export function computeOverlapColumns(
-  events: CalendarDisplayItem[],
+  displayItems: CalendarDisplayItem[],
 ): Map<string, { column: number; totalColumns: number }> {
   // Sort by start_time, then by duration descending
-  const sorted = [...events].sort((a, b) => {
+  const sorted = [...displayItems].sort((a, b) => {
     const cmp = (a.start_time || "").localeCompare(b.start_time || "");
     if (cmp !== 0) return cmp;
     return getDurationMinutes(b) - getDurationMinutes(a);
   });
 
-  // For each event, find the first available column
+  // For each display item, find the first available column
   const columns: {
-    eventId: string;
+    itemId: string;
     column: number;
     startMin: number;
     endMin: number;
   }[] = [];
 
-  for (const event of sorted) {
-    const startMin = timeToMinutes(event.start_time!);
-    const endMin = event.end_time
-      ? timeToMinutes(event.end_time)
+  for (const item of sorted) {
+    const startMin = timeToMinutes(item.start_time!);
+    const endMin = item.end_time
+      ? timeToMinutes(item.end_time)
       : startMin + 60;
     let col = 0;
     while (
@@ -107,7 +107,7 @@ export function computeOverlapColumns(
     ) {
       col++;
     }
-    columns.push({ eventId: event.id, column: col, startMin, endMin });
+    columns.push({ itemId: item.id, column: col, startMin, endMin });
   }
 
   // Determine total columns per overlap group
@@ -117,7 +117,7 @@ export function computeOverlapColumns(
       (c) => c.startMin < entry.endMin && c.endMin > entry.startMin,
     );
     const maxCol = Math.max(...overlapping.map((c) => c.column)) + 1;
-    result.set(entry.eventId, {
+    result.set(entry.itemId, {
       column: entry.column,
       totalColumns: maxCol,
     });
@@ -127,11 +127,11 @@ export function computeOverlapColumns(
 
 export function TimeGrid({
   dates,
-  events,
+  displayItems,
   today,
   onTimeSlotClick,
   onDragSelect,
-  onEventClick,
+  onDisplayItemClick,
 }: TimeGridProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -151,16 +151,16 @@ export function TimeGrid({
     }
   }, []);
 
-  // Compute timed events per column with overlap info
+  // Compute timed display items per column with overlap info
   const columnsData = useMemo(() => {
     return dates.map((date) => {
       const dateStr = getLocalDateString(date);
-      const dayEvents = events.get(dateStr) || [];
-      const timedEvents = dayEvents.filter((e) => e.start_time !== null);
-      const overlapInfo = computeOverlapColumns(timedEvents);
-      return { date, dateStr, timedEvents, overlapInfo };
+      const dayItems = displayItems.get(dateStr) || [];
+      const timedItems = dayItems.filter((item) => item.start_time !== null);
+      const overlapInfo = computeOverlapColumns(timedItems);
+      return { date, dateStr, timedItems, overlapInfo };
     });
-  }, [dates, events]);
+  }, [dates, displayItems]);
 
   // Convert Y offset to minutes
   const yToMinutes = useCallback((offsetY: number): number => {
@@ -181,9 +181,9 @@ export function TimeGrid({
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      // Only handle left clicks on the grid area (not on events)
+      // Only handle left clicks on the grid area (not on display items)
       if (e.button !== 0) return;
-      // Don't start drag when clicking on event blocks or buttons
+      // Don't start drag when clicking on display blocks or buttons
       if ((e.target as HTMLElement).closest("button")) return;
 
       const gridEl = e.currentTarget;
@@ -260,7 +260,11 @@ export function TimeGrid({
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* All-day row */}
-      <AllDayRow dates={dates} events={events} onEventClick={onEventClick} />
+      <AllDayRow
+        dates={dates}
+        displayItems={displayItems}
+        onDisplayItemClick={onDisplayItemClick}
+      />
 
       {/* Scrollable time grid */}
       <div
@@ -299,7 +303,7 @@ export function TimeGrid({
 
           {/* Day columns */}
           {columnsData.map(
-            ({ dateStr, timedEvents, overlapInfo }, colIdx) => {
+            ({ dateStr, timedItems, overlapInfo }, colIdx) => {
               const isToday = dateStr === today;
 
               return (
@@ -326,13 +330,13 @@ export function TimeGrid({
                   ))}
 
                   {/* Event blocks */}
-                  {timedEvents.map((event) => {
-                    const info = overlapInfo.get(event.id);
+                  {timedItems.map((item) => {
+                    const info = overlapInfo.get(item.id);
                     if (!info) return null;
 
-                    const startMin = timeToMinutes(event.start_time!);
-                    const endMin = event.end_time
-                      ? timeToMinutes(event.end_time)
+                    const startMin = timeToMinutes(item.start_time!);
+                    const endMin = item.end_time
+                      ? timeToMinutes(item.end_time)
                       : startMin + 60;
                     const top = (startMin / 60) * HOUR_HEIGHT;
                     const height = Math.max(
@@ -345,13 +349,13 @@ export function TimeGrid({
 
                     return (
                       <EventBlock
-                        key={event.id}
-                        event={event}
+                        key={item.id}
+                        item={item}
                         top={top}
                         height={height}
                         left={left}
                         width={width}
-                        onClick={onEventClick}
+                        onClick={onDisplayItemClick}
                       />
                     );
                   })}

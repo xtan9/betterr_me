@@ -4,7 +4,7 @@ import { EventBlock } from "@/components/calendar/event-block";
 import {
   calendarEventToDisplayItem,
   overlayItemsToDisplayItems,
-} from "@/lib/calendar/overlay-adapter";
+} from "@/lib/calendar/display";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 import type { CalendarEvent } from "@/lib/db/types";
 
@@ -40,7 +40,7 @@ function makeEvent(
 
 describe("EventBlock", () => {
   const defaultProps = {
-    event: calendarEventToDisplayItem(makeEvent()),
+    item: calendarEventToDisplayItem(makeEvent()),
     top: 100,
     height: 48,
     left: "0%",
@@ -74,7 +74,7 @@ describe("EventBlock", () => {
 
   it("uses custom color inline styles when event.color is set", () => {
     const event = makeEvent({ color: "#ff5733" });
-    render(<EventBlock {...defaultProps} event={calendarEventToDisplayItem(event)} />);
+    render(<EventBlock {...defaultProps} item={calendarEventToDisplayItem(event)} />);
     const button = screen.getByRole("button");
     // Custom color uses inline style for backgroundColor and borderLeftColor
     // jsdom normalizes hex+alpha to rgba
@@ -98,7 +98,7 @@ describe("EventBlock", () => {
     const stopSpy = vi.spyOn(clickEvent, "stopPropagation");
 
     button.dispatchEvent(clickEvent);
-    expect(onClick).toHaveBeenCalledWith(defaultProps.event);
+    expect(onClick).toHaveBeenCalledWith(defaultProps.item);
     expect(stopSpy).toHaveBeenCalled();
   });
 
@@ -117,7 +117,7 @@ describe("EventBlock", () => {
       action: { type: "toggle_task_completion", taskId: "task-1" },
     }]);
 
-    render(<EventBlock {...defaultProps} event={event} />);
+    render(<EventBlock {...defaultProps} item={event} />);
     const button = screen.getByRole("button");
     // Domain color uses inline styles instead of the default CSS class
     expect(button.className).not.toContain("bg-[hsl(var(--calendar-event-muted))]");
@@ -144,7 +144,7 @@ describe("EventBlock", () => {
       },
     }]);
 
-    render(<EventBlock {...defaultProps} event={event} />);
+    render(<EventBlock {...defaultProps} item={event} />);
     const button = screen.getByRole("button");
     expect(button.className).toContain("line-through");
     expect(button.className).toContain("opacity-60");

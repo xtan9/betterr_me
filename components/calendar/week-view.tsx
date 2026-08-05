@@ -5,12 +5,12 @@ import { useLocale } from "next-intl";
 import { TimeGrid } from "./time-grid";
 import { getWeekDates } from "@/lib/calendar/date-utils";
 import { getLocalDateString } from "@/lib/utils";
-import type { CalendarDisplayItem } from "@/lib/calendar/overlay-adapter";
+import type { CalendarDisplayItem } from "@/lib/calendar/display";
 
 interface WeekViewProps {
   currentDate: Date;
   weekStartDay: number;
-  events: Map<string, CalendarDisplayItem[]>;
+  displayItems: Map<string, CalendarDisplayItem[]>;
   today: string;
   onTimeSlotClick?: (
     date: Date,
@@ -23,17 +23,17 @@ interface WeekViewProps {
     endTime: string,
     position: { x: number; y: number },
   ) => void;
-  onEventClick?: (event: CalendarDisplayItem) => void;
+  onDisplayItemClick?: (item: CalendarDisplayItem) => void;
 }
 
 export function WeekView({
   currentDate,
   weekStartDay,
-  events,
+  displayItems,
   today,
   onTimeSlotClick,
   onDragSelect,
-  onEventClick,
+  onDisplayItemClick,
 }: WeekViewProps) {
   const locale = useLocale();
   const dates = useMemo(
@@ -82,11 +82,11 @@ export function WeekView({
       {/* Time grid */}
       <TimeGrid
         dates={dates}
-        events={events}
+        displayItems={displayItems}
         today={today}
         onTimeSlotClick={onTimeSlotClick}
         onDragSelect={onDragSelect}
-        onEventClick={onEventClick}
+        onDisplayItemClick={onDisplayItemClick}
       />
     </div>
   );

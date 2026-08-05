@@ -4,14 +4,15 @@ import { useTranslations } from "next-intl";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import type { CalendarLayer } from "@/lib/calendar/display";
 
 interface CalendarSidebarProps {
   currentDate: Date;
   onDateSelect: (date: Date | undefined) => void;
   weekStartDay: number;
   onNewEvent?: () => void;
-  enabledLayers: Set<string>;
-  onToggleLayer: (key: string) => void;
+  enabledLayers: Set<CalendarLayer>;
+  onToggleLayer: (key: CalendarLayer) => void;
 }
 
 const LAYERS = [
@@ -19,7 +20,7 @@ const LAYERS = [
   { key: "tasks", cssVar: "--calendar-task" },
   { key: "habits", cssVar: "--calendar-habit" },
   { key: "workouts", cssVar: "--calendar-workout" },
-] as const;
+] as const satisfies ReadonlyArray<{ key: CalendarLayer; cssVar: string }>;
 
 export function CalendarSidebar({
   currentDate,

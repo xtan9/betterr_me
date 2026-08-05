@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MonthGrid } from "@/components/calendar/month-grid";
 import { getMonthGridDates } from "@/lib/calendar/date-utils";
-import type { CalendarDisplayItem } from "@/lib/calendar/overlay-adapter";
+import type { CalendarDisplayItem } from "@/lib/calendar/display";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 import type { CalendarEvent } from "@/lib/db/types";
 import { toDisplayMap } from "./calendar-display-item-test-utils";
@@ -52,12 +52,12 @@ function makeEvent(
 describe("MonthGrid", () => {
   // April 2026, weekStartDay=0 (Sunday)
   const dates = getMonthGridDates(2026, 3, 0);
-  const emptyEvents = new Map<string, CalendarDisplayItem[]>();
+  const emptyDisplayItems = new Map<string, CalendarDisplayItem[]>();
   const mockOnDayClick = vi.fn();
 
   const defaultProps = {
     dates,
-    events: emptyEvents,
+    displayItems: emptyDisplayItems,
     currentMonth: 3, // April
     today: "2026-04-15",
     onDayClick: mockOnDayClick,
@@ -107,7 +107,7 @@ describe("MonthGrid", () => {
       makeEvent({ id: "e1", title: "Team Meeting", start_date: "2026-04-10", end_date: "2026-04-10" }),
     ]);
 
-    render(<MonthGrid {...defaultProps} events={toDisplayMap(eventsMap)} />);
+    render(<MonthGrid {...defaultProps} displayItems={toDisplayMap(eventsMap)} />);
     expect(screen.getByText("Team Meeting")).toBeInTheDocument();
   });
 
@@ -121,7 +121,7 @@ describe("MonthGrid", () => {
       makeEvent({ id: "e5", title: "Event 5", start_date: "2026-04-10", end_date: "2026-04-10" }),
     ]);
 
-    render(<MonthGrid {...defaultProps} events={toDisplayMap(eventsMap)} />);
+    render(<MonthGrid {...defaultProps} displayItems={toDisplayMap(eventsMap)} />);
     // Only 3 visible
     expect(screen.getByText("Event 1")).toBeInTheDocument();
     expect(screen.getByText("Event 2")).toBeInTheDocument();
@@ -145,7 +145,7 @@ describe("MonthGrid", () => {
       }),
     ]);
 
-    render(<MonthGrid {...defaultProps} events={toDisplayMap(eventsMap)} />);
+    render(<MonthGrid {...defaultProps} displayItems={toDisplayMap(eventsMap)} />);
     expect(screen.getByText("09:30")).toBeInTheDocument();
     expect(screen.getByText("Standup")).toBeInTheDocument();
   });

@@ -4,7 +4,7 @@ import { EventChip } from "@/components/calendar/event-chip";
 import {
   calendarEventToDisplayItem,
   overlayItemsToDisplayItems,
-} from "@/lib/calendar/overlay-adapter";
+} from "@/lib/calendar/display";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 import type { CalendarEvent } from "@/lib/db/types";
 
@@ -40,17 +40,17 @@ function makeEvent(
 
 describe("EventChip", () => {
   it("renders event title", () => {
-    render(<EventChip event={calendarEventToDisplayItem(makeEvent())} />);
+    render(<EventChip item={calendarEventToDisplayItem(makeEvent())} />);
     expect(screen.getByText("Test Event")).toBeInTheDocument();
   });
 
   it("renders time when start_time is set", () => {
-    render(<EventChip event={calendarEventToDisplayItem(makeEvent({ start_time: "14:30:00" }))} />);
+    render(<EventChip item={calendarEventToDisplayItem(makeEvent({ start_time: "14:30:00" }))} />);
     expect(screen.getByText("14:30")).toBeInTheDocument();
   });
 
   it("uses default teal color when no domain or custom color", () => {
-    render(<EventChip event={calendarEventToDisplayItem(makeEvent())} />);
+    render(<EventChip item={calendarEventToDisplayItem(makeEvent())} />);
     const chip = screen.getByTitle("Test Event");
     expect(chip.className).toContain("calendar-event");
   });
@@ -70,7 +70,7 @@ describe("EventChip", () => {
       action: { type: "toggle_task_completion", taskId: "task-1" },
     }]);
 
-    render(<EventChip event={event} />);
+    render(<EventChip item={event} />);
     const chip = screen.getByTitle("Task");
     // Domain color uses inline styles, not the default CSS class
     expect(chip.className).not.toContain("bg-[hsl(var(--calendar-event-muted))]");
@@ -93,14 +93,14 @@ describe("EventChip", () => {
       action: { type: "toggle_task_completion", taskId: "task-1" },
     }]);
 
-    render(<EventChip event={event} />);
+    render(<EventChip item={event} />);
     const chip = screen.getByTitle("Task");
     expect(chip.className).toContain("line-through");
     expect(chip.className).toContain("opacity-60");
   });
 
   it("does not show time for all-day events (start_time is null)", () => {
-    render(<EventChip event={calendarEventToDisplayItem(makeEvent({ start_time: null }))} />);
+    render(<EventChip item={calendarEventToDisplayItem(makeEvent({ start_time: null }))} />);
     expect(screen.getByText("Test Event")).toBeInTheDocument();
     // No time element should be rendered
     expect(screen.queryByText(/\d{2}:\d{2}/)).not.toBeInTheDocument();
