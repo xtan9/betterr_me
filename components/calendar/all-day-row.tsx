@@ -50,11 +50,11 @@ export function AllDayRow({ dates, displayItems, onDisplayItemClick }: AllDayRow
         </div>
 
         {/* Day columns */}
-        {allDayByDate.map((dayAllDayEvents, colIdx) => {
+        {allDayByDate.map((dayAllDayItems, colIdx) => {
           const visible = expanded
-            ? dayAllDayEvents
-            : dayAllDayEvents.slice(0, MAX_VISIBLE);
-          const remaining = dayAllDayEvents.length - MAX_VISIBLE;
+            ? dayAllDayItems
+            : dayAllDayItems.slice(0, MAX_VISIBLE);
+          const remaining = dayAllDayItems.length - MAX_VISIBLE;
 
           return (
             <div

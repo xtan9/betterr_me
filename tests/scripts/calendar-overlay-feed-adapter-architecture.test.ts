@@ -59,4 +59,11 @@ describe("Calendar Overlay Feed client boundary", () => {
       "useCalendarOverlayFeed",
     ]);
   });
+
+  it("uses mixed display-item terminology for all-day collections", () => {
+    const allDayRow = source("components/calendar/all-day-row.tsx");
+
+    expect(allDayRow).toContain("dayAllDayItems");
+    expect(allDayRow).not.toContain("dayAllDayEvents");
+  });
 });

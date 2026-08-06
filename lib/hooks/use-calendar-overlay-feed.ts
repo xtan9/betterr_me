@@ -13,15 +13,17 @@ import {
   type CalendarOverlayItem,
   type CalendarOverlayLayer,
   type HabitOverlayAction,
+  type LocalDateRange,
   type TaskOverlayAction,
   type WorkoutOverlayAction,
 } from "@/lib/calendar/overlay-feed";
+import {
+  calendarOverlayLocalDateSchema,
+  calendarOverlayRangeSchema,
+} from "@/lib/validations/calendar-overlay-feed";
 import { setHabitCompletion } from "@/lib/hooks/use-habit-toggle";
 
-export interface CalendarOverlayFeedRange {
-  from: string;
-  to: string;
-}
+export type CalendarOverlayFeedRange = LocalDateRange;
 
 export interface CalendarOverlayFeedSelection {
   range: CalendarOverlayFeedRange;
@@ -50,8 +52,8 @@ export type CalendarOverlayActionItem = {
 };
 
 const layerSchema = z.enum(CALENDAR_OVERLAY_LAYERS);
-const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-const timeSchema = z.string().regex(/^\d{2}:\d{2}(?::\d{2})?$/);
+const dateSchema = calendarOverlayLocalDateSchema;
+const timeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/);
 
 const taskItemSchema = z.object({
   layer: z.literal("tasks"),
@@ -146,12 +148,6 @@ function itemIsInRange(item: CalendarOverlayDisplayItem, range: CalendarOverlayF
   return item.start_date >= range.from && item.start_date <= range.to;
 }
 
-function isValidLocalDate(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [year, month, day] = value.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10) === value;
-}
-
 function retainItems(
   items: CalendarOverlayDisplayItem[],
   range: CalendarOverlayFeedRange,
@@ -213,6 +209,7 @@ export function useCalendarOverlayFeed({ range, layers }: CalendarOverlayFeedSel
   );
   const [isRetrying, setIsRetrying] = useState(false);
   const stateRef = useRef(state);
+  const stateSelectionKeyRef = useRef(selectionKey);
   const requestIdRef = useRef(0);
   const inFlightRef = useRef<{ key: string; promise: Promise<void> } | null>(null);
   const selectionRef = useRef({ range, layers: selectedLayers, key: selectionKey });
@@ -221,6 +218,7 @@ export function useCalendarOverlayFeed({ range, layers }: CalendarOverlayFeedSel
 
   const updateState = useCallback((next: CalendarOverlayFeedState) => {
     stateRef.current = next;
+    stateSelectionKeyRef.current = selectionRef.current.key;
     setState(next);
   }, []);
 
@@ -228,6 +226,12 @@ export function useCalendarOverlayFeed({ range, layers }: CalendarOverlayFeedSel
     const selection = selectionRef.current;
     if (selection.layers.length === 0) {
       updateState(IDLE_STATE);
+      return Promise.resolve();
+    }
+    if (!calendarOverlayRangeSchema.safeParse(selection.range).success) {
+      requestIdRef.current += 1;
+      inFlightRef.current = null;
+      updateState(emptyState("failed", selectedUnavailableLayers(selection.layers)));
       return Promise.resolve();
     }
     if (!force && inFlightRef.current?.key === selection.key) {
@@ -262,8 +266,7 @@ export function useCalendarOverlayFeed({ range, layers }: CalendarOverlayFeedSel
         }
         if (parsed.data.items.some((item) =>
           !selection.layers.includes(item.layer) ||
-          unavailableLayers.includes(item.layer) ||
-          !isValidLocalDate(item.date),
+          unavailableLayers.includes(item.layer),
         )) {
           throw new Error("Calendar Overlay Feed response was invalid");
         }
@@ -373,7 +376,27 @@ export function useCalendarOverlayFeed({ range, layers }: CalendarOverlayFeedSel
     }
   }, [router]);
 
-  const exposedState = selectedLayers.length === 0 ? IDLE_STATE : state;
+  const rangeIsValid = calendarOverlayRangeSchema.safeParse(range).success;
+  const stateMatchesSelection = stateSelectionKeyRef.current === selectionKey;
+  const retainedItems = retainItems(state.items, range, selectedLayers);
+  const retainedUnavailableLayers = state.unavailableLayers.filter((layer) =>
+    selectedLayers.includes(layer),
+  );
+  const exposedState: CalendarOverlayFeedState = selectedLayers.length === 0
+    ? IDLE_STATE
+    : !rangeIsValid
+      ? emptyState("failed", selectedUnavailableLayers(selectedLayers))
+      : !stateMatchesSelection
+        ? {
+            status: "loading",
+            items: retainedItems,
+            unavailableLayers: retainedUnavailableLayers,
+          }
+      : {
+          ...state,
+          items: retainedItems,
+          unavailableLayers: retainedUnavailableLayers,
+        };
   return {
     state: exposedState,
     retry,

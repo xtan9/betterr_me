@@ -158,6 +158,66 @@ describe("useCalendarOverlayFeed", () => {
     expect(result.current.state.unavailableLayers).toEqual(["tasks", "habits"]);
   });
 
+  it.each(["99:99", "12:34:99"])(
+    "fails closed for the impossible semantic time %s",
+    async (startTime) => {
+      fetchMock.mockResolvedValue(response({
+        items: [taskItem({ startTime, allDay: false })],
+      }));
+
+      const { result } = renderHook(() =>
+        useCalendarOverlayFeed({ range, layers: ["tasks"] }),
+      );
+
+      await waitFor(() => expect(result.current.state.status).toBe("failed"));
+      expect(result.current.state.items).toEqual([]);
+      expect(result.current.state.unavailableLayers).toEqual(["tasks"]);
+    },
+  );
+
+  it.each([
+    ["a malformed start date", { from: "2026-04-1", to: "2026-04-07" }],
+    ["an impossible end date", { from: "2026-04-01", to: "2026-04-31" }],
+    ["a descending range", { from: "2026-04-07", to: "2026-04-01" }],
+    ["a range longer than 42 inclusive days", { from: "2026-01-01", to: "2026-02-12" }],
+  ])("fails safely without fetching for %s", async (_reason, invalidRange) => {
+    let firstRenderState:
+      | ReturnType<typeof useCalendarOverlayFeed>["state"]
+      | undefined;
+    const { result } = renderHook(() => {
+      const feed = useCalendarOverlayFeed({
+        range: invalidRange,
+        layers: ["tasks", "habits"],
+      });
+      firstRenderState ??= feed.state;
+      return feed;
+    });
+
+    await waitFor(() => expect(result.current.state.status).toBe("failed"));
+    expect(firstRenderState).toEqual({
+      status: "failed",
+      items: [],
+      unavailableLayers: ["tasks", "habits"],
+    });
+    expect(result.current.state.items).toEqual([]);
+    expect(result.current.state.unavailableLayers).toEqual(["tasks", "habits"]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("allows a range of exactly 42 inclusive days", async () => {
+    fetchMock.mockResolvedValue(response({ items: [] }));
+    const maximumRange = { from: "2026-01-01", to: "2026-02-11" };
+
+    const { result } = renderHook(() =>
+      useCalendarOverlayFeed({ range: maximumRange, layers: ["tasks"] }),
+    );
+
+    await waitFor(() => expect(result.current.state.status).toBe("complete"));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/calendar/overlay-feed?start_date=2026-01-01&end_date=2026-02-11&layers=tasks&timezone=America%2FLos_Angeles",
+    );
+  });
+
   it("retains only prior items in the current range and selected layers while loading", async () => {
     const nextRequest = deferred<Response>();
     fetchMock
@@ -199,6 +259,71 @@ describe("useCalendarOverlayFeed", () => {
       nextRequest.resolve(response({ items: [] }));
     });
     await waitFor(() => expect(result.current.state.status).toBe("complete"));
+  });
+
+  it("never exposes prior items outside a changed non-empty selection during render", async () => {
+    const nextRequest = deferred<Response>();
+    fetchMock
+      .mockResolvedValueOnce(response({ items: [
+        taskItem({ id: "tasks:outside-range", date: "2026-04-01" }),
+        taskItem({ id: "tasks:inside-range", date: "2026-04-02" }),
+        {
+          layer: "habits",
+          kind: "habit",
+          id: "habits:outside-layer:2026-04-02",
+          habitId: "outside-layer",
+          title: "Habit",
+          date: "2026-04-02",
+          startTime: null,
+          endTime: null,
+          allDay: true,
+          completed: false,
+          action: {
+            type: "toggle_habit_completion",
+            habitId: "outside-layer",
+            date: "2026-04-02",
+          },
+        },
+      ] }))
+      .mockReturnValueOnce(nextRequest.promise);
+
+    const changedRange = { from: "2026-04-02", to: "2026-04-03" };
+    let firstChangedSelectionState:
+      | ReturnType<typeof useCalendarOverlayFeed>["state"]
+      | undefined;
+    const { result, rerender } = renderHook<
+      ReturnType<typeof useCalendarOverlayFeed>,
+      { selectedRange: { from: string; to: string }; layers: readonly ("tasks" | "habits")[] }
+    >(
+      ({ selectedRange, layers }) => {
+        const feed = useCalendarOverlayFeed({ range: selectedRange, layers });
+        if (
+          selectedRange.from === changedRange.from &&
+          firstChangedSelectionState === undefined
+        ) {
+          firstChangedSelectionState = feed.state;
+        }
+        return feed;
+      },
+      {
+        initialProps: {
+          selectedRange: range,
+          layers: ["tasks", "habits"],
+        },
+      },
+    );
+
+    await waitFor(() => expect(result.current.state.status).toBe("complete"));
+    rerender({ selectedRange: changedRange, layers: ["tasks"] });
+
+    expect(firstChangedSelectionState?.status).toBe("loading");
+    expect(firstChangedSelectionState?.items.map((item) => item.id)).toEqual([
+      "tasks:inside-range",
+    ]);
+
+    await act(async () => {
+      nextRequest.resolve(response({ items: [] }));
+    });
   });
 
   it("exposes empty selection as idle immediately without retaining prior state", async () => {
