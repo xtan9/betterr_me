@@ -1743,7 +1743,7 @@ begin
   end if;
 
   v_conflict := public.recurring_task_lifecycle(
-    'pause-series',
+    'resume-series',
     jsonb_build_object(
       'userId', '65900000-0000-0000-0000-000000000001',
       'seriesId', v_series_id
@@ -1751,7 +1751,7 @@ begin
   );
   if v_conflict->>'status' <> 'invalid-transition'
      or v_conflict->>'type' <> 'invalid-transition' then
-    raise exception 'repeated pause did not return a typed invalid transition: %', v_conflict;
+    raise exception 'repeated resume did not return a typed invalid transition: %', v_conflict;
   end if;
 
   v_conflict := public.recurring_task_lifecycle(
