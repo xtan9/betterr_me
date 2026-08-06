@@ -400,6 +400,55 @@ describe("useCalendarOverlayFeed", () => {
     });
   });
 
+  it("ignores a failed action refresh from the previous selection", async () => {
+    const staleRefresh = deferred<Response>();
+    fetchMock
+      .mockResolvedValueOnce(response({ items: [taskItem()] }))
+      .mockResolvedValueOnce(response({ task: { id: "task-1" } }))
+      .mockReturnValueOnce(staleRefresh.promise)
+      .mockResolvedValueOnce(response({ items: [] }));
+
+    const { result, rerender } = renderHook<
+      ReturnType<typeof useCalendarOverlayFeed>,
+      { selectedRange: { from: string; to: string }; layers: readonly ("tasks" | "habits")[] }
+    >(
+      ({ selectedRange, layers }) =>
+        useCalendarOverlayFeed({ range: selectedRange, layers }),
+      {
+        initialProps: {
+          selectedRange: range,
+          layers: ["tasks"] as readonly ("tasks" | "habits")[],
+        },
+      },
+    );
+
+    await waitFor(() => expect(result.current.state.status).toBe("complete"));
+
+    await act(async () => {
+      await result.current.executeAction({
+        action: { type: "toggle_task_completion", taskId: "task-1" },
+        completed: false,
+      });
+    });
+    expect(result.current.state.status).toBe("loading");
+
+    rerender({
+      selectedRange: { from: "2026-05-01", to: "2026-05-07" },
+      layers: ["habits"],
+    });
+    await waitFor(() => expect(result.current.state.status).toBe("complete"));
+
+    await act(async () => {
+      staleRefresh.resolve(response({}, false));
+    });
+
+    expect(result.current.state).toEqual({
+      status: "complete",
+      items: [],
+      unavailableLayers: [],
+    });
+  });
+
   it("navigates workouts without invalidating either data family", async () => {
     fetchMock.mockResolvedValue(response({ items: [] }));
 

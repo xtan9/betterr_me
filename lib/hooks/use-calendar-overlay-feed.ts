@@ -293,7 +293,10 @@ export function useCalendarOverlayFeed({ range, layers }: CalendarOverlayFeedSel
           updateState(emptyState("failed", selectedUnavailableLayers(selection.layers)));
         }
       } catch {
-        if (requestId === requestIdRef.current) {
+        if (
+          requestId === requestIdRef.current &&
+          selectionRef.current.key === selection.key
+        ) {
           updateState(emptyState("failed", selectedUnavailableLayers(selection.layers)));
         }
       }
