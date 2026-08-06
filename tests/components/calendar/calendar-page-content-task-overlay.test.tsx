@@ -1,13 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
-  overlay: { data: null as unknown, error: null as Error | null },
-  overlayKeys: [] as (string | null)[],
+  overlay: {
+    state: {
+      status: "failed" as "idle" | "loading" | "complete" | "degraded" | "failed",
+      items: [] as unknown[],
+      unavailableLayers: ["tasks", "habits", "workouts"] as string[],
+    },
+    retry: vi.fn().mockResolvedValue(undefined),
+  },
+  overlaySelections: [] as { range: unknown; layers: unknown }[],
   mutate: vi.fn().mockResolvedValue(undefined),
   replace: vi.fn(),
   actions: {
-    dispatch: vi.fn(),
-    toggleTask: vi.fn(),
+    toggleTask: vi.fn().mockResolvedValue({ success: true }),
     toggleHabit: vi.fn().mockResolvedValue({ success: true }),
     navigateWorkout: vi.fn(),
   },
@@ -21,8 +27,6 @@ vi.mock("next-intl", () => ({
 }));
 vi.mock("swr", () => ({
   default: (key: string | null) => {
-    state.overlayKeys.push(key);
-    if (key?.includes("/overlay-feed")) return { ...state.overlay, isLoading: false };
     if (key?.includes("calendar-events")) {
       return {
         data: {
@@ -42,6 +46,24 @@ vi.mock("swr", () => ({
   },
   useSWRConfig: () => ({ mutate: state.mutate }),
 }));
+vi.mock("@/lib/hooks/use-calendar-overlay-feed", async () => {
+  const { useState } = await vi.importActual<typeof import("react")>("react");
+  return {
+    useCalendarOverlayFeed: (selection: { range: unknown; layers: unknown }) => {
+      state.overlaySelections.push(selection);
+      const [isRetrying, setIsRetrying] = useState(false);
+      const retry = async () => {
+        setIsRetrying(true);
+        try {
+          await state.overlay.retry();
+        } finally {
+          setIsRetrying(false);
+        }
+      };
+      return { ...state.overlay, isRetrying, retry };
+    },
+  };
+});
 vi.mock("@/lib/fetcher", () => ({ fetcher: vi.fn() }));
 vi.mock("@/lib/hooks/use-localization", () => ({
   useLocalization: () => ({ weekStart: "monday", isLoading: false }),
@@ -154,8 +176,16 @@ describe("CalendarPageContent task overlay failure seam", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     state.mutate = vi.fn().mockResolvedValue(undefined);
-    state.overlay = { data: null, error: new Error("overlay unavailable") };
-    state.overlayKeys = [];
+    state.overlay = {
+      state: { status: "failed", items: [], unavailableLayers: ["tasks", "habits", "workouts"] },
+      retry: vi.fn().mockResolvedValue(undefined),
+    };
+    state.actions = {
+      toggleTask: vi.fn().mockResolvedValue({ success: true }),
+      toggleHabit: vi.fn().mockResolvedValue({ success: true }),
+      navigateWorkout: vi.fn(),
+    };
+    state.overlaySelections = [];
   });
 
   it("keeps Calendar Events usable and retries only the task overlay", async () => {
@@ -165,20 +195,18 @@ describe("CalendarPageContent task overlay failure seam", () => {
     expect(screen.getByText("taskOverlay.unavailable")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "taskOverlay.retry" }));
-    expect(state.mutate).toHaveBeenCalledWith(expect.stringContaining("/api/calendar/overlay-feed"));
+    expect(state.overlay.retry).toHaveBeenCalledTimes(1);
     expect(state.mutate).not.toHaveBeenCalledWith(expect.stringContaining("/api/calendar-events"));
   });
 
   it("keeps an unavailable layer notice visible while its retry is in flight", async () => {
     let resolveMutate!: () => void;
-    state.mutate = vi.fn(
+    state.overlay.retry = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           resolveMutate = resolve;
         }),
     );
-    state.overlay = { data: null, error: new Error("overlay unavailable") };
-
     render(<CalendarPageContent />);
 
     const notice = screen.getByText("taskOverlay.unavailable");
@@ -195,32 +223,34 @@ describe("CalendarPageContent task overlay failure seam", () => {
   });
 
   it("does not request the overlay when every overlay Calendar Layer is disabled", () => {
-    state.overlay = { data: { items: [] }, error: null };
     render(<CalendarPageContent />);
 
     for (const layer of ["tasks", "habits", "workouts"]) {
       fireEvent.click(screen.getAllByTestId(`toggle-${layer}`)[0]);
     }
 
-    expect(state.overlayKeys.at(-1)).toBeNull();
+    expect(state.overlaySelections.at(-1)?.layers).toEqual([]);
   });
 
   it("shows a localized unavailable habit notice and retries only the overlay", () => {
     state.overlay = {
-      data: { items: [], unavailableLayers: ["habits"] },
-      error: null,
+      state: { status: "degraded", items: [], unavailableLayers: ["habits"] },
+      retry: vi.fn().mockResolvedValue(undefined),
     };
 
     render(<CalendarPageContent />);
 
     expect(screen.getByText("habitOverlay.unavailable")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "habitOverlay.retry" }));
-    expect(state.mutate).toHaveBeenCalledWith(expect.stringContaining("layers=tasks,habits"));
+    expect(state.overlay.retry).toHaveBeenCalledTimes(1);
     expect(state.mutate).not.toHaveBeenCalledWith(expect.stringContaining("/api/calendar-events"));
   });
 
   it("dispatches the typed habit action through the existing UI adapter", async () => {
-    state.overlay = { data: { items: [] }, error: null };
+    state.overlay = {
+      state: { status: "complete", items: [], unavailableLayers: [] },
+      retry: vi.fn().mockResolvedValue(undefined),
+    };
 
     render(<CalendarPageContent />);
     fireEvent.click(screen.getByTestId("invoke-habit-action"));
@@ -231,7 +261,10 @@ describe("CalendarPageContent task overlay failure seam", () => {
   });
 
   it("keeps Calendar Event interaction on the Calendar Event path", () => {
-    state.overlay = { data: { items: [] }, error: null };
+    state.overlay = {
+      state: { status: "complete", items: [], unavailableLayers: [] },
+      retry: vi.fn().mockResolvedValue(undefined),
+    };
 
     render(<CalendarPageContent />);
     fireEvent.click(screen.getByTestId("invoke-calendar-event"));
@@ -243,14 +276,17 @@ describe("CalendarPageContent task overlay failure seam", () => {
   });
 
   it("keeps the calendar visible, localizes workout degradation, and dispatches workout navigation", async () => {
-    state.overlay = { data: { items: [], unavailableLayers: ["workouts"] }, error: null };
+    state.overlay = {
+      state: { status: "degraded", items: [], unavailableLayers: ["workouts"] },
+      retry: vi.fn().mockResolvedValue(undefined),
+    };
 
     render(<CalendarPageContent />);
 
     expect(screen.getByTestId("day-view")).toBeInTheDocument();
     expect(screen.getByText("workoutOverlay.unavailable")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "workoutOverlay.retry" }));
-    expect(state.mutate).toHaveBeenCalledWith(expect.stringContaining("layers=tasks,habits,workouts"));
+    expect(state.overlay.retry).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByTestId("invoke-workout-action"));
     await waitFor(() => {
