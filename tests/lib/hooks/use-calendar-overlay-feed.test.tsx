@@ -1,8 +1,10 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const routerPush = vi.hoisted(() => vi.fn());
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: routerPush }),
 }));
 
 import { useCalendarOverlayFeed } from "@/lib/hooks/use-calendar-overlay-feed";
@@ -46,6 +48,7 @@ describe("useCalendarOverlayFeed", () => {
 
   beforeEach(() => {
     fetchMock = vi.fn();
+    routerPush.mockReset();
     vi.stubGlobal("fetch", fetchMock);
     vi.spyOn(Intl.DateTimeFormat.prototype, "resolvedOptions").mockReturnValue({
       locale: "en-US",
@@ -242,5 +245,91 @@ describe("useCalendarOverlayFeed", () => {
     });
     await waitFor(() => expect(result.current.state.status).toBe("complete"));
     expect(result.current.isRetrying).toBe(false);
+  });
+
+  it("executes task actions, returns a typed outcome, and invalidates every mounted projection", async () => {
+    fetchMock.mockResolvedValue(response({ items: [] }));
+
+    const first = renderHook(() => useCalendarOverlayFeed({
+      range,
+      layers: ["tasks"],
+    }));
+    const second = renderHook(() => useCalendarOverlayFeed({
+      range: { from: "2026-04-02", to: "2026-04-10" },
+      layers: ["tasks", "habits"],
+    }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    let outcome;
+    await act(async () => {
+      outcome = await first.result.current.executeAction({
+        action: { type: "toggle_task_completion", taskId: "task-1" },
+        completed: false,
+      });
+    });
+
+    expect(outcome).toEqual({ status: "success" });
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(fetchMock).toHaveBeenCalledWith("/api/tasks/task-1/toggle", { method: "POST" });
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("calendar-events"))).toHaveLength(0);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("overlay-feed"))).toHaveLength(4);
+
+    first.unmount();
+    second.unmount();
+  });
+
+  it("executes habit actions pessimistically and does not expose server errors", async () => {
+    fetchMock
+      .mockResolvedValueOnce(response({ items: [] }))
+      .mockResolvedValueOnce(response({ error: "private server detail" }, false));
+
+    const { result } = renderHook(() => useCalendarOverlayFeed({
+      range,
+      layers: ["habits"],
+    }));
+    await waitFor(() => expect(result.current.state.status).toBe("complete"));
+
+    let failure;
+    await act(async () => {
+      failure = await result.current.executeAction({
+        action: {
+          type: "toggle_habit_completion",
+          habitId: "habit-1",
+          date: "2026-04-02",
+        },
+        completed: false,
+      });
+    });
+
+    expect(failure).toEqual({ status: "failure", reason: "request-failed" });
+    expect(fetchMock).toHaveBeenCalledWith("/api/habits/habit-1/toggle", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date: "2026-04-02", completed: true }),
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("navigates workouts without invalidating either data family", async () => {
+    fetchMock.mockResolvedValue(response({ items: [] }));
+
+    const { result } = renderHook(() => useCalendarOverlayFeed({
+      range,
+      layers: ["workouts"],
+    }));
+    await waitFor(() => expect(result.current.state.status).toBe("complete"));
+
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.executeAction({
+        action: { type: "navigate_workout", workoutId: "workout-1" },
+        completed: false,
+      });
+    });
+
+    expect(outcome).toEqual({ status: "success" });
+    expect(routerPush).toHaveBeenCalledWith("/workouts/workout-1");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

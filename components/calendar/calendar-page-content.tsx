@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import useSWR, { useSWRConfig } from "swr";
 import { fetcher } from "@/lib/fetcher";
@@ -14,7 +15,6 @@ import {
   getDayDateRange,
 } from "@/lib/calendar/date-utils";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
-import { useCalendarActions } from "@/hooks/use-calendar-actions";
 import { useCalendarNavigation } from "./use-calendar-navigation";
 import { useCalendarEvents } from "./use-calendar-events";
 import { CalendarHeader } from "./calendar-header";
@@ -136,7 +136,7 @@ export function CalendarPageContent() {
     range: { from: startDate, to: endDate },
     layers: overlayLayers,
   });
-  const { retry: retryOverlayFeed } = overlayFeed;
+  const { executeAction } = overlayFeed;
 
   const unavailableOverlayNotices = useMemo(() => {
     const unavailableLayers = new Set(overlayFeed.state.unavailableLayers);
@@ -153,34 +153,12 @@ export function CalendarPageContent() {
     if (eventsError) console.error("Failed to fetch calendar events:", eventsError);
   }, [eventsError]);
 
-  const handleOverlayMutated = useCallback(() => {
-    globalMutate(
-      `/api/calendar-events?start_date=${startDate}&end_date=${endDate}`,
-    );
-    void retryOverlayFeed();
-  }, [endDate, globalMutate, retryOverlayFeed, startDate]);
-
-  const { toggleTask, toggleHabit, navigateWorkout } = useCalendarActions(handleOverlayMutated);
-
   const handleOverlayItemAction = useCallback(
     async (item: CalendarOverlayDisplayItem) => {
-      if (item.action.type === "toggle_task_completion") {
-        const result = await toggleTask(item.action.taskId);
-        if (!result.success) console.error("Calendar task action failed:", result.error);
-        return;
-      }
-      if (item.action.type === "toggle_habit_completion") {
-        const result = await toggleHabit(
-          item.action.habitId,
-          item.action.date,
-          !item.completed,
-        );
-        if (!result.success) console.error("Calendar habit action failed:", result.error);
-        return;
-      }
-      navigateWorkout(item.action.workoutId);
+      const result = await executeAction(item);
+      if (result.status === "failure") toast.error(t("sidebar.actionFailed"));
     },
-    [navigateWorkout, toggleHabit, toggleTask],
+    [executeAction, t],
   );
 
   const onEventSavedCallback = useCallback(() => {

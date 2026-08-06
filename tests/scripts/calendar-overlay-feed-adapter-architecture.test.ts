@@ -13,6 +13,7 @@ describe("Calendar Overlay Feed client boundary", () => {
     expect(page).toContain("useCalendarOverlayFeed");
     expect(page).not.toContain("/api/calendar/overlay-feed");
     expect(page).not.toContain("overlayItemsToDisplayItems");
+    expect(page).not.toContain("use-calendar-actions");
     expect(page).toContain("/api/calendar-events");
 
     expect(adapter).toContain("Intl.DateTimeFormat().resolvedOptions().timeZone");
@@ -23,6 +24,12 @@ describe("Calendar Overlay Feed client boundary", () => {
     expect(adapter).toContain("status: \"degraded\"");
     expect(adapter).toContain("status: \"failed\"");
     expect(adapter).toContain("overlayItemsToDisplayItems");
+    expect(adapter).toContain("executeAction");
+    expect(adapter).toContain("invalidateOverlayFeedFamily");
     expect(adapter).not.toContain("useSWR");
+  });
+
+  it("removes the retired single-caller overlay action hook", () => {
+    expect(() => source("hooks/use-calendar-actions.ts")).toThrow();
   });
 });

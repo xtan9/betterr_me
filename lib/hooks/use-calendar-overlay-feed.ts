@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { z } from "zod";
 
 import {
@@ -11,7 +12,11 @@ import {
   CALENDAR_OVERLAY_LAYERS,
   type CalendarOverlayItem,
   type CalendarOverlayLayer,
+  type HabitOverlayAction,
+  type TaskOverlayAction,
+  type WorkoutOverlayAction,
 } from "@/lib/calendar/overlay-feed";
+import { setHabitCompletion } from "@/lib/hooks/use-habit-toggle";
 
 export interface CalendarOverlayFeedRange {
   from: string;
@@ -34,6 +39,15 @@ export type CalendarOverlayFeedState =
   | (CalendarOverlayFeedStateBase & { status: "complete" })
   | (CalendarOverlayFeedStateBase & { status: "degraded" })
   | (CalendarOverlayFeedStateBase & { status: "failed" });
+
+export type CalendarOverlayActionOutcome =
+  | { status: "success" }
+  | { status: "failure"; reason: "request-failed" };
+
+export type CalendarOverlayActionItem = {
+  action: TaskOverlayAction | HabitOverlayAction | WorkoutOverlayAction;
+  completed: boolean;
+};
 
 const layerSchema = z.enum(CALENDAR_OVERLAY_LAYERS);
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -110,6 +124,15 @@ const IDLE_STATE: CalendarOverlayFeedState = {
   unavailableLayers: [],
 };
 
+type OverlayFeedInvalidation = () => void;
+const mountedOverlayFeedInvalidations = new Set<OverlayFeedInvalidation>();
+
+function invalidateOverlayFeedFamily(): void {
+  for (const invalidate of mountedOverlayFeedInvalidations) {
+    invalidate();
+  }
+}
+
 function emptyState(status: Exclude<CalendarOverlayFeedState["status"], "idle" | "loading">, unavailableLayers: CalendarOverlayLayer[] = []): CalendarOverlayFeedState {
   return { status, items: [], unavailableLayers };
 }
@@ -179,6 +202,7 @@ function selectedUnavailableLayers(
 }
 
 export function useCalendarOverlayFeed({ range, layers }: CalendarOverlayFeedSelection) {
+  const router = useRouter();
   const selectedLayers = useMemo(() => normalizeLayers(layers), [layers]);
   const layersKey = selectedLayers.join(",");
   const selectionKey = `${range.from}:${range.to}:${layersKey}`;
@@ -200,13 +224,13 @@ export function useCalendarOverlayFeed({ range, layers }: CalendarOverlayFeedSel
     setState(next);
   }, []);
 
-  const startRequest = useCallback((): Promise<void> => {
+  const startRequest = useCallback((force = false): Promise<void> => {
     const selection = selectionRef.current;
     if (selection.layers.length === 0) {
       updateState(IDLE_STATE);
       return Promise.resolve();
     }
-    if (inFlightRef.current?.key === selection.key) {
+    if (!force && inFlightRef.current?.key === selection.key) {
       return inFlightRef.current.promise;
     }
 
@@ -256,7 +280,10 @@ export function useCalendarOverlayFeed({ range, layers }: CalendarOverlayFeedSel
         }
 
         const projected = responseItems(parsed.data, selection.range, selection.layers);
-        if (requestId !== requestIdRef.current) return;
+        if (
+          requestId !== requestIdRef.current ||
+          selectionRef.current.key !== selection.key
+        ) return;
 
         if (projected.unavailableLayers.length === 0) {
           updateState({ status: "complete", items: projected.items, unavailableLayers: [] });
@@ -299,10 +326,55 @@ export function useCalendarOverlayFeed({ range, layers }: CalendarOverlayFeedSel
     }
   }, [startRequest]);
 
+  const refreshProjection = useCallback(() => {
+    if (selectionRef.current.layers.length === 0) return;
+    requestIdRef.current += 1;
+    inFlightRef.current = null;
+    void startRequest(true);
+  }, [startRequest]);
+
+  useEffect(() => {
+    mountedOverlayFeedInvalidations.add(refreshProjection);
+    return () => {
+      mountedOverlayFeedInvalidations.delete(refreshProjection);
+    };
+  }, [refreshProjection]);
+
+  const executeAction = useCallback(async (
+    item: CalendarOverlayActionItem,
+  ): Promise<CalendarOverlayActionOutcome> => {
+    try {
+      switch (item.action.type) {
+        case "toggle_task_completion": {
+          const response = await fetch(`/api/tasks/${item.action.taskId}/toggle`, {
+            method: "POST",
+          });
+          if (!response.ok) return { status: "failure", reason: "request-failed" };
+          invalidateOverlayFeedFamily();
+          return { status: "success" };
+        }
+        case "toggle_habit_completion":
+          await setHabitCompletion(
+            item.action.habitId,
+            !item.completed,
+            item.action.date,
+          );
+          invalidateOverlayFeedFamily();
+          return { status: "success" };
+        case "navigate_workout":
+          router.push(`/workouts/${item.action.workoutId}`);
+          return { status: "success" };
+      }
+    } catch {
+      return { status: "failure", reason: "request-failed" };
+    }
+  }, [router]);
+
   const exposedState = selectedLayers.length === 0 ? IDLE_STATE : state;
   return {
     state: exposedState,
     retry,
     isRetrying,
+    executeAction,
   };
 }
