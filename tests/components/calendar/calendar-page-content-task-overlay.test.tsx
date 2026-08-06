@@ -8,15 +8,12 @@ const state = vi.hoisted(() => ({
       unavailableLayers: ["tasks", "habits", "workouts"] as string[],
     },
     retry: vi.fn().mockResolvedValue(undefined),
+    executeAction: vi.fn().mockResolvedValue({ status: "success" }),
   },
   overlaySelections: [] as { range: unknown; layers: unknown }[],
   mutate: vi.fn().mockResolvedValue(undefined),
   replace: vi.fn(),
-  actions: {
-    toggleTask: vi.fn().mockResolvedValue({ success: true }),
-    toggleHabit: vi.fn().mockResolvedValue({ success: true }),
-    navigateWorkout: vi.fn(),
-  },
+  toastError: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -25,6 +22,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
 }));
+vi.mock("sonner", () => ({ toast: { error: state.toastError } }));
 vi.mock("swr", () => ({
   default: (key: string | null) => {
     if (key?.includes("calendar-events")) {
@@ -69,9 +67,6 @@ vi.mock("@/lib/hooks/use-localization", () => ({
   useLocalization: () => ({ weekStart: "monday", isLoading: false }),
 }));
 vi.mock("@/hooks/use-keyboard-shortcuts", () => ({ useKeyboardShortcuts: vi.fn() }));
-vi.mock("@/hooks/use-calendar-actions", () => ({
-  useCalendarActions: () => state.actions,
-}));
 vi.mock("@/components/calendar/use-calendar-navigation", () => ({
   useCalendarNavigation: () => ({
     view: "day",
@@ -179,11 +174,7 @@ describe("CalendarPageContent task overlay failure seam", () => {
     state.overlay = {
       state: { status: "failed", items: [], unavailableLayers: ["tasks", "habits", "workouts"] },
       retry: vi.fn().mockResolvedValue(undefined),
-    };
-    state.actions = {
-      toggleTask: vi.fn().mockResolvedValue({ success: true }),
-      toggleHabit: vi.fn().mockResolvedValue({ success: true }),
-      navigateWorkout: vi.fn(),
+      executeAction: vi.fn().mockResolvedValue({ status: "success" }),
     };
     state.overlaySelections = [];
   });
@@ -236,6 +227,7 @@ describe("CalendarPageContent task overlay failure seam", () => {
     state.overlay = {
       state: { status: "degraded", items: [], unavailableLayers: ["habits"] },
       retry: vi.fn().mockResolvedValue(undefined),
+      executeAction: vi.fn().mockResolvedValue({ status: "success" }),
     };
 
     render(<CalendarPageContent />);
@@ -250,13 +242,36 @@ describe("CalendarPageContent task overlay failure seam", () => {
     state.overlay = {
       state: { status: "complete", items: [], unavailableLayers: [] },
       retry: vi.fn().mockResolvedValue(undefined),
+      executeAction: vi.fn().mockResolvedValue({ status: "success" }),
     };
 
     render(<CalendarPageContent />);
     fireEvent.click(screen.getByTestId("invoke-habit-action"));
 
     await waitFor(() => {
-      expect(state.actions.toggleHabit).toHaveBeenCalledWith("habit-1", "2026-04-02", false);
+      expect(state.overlay.executeAction).toHaveBeenCalledWith(expect.objectContaining({
+        action: {
+          type: "toggle_habit_completion",
+          habitId: "habit-1",
+          date: "2026-04-02",
+        },
+        completed: true,
+      }));
+    });
+  });
+
+  it("translates an adapter failure through the existing localized toast", async () => {
+    state.overlay = {
+      state: { status: "complete", items: [], unavailableLayers: [] },
+      retry: vi.fn().mockResolvedValue(undefined),
+      executeAction: vi.fn().mockResolvedValue({ status: "failure", reason: "request-failed" }),
+    };
+
+    render(<CalendarPageContent />);
+    fireEvent.click(screen.getByTestId("invoke-habit-action"));
+
+    await waitFor(() => {
+      expect(state.toastError).toHaveBeenCalledWith("sidebar.actionFailed");
     });
   });
 
@@ -264,21 +279,21 @@ describe("CalendarPageContent task overlay failure seam", () => {
     state.overlay = {
       state: { status: "complete", items: [], unavailableLayers: [] },
       retry: vi.fn().mockResolvedValue(undefined),
+      executeAction: vi.fn().mockResolvedValue({ status: "success" }),
     };
 
     render(<CalendarPageContent />);
     fireEvent.click(screen.getByTestId("invoke-calendar-event"));
 
     expect(screen.getByTestId("calendar-event-dialog")).toBeInTheDocument();
-    expect(state.actions.toggleTask).not.toHaveBeenCalled();
-    expect(state.actions.toggleHabit).not.toHaveBeenCalled();
-    expect(state.actions.navigateWorkout).not.toHaveBeenCalled();
+    expect(state.overlay.executeAction).not.toHaveBeenCalled();
   });
 
   it("keeps the calendar visible, localizes workout degradation, and dispatches workout navigation", async () => {
     state.overlay = {
       state: { status: "degraded", items: [], unavailableLayers: ["workouts"] },
       retry: vi.fn().mockResolvedValue(undefined),
+      executeAction: vi.fn().mockResolvedValue({ status: "success" }),
     };
 
     render(<CalendarPageContent />);
@@ -290,7 +305,9 @@ describe("CalendarPageContent task overlay failure seam", () => {
 
     fireEvent.click(screen.getByTestId("invoke-workout-action"));
     await waitFor(() => {
-      expect(state.actions.navigateWorkout).toHaveBeenCalledWith("workout-1");
+      expect(state.overlay.executeAction).toHaveBeenCalledWith(expect.objectContaining({
+        action: { type: "navigate_workout", workoutId: "workout-1" },
+      }));
     });
   });
 });
