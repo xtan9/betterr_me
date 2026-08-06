@@ -34,15 +34,19 @@ describe("Calendar Overlay Feed client boundary", () => {
   it("removes retired action orchestrators without aliases or test-only exports", () => {
     expect(existsSync("hooks/use-calendar-actions.ts")).toBe(false);
 
-    const replacementHooks = readdirSync("hooks")
-      .filter((path) => /\.[jt]sx?$/.test(path))
+    const replacementHooks = ["hooks", "lib/hooks"]
+      .flatMap((directory) => readdirSync(directory)
+        .filter((path) => /\.[jt]sx?$/.test(path))
+        .map((path) => `${directory}/${path}`))
+      .filter((path) => path !== "lib/hooks/use-calendar-overlay-feed.ts")
       .filter((path) => {
-        const hook = source(`hooks/${path}`);
-        return /CalendarOverlay(?:DisplayItem|Action)|toggle_(?:task|habit)_completion|navigate_workout/.test(hook);
+        const hook = source(path);
+        return /useCalendarOverlayFeed|executeAction|CalendarOverlay(?:DisplayItem|Action)|toggle_(?:task|habit)_completion|navigate_workout/.test(hook);
       });
     expect(replacementHooks).toEqual([]);
 
     const adapter = source("lib/hooks/use-calendar-overlay-feed.ts");
+    expect(adapter).not.toMatch(/^export\s+(?:\*|\{)/gm);
     const exports = [...adapter.matchAll(
       /^export (?:interface|type|function|const|class) ([A-Za-z0-9_]+)/gm,
     )].map(([, name]) => name);
