@@ -11,7 +11,7 @@ const supportedOrInternalFiles = new Set([
 ]);
 
 describe("Household Runway Runtime import boundary", () => {
-  it("retires the legacy public protocol modules", () => {
+  it("retires the legacy public protocol modules and environment relay", () => {
     expect(
       existsSync(resolve(root, "lib/finance/household-runway-interview.ts")),
     ).toBe(false);
@@ -35,7 +35,7 @@ describe("Household Runway Runtime import boundary", () => {
     ).toBe(true);
     expect(
       existsSync(resolve(root, "lib/finance/internal/household-runway-runtime-environment.ts")),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("keeps production callers on the Runtime or supported adapters", () => {

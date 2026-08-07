@@ -49,11 +49,6 @@ import {
   type HouseholdRunwayValidationIssue,
 } from "@/lib/finance/internal/household-runway-interview";
 import type { HouseholdRunwayDraftState } from "@/lib/finance/internal/household-runway-draft-codec";
-import {
-  registerHouseholdRunwayRuntimeEnvironment,
-  unregisterHouseholdRunwayRuntimeEnvironment,
-  type HouseholdRunwayInterviewRuntimeEnvironmentMessage,
-} from "@/lib/finance/internal/household-runway-runtime-environment";
 
 /** User-facing retention policy; storage/version details remain internal. */
 export const HOUSEHOLD_RUNWAY_DRAFT_RETENTION_DAYS = 30;
@@ -558,6 +553,21 @@ export interface HouseholdRunwayInterviewRuntime {
   start(): void;
   send(intent: HouseholdRunwayInterviewIntent): void;
   dispose(): void;
+}
+
+export type HouseholdRunwayInterviewRuntimeEnvironmentMessage =
+  | {
+      type: "history_projection_changed";
+      destination: "landing" | "interview";
+      stage?: HouseholdRunwayInterviewStage;
+    }
+  | { type: "locale_changed"; locale?: RunwayLocale };
+
+export interface HouseholdRunwayInterviewRuntimeComposition {
+  runtime: HouseholdRunwayInterviewRuntime;
+  dispatchEnvironment(
+    message: HouseholdRunwayInterviewRuntimeEnvironmentMessage,
+  ): void;
 }
 
 type RuntimeMessage =
@@ -1112,9 +1122,9 @@ function outcomeCommand(
   return { ...input, ...commandMetadata(id, now, "outcome") } as HouseholdRunwayInterviewCommand;
 }
 
-export function createHouseholdRunwayInterviewRuntimeWithCapabilities(
+export function createHouseholdRunwayInterviewRuntimeComposition(
   options: HouseholdRunwayInterviewRuntimeCompositionOptions = {},
-): HouseholdRunwayInterviewRuntime {
+): HouseholdRunwayInterviewRuntimeComposition {
   const createId = options.createId ?? defaultId;
   const now = options.now ?? (() => new Date().toISOString());
   const schedule = options.schedule ?? defaultSchedule;
@@ -2284,12 +2294,20 @@ export function createHouseholdRunwayInterviewRuntimeWithCapabilities(
         confirmation,
         assessmentHistory,
       );
-      unregisterHouseholdRunwayRuntimeEnvironment(runtime);
     },
   };
 
-  registerHouseholdRunwayRuntimeEnvironment(runtime, (message) => {
+  const dispatchEnvironment = (
+    message: HouseholdRunwayInterviewRuntimeEnvironmentMessage,
+  ) => {
     if (!disposed) enqueue({ type: "environment", message });
-  });
-  return runtime;
+  };
+
+  return { runtime, dispatchEnvironment };
+}
+
+export function createHouseholdRunwayInterviewRuntimeWithCapabilities(
+  options: HouseholdRunwayInterviewRuntimeCompositionOptions = {},
+): HouseholdRunwayInterviewRuntime {
+  return createHouseholdRunwayInterviewRuntimeComposition(options).runtime;
 }
