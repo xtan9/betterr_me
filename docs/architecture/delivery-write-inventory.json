@@ -58,7 +58,7 @@
       "migrationStatus": "migrated",
       "owningTicket": "#659 / #681 / #682 / #686 / #687 / #688 / #692",
       "authority": "lib/recurring-tasks/lifecycle.ts, its Supabase adapters, and the declared compatibility adapter",
-      "evidence": "Recurring-task routes, the calendar feed, the dashboard/read path, the optional prewarm job, and AI tools call lifecycle and Series/Occurrence adapters; ordinary task queries remain task-model queries, direct recurring persistence writes and legacy projection writers are absent, and the post-cutover storage/rollback/RLS proof is in docs/architecture/recurring-task-lifecycle-contract.md and the registered SQL fixtures."
+      "evidence": "Recurring-task routes, the calendar feed, the dashboard/read path, the optional prewarm job, and AI tools call lifecycle and Series/Occurrence adapters; ordinary task queries remain task-model queries, direct recurring persistence writes and legacy projection writers are absent, and the post-cutover storage/rollback/RLS proof is in docs/architecture/recurring-task-lifecycle-contract.md and the registered SQL fixtures. That contract also records the confirmed, implementation-pending refinement to authenticated Series capabilities, shared Task Commands, focused Coverage-backed queries, a separate maintenance capability, narrow outcomes, retry identity, optimistic concurrency, and a restricted public package surface."
     },
     {
       "id": "habits-completion",
