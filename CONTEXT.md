@@ -14,6 +14,10 @@ _Avoid_: Finance Cushion, saved assessment
 A calculated evaluation of how long a household's resources could cover essential expenses across one or more income-interruption scenarios and proposed adjustments. It may be calculated from a Household Runway Draft or a Household Runway Plan.
 _Avoid_: Cushion, runway calculation, Plan
 
+**Household Runway Assessment Snapshot**:
+A saved baseline result for the first applicable income-interruption scenario at a point in a Household Runway Plan's history, used to compare that Plan's outcomes over time.
+_Avoid_: Saved Assessment, selected-scenario result, What-if snapshot
+
 **Household Runway Interview**:
 The guided process through which a person supplies and reviews household financial inputs, assesses interruption scenarios, and may create or revise a Household Runway Plan.
 _Avoid_: Wizard, finance form

@@ -50,15 +50,18 @@ The versioned pure calculation engine runs a monthly cash-flow simulation:
       - interruption-plan expenses
 
 The engine reports covered months (including a partial final month), the
-estimated depletion date, and a month-by-month ledger. When continuing income
-covers essential expenses, the result says that the plan is sustainable under
-the current inputs instead of displaying `Infinity`.
+estimated depletion date when that date is representable, and a monthly cash
+flow series. The series contains every month through shorter horizons; beyond
+240 months it contains every month through month 12 followed by bounded,
+explicitly identified checkpoints through the final modeled month. When
+continuing income covers essential expenses, the result says that the plan is
+sustainable under the current inputs instead of displaying `Infinity`.
 
-Cash is included at 100%. Ordinary investments default to 70%. Retirement
-accounts and home equity are excluded from the primary result. Retirement
-funds enter the simulation only when the visitor explicitly enables the
-extreme-mode preview, with tax, penalty, and liquidity warnings. Home equity
-remains excluded.
+Cash and liquid investments are included at their entered amounts. Illiquid
+investments, retirement accounts, and home equity are excluded from the primary
+result. Illiquid investments and retirement funds enter the simulation only
+when the visitor explicitly enables them in a What-if preview, with tax,
+penalty, and liquidity warnings. Home equity remains excluded.
 
 Gross income can be converted with a country/region-specific, versioned
 take-home estimator for the United States, Canada, mainland China, and Taiwan.
@@ -72,18 +75,28 @@ example, two employed adults can compare either income stopping and both
 stopping, while a single already-unemployed adult sees the current real state.
 The result includes:
 
-- the primary runway and estimated depletion date;
-- an accessible cash-balance curve and monthly table;
+- the primary runway and an estimated depletion date when representable;
+- an accessible cash-balance curve and monthly/checkpoint table;
 - current-lifestyle, interruption-plan, and extreme-mode comparisons;
 - included and excluded inputs plus confidence-improving questions;
-- temporary What-if changes with exact deltas and explicit Apply/Reset;
-- one or two deterministic, highest-leverage actions;
+- temporary What-if changes with exact numeric or qualitative comparisons and
+  explicit Apply/Reset;
+- up to two deterministic, highest-leverage actions;
 - region-specific categories of next steps; and
 - a downloadable text report containing inputs, assumptions, scenarios, and
   actions.
 
-Planning bands (`<3`, `3–6`, and `6+` months) use neutral action language. They
-are planning prompts, not a score or claim that a household is healthy.
+Planning bands (`<3`, `3–<6`, and `6+` months) describe the live What-if
+preview and use neutral action language. Sustainability remains distinct from
+the numeric bands. They are planning prompts, not a score or claim that a
+household is healthy.
+
+A Household Runway Assessment Snapshot records the baseline result for the
+first applicable income-interruption scenario, not the currently selected
+Scenario or a provisional What-if preview. Historical snapshots receive a
+numeric change only when their Scenario and calculation-model version match.
+A transition to or from sustainability is described qualitatively instead of
+being converted to a numeric month delta.
 
 ## Persistence and security
 
