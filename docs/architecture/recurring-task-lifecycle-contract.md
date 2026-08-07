@@ -1,6 +1,6 @@
 # Recurring Task Lifecycle contract evidence
 
-Status: accepted for issue #692
+Status: accepted for issue #692; capability-boundary refinement confirmed 6 August 2026 and pending implementation
 
 This document records the post-cutover contract for the Recurring Task Lifecycle. Dependency #691 is the activated lifecycle implementation at `a6209c30`; the release marker is `20260803000001_activate_recurring_task_lifecycle`, and the contract migration is `20260803000002_contract_recurring_task_lifecycle`.
 
@@ -16,7 +16,46 @@ The existing HTTP/AI response shape is retained only by the declared adapter in 
 
 No compatibility writer, legacy template store, generation counter, exception/original-date task field, or best-effort materializer remains in the runtime path.
 
-## Evidence map
+## Confirmed application boundary
+
+This refinement deepens the package boundary already chosen by ADR-0005; it does not replace the lifecycle, persistence, or domain decisions in ADRs 0001-0007. "One behavior-rich seam" means one supported package boundary with focused capabilities, not one object that combines commands, queries, scheduling, compatibility, and maintenance.
+
+### Composition
+
+- An authenticated production factory exposes Series commands, Series queries, and Coverage capabilities. Interactive capabilities derive ownership from the authenticated principal and do not accept a caller-supplied user ID.
+- Shared Task Commands accept the visible Task identity and requested scope, detect Series membership, and delegate recurring behavior through a private Task Occurrence port. Recurring lineage, scope, ownership, and version validity are resolved authoritatively again inside the lifecycle transaction.
+- A separately constructed, narrowly authorized maintenance capability owns active-Series scanning and prewarming. It is not part of the interactive command interface.
+- Pure recurrence calculation and description remain available through an explicit `scheduling` subpath. Legacy HTTP and AI translation remains available through an explicit `compatibility` subpath, inside the package but outside the core lifecycle.
+
+### Command contract
+
+- Every mutation carries a stable operation ID that survives retry. Series-definition and Series-state mutations also carry the opaque version returned by a prior Series projection.
+- Interactive HTTP, UI, and AI callers propagate those values across retries. A fresh server-generated operation ID is not a substitute for caller-visible retry identity, and a hidden pre-mutation read is not a substitute for optimistic concurrency.
+- Commands return narrow, operation-specific results and a stable discriminated failure union. Canonical failures include validation, not-found, conflict, invalid-transition, and coverage-unavailable; delivery adapters map them to channel-specific presentation without parsing messages.
+- The canonical destructive command is `endSeries`. Legacy HTTP `DELETE` and AI delete-shaped identifiers translate to ending at the compatibility edge. Physical erasure belongs to a separate account-erasure capability.
+- Lifecycle telemetry is emitted through a private injected port rather than being added to every command result. Maintenance results may expose aggregate operational counts.
+
+### Read contract
+
+Focused task, sidebar, dashboard, and calendar query services ensure the requested Coverage before reading materialized Task Occurrences. They return their projection together with a structured completeness result of `complete`, `partial`, or `unavailable`; incomplete data is never represented as complete.
+
+Delivery policy remains explicit at the channel edge. Task reads may return available data with warnings, sidebar reads may fail closed, and AI may return a typed failure. These are presentation choices over one shared Coverage fact, not separate Coverage implementations.
+
+### Supported package surface
+
+The root package exports the production capability factory and public contract types. The `scheduling` and `compatibility` subpaths are the only supported production subpaths. Persistence state, in-memory storage, concrete Supabase lifecycle classes, telemetry plumbing, and focused persistence adapters are private.
+
+After the coordinated cutover, creation, Task Occurrence, and Series State adapter behavior is folded behind the capabilities and the obsolete public adapters are deleted. Production architecture tests reject other deep imports.
+
+### Conformance and cutover
+
+The in-memory lifecycle remains private as a fast reference implementation. One capability conformance suite runs against both the reference implementation and the production Supabase adapter; registered SQL fixtures remain authoritative for RLS, locking, idempotency, conflict handling, rollback, and transaction behavior.
+
+The change ships as one reviewable production cutover: establish the capabilities and conformance suite, migrate all HTTP, UI, AI, query, calendar, dashboard, sidebar, and prewarming callers, propagate operation IDs and version tokens, enforce the import boundary, and remove obsolete paths. Intermediate commits may be incremental, but no deployed state may contain competing production command paths.
+
+## Current evidence map
+
+The following evidence describes the activated post-#692 lifecycle before the confirmed capability-boundary refinement is implemented.
 
 | Surface | Authority and proof |
 | --- | --- |
@@ -30,9 +69,9 @@ No compatibility writer, legacy template store, generation counter, exception/or
 | Architecture boundary | `tests/scripts/recurring-cutover-architecture.test.ts`, `series-state-adapter-architecture.test.ts`, and `occurrence-adapter-architecture.test.ts` prove activation ordering, adapter routing, and no legacy writers. |
 | Database acceptance | The registered `recurring-tasks` fixtures cover lifecycle creation, coverage horizons, overrides, completion/reopen, skip, revisions, Extra/Withdrawn dispositions, pause/resume, ending/stopping policy, retries, deletion, observability, concurrency, RLS, and rollback. |
 
-## Cross-channel acceptance
+## Current cross-channel acceptance
 
-The acceptance suite proves the same lifecycle outcomes across HTTP, AI, dashboard/read, and the SQL boundary for:
+The existing delivery, adapter, lifecycle, and SQL suites collectively cover:
 
 - Series creation and initial Coverage;
 - Occurrence Override, completion/reopen, and Skip;
@@ -43,4 +82,6 @@ The acceptance suite proves the same lifecycle outcomes across HTTP, AI, dashboa
 - idempotent retry and revision/concurrency conflicts;
 - owner isolation, direct-write denial, and transaction rollback.
 
-The delivery-write inventory records the lifecycle authority as migrated under #692 and keeps ordinary task queries excluded only when they are query-only. This file, the inventory JSON, and its SHA-256 lock are release evidence and must move together.
+The refinement is not complete until the capability conformance suite runs against both implementations, HTTP and AI parity tests exercise the supported capabilities, retry and stale-version scenarios are covered, the production import boundary permits only the declared surface, and the registered SQL fixtures still pass.
+
+The delivery-write inventory records the lifecycle authority as migrated under #692 and keeps ordinary task queries excluded only when they are query-only. This contract and the inventory JSON are coupled release evidence and must move together when the authority or its evidence changes. The former SHA-256 lock was intentionally retired when the inventory became a permanent empty, fail-closed guard under #658.
