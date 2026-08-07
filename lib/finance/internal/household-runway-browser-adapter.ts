@@ -22,15 +22,12 @@ import {
 import type { HouseholdRunwayDraftStorageReadResult } from "@/lib/finance/internal/runway-draft-client";
 import type { HouseholdRunwayDraftState } from "@/lib/finance/internal/household-runway-draft-codec";
 import {
-  dispatchHouseholdRunwayRuntimeEnvironment,
-  type HouseholdRunwayInterviewRuntimeEnvironmentMessage,
-} from "@/lib/finance/internal/household-runway-runtime-environment";
-import {
-  createHouseholdRunwayInterviewRuntimeWithCapabilities,
+  createHouseholdRunwayInterviewRuntimeComposition,
   type HouseholdRunwayInterviewRuntime,
   type HouseholdRunwayInterviewRuntimeCapabilities,
   type HouseholdRunwayInterviewRuntimeConfirmationRequest,
   type HouseholdRunwayInterviewRuntimeDraftRequest,
+  type HouseholdRunwayInterviewRuntimeEnvironmentMessage,
   type HouseholdRunwayInterviewRuntimePlanOutcome,
   type HouseholdRunwayInterviewRuntimePlanRequest,
   type HouseholdRunwayInterviewRuntimeReportRequest,
@@ -437,7 +434,10 @@ export function createHouseholdRunwayBrowserAdapterWithCapabilities(
         trackRunwayEvent(request.eventName, request.stage)),
   };
 
-  const runtime = createHouseholdRunwayInterviewRuntimeWithCapabilities({
+  const {
+    runtime,
+    dispatchEnvironment: dispatchRuntimeEnvironment,
+  } = createHouseholdRunwayInterviewRuntimeComposition({
     ...options,
     ...browserCapabilities,
     navigate,
@@ -478,7 +478,7 @@ export function createHouseholdRunwayBrowserAdapterWithCapabilities(
         message.type === "history_projection_changed" &&
         message.destination === "interview" &&
         runtime.getSnapshot().screen.kind !== "resume_choice";
-      dispatchHouseholdRunwayRuntimeEnvironment(runtime, message);
+      dispatchRuntimeEnvironment(message);
       if (shouldImportDeviceDraft) scheduleDeviceDraftImport();
     }
   };
