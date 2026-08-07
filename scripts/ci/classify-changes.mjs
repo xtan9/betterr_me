@@ -70,7 +70,7 @@ const MUTATION_INFRASTRUCTURE_PATTERNS = [
 ];
 
 export const OWNERSHIP_REGISTRY = [
-  rule("calendar", [/^(?:app|components)\/calendar\//, /^app\/api\/(?:calendar|calendar-events)\//, /^hooks\/use-calendar/, /^lib\/hooks\/use-calendar-overlay-feed\./, /^lib\/(?:calendar\/|db\/calendar-events|validations\/calendar-events)/], fullE2E()),
+  rule("calendar", [/^(?:app|components)\/calendar\//, /^app\/api\/(?:calendar|calendar-events)\//, /^hooks\/use-calendar/, /^lib\/hooks\/use-calendar-overlay-feed\./, /^lib\/(?:calendar\/|db\/calendar-events|validations\/(?:calendar-events|calendar-overlay-feed))/], fullE2E()),
   rule("journal", [/^(?:app|components)\/journal\//, /^app\/api\/journal\//, /^lib\/(?:journal\/|db\/journal|hooks\/use-journal|validations\/journal)/], fullE2E()),
   rule("workouts", [/^app\/(?:api\/)?(?:workouts|exercises|routines)\//, /^app\/api\/admin\/sync-exercise-media\//, /^components\/fitness\//, /^lib\/(?:db\/(?:exercise|routine|workout)|exercisedb\/|fitness\/|hooks\/use-(?:active-workout|exercise|fitness|routine|workout)|validations\/(?:exercise|exercise-media|routine|workout))/,], fullE2E()),
   rule("chat", [/^(?:app|components)\/chat\//, /^app\/api\/(?:chat|conversations)\//, /^lib\/(?:ai|chat|db\/(?:chat|conversation)|validations\/chat)/], fullE2E()),

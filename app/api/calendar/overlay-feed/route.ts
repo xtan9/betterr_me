@@ -12,26 +12,12 @@ import {
   type CalendarOverlayQueryOutcome,
 } from "@/lib/calendar/overlay-feed";
 import { querySupabaseCalendarOverlayFeed } from "@/lib/calendar/supabase-overlay-feed";
+import { calendarOverlayRangeSchema } from "@/lib/validations/calendar-overlay-feed";
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ["cookie"],
   requiredPermission: "read",
 } as const satisfies AuthenticatedRequestPolicy;
-
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const MAX_RANGE_DAYS = 42;
-
-function isValidLocalDate(value: string): boolean {
-  if (!DATE_PATTERN.test(value)) return false;
-  const [year, month, day] = value.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10) === value;
-}
-
-function rangeLength(from: string, to: string): number {
-  const fromMs = Date.parse(`${from}T00:00:00Z`);
-  const toMs = Date.parse(`${to}T00:00:00Z`);
-  return Math.floor((toMs - fromMs) / 86_400_000) + 1;
-}
 
 function validTimeZone(value: string): boolean {
   try {
@@ -73,14 +59,22 @@ export async function GET(request: NextRequest) {
         { status: 400 },
       );
     }
-    if (!isValidLocalDate(startDate) || !isValidLocalDate(endDate)) {
+    const rangeValidation = calendarOverlayRangeSchema.safeParse({
+      from: startDate,
+      to: endDate,
+    });
+    if (
+      !rangeValidation.success &&
+      rangeValidation.error.issues.some(({ path }) =>
+        path[0] === "from" || path[0] === "to",
+      )
+    ) {
       return NextResponse.json(
         { error: "start_date and end_date must be valid YYYY-MM-DD dates" },
         { status: 400 },
       );
     }
-    const days = rangeLength(startDate, endDate);
-    if (days < 1 || days > MAX_RANGE_DAYS) {
+    if (!rangeValidation.success) {
       return NextResponse.json(
         { error: "The requested date range must be inclusive and no more than 42 days" },
         { status: 400 },

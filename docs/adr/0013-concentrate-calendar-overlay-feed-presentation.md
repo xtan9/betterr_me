@@ -22,3 +22,8 @@ Keeping the current split leaves transport keys, degradation policy, retry lifec
 - Framework-free Calendar display types, Calendar Event adaptation, and final date grouping remain outside the client hook in a neutrally named display module. Mixed Calendar Event and overlay collections use `items` or `displayItems`, not `events`, and Calendar Layer selection is statically constrained rather than represented as arbitrary strings.
 - Adapter tests own request construction, timezone use, response validation, empty-selection suppression, state normalization, stale-item filtering, retry, action routing, and cache invalidation. Page tests mock the adapter and own Calendar Event coexistence, localization, final composition, and mixed-item dispatch.
 - The existing `/api/calendar/overlay-feed` route, application query, Calendar Event acquisition behavior, markup, localization, and view choice remain unchanged.
+
+## Follow-up implementation decisions
+
+- `EventBlock` and `EventChip` remain presentation-primitive names. Their interfaces consume `CalendarDisplayItem`, and mixed collections and callbacks use `item` or `displayItems`; renaming the primitives would add churn without deepening the adapter or clarifying a collection contract.
+- The response Zod schema remains private to the client adapter because it validates untrusted JSON at that trust seam. The server continues to construct the response from typed application outcomes rather than sharing a runtime wire schema across the network boundary. Local-date and inclusive-range semantics are shared through `lib/validations/calendar-overlay-feed.ts` so the client request adapter and HTTP route cannot drift on the 42-day policy.
