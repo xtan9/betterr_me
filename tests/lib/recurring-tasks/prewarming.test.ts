@@ -4,8 +4,8 @@ import {
   InMemoryRecurringTaskLifecyclePersistence,
   RecurringTaskLifecycle,
   type RecurringLifecycleSignal,
-} from "@/lib/recurring-tasks/lifecycle";
-import { prewarmActiveRecurringTaskCoverage } from "@/lib/recurring-tasks/prewarming";
+} from "@/lib/recurring-tasks/internal/lifecycle";
+import { prewarmActiveRecurringTaskCoverage } from "@/lib/recurring-tasks/internal/prewarming";
 
 function defaults(title: string) {
   return {

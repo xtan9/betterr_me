@@ -5,7 +5,7 @@ import { log } from "@/lib/logger";
 import {
   createRecurringTaskMaintenanceCapability,
   RECURRING_TASK_MAINTENANCE_AUTHORITY,
-} from "@/lib/recurring-tasks";
+} from "@/lib/recurring-tasks/internal/maintenance";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**

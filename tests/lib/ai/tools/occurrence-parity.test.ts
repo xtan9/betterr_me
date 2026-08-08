@@ -8,7 +8,6 @@ import { encodeSeriesVersion } from "@/lib/tasks/commands";
 
 const {
   httpSupabase,
-  mockCreateAdapter,
   mockTaskWritesFactory,
   mockDelete,
   mockTaskCommandFactory,
@@ -16,7 +15,6 @@ const {
 } = vi.hoisted(() => {
   const httpSupabase = {};
   const mockDelete = vi.fn();
-  const mockCreateAdapter = vi.fn(() => ({}));
   const mockTaskWritesFactory = vi.fn(() => ({
     delete: mockDelete,
     deleteSeries: vi.fn(),
@@ -28,7 +26,6 @@ const {
   }));
   return {
     httpSupabase,
-    mockCreateAdapter,
     mockTaskWritesFactory,
     mockDelete,
     mockTaskCommandFactory,
@@ -47,10 +44,6 @@ vi.mock("@/lib/auth/authenticated-request", () => ({
     },
     client: httpSupabase,
   })),
-}));
-
-vi.mock("@/lib/recurring-tasks/supabase-occurrence-adapter", () => ({
-  createSupabaseOccurrenceAdapter: mockCreateAdapter,
 }));
 
 vi.mock("@/lib/tasks/writes", async () => {

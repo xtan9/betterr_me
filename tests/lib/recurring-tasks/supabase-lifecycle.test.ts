@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { SupabaseRecurringTaskLifecycle } from "@/lib/recurring-tasks/supabase-lifecycle";
-import type { RecurringLifecycleSignal } from "@/lib/recurring-tasks/lifecycle";
+import { SupabaseRecurringTaskLifecycle } from "@/lib/recurring-tasks/internal/supabase-lifecycle";
+import type { RecurringLifecycleSignal } from "@/lib/recurring-tasks/internal/lifecycle";
 
 describe("SupabaseRecurringTaskLifecycle", () => {
   it("maps a lifecycle request to the single transactional RPC boundary", async () => {

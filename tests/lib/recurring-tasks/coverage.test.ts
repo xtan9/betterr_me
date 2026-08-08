@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   ensureRecurringTaskCoverage,
   taskReadCoverageRange,
-} from "@/lib/recurring-tasks/coverage";
+} from "@/lib/recurring-tasks/internal/coverage";
 
 vi.mock("@/lib/logger", () => ({
   log: {

@@ -24,9 +24,19 @@ import type {
   ReviseSeriesRequest,
   SeriesCommandRequest,
   SeriesDefaults,
+  SeriesRevision,
+  TaskOccurrence,
 } from "./lifecycle";
 import type { RecurrenceRule } from "@/lib/db/types";
 import { compareLocalDates, isValidLocalDate } from "./recurrence";
+
+export type {
+  LocalDateRange,
+  RecurringSeriesStatus,
+  SeriesDefaults,
+  SeriesRevision,
+  TaskOccurrence,
+} from "./lifecycle";
 
 /** A user principal is the only authority accepted by the interactive boundary. */
 export type AuthenticatedRecurringTaskPrincipal = Extract<
@@ -117,9 +127,23 @@ export interface CoverageEnsureCommand {
 }
 
 /** Public Series projection. Ownership and the storage revision counter stay private. */
-export type SeriesProjection = Omit<RecurringTaskSeries, "userId" | "revisionToken"> & {
+export interface SeriesProjection {
+  id: string;
+  status: RecurringSeriesStatus;
+  timeZone: string;
+  recurrenceAnchor: string;
+  activationDate: string;
+  occurrenceLimit: number | null;
+  lastScheduledDate: string | null;
+  coverageHorizon: string | null;
+  currentRevisionId: string;
+  revisions: SeriesRevision[];
+  occurrences: TaskOccurrence[];
+  intentionalAbsences: string[];
+  createdAt: string;
+  updatedAt: string;
   version: SeriesVersion;
-};
+}
 
 type SeriesMutationSuccess<
   ResultType extends string,
@@ -262,7 +286,7 @@ export interface CoverageResult {
   requestedRange: LocalDateRange;
   completeness: CoverageCompleteness;
   series: SeriesProjection[];
-  occurrences: RecurringTaskSeries["occurrences"];
+  occurrences: TaskOccurrence[];
   intentionalAbsences: string[];
 }
 

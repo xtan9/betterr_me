@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Task, TaskInsert, TaskUpdate, TaskFilters } from './types';
-import { addLocalDays } from '@/lib/recurring-tasks/recurrence';
+import { addLocalDays } from '@/lib/recurring-tasks/scheduling';
 import { syncTaskUpdate } from '@/lib/tasks/sync';
 
 export class TasksDB {

@@ -2,9 +2,9 @@ import type {
   AuthenticatedRecurringTaskPrincipal,
   CoverageCompleteness,
   CoverageComplete,
+  LocalDateRange,
   CoverageUnavailable,
-} from "@/lib/recurring-tasks/capabilities";
-import type { LocalDateRange } from "@/lib/recurring-tasks/lifecycle";
+} from "@/lib/recurring-tasks";
 
 export interface SidebarCounts {
   habits_incomplete: number;

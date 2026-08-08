@@ -26,7 +26,7 @@ import {
   TabsContent,
 } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/layouts/page-header";
-import { describeRecurrence } from "@/lib/recurring-tasks/recurrence";
+import { describeRecurrence } from "@/lib/recurring-tasks/scheduling";
 import { useDebounce } from "@/lib/hooks/use-debounce";
 import { useProjects } from "@/lib/hooks/use-projects";
 import { useCategories } from "@/lib/hooks/use-categories";

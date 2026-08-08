@@ -1,6 +1,6 @@
 # Recurring Task Lifecycle contract evidence
 
-Status: accepted for issue #692; capability-boundary refinement implemented for issue #886
+Status: completed for issue #896; capability-boundary refinement implemented for issue #886
 
 This document records the post-cutover contract for the Recurring Task Lifecycle. Dependency #691 is the activated lifecycle implementation at `a6209c30`; the release marker is `20260803000001_activate_recurring_task_lifecycle`, and the contract migration is `20260803000002_contract_recurring_task_lifecycle`.
 
@@ -23,7 +23,7 @@ This refinement deepens the package boundary already chosen by ADR-0005; it does
 ### Composition
 
 - An authenticated production factory exposes Series commands, Series queries, and Coverage capabilities. Interactive capabilities derive ownership from the authenticated principal and do not accept a caller-supplied user ID.
-- Shared Task Commands accept the visible Task identity and requested scope, detect Series membership, and delegate recurring behavior through a private Task Occurrence port. Recurring lineage, scope, ownership, and version validity are resolved authoritatively again inside the lifecycle transaction.
+- Shared Task Commands accept the visible Task identity and requested scope, detect Series membership, and delegate recurring behavior through a private lifecycle port. Recurring lineage, scope, ownership, and version validity are resolved authoritatively again inside the lifecycle transaction; delivery callers do not select a lifecycle or persistence adapter.
 - A separately constructed, narrowly authorized maintenance capability owns active-Series scanning and prewarming. It is not part of the interactive command interface.
 - Pure recurrence calculation and description remain available through an explicit `scheduling` subpath. Legacy HTTP and AI translation remains available through an explicit `compatibility` subpath, inside the package but outside the core lifecycle.
 
@@ -43,19 +43,19 @@ Delivery policy remains explicit at the channel edge. Task reads may return avai
 
 ### Supported package surface
 
-The root package exports the production capability factory and public contract types. The `scheduling` and `compatibility` subpaths are the only supported production subpaths. Persistence state, in-memory storage, concrete Supabase lifecycle classes, telemetry plumbing, and focused persistence adapters are private.
+The root package exports only the authenticated production capability factory and public contract types. The `scheduling` and `compatibility` subpaths are the only supported production subpaths. Persistence state, in-memory storage, concrete Supabase lifecycle classes, telemetry plumbing, focused persistence adapters, and maintenance composition live under the private `lib/recurring-tasks/internal/` boundary.
 
-After the coordinated cutover, creation and supported Series command behavior is folded behind the capabilities. Task-scoped compatibility remains private until the shared Task Commands contract is delivered. Production architecture tests reject other deep imports.
+The coordinated cutover is complete: creation and Series command behavior is folded behind the authenticated capabilities, visible Task mutations route through shared Task Commands, and the cron delivery uses its separately authorized private maintenance composition. The obsolete creation, Occurrence Adapter, and Series State Adapter entry points are removed. Production architecture tests reject unsupported deep imports, legacy writers, delivery-selected lifecycle adapters, and obsolete exports.
 
 ### Conformance and cutover
 
-The in-memory lifecycle remains private as a fast reference implementation. One capability conformance suite runs against both the reference implementation and the production Supabase adapter; registered SQL fixtures remain authoritative for RLS, locking, idempotency, conflict handling, rollback, and transaction behavior.
+The in-memory lifecycle remains private as a fast reference implementation. One shared capability conformance suite runs against both the reference implementation and the production Supabase adapter; HTTP/AI parity, retry/conflict suites, and registered SQL fixtures remain authoritative for RLS, locking, idempotency, conflict handling, rollback, and transaction behavior.
 
 The change ships as one reviewable production cutover: establish the capabilities and conformance suite, migrate all HTTP, UI, AI, query, calendar, dashboard, sidebar, and prewarming callers, propagate operation IDs and version tokens, enforce the import boundary, and remove obsolete paths. Intermediate commits may be incremental, but no deployed state may contain competing production command paths.
 
 ## Current evidence map
 
-The following evidence describes the activated post-#692 lifecycle and the #886 capability-boundary refinement.
+The following evidence describes the activated post-#692 lifecycle, the #886 capability-boundary refinement, and the completed #896 package cutover.
 
 | Surface | Authority and proof |
 | --- | --- |
@@ -64,11 +64,11 @@ The following evidence describes the activated post-#692 lifecycle and the #886 
 | Dashboard/read | `lib/dashboard/query.ts` and `lib/dashboard/supabase-query.ts` bind the authenticated principal, ensure structured Coverage before the dashboard reads materialized Task Occurrences, and preserve available data with a typed warning when Coverage is incomplete. No fallback generator or virtual expansion is available. |
 | Sidebar/read | `lib/sidebar/query.ts` owns the fail-closed sidebar policy, and `lib/sidebar/supabase-query.ts` composes authenticated Coverage with materialized habit/task reads. `app/api/sidebar/counts/route.ts` passes the authenticated principal to that query and never supplies a user ID, Coverage helper, lifecycle, or persistence adapter. The sidebar query and route/import-boundary suites prove complete, partial, unavailable, authorization, and ensure-before-read behavior. |
 | Calendar overlay/read | `lib/calendar/query.ts` owns authenticated Coverage orchestration before materialized Task Occurrence reads; `lib/calendar/supabase-query.ts` binds that query to the authenticated capability factory. Calendar query, adapter, and overlay route suites prove structured completeness, fail-closed task overlays, range boundaries, authorization, and the separate Calendar Event path. |
-| Task writes | `lib/tasks/writes.ts`, `occurrence-adapter.ts`, and the private `series-state-adapter.ts` remain compatibility seams for task-scoped commands; ordinary Task Writes reject scoped recurrence mutations unless the lifecycle adapter owns them. |
+| Task writes | `lib/tasks/commands.ts` is the sole task-scoped mutation authority: it accepts visible Task identity, routes ordinary and recurring commands, and delegates recurring work through the private lifecycle port. `lib/tasks/writes.ts` remains the ordinary Task creation and reminder boundary; its obsolete recurring compatibility seam is removed. |
 | Storage contract | `20260803000002_contract_recurring_task_lifecycle.sql` checks the completed immutable cutover, rewrites installed delivery functions to target storage, removes the legacy table/columns/functions/indexes, and retains only migration facts needed for audit. |
 | SQL fixture | `supabase/tests/recurring_task_series_revision_capabilities.sql` is registered as a constrained transactional fixture and checks effective-dated lineage, historical Occurrence preservation, stopping policy, replay, typed stale conflicts, and rollback; the broader recurring-task fixtures provide the remaining storage/RLS evidence. |
-| Import boundary | `tests/lib/recurring-tasks/import-boundary.test.ts` proves the generator and legacy DB module are absent and compatibility translation is declared. |
-| Architecture boundary | `tests/scripts/recurring-cutover-architecture.test.ts`, `series-state-adapter-architecture.test.ts`, and `occurrence-adapter-architecture.test.ts` prove activation ordering, capability routing for supported Series mutations, private task-scoped compatibility, and no legacy writers. |
+| Import boundary | `tests/lib/recurring-tasks/import-boundary.test.ts` and `tests/scripts/recurring-package-architecture.test.ts` prove the generator, legacy DB module, and obsolete adapters are absent; delivery imports are limited to the root, `scheduling`, and `compatibility` entry points. |
+| Architecture boundary | `tests/scripts/recurring-cutover-architecture.test.ts`, `series-state-adapter-architecture.test.ts`, and `occurrence-adapter-architecture.test.ts` prove activation ordering, capability routing, private Task Commands composition, no delivery-selected lifecycle adapters, and removal of legacy writers/exports. |
 | Database acceptance | The registered `recurring-tasks` fixtures cover lifecycle creation, coverage horizons, overrides, completion/reopen, skip, revisions, Extra/Withdrawn dispositions, pause/resume, ending/stopping policy, retries, deletion, observability, concurrency, RLS, and rollback. |
 
 ## Current cross-channel acceptance
@@ -84,6 +84,6 @@ The existing delivery, adapter, lifecycle, and SQL suites collectively cover:
 - idempotent retry and revision/concurrency conflicts;
 - owner isolation, direct-write denial, and transaction rollback.
 
-The #886 refinement is evidenced by the capability conformance suite running against both implementations, HTTP and AI parity tests exercising the supported capabilities, retry and stale-version scenarios, the production import boundary, and the registered transactional SQL fixtures.
+The #886 refinement and #896 cutover are evidenced by the shared capability conformance suite running against both implementations, HTTP and AI parity tests exercising the supported capabilities, retry and stale-version scenarios, the package/import architecture tests, and the registered transactional SQL fixtures.
 
-The delivery-write inventory records the lifecycle authority as migrated under #692 and keeps ordinary task queries excluded only when they are query-only. This contract and the inventory JSON are coupled release evidence and must move together when the authority or its evidence changes. The former SHA-256 lock was intentionally retired when the inventory became a permanent empty, fail-closed guard under #658.
+The delivery-write inventory records the lifecycle authority as migrated through #896 and keeps ordinary task queries excluded only when they are query-only. This contract and the inventory JSON are coupled release evidence and move together for the completed authority and evidence. The former SHA-256 lock was intentionally retired when the inventory became a permanent empty, fail-closed guard under #658.

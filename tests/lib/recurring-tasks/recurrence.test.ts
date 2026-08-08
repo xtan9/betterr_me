@@ -4,7 +4,7 @@ import {
   getOccurrencesInRange,
   getNextOccurrence,
   describeRecurrence,
-} from "@/lib/recurring-tasks/recurrence";
+} from "@/lib/recurring-tasks/internal/recurrence";
 import type { RecurrenceRule } from "@/lib/db/types";
 
 describe("calculateScheduledDates", () => {

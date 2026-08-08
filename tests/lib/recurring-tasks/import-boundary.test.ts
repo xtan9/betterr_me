@@ -17,16 +17,14 @@ const lifecycleBoundarySources = [
   "lib/calendar/supabase-query.ts",
   "lib/calendar/display.ts",
   "lib/ai/tools/tasks.ts",
-  "lib/recurring-tasks/supabase-occurrence-adapter.ts",
-  "lib/recurring-tasks/supabase-series-state-adapter.ts",
-  "lib/recurring-tasks/activation.ts",
   "lib/dashboard/dashboard-snapshot.ts",
   "lib/dashboard/query.ts",
   "lib/dashboard/supabase-query.ts",
   "lib/sidebar/query.ts",
   "lib/sidebar/supabase-query.ts",
   "lib/db/tasks.ts",
-  "lib/recurring-tasks/coverage.ts",
+  "lib/recurring-tasks/internal/coverage.ts",
+  "lib/tasks/commands.ts",
 ];
 
 describe("recurring lifecycle import boundary", () => {
