@@ -1,6 +1,6 @@
 # Recurring Task Lifecycle contract evidence
 
-Status: accepted for issue #692; capability-boundary refinement confirmed 6 August 2026 and pending implementation
+Status: accepted for issue #692; capability-boundary refinement implemented for issue #886
 
 This document records the post-cutover contract for the Recurring Task Lifecycle. Dependency #691 is the activated lifecycle implementation at `a6209c30`; the release marker is `20260803000001_activate_recurring_task_lifecycle`, and the contract migration is `20260803000002_contract_recurring_task_lifecycle`.
 
@@ -45,7 +45,7 @@ Delivery policy remains explicit at the channel edge. Task reads may return avai
 
 The root package exports the production capability factory and public contract types. The `scheduling` and `compatibility` subpaths are the only supported production subpaths. Persistence state, in-memory storage, concrete Supabase lifecycle classes, telemetry plumbing, and focused persistence adapters are private.
 
-After the coordinated cutover, creation, Task Occurrence, and Series State adapter behavior is folded behind the capabilities and the obsolete public adapters are deleted. Production architecture tests reject other deep imports.
+After the coordinated cutover, creation and supported Series command behavior is folded behind the capabilities. Task-scoped compatibility remains private until the shared Task Commands contract is delivered. Production architecture tests reject other deep imports.
 
 ### Conformance and cutover
 
@@ -55,18 +55,18 @@ The change ships as one reviewable production cutover: establish the capabilitie
 
 ## Current evidence map
 
-The following evidence describes the activated post-#692 lifecycle before the confirmed capability-boundary refinement is implemented.
+The following evidence describes the activated post-#692 lifecycle and the #886 capability-boundary refinement.
 
 | Surface | Authority and proof |
 | --- | --- |
-| HTTP creation/list/read | `app/api/recurring-tasks/route.ts` and `[id]/route.ts` call the activated lifecycle; response translation is explicit and tested in the route suites. |
-| AI creation/list/read | `lib/ai/tools/tasks.ts` uses the lifecycle and the same response adapter; `tests/lib/ai/tools/recurring-tasks.test.ts` and `series-creation-parity.test.ts` prove parity. |
+| HTTP creation/query/Series mutation | `app/api/recurring-tasks/route.ts` and `[id]/route.ts` use the authenticated capabilities; legacy fields are translated at the compatibility edge and route tests cover operation IDs, opaque versions, effective dates, and typed failures. |
+| AI creation/query/Series mutation | `lib/ai/tools/tasks.ts` uses the same public Series command/query capabilities and response adapter; recurring-task tests and `series-state-parity.test.ts` prove canonical HTTP/AI inputs. |
 | Dashboard/read | `lib/dashboard/dashboard-snapshot.ts` requires `ensureRecurringCoverage` before ordinary task queries; failed coverage is surfaced as a typed warning. No fallback generator or virtual expansion is available. |
-| Task writes | `lib/tasks/writes.ts`, `occurrence-adapter.ts`, and `series-state-adapter.ts` use narrow Task/Occurrence and Series State seams; ordinary Task Writes reject scoped recurrence mutations unless the lifecycle adapter owns them. |
+| Task writes | `lib/tasks/writes.ts`, `occurrence-adapter.ts`, and the private `series-state-adapter.ts` remain compatibility seams for task-scoped commands; supported Series-definition and Series-state routes do not construct them. |
 | Storage contract | `20260803000002_contract_recurring_task_lifecycle.sql` checks the completed immutable cutover, rewrites installed delivery functions to target storage, removes the legacy table/columns/functions/indexes, and retains only migration facts needed for audit. |
-| SQL fixture | `supabase/tests/recurring_task_legacy_contract.sql` is registered as a constrained transactional fixture and checks retired storage, active function bodies, RLS, execute/direct-write privileges, and rollback. |
+| SQL fixture | `supabase/tests/recurring_task_series_revision_capabilities.sql` is registered as a constrained transactional fixture and checks effective-dated lineage, historical Occurrence preservation, stopping policy, replay, typed stale conflicts, and rollback; the broader recurring-task fixtures provide the remaining storage/RLS evidence. |
 | Import boundary | `tests/lib/recurring-tasks/import-boundary.test.ts` proves the generator and legacy DB module are absent and compatibility translation is declared. |
-| Architecture boundary | `tests/scripts/recurring-cutover-architecture.test.ts`, `series-state-adapter-architecture.test.ts`, and `occurrence-adapter-architecture.test.ts` prove activation ordering, adapter routing, and no legacy writers. |
+| Architecture boundary | `tests/scripts/recurring-cutover-architecture.test.ts`, `series-state-adapter-architecture.test.ts`, and `occurrence-adapter-architecture.test.ts` prove activation ordering, capability routing for supported Series mutations, private task-scoped compatibility, and no legacy writers. |
 | Database acceptance | The registered `recurring-tasks` fixtures cover lifecycle creation, coverage horizons, overrides, completion/reopen, skip, revisions, Extra/Withdrawn dispositions, pause/resume, ending/stopping policy, retries, deletion, observability, concurrency, RLS, and rollback. |
 
 ## Current cross-channel acceptance
@@ -82,6 +82,6 @@ The existing delivery, adapter, lifecycle, and SQL suites collectively cover:
 - idempotent retry and revision/concurrency conflicts;
 - owner isolation, direct-write denial, and transaction rollback.
 
-The refinement is not complete until the capability conformance suite runs against both implementations, HTTP and AI parity tests exercise the supported capabilities, retry and stale-version scenarios are covered, the production import boundary permits only the declared surface, and the registered SQL fixtures still pass.
+The #886 refinement is evidenced by the capability conformance suite running against both implementations, HTTP and AI parity tests exercising the supported capabilities, retry and stale-version scenarios, the production import boundary, and the registered transactional SQL fixtures.
 
 The delivery-write inventory records the lifecycle authority as migrated under #692 and keeps ordinary task queries excluded only when they are query-only. This contract and the inventory JSON are coupled release evidence and must move together when the authority or its evidence changes. The former SHA-256 lock was intentionally retired when the inventory became a permanent empty, fail-closed guard under #658.

@@ -377,6 +377,59 @@ function runWalkingSkeleton(
       if (stale.type !== "conflict") return;
       expect(stale.expectedVersion).toBe(created.series.version);
       expect(stale.actualVersion).toBe(revised.series.version);
+
+      const replay = await capabilities.seriesCommands.reviseSeries({
+        operationId: "revise-series-1",
+        seriesId,
+        version: created.series.version,
+        effectiveDate: "2026-08-02",
+        defaults: { title: "Updated review" },
+      });
+      expect(replay.type).toBe("revised");
+      expect(replay.status).toBe("already-applied");
+      if (!("series" in replay)) return;
+      expect(replay.series.version).toBe(revised.series.version);
+    });
+
+    it("requires an opaque prior version and an explicit effective Scheduled Date", async () => {
+      const capabilities = makeCapabilities();
+      const created = await capabilities.seriesCommands.createSeries({
+        ...createInput(),
+        operationId: "revision-contract-create",
+      });
+      if (!("series" in created)) return;
+
+      const missingVersion = await capabilities.seriesCommands.reviseSeries({
+        operationId: "revision-missing-version",
+        seriesId: created.series.id,
+        version: undefined as never,
+        effectiveDate: "2026-08-02",
+        defaults: { title: "Missing version" },
+      });
+      expect(missingVersion).toMatchObject({
+        type: "validation",
+        status: "validation",
+        operation: RECURRING_TASK_OPERATION_IDS.reviseSeries,
+        operationId: "revision-missing-version",
+        field: "version",
+        reason: "Series version is invalid",
+      });
+
+      const missingEffectiveDate = await capabilities.seriesCommands.reviseSeries({
+        operationId: "revision-missing-effective-date",
+        seriesId: created.series.id,
+        version: created.series.version,
+        effectiveDate: undefined as never,
+        defaults: { title: "Missing date" },
+      });
+      expect(missingEffectiveDate).toMatchObject({
+        type: "validation",
+        status: "validation",
+        operation: RECURRING_TASK_OPERATION_IDS.reviseSeries,
+        operationId: "revision-missing-effective-date",
+        field: "effectiveDate",
+        reason: "Effective Scheduled Date is required",
+      });
     });
 
     it("exposes operation-specific Series state successes", async () => {

@@ -79,7 +79,8 @@ export interface ReviseSeriesCommand {
   operationId: RecurringTaskOperationId;
   seriesId: string;
   version: SeriesVersion;
-  effectiveDate?: string;
+  /** The first Scheduled Date on which the new Series Revision applies. */
+  effectiveDate: string;
   recurrenceRule?: RecurrenceRule;
   defaults?: Partial<SeriesDefaults>;
   scope?: "following" | "all";
@@ -369,6 +370,33 @@ export function createRecurringTaskCapabilitiesForLifecycle(
       );
       if (operationValidation) return operationValidation;
       const operationId = input.operationId;
+      if (typeof input?.seriesId !== "string" || !input.seriesId.trim()) {
+        return validationFailure(
+          RECURRING_TASK_OPERATION_IDS.reviseSeries,
+          operationId,
+          "seriesId",
+          "Series ID is required",
+        );
+      }
+      if (
+        typeof input?.effectiveDate !== "string"
+        || !input.effectiveDate.trim()
+      ) {
+        return validationFailure(
+          RECURRING_TASK_OPERATION_IDS.reviseSeries,
+          operationId,
+          "effectiveDate",
+          "Effective Scheduled Date is required",
+        );
+      }
+      if (!isValidLocalDate(input.effectiveDate)) {
+        return validationFailure(
+          RECURRING_TASK_OPERATION_IDS.reviseSeries,
+          operationId,
+          "effectiveDate",
+          "Effective Scheduled Date must be a valid local date",
+        );
+      }
       const version = parseSeriesVersion(input.version, input.seriesId);
       if (!version) {
         return validationFailure(
@@ -890,14 +918,18 @@ export function encodeSeriesVersion(
 }
 
 function parseSeriesVersion(
-  value: SeriesVersion,
-  seriesId: string,
+  value: unknown,
+  seriesId: unknown,
 ): DecodedSeriesVersion | undefined {
+  if (typeof value !== "string" || typeof seriesId !== "string") {
+    return undefined;
+  }
   const decoded = parseEncodedVersion(value);
   return decoded?.seriesId === seriesId ? decoded : undefined;
 }
 
-function parseEncodedVersion(value: string): DecodedSeriesVersion | undefined {
+function parseEncodedVersion(value: unknown): DecodedSeriesVersion | undefined {
+  if (typeof value !== "string") return undefined;
   if (!value.startsWith("rt-series-v1.")) return undefined;
   try {
     const json = decodeBase64Url(value.slice("rt-series-v1.".length));
