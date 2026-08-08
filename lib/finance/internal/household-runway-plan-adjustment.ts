@@ -102,19 +102,23 @@ export function isHouseholdRunwayPlanAdjustmentActive(
   return PLAN_ADJUSTMENT_FIELDS.some((field) => adjustment[field] > 0);
 }
 
+function finiteNumber(value: unknown): number | null {
+  try {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+  } catch {
+    return null;
+  }
+}
+
 function normalizeStoredCents(value: unknown): number {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? Math.max(0, Math.round(numeric)) : 0;
+  const numeric = finiteNumber(value);
+  return numeric === null ? 0 : Math.max(0, Math.round(numeric));
 }
 
 function normalizeIntentCents(value: unknown, maximumCents: number): number {
-  let numeric: number;
-  try {
-    numeric = Number(value);
-  } catch {
-    return 0;
-  }
-  if (!Number.isFinite(numeric)) return 0;
+  const numeric = finiteNumber(value);
+  if (numeric === null) return 0;
   return Math.min(maximumCents, Math.max(0, Math.round(numeric)));
 }
 
@@ -123,7 +127,13 @@ export function normalizeStoredHouseholdRunwayPlanAdjustment(
 ): RunwayAdjustments {
   const result = emptyHouseholdRunwayPlanAdjustment();
   for (const field of PLAN_ADJUSTMENT_FIELDS) {
-    result[field] = normalizeStoredCents(input?.[field]);
+    let value: unknown;
+    try {
+      value = input?.[field];
+    } catch {
+      value = undefined;
+    }
+    result[field] = normalizeStoredCents(value);
   }
   return result;
 }
@@ -157,9 +167,13 @@ export function getHouseholdRunwayPlanAdjustmentLimits(
 }
 
 function objectPatch(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+  try {
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
 }
 
 export function normalizeHouseholdRunwayPlanAdjustmentIntent(input: {
@@ -170,9 +184,21 @@ export function normalizeHouseholdRunwayPlanAdjustmentIntent(input: {
   const limits = getHouseholdRunwayPlanAdjustmentLimits(input.planInputs);
   const normalized: Partial<RunwayAdjustments> = {};
   for (const field of PLAN_ADJUSTMENT_FIELDS) {
-    if (Object.prototype.hasOwnProperty.call(patch, field)) {
-      normalized[field] = normalizeIntentCents(patch[field], limits[field]);
+    let present = false;
+    try {
+      present = Object.prototype.hasOwnProperty.call(patch, field);
+    } catch {
+      continue;
     }
+    if (!present) continue;
+
+    let value: unknown;
+    try {
+      value = patch[field];
+    } catch {
+      value = undefined;
+    }
+    normalized[field] = normalizeIntentCents(value, limits[field]);
   }
   return normalized;
 }
