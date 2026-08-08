@@ -1,8 +1,8 @@
 import type {
   AuthenticatedRecurringTaskPrincipal,
   CoverageCompleteness,
-  CoverageUnavailable,
 } from "@/lib/recurring-tasks";
+import type { CoverageRead } from "@/lib/recurring-tasks/coverage-read";
 
 import {
   queryCalendarOverlayFeed,
@@ -22,15 +22,8 @@ export interface CalendarQueryReadRequest {
   timezone?: string;
 }
 
-export interface CalendarQueryCoverageRequest {
-  principal: AuthenticatedRecurringTaskPrincipal;
-  range: LocalDateRange;
-}
-
 export interface CalendarQueryDependencies {
-  coverage: {
-    ensure(request: CalendarQueryCoverageRequest): Promise<CoverageCompleteness>;
-  };
+  coverage: CoverageRead;
   overlay: CalendarOverlayReadCapabilities;
 }
 
@@ -44,19 +37,6 @@ export interface CalendarQuery {
     request: CalendarQueryReadRequest,
     options?: CalendarOverlayQueryOptions,
   ): Promise<CalendarQueryResult>;
-}
-
-export function unavailableCalendarCoverage(
-  range: LocalDateRange,
-  reason = "Coverage could not be ensured",
-): CoverageUnavailable {
-  return {
-    status: "unavailable",
-    type: "unavailable",
-    requestedRange: range,
-    failedSeriesIds: [],
-    reason,
-  };
 }
 
 /**
@@ -76,15 +56,10 @@ export function createCalendarQuery(
         ...dependencies.overlay,
         coverage: {
           ensureThrough: async (coverageRequest): Promise<TaskCoverageResult> => {
-            try {
-              completeness = await dependencies.coverage.ensure({
-                principal,
-                range: coverageRequest.range,
-              });
-            } catch (cause) {
-              completeness = unavailableCalendarCoverage(coverageRequest.range);
-              reportCoverageFailure(options, coverageRequest, cause);
-            }
+            completeness = await dependencies.coverage.ensure(
+              coverageRequest.range,
+              (cause) => reportCoverageFailure(options, coverageRequest, cause),
+            );
             return toTaskCoverageResult(completeness);
           },
         },
