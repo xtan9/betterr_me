@@ -33,9 +33,9 @@ export type AuthenticatedRecurringTaskPrincipal = Extract<
 export type RecurringTaskOperationId = string;
 
 /**
- * A Series version is intentionally opaque to callers. The encoding is an
- * implementation detail of this adapter and may change without changing the
- * capability contract.
+ * An opaque technical concurrency token for a Series projection. It is not a
+ * domain Series Revision; its encoding is an adapter detail that may change
+ * without changing the capability contract.
  */
 declare const seriesVersionBrand: unique symbol;
 export type SeriesVersion = string & {
@@ -51,6 +51,11 @@ export const RECURRING_TASK_OPERATION_IDS = Object.freeze({
   listSeries: "recurring-task.series.list",
   getSeries: "recurring-task.series.get",
   ensureCoverage: "recurring-task.coverage.ensure",
+} as const);
+
+const STABLE_VALIDATION_REASONS = Object.freeze({
+  command: "invalid-command",
+  query: "invalid-query",
 } as const);
 
 export type RecurringTaskOperation =
@@ -710,7 +715,12 @@ function mapCommandError(
   operationId: RecurringTaskOperationId,
 ): RecurringTaskFailure {
   if (error instanceof RangeError) {
-    return validationFailure(operation, operationId, undefined, error.message);
+    return validationFailure(
+      operation,
+      operationId,
+      undefined,
+      STABLE_VALIDATION_REASONS.command,
+    );
   }
   throw error;
 }
@@ -720,7 +730,12 @@ function mapQueryError(
   operation: RecurringTaskOperation,
 ): RecurringTaskFailure {
   if (error instanceof RangeError) {
-    return validationFailure(operation, undefined, undefined, error.message);
+    return validationFailure(
+      operation,
+      undefined,
+      undefined,
+      STABLE_VALIDATION_REASONS.query,
+    );
   }
   throw error;
 }

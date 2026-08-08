@@ -11,8 +11,8 @@ import { createInMemoryRecurringTaskCapabilities } from "@/lib/recurring-tasks/r
 import {
   InMemoryRecurringTaskLifecyclePersistence,
   RecurringTaskLifecycle,
+  type RecurringTaskSeries,
   type UserCoverageOutcome,
-  type RecurringTaskLifecyclePort,
 } from "@/lib/recurring-tasks/lifecycle";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -64,14 +64,7 @@ function createSupabaseCapabilities(): {
   capabilities: AuthenticatedRecurringTaskCapabilities;
   rpc: ReturnType<typeof vi.fn>;
 } {
-  const lifecycle = createReferenceLifecycle();
-  const rpc = vi.fn(async (
-    _name: string,
-    args: { p_operation: string; p_request: Record<string, unknown> },
-  ) => ({
-    data: await callLifecycle(lifecycle, args.p_operation, args.p_request),
-    error: null,
-  }));
+  const rpc = createSupabaseRpcFixture();
 
   return {
     capabilities: createAuthenticatedRecurringTaskCapabilities(
@@ -82,37 +75,241 @@ function createSupabaseCapabilities(): {
   };
 }
 
-async function callLifecycle(
-  lifecycle: RecurringTaskLifecyclePort,
+/**
+ * Raw RPC fixture for the production Supabase adapter seam.
+ *
+ * This deliberately does not instantiate the private lifecycle. It models the
+ * JSON returned by recurring_task_lifecycle so the conformance lane exercises
+ * SupabaseRecurringTaskLifecycle request/response mapping and capability
+ * projection independently of the in-memory reference implementation.
+ */
+function createSupabaseRpcFixture() {
+  let series: RecurringTaskSeries | undefined;
+  const replayedOperations = new Map<string, Record<string, unknown>>();
+  const mutatingOperations = new Set([
+    "create-series",
+    "revise-series",
+    "pause-series",
+    "resume-series",
+    "end-series",
+    "ensure-user-coverage",
+  ]);
+
+  return vi.fn(async (
+    _name: string,
+    args: { p_operation: string; p_request: Record<string, unknown> },
+  ) => {
+    const { p_operation: operation, p_request: request } = args;
+    const idempotencyKey = typeof request.idempotencyKey === "string"
+      ? `${operation}:${request.idempotencyKey}`
+      : undefined;
+    const replay = idempotencyKey === undefined
+      ? undefined
+      : replayedOperations.get(idempotencyKey);
+    if (replay) {
+      return {
+        data: {
+          ...cloneRpcData(replay),
+          status: "already-applied",
+          type: "already-applied",
+        },
+        error: null,
+      };
+    }
+
+    const data = handleSupabaseFixtureOperation(operation, request, () => series, (next) => {
+      series = next;
+    });
+    if (idempotencyKey !== undefined && mutatingOperations.has(operation)) {
+      replayedOperations.set(idempotencyKey, cloneRpcData(data));
+    }
+    return { data, error: null };
+  });
+}
+
+function handleSupabaseFixtureOperation(
   operation: string,
   request: Record<string, unknown>,
-) {
-  switch (operation) {
-    case "create-series":
-      return lifecycle.createSeries(request as never);
-    case "revise-series":
-      return lifecycle.reviseSeries(request as never);
-    case "pause-series":
-      return lifecycle.pauseSeries(request as never);
-    case "resume-series":
-      return lifecycle.resumeSeries(request as never);
-    case "end-series":
-      return lifecycle.endSeries(request as never);
-    case "ensure-user-coverage":
-      return lifecycle.ensureUserCoverage(request as never);
-    case "list-series":
-      return lifecycle.listSeries(
-        request.userId as string,
-        request.status as never,
-      );
-    case "get-series":
-      return lifecycle.getSeries(
-        request.userId as string,
-        request.seriesId as string,
-      );
-    default:
-      throw new Error(`Unsupported conformance operation: ${operation}`);
+  readSeries: () => RecurringTaskSeries | undefined,
+  writeSeries: (series: RecurringTaskSeries) => void,
+): Record<string, unknown> {
+  const current = readSeries();
+
+  if (operation === "create-series") {
+    if (typeof request.userId !== "string") {
+      return { status: "not-found", type: "not-found" };
+    }
+    const created = createSupabaseFixtureSeries(request.userId);
+    const coverage = request.coverage;
+    if (coverage && typeof coverage === "object" && "to" in coverage) {
+      created.coverageHorizon = coverage.to as string;
+    }
+    writeSeries(created);
+    return supabaseFixtureSuccess(created);
   }
+
+  if (!current || request.userId !== current.userId) {
+    return { status: "not-found", type: "not-found" };
+  }
+
+  switch (operation) {
+    case "list-series":
+      return {
+        series: request.status === undefined || request.status === current.status
+          ? [cloneSupabaseFixtureSeries(current)]
+          : [],
+      };
+    case "get-series":
+      return request.seriesId === current.id
+        ? supabaseFixtureSuccess(current)
+        : { status: "not-found", type: "not-found" };
+    case "revise-series": {
+      const conflict = expectedVersionConflict(current, request);
+      if (conflict) return conflict;
+      const revised = cloneSupabaseFixtureSeries(current);
+      revised.revisionToken += 1;
+      const defaults = request.defaults;
+      if (defaults && typeof defaults === "object" && "title" in defaults) {
+        const revision = revised.revisions.find(
+          (candidate) => candidate.id === revised.currentRevisionId,
+        );
+        if (revision) revision.defaults.title = defaults.title as string;
+      }
+      writeSeries(revised);
+      return supabaseFixtureSuccess(revised);
+    }
+    case "pause-series":
+      return transitionSupabaseFixtureSeries(current, request, "paused", writeSeries);
+    case "resume-series":
+      return transitionSupabaseFixtureSeries(current, request, "active", writeSeries);
+    case "end-series":
+      return transitionSupabaseFixtureSeries(current, request, "ended", writeSeries);
+    case "ensure-user-coverage": {
+      const covered = cloneSupabaseFixtureSeries(current);
+      const range = request.range;
+      if (range && typeof range === "object" && "to" in range) {
+        covered.coverageHorizon = range.to as string;
+        writeSeries(covered);
+      }
+      return {
+        status: "complete",
+        type: "complete",
+        series: [covered],
+        occurrences: structuredClone(covered.occurrences),
+        intentionalAbsences: [...covered.intentionalAbsences],
+      };
+    }
+    default:
+      throw new Error(`Unsupported Supabase RPC operation: ${operation}`);
+  }
+}
+
+function transitionSupabaseFixtureSeries(
+  current: RecurringTaskSeries,
+  request: Record<string, unknown>,
+  status: RecurringTaskSeries["status"],
+  writeSeries: (series: RecurringTaskSeries) => void,
+): Record<string, unknown> {
+  const conflict = expectedVersionConflict(current, request);
+  if (conflict) return conflict;
+  if (
+    (status === "paused" && current.status !== "active")
+    || (status === "active" && current.status !== "paused")
+  ) {
+    return {
+      status: "invalid-transition",
+      type: "invalid-transition",
+      reason: "The Series state transition is invalid",
+    };
+  }
+  const next = cloneSupabaseFixtureSeries(current);
+  next.status = status;
+  next.revisionToken += 1;
+  writeSeries(next);
+  return supabaseFixtureSuccess(next);
+}
+
+function expectedVersionConflict(
+  series: RecurringTaskSeries,
+  request: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  if (
+    typeof request.expectedRevisionToken === "number"
+    && request.expectedRevisionToken !== series.revisionToken
+  ) {
+    return {
+      status: "conflict",
+      type: "conflict",
+      expectedRevisionToken: request.expectedRevisionToken,
+      actualRevisionToken: series.revisionToken,
+    };
+  }
+  return undefined;
+}
+
+function createSupabaseFixtureSeries(userId: string): RecurringTaskSeries {
+  const createdAt = "2026-08-01T12:00:00.000Z";
+  const revisionId = "revision-1";
+  return {
+    id: "series-1",
+    userId,
+    status: "active",
+    timeZone: "UTC",
+    recurrenceAnchor: "2026-08-01",
+    activationDate: "2026-08-01",
+    occurrenceLimit: null,
+    lastScheduledDate: null,
+    coverageHorizon: null,
+    currentRevisionId: revisionId,
+    revisionToken: 1,
+    revisions: [
+      {
+        id: revisionId,
+        seriesId: "series-1",
+        effectiveFrom: "2026-08-01",
+        effectiveTo: null,
+        state: "active",
+        recurrenceRule: { frequency: "daily", interval: 1 },
+        recurrenceAnchor: "2026-08-01",
+        activationDate: "2026-08-01",
+        defaults: {
+          title: "Daily review",
+          description: null,
+          priority: 1,
+          categoryId: null,
+          dueTime: "09:00:00",
+        },
+        createdAt,
+      },
+    ],
+    occurrences: [],
+    intentionalAbsences: [],
+    createdAt,
+    updatedAt: createdAt,
+  };
+}
+
+function cloneSupabaseFixtureSeries(series: RecurringTaskSeries): RecurringTaskSeries {
+  return structuredClone(series);
+}
+
+function supabaseFixtureSuccess(
+  series: RecurringTaskSeries,
+  status: "complete" | "already-applied" = "complete",
+): Record<string, unknown> {
+  const snapshot = cloneSupabaseFixtureSeries(series);
+  return {
+    status,
+    type: status,
+    value: snapshot,
+    series: snapshot,
+    occurrences: structuredClone(snapshot.occurrences),
+    intentionalAbsences: [...snapshot.intentionalAbsences],
+  };
+}
+
+function cloneRpcData(data: Record<string, unknown>): Record<string, unknown> {
+  return structuredClone(data);
 }
 
 function runWalkingSkeleton(
@@ -368,6 +565,44 @@ describe("production recurring-task capability composition", () => {
         failedSeriesIds: [],
         reason: "The database was unavailable",
       },
+    });
+  });
+
+  it("maps lifecycle validation exceptions to stable public failure codes", async () => {
+    const lifecycle = createReferenceLifecycle();
+    vi.spyOn(lifecycle, "createSeries").mockRejectedValue(
+      new RangeError("Activation Date cannot be before the Recurrence Anchor"),
+    );
+    vi.spyOn(lifecycle, "listSeries").mockRejectedValue(
+      new RangeError("private query validation detail"),
+    );
+    const capabilities = createRecurringTaskCapabilitiesForLifecycle(
+      principal,
+      lifecycle,
+    );
+
+    const commandFailure = await capabilities.seriesCommands.createSeries({
+      ...createInput(),
+      operationId: "range-error-command",
+    });
+    expect(commandFailure).toMatchObject({
+      type: "validation",
+      status: "validation",
+      operation: RECURRING_TASK_OPERATION_IDS.createSeries,
+      operationId: "range-error-command",
+      reason: "invalid-command",
+    });
+    expect(commandFailure).not.toHaveProperty(
+      "reason",
+      "Activation Date cannot be before the Recurrence Anchor",
+    );
+
+    const queryFailure = await capabilities.seriesQueries.listSeries();
+    expect(queryFailure).toEqual({
+      type: "validation",
+      status: "validation",
+      operation: RECURRING_TASK_OPERATION_IDS.listSeries,
+      reason: "invalid-query",
     });
   });
 });
