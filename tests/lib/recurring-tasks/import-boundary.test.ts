@@ -13,7 +13,8 @@ const lifecycleBoundarySources = [
   "app/api/sidebar/counts/route.ts",
   "app/api/calendar/overlay-feed/route.ts",
   "lib/calendar/overlay-feed.ts",
-  "lib/calendar/supabase-overlay-feed.ts",
+  "lib/calendar/query.ts",
+  "lib/calendar/supabase-query.ts",
   "lib/calendar/display.ts",
   "lib/ai/tools/tasks.ts",
   "lib/recurring-tasks/supabase-occurrence-adapter.ts",
@@ -143,10 +144,52 @@ describe("recurring lifecycle import boundary", () => {
     );
 
     expect(dashboardRoute).toContain("createSupabaseDashboardQuery");
-    expect(dashboardRoute).toContain('onIncomplete: \'return-available\'');
+    expect(dashboardRoute).toContain("onIncomplete: 'return-available'");
     expect(dashboardRoute).not.toMatch(
       /ensureRecurringTaskCoverage|ensureRecurringTaskCoverageThrough|createSupabaseDashboardSnapshot/,
     );
     expect(dashboardRoute).not.toMatch(/new\s+\w+DB\s*\(|\buserId\b/);
+  });
+
+  it("routes Calendar Task overlays through the authenticated focused query", () => {
+    const route = readFileSync(
+      resolve(process.cwd(), "app/api/calendar/overlay-feed/route.ts"),
+      "utf8",
+    );
+    const query = readFileSync(
+      resolve(process.cwd(), "lib/calendar/query.ts"),
+      "utf8",
+    );
+    const supabaseQuery = readFileSync(
+      resolve(process.cwd(), "lib/calendar/supabase-query.ts"),
+      "utf8",
+    );
+
+    expect(route).toContain("createSupabaseCalendarQuery");
+    expect(route).not.toMatch(
+      /ensureRecurringTaskCoverage|ensureRecurringTaskCoverageThrough/,
+    );
+    expect(query).toContain("createCalendarQuery");
+    expect(supabaseQuery).toContain(
+      "createAuthenticatedRecurringTaskCapabilities",
+    );
+    for (const source of [query, supabaseQuery]) {
+      expect(source).not.toMatch(
+        /ensureRecurringTaskCoverage|ensureRecurringTaskCoverageThrough/,
+      );
+    }
+  });
+
+  it("keeps Calendar Event recurrence on the supported scheduling subpath", () => {
+    const calendarRecurrence = readFileSync(
+      resolve(process.cwd(), "lib/calendar/recurrence.ts"),
+      "utf8",
+    );
+    expect(calendarRecurrence).toContain(
+      "@/lib/recurring-tasks/scheduling",
+    );
+    expect(calendarRecurrence).not.toContain(
+      "@/lib/recurring-tasks/recurrence",
+    );
   });
 });

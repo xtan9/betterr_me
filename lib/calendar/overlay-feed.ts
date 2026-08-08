@@ -78,6 +78,12 @@ export interface CalendarOverlayCapabilities extends TaskOverlayCapabilities {
   workouts: WorkoutOverlayCapabilities;
 }
 
+/** Overlay reads without the recurring-task Coverage authority. */
+export type CalendarOverlayReadCapabilities = Omit<
+  CalendarOverlayCapabilities,
+  "coverage"
+>;
+
 export interface TaskOverlayAction {
   type: "toggle_task_completion";
   taskId: string;
