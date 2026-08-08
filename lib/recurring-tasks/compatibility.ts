@@ -1,6 +1,8 @@
 import type { EndType, RecurrenceRule } from "@/lib/db/types";
 import type { RecurringTaskSeries } from "./lifecycle";
 
+/** Supported compatibility subpath for legacy HTTP and AI translation. */
+
 /** The historical HTTP/AI response retained only at this adapter boundary. */
 export interface RecurringTaskResponse {
   id: string;
