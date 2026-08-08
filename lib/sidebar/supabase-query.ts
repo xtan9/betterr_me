@@ -2,16 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { HabitsDB, TasksDB } from "@/lib/db";
 import {
-  createAuthenticatedRecurringTaskCapabilities,
   type AuthenticatedRecurringTaskPrincipal,
-  type CoverageCapabilityResult,
-  type CoverageCompleteness,
-  type LocalDateRange,
-} from "@/lib/recurring-tasks";
+  createCoverageRead,
+} from "@/lib/recurring-tasks/coverage-read";
 
 import {
   createSidebarCountsQuery,
-  unavailableSidebarCoverage,
   type SidebarCounts,
   type SidebarCountsQuery,
   type SidebarCountsQueryDependencies,
@@ -22,22 +18,17 @@ export function createSupabaseSidebarCountsQuery(
   supabase: SupabaseClient,
   principal: AuthenticatedRecurringTaskPrincipal,
 ): SidebarCountsQuery {
-  const recurringCapabilities = createAuthenticatedRecurringTaskCapabilities(
+  const coverageRead = createCoverageRead({
     supabase,
     principal,
-  );
+    source: "sidebar",
+  });
   const habits = new HabitsDB(supabase);
   const tasks = new TasksDB(supabase);
 
   const dependencies: SidebarCountsQueryDependencies = {
     coverage: {
-      async ensure({ principal: owner, range }) {
-        const outcome = await recurringCapabilities.coverage.ensure({
-          operationId: sidebarCoverageOperationId(owner.userId, range),
-          range,
-        });
-        return coverageCompleteness(outcome, range);
-      },
+      ensure: ({ range }) => coverageRead.ensure(range),
     },
     counts: {
       read: ({ principal: owner, date }) =>
@@ -65,25 +56,4 @@ async function readSidebarCounts(
     ).length,
     tasks_due: tasksDueToday.filter((task) => !task.is_completed).length,
   };
-}
-
-function coverageCompleteness(
-  outcome: CoverageCapabilityResult,
-  range: LocalDateRange,
-): CoverageCompleteness {
-  if (outcome.type === "coverage") return outcome.completeness;
-
-  return unavailableSidebarCoverage(
-    range,
-    "reason" in outcome && typeof outcome.reason === "string"
-      ? outcome.reason
-      : undefined,
-  );
-}
-
-function sidebarCoverageOperationId(
-  userId: string,
-  range: LocalDateRange,
-): string {
-  return `sidebar-read-coverage:${userId}:${range.from}:${range.to}`;
 }
