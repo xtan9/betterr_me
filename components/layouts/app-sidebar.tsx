@@ -39,8 +39,6 @@ import { SidebarUserFooter } from "@/components/layouts/sidebar-user-footer";
 import { useSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 import { useCurrentProfile } from "@/lib/hooks/use-current-profile";
 import { SIDEBAR_TRANSITION, SIDEBAR_HOVER } from "@/lib/sidebar-styles";
-import useSWR from "swr";
-import { fetcher } from "@/lib/fetcher";
 
 const mainNavItems = [
   {
@@ -131,10 +129,8 @@ export function AppSidebar({ pinned, onTogglePin, onDropdownOpenChange }: AppSid
   const tSidebar = useTranslations("common.sidebar");
   const { habitsIncomplete, tasksDue, error } = useSidebarCounts();
   const { currentProfile, status } = useCurrentProfile();
-  const { data: controlPlaneData } = useSWR("/api/control-plane", fetcher, { shouldRetryOnError: false });
   const canAccessAdmin =
     status === "available" && currentProfile?.capabilities.canAccessAdmin === true;
-  const hasControlPlaneAccess = Boolean(controlPlaneData);
 
   const badgeCounts: Record<string, number> = error
     ? {}
@@ -208,22 +204,6 @@ export function AppSidebar({ pinned, onTogglePin, onDropdownOpenChange }: AppSid
                   )}
                 </SidebarMenuItem>
               ))}
-              {hasControlPlaneAccess && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname.startsWith("/control-plane")}
-                    tooltip="Control Plane"
-                    className={navButtonClassName}
-                    style={navButtonStyle}
-                  >
-                    <Link href="/control-plane">
-                      <NavIconContainer icon={Shield} />
-                      <span>Control Plane</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

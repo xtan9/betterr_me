@@ -3,9 +3,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { AppSidebar } from "@/components/layouts/app-sidebar";
 
-const { mockUseCurrentProfile, mockUseSWR } = vi.hoisted(() => ({
+const { mockUseCurrentProfile } = vi.hoisted(() => ({
   mockUseCurrentProfile: vi.fn(),
-  mockUseSWR: vi.fn(),
 }));
 
 // Mock next/navigation
@@ -78,13 +77,6 @@ vi.mock("@/lib/hooks/use-current-profile", () => ({
   useCurrentProfile: () => mockUseCurrentProfile(),
 }));
 
-vi.mock("swr", () => ({
-  default: (...args: unknown[]) => {
-    mockUseSWR(...args);
-    return { data: undefined, error: undefined, isLoading: false };
-  },
-}));
-
 // Mock shadcn tooltip components
 vi.mock("@/components/ui/tooltip", () => ({
   Tooltip: ({ children }: any) => <>{children}</>,
@@ -118,7 +110,6 @@ describe("AppSidebar", () => {
       currentProfile: undefined,
       status: "loading",
     });
-    mockUseSWR.mockReset();
   });
 
   it("renders logo link + 8 nav items as links", () => {

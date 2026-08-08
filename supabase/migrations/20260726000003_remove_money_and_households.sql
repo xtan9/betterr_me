@@ -1,4 +1,4 @@
--- Retire the approved Money and household-sharing model after the Control Plane migration.
+-- Retire the approved Money and household-sharing model.
 -- deliberately forward-only: every verified relation uses RESTRICT so catalog
 -- drift blocks deployment instead of deleting an unreviewed dependency.
 

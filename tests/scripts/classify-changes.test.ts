@@ -209,6 +209,7 @@ describe("conditional test classifier", () => {
     ["settings", "lib/db/profile-details.ts"],
     ["cron", "app/api/cron/dispatch-reminders/route.ts"],
     ["control-plane", "app/control-plane/page.tsx"],
+    ["admin", "components/admin/admin-dashboard-content.tsx"],
   ])("selects browser validation for the %s product area", (owner, path) => {
     const result = classifyChanges([{ status: "M", path }]);
 
