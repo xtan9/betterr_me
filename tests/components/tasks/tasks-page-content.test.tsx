@@ -431,6 +431,7 @@ describe("TasksPageContent", () => {
               id: "rt-1",
               title: "Weekly review",
               status: "paused",
+              version: "rt-series-v1.paused-version",
               recurrence_rule: {
                 frequency: "weekly",
                 interval: 1,
@@ -494,6 +495,7 @@ describe("TasksPageContent", () => {
               id: "rt-1",
               title: "Weekly review",
               status: "paused",
+              version: "rt-series-v1.paused-version",
               recurrence_rule: {
                 frequency: "weekly",
                 interval: 1,
@@ -522,7 +524,13 @@ describe("TasksPageContent", () => {
     await vi.waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
         "/api/recurring-tasks/rt-1?action=resume",
-        { method: "PATCH" },
+        {
+          method: "PATCH",
+          headers: {
+            "Idempotency-Key": expect.any(String),
+            "If-Match": "rt-series-v1.paused-version",
+          },
+        },
       );
       expect(mockMutatePaused).toHaveBeenCalled();
       expect(mockMutate).toHaveBeenCalled();
@@ -550,6 +558,7 @@ describe("TasksPageContent", () => {
               id: "rt-1",
               title: "Weekly review",
               status: "paused",
+              version: "rt-series-v1.paused-version",
               recurrence_rule: {
                 frequency: "weekly",
                 interval: 1,
@@ -601,6 +610,7 @@ describe("TasksPageContent", () => {
               id: "rt-1",
               title: "Weekly review",
               status: "paused",
+              version: "rt-series-v1.paused-version",
               recurrence_rule: {
                 frequency: "weekly",
                 interval: 1,
@@ -629,6 +639,10 @@ describe("TasksPageContent", () => {
     await vi.waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith("/api/recurring-tasks/rt-1", {
         method: "DELETE",
+        headers: {
+          "Idempotency-Key": expect.any(String),
+          "If-Match": "rt-series-v1.paused-version",
+        },
       });
       expect(mockMutatePaused).toHaveBeenCalled();
       expect(mockToast.success).toHaveBeenCalledWith("Recurring task deleted");
@@ -655,6 +669,7 @@ describe("TasksPageContent", () => {
               id: "rt-1",
               title: "Weekly review",
               status: "paused",
+              version: "rt-series-v1.paused-version",
               recurrence_rule: {
                 frequency: "weekly",
                 interval: 1,

@@ -4,10 +4,15 @@ import {
   initialSeriesCoverage,
   toCreateSeriesCommand,
   toLifecycleRecurrenceDates,
+  toReviseSeriesCommand,
+  toSeriesStateCommand,
   toRecurringTaskResponse,
   type SeriesCreationCompatibilityInput,
 } from "@/lib/recurring-tasks/compatibility";
-import type { SeriesProjection } from "@/lib/recurring-tasks/capabilities";
+import type {
+  SeriesProjection,
+  SeriesVersion,
+} from "@/lib/recurring-tasks/capabilities";
 
 function publicSeries(): SeriesProjection {
   return {
@@ -89,6 +94,48 @@ describe("recurring task compatibility", () => {
     expect(toLifecycleRecurrenceDates(" 2026-08-01 ")).toEqual({
       recurrenceAnchor: "2026-08-01",
       activationDate: "2026-08-01",
+    });
+  });
+
+  it("maps revision and state metadata into the shared command vocabulary", () => {
+    const version = "rt-series-v1.opaque-version" as SeriesVersion;
+
+    expect(toReviseSeriesCommand({
+      operationId: "series-revise-1",
+      seriesId: " series-1 ",
+      version,
+      effectiveDate: " 2026-08-03 ",
+      title: "  Revised review ",
+      dueTime: "09:00",
+      recurrenceRule: { frequency: "weekly", interval: 1, days_of_week: [1] },
+      scope: "following",
+      endType: "on_date",
+      endDate: " 2026-08-31 ",
+    })).toEqual({
+      operationId: "series-revise-1",
+      seriesId: "series-1",
+      version,
+      effectiveDate: "2026-08-03",
+      defaults: { title: "Revised review", dueTime: "09:00:00" },
+      recurrenceRule: { frequency: "weekly", interval: 1, days_of_week: [1] },
+      scope: "following",
+      endType: "on_date",
+      occurrenceLimit: null,
+      lastScheduledDate: "2026-08-31",
+    });
+
+    expect(toSeriesStateCommand({
+      operationId: "series-pause-1",
+      seriesId: " series-1 ",
+      version,
+      effectiveDate: "2026-08-04",
+      coverage: { from: "2026-08-04", to: "2026-08-11" },
+    })).toEqual({
+      operationId: "series-pause-1",
+      seriesId: "series-1",
+      version,
+      effectiveDate: "2026-08-04",
+      coverage: { from: "2026-08-04", to: "2026-08-11" },
     });
   });
 

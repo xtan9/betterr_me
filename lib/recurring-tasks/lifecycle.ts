@@ -308,6 +308,14 @@ export interface OccurrenceUpdateRequest extends LifecycleContext {
 export interface OccurrenceCommandRequest extends LifecycleContext {
   seriesId: string;
   occurrenceId: string;
+  /** Visible Task identity used by shared Task Commands routing. */
+  taskId?: string;
+  /** Requested scope is revalidated in the lifecycle transaction. */
+  scope?: LifecycleScope;
+  /** Scheduled Date from the visible Task projection, checked against ledger state. */
+  scheduledDate?: string;
+  /** Optional immutable ledger revision fact for callers that have it. */
+  expectedRevisionId?: string;
 }
 
 export interface SeriesCommandRequest extends LifecycleContext {
@@ -828,6 +836,8 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
       if (invalid) return invalid;
       const occurrence = ownedOccurrence(series, request.occurrenceId);
       if (!occurrence) return notFound();
+      const identity = validateOccurrenceCommand(series, occurrence, request);
+      if (identity) return identity;
       if (occurrence.state === "skipped") {
         return { ...summarize(series), status: "already-applied" };
       }
@@ -852,6 +862,8 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
       if (invalid) return invalid;
       const occurrence = ownedOccurrence(series, request.occurrenceId);
       if (!occurrence) return notFound();
+      const identity = validateOccurrenceCommand(series, occurrence, request);
+      if (identity) return identity;
       if (occurrence.state === "completed") {
         return { ...summarize(series), status: "already-applied" };
       }
@@ -873,6 +885,8 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
       if (invalid) return invalid;
       const occurrence = ownedOccurrence(series, request.occurrenceId);
       if (!occurrence) return notFound();
+      const identity = validateOccurrenceCommand(series, occurrence, request);
+      if (identity) return identity;
       if (occurrence.state === "open" || occurrence.state === "extra") {
         return { ...summarize(series), status: "already-applied" };
       }
@@ -1598,6 +1612,42 @@ function ownedOccurrence(
   occurrenceId: string,
 ): TaskOccurrence | undefined {
   return series.occurrences.find((occurrence) => occurrence.id === occurrenceId);
+}
+
+function validateOccurrenceCommand(
+  series: RecurringTaskSeries,
+  occurrence: TaskOccurrence,
+  request: OccurrenceCommandRequest,
+): NotFoundOutcome | InvalidTransitionOutcome | ConflictOutcome | undefined {
+  if (request.scope !== undefined && request.scope !== "this") {
+    return invalidTransition(
+      "Task Occurrence state commands only support the this scope",
+    );
+  }
+  if (
+    request.taskId !== undefined
+    && occurrence.taskId !== request.taskId
+  ) {
+    return notFound();
+  }
+  if (
+    request.scheduledDate !== undefined
+    && occurrence.scheduledDate !== request.scheduledDate
+  ) {
+    return notFound();
+  }
+  if (
+    request.expectedRevisionId !== undefined
+    && occurrence.revisionId !== request.expectedRevisionId
+  ) {
+    return {
+      status: "conflict",
+      type: "conflict",
+      reason: "Task occurrence revision changed concurrently",
+    };
+  }
+  if (occurrence.seriesId !== series.id) return notFound();
+  return undefined;
 }
 
 function reconcileEligibleOccurrences(
