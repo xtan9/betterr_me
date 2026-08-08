@@ -12,7 +12,6 @@ select public.sql_fixture_create_auth_user(
   'task-commands-other@example.test'
 );
 
-set local role authenticated;
 select set_config(
   'request.jwt.claims',
   '{"sub":"68200000-0000-0000-0000-000000000001"}',
@@ -52,6 +51,8 @@ begin
 end
 $privileges$;
 
+-- Seed ordinary projections while the disposable runner role owns the table
+-- grant; all command assertions below execute as authenticated.
 insert into public.tasks (id, user_id, title, status, is_completed)
 values
   (
@@ -74,7 +75,76 @@ values
     'Rollback me',
     'todo',
     false
+  ),
+  (
+    '68200000-0000-0000-0000-000000000104',
+    '68200000-0000-0000-0000-000000000001',
+    'Edit me',
+    'todo',
+    false
   );
+
+set local role authenticated;
+
+do $edit$
+declare
+  outcome jsonb;
+  retry_outcome jsonb;
+  conflict_outcome jsonb;
+begin
+  outcome := public.task_command_atomic(
+    'edit',
+    jsonb_build_object(
+      'userId', '68200000-0000-0000-0000-000000000001',
+      'taskId', '68200000-0000-0000-0000-000000000104',
+      'updates', jsonb_build_object(
+        'title', 'Edited task',
+        'priority', 2,
+        'completion_difficulty', 1
+      ),
+      'idempotencyKey', 'task-edit-682'
+    )
+  );
+  retry_outcome := public.task_command_atomic(
+    'edit',
+    jsonb_build_object(
+      'userId', '68200000-0000-0000-0000-000000000001',
+      'taskId', '68200000-0000-0000-0000-000000000104',
+      'updates', jsonb_build_object(
+        'title', 'Edited task',
+        'priority', 2,
+        'completion_difficulty', 1
+      ),
+      'idempotencyKey', 'task-edit-682'
+    )
+  );
+  conflict_outcome := public.task_command_replay(
+    'edit',
+    jsonb_build_object(
+      'userId', '68200000-0000-0000-0000-000000000001',
+      'taskId', '68200000-0000-0000-0000-000000000104',
+      'updates', jsonb_build_object(
+        'title', 'Different task',
+        'priority', 2,
+        'completion_difficulty', 1
+      ),
+      'idempotencyKey', 'task-edit-682'
+    )
+  );
+  if outcome->>'status' <> 'complete'
+     or retry_outcome->>'status' <> 'already-applied'
+     or conflict_outcome->>'status' <> 'conflict'
+     or (select title from public.tasks
+         where id = '68200000-0000-0000-0000-000000000104') <> 'Edited task'
+     or (select priority from public.tasks
+         where id = '68200000-0000-0000-0000-000000000104') <> 2
+     or (select completion_difficulty from public.tasks
+         where id = '68200000-0000-0000-0000-000000000104') <> 1 then
+    raise exception 'Ordinary Task edit did not apply and replay atomically: %, %, %',
+      outcome, retry_outcome, conflict_outcome;
+  end if;
+end
+$edit$;
 
 do $complete$
 declare

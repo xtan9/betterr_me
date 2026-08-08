@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Task } from "@/lib/db/types";
 import {
   bindTaskCommands,
+  encodeSeriesVersion,
   TaskCommands,
   type TaskCommandPersistence,
 } from "@/lib/tasks/commands";
@@ -37,11 +38,15 @@ function persistence(): TaskCommandPersistence {
       complete: vi.fn(),
       reopen: vi.fn(),
       skip: vi.fn(),
+      edit: vi.fn(),
     },
     lifecycle: {
       completeOccurrence: vi.fn(),
       reopenOccurrence: vi.fn(),
       skipOccurrence: vi.fn(),
+      editOccurrence: vi.fn(),
+      reviseSeries: vi.fn(),
+      endSeries: vi.fn(),
     },
   };
 }
@@ -121,6 +126,228 @@ describe("TaskCommands", () => {
     });
     expect(store.lifecycle.completeOccurrence).not.toHaveBeenCalled();
   });
+
+  it("routes an ordinary field edit through ordinary Task Command persistence", async () => {
+    const store = persistence();
+    vi.mocked(store.getTask).mockResolvedValue(task());
+    vi.mocked(store.ordinary.edit).mockResolvedValue({
+      status: "complete",
+      task: task({ title: "Updated title" }),
+    });
+
+    await expect(
+      new TaskCommands(store).execute({
+        type: "edit",
+        userId: "user-1",
+        taskId: "task-1",
+        operationId: "ordinary-edit-1",
+        updates: { title: "Updated title" },
+      }),
+    ).resolves.toMatchObject({
+      status: "complete",
+      operation: "edit",
+      operationId: "ordinary-edit-1",
+      task: task({ title: "Updated title" }),
+    });
+
+    expect(store.ordinary.edit).toHaveBeenCalledWith({
+      type: "edit",
+      userId: "user-1",
+      taskId: "task-1",
+      operationId: "ordinary-edit-1",
+      updates: { title: "Updated title" },
+    });
+  });
+
+  it("rejects future and all scopes for ordinary Tasks before persistence", async () => {
+    const store = persistence();
+    vi.mocked(store.getTask).mockResolvedValue(task());
+
+    await expect(
+      new TaskCommands(store).execute({
+        type: "edit",
+        userId: "user-1",
+        taskId: "task-1",
+        scope: "following",
+        operationId: "ordinary-scoped-edit-1",
+        updates: { title: "Not a Series edit" },
+      }),
+    ).resolves.toEqual({
+      status: "invalid-transition",
+      type: "invalid-transition",
+      operation: "edit",
+      operationId: "ordinary-scoped-edit-1",
+      reason: "Task Commands only support the this scope for ordinary Tasks",
+    });
+    expect(store.ordinary.edit).not.toHaveBeenCalled();
+  });
+
+  it("routes a single-occurrence field edit as an override with visible identity", async () => {
+    const store = persistence();
+    const current = task({
+      recurring_series_id: "series-1",
+      recurring_occurrence_id: "occurrence-1",
+      scheduled_date: "2026-08-07",
+    });
+    vi.mocked(store.getTask).mockResolvedValue(current);
+    vi.mocked(store.lifecycle.editOccurrence).mockResolvedValue({
+      status: "complete",
+      type: "complete",
+    } as never);
+
+    await expect(
+      new TaskCommands(store).execute({
+        type: "edit",
+        userId: "user-1",
+        taskId: "task-1",
+        scope: "this",
+        operationId: "occurrence-edit-1",
+        updates: {
+          title: "  Personal title  ",
+          due_date: "2026-08-09",
+          status: "in_progress",
+        },
+      }),
+    ).resolves.toMatchObject({
+      status: "complete",
+      operation: "edit",
+      operationId: "occurrence-edit-1",
+    });
+
+    expect(store.lifecycle.editOccurrence).toHaveBeenCalledWith({
+      userId: "user-1",
+      taskId: "task-1",
+      seriesId: "series-1",
+      occurrenceId: "occurrence-1",
+      scope: "this",
+      scheduledDate: "2026-08-07",
+      updates: {
+        title: "Personal title",
+        dueDate: "2026-08-09",
+        status: "in_progress",
+      },
+      idempotencyKey: "occurrence-edit-1",
+    });
+  });
+
+  it.each(["following", "all"] as const)(
+    "routes scope=%s field edits through a versioned Series Revision",
+    async (scope) => {
+      const store = persistence();
+      const current = task({
+        recurring_series_id: "series-1",
+        recurring_occurrence_id: "occurrence-1",
+        scheduled_date: "2026-08-07",
+      });
+      vi.mocked(store.getTask).mockResolvedValue(current);
+      vi.mocked(store.lifecycle.reviseSeries).mockResolvedValue({
+        status: "complete",
+        type: "complete",
+      } as never);
+
+      await expect(
+        new TaskCommands(store).execute({
+          type: "edit",
+          userId: "user-1",
+          taskId: "task-1",
+          scope,
+          effectiveDate: "2026-08-08",
+          operationId: `series-edit-${scope}-1`,
+          expectedVersion: encodeSeriesVersion("series-1", 4),
+          updates: {
+            title: "Following title",
+            priority: 2,
+          },
+        }),
+      ).resolves.toMatchObject({
+        status: "complete",
+        operation: "edit",
+        operationId: `series-edit-${scope}-1`,
+      });
+
+      expect(store.lifecycle.reviseSeries).toHaveBeenCalledWith({
+        userId: "user-1",
+        taskId: "task-1",
+        occurrenceId: "occurrence-1",
+        seriesId: "series-1",
+        scope,
+        effectiveDate: "2026-08-08",
+        defaults: {
+          title: "Following title",
+          priority: 2,
+        },
+        expectedRevisionToken: 4,
+        idempotencyKey: `series-edit-${scope}-1`,
+      });
+    },
+  );
+
+  it("requires a valid opaque Series version for Series effects", async () => {
+    const store = persistence();
+    vi.mocked(store.getTask).mockResolvedValue(task({
+      recurring_series_id: "series-1",
+      recurring_occurrence_id: "occurrence-1",
+      scheduled_date: "2026-08-07",
+    }));
+
+    await expect(
+      new TaskCommands(store).execute({
+        type: "edit",
+        userId: "user-1",
+        taskId: "task-1",
+        scope: "following",
+        operationId: "missing-version-1",
+        updates: { title: "Unsafe revision" },
+      }),
+    ).resolves.toMatchObject({
+      status: "invalid-transition",
+      operation: "edit",
+      operationId: "missing-version-1",
+    });
+    expect(store.lifecycle.reviseSeries).not.toHaveBeenCalled();
+  });
+
+  it.each(["following", "all"] as const)(
+    "maps scope=%s deletion to an explicit versioned endSeries command",
+    async (scope) => {
+      const store = persistence();
+      vi.mocked(store.getTask).mockResolvedValue(task({
+        recurring_series_id: "series-1",
+        recurring_occurrence_id: "occurrence-1",
+        scheduled_date: "2026-08-07",
+      }));
+      vi.mocked(store.lifecycle.endSeries).mockResolvedValue({
+        status: "complete",
+        type: "complete",
+      } as never);
+
+      await expect(
+        new TaskCommands(store).execute({
+          type: "skip",
+          userId: "user-1",
+          taskId: "task-1",
+          scope,
+          operationId: `series-delete-${scope}-1`,
+          expectedVersion: encodeSeriesVersion("series-1", 5),
+        }),
+      ).resolves.toMatchObject({
+        status: "complete",
+        operation: "skip",
+        operationId: `series-delete-${scope}-1`,
+      });
+
+      expect(store.lifecycle.endSeries).toHaveBeenCalledWith({
+        userId: "user-1",
+        taskId: "task-1",
+        occurrenceId: "occurrence-1",
+        seriesId: "series-1",
+        scope,
+        effectiveDate: "2026-08-07",
+        expectedRevisionToken: 5,
+        idempotencyKey: `series-delete-${scope}-1`,
+      });
+    },
+  );
 
   it("replays a destructive command after its visible Task is gone", async () => {
     const store = persistence();
