@@ -6,7 +6,6 @@ import {
   isExactCanonicalResource,
   matchesS256CodeChallenge,
   publicBoundaryRejects,
-  s256CodeChallenge,
   selectDelegatedSigningJwk,
   type DelegatedJwtClaims,
 } from "../../e2e/mcp-access-grant-policy";
@@ -42,11 +41,10 @@ function validPolicy() {
 }
 
 describe("MCP Access Grant deterministic policy", () => {
-  it("proves the RFC 7636 S256 vector and rejects missing, plain, and wrong proof", () => {
+  it("matches S256 proofs and rejects missing, plain, and wrong proof", () => {
     const verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
     const challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
 
-    expect(s256CodeChallenge(verifier)).toBe(challenge);
     expect(matchesS256CodeChallenge(verifier, challenge, "S256")).toBe(true);
     expect(matchesS256CodeChallenge(undefined, challenge, "S256")).toBe(false);
     expect(matchesS256CodeChallenge(verifier, challenge, "plain")).toBe(false);

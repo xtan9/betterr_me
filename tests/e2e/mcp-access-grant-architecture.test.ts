@@ -53,6 +53,24 @@ describe("MCP access-grant evidence architecture", () => {
     }
   });
 
+  it("keeps adapter-safe journey mechanics free of evidence conclusions", () => {
+    const journey = source("e2e/mcp-access-grant-journey.ts");
+    const adapters = [
+      source("e2e/mcp-access-grant-public-client.ts"),
+      source("e2e/mcp-access-grant-compatibility.ts"),
+    ];
+
+    expect(journey).not.toMatch(/mcp-access-grant-(?:evidence|policy)/);
+    expect(journey).not.toMatch(/\b(?:GateAccumulator|GateStatus|classify|finalize|sanitizeText|sanitizeUrl)\b/);
+    expect(journey).toMatch(/MCP_ACCESS_GRANT_REQUEST_RECIPE_CATALOG/);
+    expect(journey).toMatch(/export function (?:buildLoopbackUrls|buildPublicNativeClientMetadata|buildRegistrationNegativeCases|grantClientId|s256CodeChallenge)/);
+    expect(journey).toMatch(/export function assertExactCanonicalResource/);
+
+    for (const adapter of adapters) {
+      expect(adapter).toMatch(/mcp-access-grant-journey/);
+    }
+  });
+
   it("keeps the disposable E2E target explicit at the canonical boundary", () => {
     const workflow = source(".github/workflows/e2e.yml");
 

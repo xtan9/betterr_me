@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
 
 import type { Page, Request as PlaywrightRequest, TestInfo } from "@playwright/test";
@@ -54,7 +54,10 @@ import {
   buildRegistrationNegativeCases,
   grantClientId,
   LOOPBACK_HOSTS,
+  s256CodeChallenge,
   type LoopbackHost,
+} from "./mcp-access-grant-journey";
+import {
   type PublicClientProfileValidation,
   validatePublicClientProfile,
 } from "./mcp-access-grant-policy";
@@ -171,7 +174,7 @@ function requestParameterEvidence(body: BodyInit | null | undefined): Pick<
     requestCodeChallengePresent: parameters.has("code_challenge"),
     requestCodePresent: parameters.has("code"),
     requestCodeVerifierPresent: parameters.has("code_verifier"),
-    ...(codeVerifier ? { requestCodeVerifierHash: createHash("sha256").update(codeVerifier).digest("base64url") } : {}),
+    ...(codeVerifier ? { requestCodeVerifierHash: s256CodeChallenge(codeVerifier) } : {}),
   };
 }
 
