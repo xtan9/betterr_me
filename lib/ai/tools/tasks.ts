@@ -27,6 +27,7 @@ import {
   recurringTaskFailureMessage,
   toCreateSeriesCommand,
   toLifecycleRecurrenceDates,
+  toReviseSeriesCommand,
   toRecurringTaskResponse,
 } from "@/lib/recurring-tasks/compatibility";
 import {
@@ -481,7 +482,7 @@ export function taskTools(): ToolDefinition[] {
           recurringTaskCapabilities(ctx).seriesCommands,
           {
             type: "revise",
-            command: {
+            command: toReviseSeriesCommand({
               operationId: params.operationId,
               seriesId: params.recurringTaskId,
               version: params.version as SeriesVersion,
@@ -496,7 +497,7 @@ export function taskTools(): ToolDefinition[] {
               endDate: params.endDate,
               endCount: params.endCount,
               scope: params.scope,
-            },
+            }),
           },
         );
         if (isSeriesCompatibilitySuccess(outcome)) {

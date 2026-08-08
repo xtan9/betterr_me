@@ -13,6 +13,7 @@ import {
   type SeriesCreationCompatibilityInput,
 } from "@/lib/recurring-tasks/compatibility";
 import type {
+  ReviseSeriesCommand,
   SeriesProjection,
   SeriesVersion,
 } from "@/lib/recurring-tasks/internal/capabilities";
@@ -245,7 +246,7 @@ describe("recurring task compatibility", () => {
     expect(commands.resumeSeries).not.toHaveBeenCalled();
   });
 
-  it("executes revision intent through only the matching command", async () => {
+  it("executes a canonical revision command unchanged through only the matching command", async () => {
     const outcome = {
       type: "revised" as const,
       status: "complete" as const,
@@ -260,31 +261,154 @@ describe("recurring task compatibility", () => {
       resumeSeries: vi.fn(),
       endSeries: vi.fn(),
     };
+    const command: ReviseSeriesCommand = {
+      operationId: "revise-operation",
+      seriesId: " series/opaque id ",
+      version: publicSeries().version,
+      effectiveDate: " 2026-08-11 ",
+      recurrenceRule: { frequency: "weekly", interval: 2, days_of_week: [1] },
+      defaults: {
+        title: "  Updated review  ",
+        description: "  Keep the spacing  ",
+        priority: 2,
+        categoryId: " opaque category ",
+        dueTime: "09:00",
+      },
+      scope: "all",
+      occurrenceLimit: 4,
+      lastScheduledDate: "2026-08-31",
+      endType: "on_date",
+    };
 
     const result = await executeSeriesCompatibilityIntent(commands, {
       type: "revise",
-      command: {
-        operationId: "revise-operation",
-        seriesId: "series-1",
-        version: publicSeries().version,
-        effectiveDate: "2026-08-11",
-        title: "Updated review",
-        dueTime: "09:00",
-      },
+      command,
     });
 
     expect(result).toBe(outcome);
     expect(reviseSeries).toHaveBeenCalledTimes(1);
-    expect(reviseSeries).toHaveBeenCalledWith({
-      operationId: "revise-operation",
-      seriesId: "series-1",
-      version: publicSeries().version,
-      effectiveDate: "2026-08-11",
-      defaults: { title: "Updated review", dueTime: "09:00:00" },
-    });
+    expect(reviseSeries).toHaveBeenCalledWith(command);
     expect(commands.pauseSeries).not.toHaveBeenCalled();
     expect(commands.resumeSeries).not.toHaveBeenCalled();
     expect(commands.endSeries).not.toHaveBeenCalled();
+  });
+
+  it("does not infer a missing revision date from any reference date", async () => {
+    const outcome = {
+      type: "validation" as const,
+      status: "validation" as const,
+      operation: "recurring-task.series.revise" as const,
+      operationId: "revise-missing-date",
+      field: "effectiveDate",
+      reason: "Effective Scheduled Date is required",
+    };
+    const reviseSeries = vi.fn().mockResolvedValue(outcome);
+    const commands: SeriesCompatibilityCommandPort = {
+      reviseSeries,
+      pauseSeries: vi.fn(),
+      resumeSeries: vi.fn(),
+      endSeries: vi.fn(),
+    };
+    const command: ReviseSeriesCommand = {
+      operationId: "revise-missing-date",
+      seriesId: "series-1",
+      version: publicSeries().version,
+      effectiveDate: "",
+      defaults: { title: "Updated review" },
+    };
+
+    const result = await executeSeriesCompatibilityIntent(commands, {
+      type: "revise",
+      command,
+    });
+
+    expect(result).toBe(outcome);
+    expect(reviseSeries).toHaveBeenCalledWith(command);
+  });
+
+  it.each([
+    {
+      type: "validation",
+      status: "validation",
+      operation: "recurring-task.series.revise",
+      operationId: "revise-validation",
+      reason: "invalid revision",
+    },
+    {
+      type: "not-found",
+      status: "not-found",
+      operation: "recurring-task.series.revise",
+      operationId: "revise-not-found",
+    },
+    {
+      type: "conflict",
+      status: "conflict",
+      operation: "recurring-task.series.revise",
+      operationId: "revise-conflict",
+    },
+    {
+      type: "invalid-transition",
+      status: "invalid-transition",
+      operation: "recurring-task.series.revise",
+      operationId: "revise-invalid-transition",
+      reason: "revision is not allowed",
+    },
+    {
+      type: "coverage-unavailable",
+      status: "coverage-unavailable",
+      operation: "recurring-task.series.revise",
+      operationId: "revise-coverage",
+      requestedRange: { from: "2026-08-11", to: "2026-08-18" },
+      reason: "coverage unavailable",
+    },
+  ] as const)("returns the typed revise-Series $type outcome unchanged", async (failure) => {
+    const reviseSeries = vi.fn().mockResolvedValue(failure);
+    const commands: SeriesCompatibilityCommandPort = {
+      reviseSeries,
+      pauseSeries: vi.fn(),
+      resumeSeries: vi.fn(),
+      endSeries: vi.fn(),
+    };
+    const command: ReviseSeriesCommand = {
+      operationId: failure.operationId,
+      seriesId: "series-1",
+      version: publicSeries().version,
+      effectiveDate: "2026-08-11",
+      defaults: { title: "Updated review" },
+    };
+
+    const result = await executeSeriesCompatibilityIntent(commands, {
+      type: "revise",
+      command,
+    });
+
+    expect(result).toBe(failure);
+    expect(reviseSeries).toHaveBeenCalledTimes(1);
+    expect(reviseSeries).toHaveBeenCalledWith(command);
+  });
+
+  it("leaves a thrown revise-Series command error unchanged", async () => {
+    const cause = new Error("revision command failed");
+    const reviseSeries = vi.fn().mockRejectedValue(cause);
+    const commands: SeriesCompatibilityCommandPort = {
+      reviseSeries,
+      pauseSeries: vi.fn(),
+      resumeSeries: vi.fn(),
+      endSeries: vi.fn(),
+    };
+
+    await expect(
+      executeSeriesCompatibilityIntent(commands, {
+        type: "revise",
+        command: {
+          operationId: "revise-error",
+          seriesId: "series-1",
+          version: publicSeries().version,
+          effectiveDate: "2026-08-11",
+          defaults: { title: "Updated review" },
+        },
+      }),
+    ).rejects.toBe(cause);
   });
 
   it.each([
@@ -376,6 +500,19 @@ describe("recurring task compatibility", () => {
         status,
         operation: "recurring-task.series.pause",
         operationId: "pause-success",
+        series: publicSeries(),
+      })).toBe(true);
+    },
+  );
+
+  it.each(["complete", "already-applied"] as const)(
+    "classifies a %s revised result as compatibility success",
+    (status) => {
+      expect(isSeriesCompatibilitySuccess({
+        type: "revised",
+        status,
+        operation: "recurring-task.series.revise",
+        operationId: "revise-success",
         series: publicSeries(),
       })).toBe(true);
     },

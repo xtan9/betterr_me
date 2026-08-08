@@ -19,6 +19,7 @@ import {
   isSeriesCompatibilitySuccess,
   recurringTaskFailureHttpStatus,
   recurringTaskFailureMessage,
+  toReviseSeriesCommand,
   toRecurringTaskResponse,
 } from '@/lib/recurring-tasks/compatibility';
 import { decodeUserTimeZone } from '@/lib/preferences/owners';
@@ -259,15 +260,22 @@ export async function PATCH(
       }
     }
 
+    if (!effectiveDate) {
+      return NextResponse.json(
+        { error: 'Effective Scheduled Date is required' },
+        { status: 400 },
+      );
+    }
+
     const outcome = await executeSeriesCompatibilityIntent(
       capabilities.seriesCommands,
       {
         type: "revise",
-        command: {
+        command: toReviseSeriesCommand({
           operationId: metadata.operationId,
           seriesId: id,
           version: metadata.version,
-          effectiveDate: effectiveDate ?? '',
+          effectiveDate,
           title: validation.data.title,
           description: validation.data.description,
           priority: validation.data.priority,
@@ -278,7 +286,7 @@ export async function PATCH(
           endType: validation.data.end_type,
           endDate: validation.data.end_date,
           endCount: validation.data.end_count,
-        },
+        }),
       },
     );
     return respondToSeriesCommand(outcome, userId);

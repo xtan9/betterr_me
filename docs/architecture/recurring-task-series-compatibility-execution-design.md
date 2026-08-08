@@ -1,6 +1,6 @@
 # Recurring Task Series compatibility execution design
 
-Status: design accepted; implementation not started
+Status: design accepted; implementation complete
 
 This document resolves architecture-review Candidate 3, "Deepen Recurring
 Task Series compatibility execution." The candidate is accepted in a narrower
@@ -158,7 +158,7 @@ shape is fixed by this design.
 
 ```ts
 type SeriesCompatibilityIntent =
-  | { type: "revise"; command: SeriesRevisionCompatibilityInput }
+  | { type: "revise"; command: ReviseSeriesCommand }
   | { type: "pause"; command: SeriesStateCompatibilityInput; referenceDate: string }
   | { type: "resume"; command: SeriesStateCompatibilityInput; referenceDate: string }
   | { type: "end"; command: SeriesStateCompatibilityInput; referenceDate: string };
@@ -179,6 +179,11 @@ function executeSeriesCompatibilityIntent(
   intent: SeriesCompatibilityIntent,
 ): Promise<SeriesCompatibilityResult>;
 ```
+
+Legacy revision fields are translated with the existing shared
+`toReviseSeriesCommand` mapper at each delivery compatibility edge. The
+executor receives that canonical `ReviseSeriesCommand` and forwards it without
+re-normalizing revision values or inferring an effective Scheduled Date.
 
 The executor accepts only an already-authenticated command port. It never
 accepts Supabase, a cookie, an MCP credential, a principal, a user ID, a

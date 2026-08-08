@@ -244,6 +244,23 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
     });
   });
 
+  it("requires an explicit effective Scheduled Date for definition edits", async () => {
+    const response = await PATCH(
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1", {
+        method: "PATCH",
+        headers: mutationHeaders("http-missing-revision-date"),
+        body: JSON.stringify({ title: "Updated" }),
+      }),
+      { params: Promise.resolve({ id: "rt-1" }) },
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "Effective Scheduled Date is required",
+    });
+    expect(mockReviseSeries).not.toHaveBeenCalled();
+  });
+
   it("routes pause and resume actions through typed capabilities", async () => {
     await PATCH(
       new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?action=pause&date=2026-08-07", {
