@@ -39,6 +39,23 @@ describe("MCP access-grant evidence architecture", () => {
     expect(adapters.join("\n")).not.toMatch(/mcp-access-grant-public-client-profile/);
   });
 
+  it("keeps the aggregate compatibility profile deterministic and source-bound", () => {
+    const profile = source("e2e/mcp-access-grant-aggregate-profile.ts");
+    const adapters = [
+      source("e2e/mcp-access-grant-public-client.ts"),
+      source("e2e/mcp-access-grant-compatibility.ts"),
+    ];
+
+    expect(profile).not.toMatch(/@playwright\/test|@modelcontextprotocol|@supabase\/supabase-js/);
+    expect(profile).not.toMatch(/node:(?:child_process|fs|http|net|timers|worker_threads)/);
+    expect(profile).not.toMatch(/mcp-access-grant-(?:public-client|compatibility)\.ts/);
+    expect(profile).toMatch(/export async function runAggregateCompatibilityEvidence/);
+    expect(profile).toMatch(/requiredGateIds: COMPATIBILITY_PROFILE\.expandedGateIds/);
+    expect(profile).toMatch(/source-bound/);
+    expect(profile.match(/export async function /g)).toHaveLength(1);
+    expect(adapters.join("\n")).not.toMatch(/mcp-access-grant-aggregate-profile|runAggregateCompatibilityEvidence/);
+  });
+
   it("leaves live capabilities, journey sequencing, and suite manifests in the adapters", () => {
     const adapters = [
       source("e2e/mcp-access-grant-public-client.ts"),

@@ -215,6 +215,21 @@ describe("Candidate 2 MCP evidence catalogs", () => {
       role: "made-up-role",
       family: "ipv4",
     })).toEqual({ accepted: false, authority: "rejected" });
+
+    expect(classifyFactIdentity({
+      profile: "compatibility",
+      source: "compatibility",
+      kind: "loopback",
+      role: "callback",
+      family: "none",
+    })).toEqual({ accepted: true, authority: "authoritative" });
+    expect(classifyFactIdentity({
+      profile: "compatibility",
+      source: "compatibility",
+      kind: "loopback",
+      role: "callback",
+      family: "ipv4",
+    })).toEqual({ accepted: false, authority: "rejected" });
   });
 
   it("keeps live request recipes and decision cases bidirectionally equal", () => {

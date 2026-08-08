@@ -124,6 +124,7 @@ const PUBLIC_FAMILY_FACT_KINDS = [
 const COMPATIBILITY_FACT_KINDS = [
   "registration",
   "authorization",
+  "loopback",
   "pkce",
   "resource-binding",
   "delegated-token",
@@ -708,7 +709,7 @@ function makeGates(): Record<string, GateDefinition> {
   const compatibilityDirect: Record<string, { classifier: string; factKinds: CatalogFactKind[] }> = {
     "public-client-registration": { classifier: "compatibility-registration", factKinds: ["registration"] },
     "authorization-consent": { classifier: "compatibility-authorization", factKinds: ["authorization"] },
-    "loopback-pkce": { classifier: "compatibility-pkce", factKinds: ["pkce"] },
+    "loopback-pkce": { classifier: "compatibility-pkce", factKinds: ["loopback", "pkce"] },
     "pkce-negative-proof": { classifier: "negative-proof", factKinds: ["pkce"] },
     "resource-binding-negative": { classifier: "resource-negative", factKinds: ["resource-binding"] },
     "delegated-token-validation": { classifier: "compatibility-token-validation", factKinds: ["delegated-token"] },
@@ -962,6 +963,7 @@ function sourcePolicy(
       "sanitized-evidence": ["verification"],
       registration: ["primary"],
       authorization: ["primary"],
+      loopback: ["callback", "request"],
       pkce: ["positive", "negative"],
       "resource-binding": ["negative"],
       "delegated-token": ["validation", "negative"],
@@ -1024,6 +1026,7 @@ function factGateId(
   const compatibilityGateByFact: Partial<Record<CatalogFactKind, string>> = {
     registration: "public-client-registration",
     authorization: "authorization-consent",
+    loopback: "loopback-pkce",
     pkce: role === "negative" ? "pkce-negative-proof" : "loopback-pkce",
     "resource-binding": "resource-binding-negative",
     "delegated-token": role === "negative" ? "delegated-token-negative-boundary" : "delegated-token-validation",
@@ -1097,6 +1100,7 @@ const RECIPE_SEEDS: readonly RecipeSeed[] = [
   { key: "compatibility.discovery.provider", profile: "compatibility", source: "compatibility", method: "GET", operation: "authorization-server-metadata", classifier: "provider-discovery" },
   { key: "compatibility.registration", profile: "compatibility", source: "compatibility", method: "POST", operation: "dynamic-registration", classifier: "compatibility-registration" },
   { key: "compatibility.authorization", profile: "compatibility", source: "compatibility", method: "CALLBACK", operation: "authorization-consent", classifier: "compatibility-authorization" },
+  { key: "compatibility.loopback", profile: "compatibility", source: "compatibility", method: "CALLBACK", operation: "loopback-callback-and-request", classifier: "compatibility-pkce" },
   { key: "compatibility.pkce.positive", profile: "compatibility", source: "compatibility", method: "POST", operation: "positive-pkce-exchange", classifier: "compatibility-pkce" },
   { key: "compatibility.pkce.negative", profile: "compatibility", source: "compatibility", method: "POST", operation: "negative-pkce-proof", classifier: "negative-proof" },
   { key: "compatibility.resource.negative", profile: "compatibility", source: "compatibility", method: "GET", operation: "negative-resource-binding", classifier: "resource-negative" },
