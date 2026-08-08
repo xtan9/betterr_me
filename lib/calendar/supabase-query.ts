@@ -1,19 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
-  createAuthenticatedRecurringTaskCapabilities,
+  createCoverageRead,
   type AuthenticatedRecurringTaskPrincipal,
-  type CoverageCapabilityResult,
-  type CoverageCompleteness,
-  type LocalDateRange,
-} from "@/lib/recurring-tasks";
+} from "@/lib/recurring-tasks/coverage-read";
 import type { Habit, HabitLog, Task, Workout } from "@/lib/db/types";
 
-import {
-  createCalendarQuery,
-  unavailableCalendarCoverage,
-  type CalendarQuery,
-} from "./query";
+import { createCalendarQuery, type CalendarQuery } from "./query";
 import type {
   CalendarOverlayReadCapabilities,
   HabitOverlayRequest,
@@ -26,10 +19,11 @@ export function createSupabaseCalendarQuery(
   supabase: SupabaseClient,
   principal: AuthenticatedRecurringTaskPrincipal,
 ): CalendarQuery {
-  const recurringCapabilities = createAuthenticatedRecurringTaskCapabilities(
+  const coverage = createCoverageRead({
     supabase,
     principal,
-  );
+    source: "calendar",
+  });
 
   const overlay: CalendarOverlayReadCapabilities = {
     read: {
@@ -48,18 +42,7 @@ export function createSupabaseCalendarQuery(
     },
   };
 
-  return createCalendarQuery(principal, {
-    coverage: {
-      async ensure({ principal: owner, range }) {
-        const outcome = await recurringCapabilities.coverage.ensure({
-          operationId: calendarCoverageOperationId(owner.userId, range),
-          range,
-        });
-        return coverageCompleteness(outcome, range);
-      },
-    },
-    overlay,
-  });
+  return createCalendarQuery(principal, { coverage, overlay });
 }
 
 function readTasks(
@@ -129,29 +112,6 @@ async function readRows<T>(
   const { data, error } = await query;
   if (error) throw error;
   return (data as T[] | null) ?? [];
-}
-
-function coverageCompleteness(
-  outcome: CoverageCapabilityResult,
-  range: LocalDateRange,
-): CoverageCompleteness {
-  if (outcome.type === "coverage") return outcome.completeness;
-  if (outcome.type === "coverage-unavailable") {
-    return unavailableCalendarCoverage(range, outcome.reason);
-  }
-  return unavailableCalendarCoverage(
-    range,
-    "reason" in outcome && typeof outcome.reason === "string"
-      ? outcome.reason
-      : undefined,
-  );
-}
-
-function calendarCoverageOperationId(
-  userId: string,
-  range: LocalDateRange,
-): string {
-  return `calendar-read-coverage:${userId}:${range.from}:${range.to}`;
 }
 
 function timeZoneOffsetMs(instant: Date, timezone: string): number {

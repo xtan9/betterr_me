@@ -1,12 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createCapabilities } = vi.hoisted(() => ({
-  createCapabilities: vi.fn(),
+const { createCoverageRead } = vi.hoisted(() => ({
+  createCoverageRead: vi.fn(),
 }));
 
-vi.mock("@/lib/recurring-tasks", () => ({
-  createAuthenticatedRecurringTaskCapabilities: createCapabilities,
+vi.mock("@/lib/recurring-tasks/coverage-read", () => ({
+  createCoverageRead,
 }));
 
 import { createSupabaseCalendarQuery } from "@/lib/calendar/supabase-query";
@@ -40,31 +40,31 @@ describe("Supabase calendar query", () => {
         return { tasks }[table];
       }),
     } as unknown as SupabaseClient;
-    const ensure = vi.fn(async ({ range }: { range: { from: string; to: string } }) => {
+    const ensure = vi.fn(async (range: { from: string; to: string }) => {
       events.push(`coverage:${range.from}:${range.to}`);
       return {
-        type: "coverage" as const,
         status: "complete" as const,
-        completeness: {
-          status: "complete" as const,
-          type: "complete" as const,
-          requestedRange: range,
-          failedSeriesIds: [] as [],
-        },
+        type: "complete" as const,
+        requestedRange: range,
+        failedSeriesIds: [] as [],
       };
     });
-    createCapabilities.mockReturnValue({ coverage: { ensure } });
+    createCoverageRead.mockReturnValue({ ensure });
 
     const result = await createSupabaseCalendarQuery(supabase, principal).read({
       range: { from: "2026-04-01", to: "2026-04-07" },
       layers: ["tasks"],
     });
 
-    expect(createCapabilities).toHaveBeenCalledWith(supabase, principal);
-    expect(ensure).toHaveBeenCalledWith({
-      operationId: "calendar-read-coverage:user-1:2026-04-01:2026-04-07",
-      range: { from: "2026-04-01", to: "2026-04-07" },
+    expect(createCoverageRead).toHaveBeenCalledWith({
+      supabase,
+      principal,
+      source: "calendar",
     });
+    expect(ensure).toHaveBeenCalledWith(
+      { from: "2026-04-01", to: "2026-04-07" },
+      expect.any(Function),
+    );
     expect(events).toEqual([
       "coverage:2026-04-01:2026-04-07",
       "read:tasks",
@@ -100,12 +100,8 @@ describe("Supabase calendar query", () => {
     async (_label, completeness) => {
       const from = vi.fn();
       const supabase = { from } as unknown as SupabaseClient;
-      const ensure = vi.fn().mockResolvedValue({
-        type: "coverage",
-        status: completeness.status,
-        completeness,
-      });
-      createCapabilities.mockReturnValue({ coverage: { ensure } });
+      const ensure = vi.fn().mockResolvedValue(completeness);
+      createCoverageRead.mockReturnValue({ ensure });
 
       const result = await createSupabaseCalendarQuery(supabase, principal).read({
         range: completeness.requestedRange,
