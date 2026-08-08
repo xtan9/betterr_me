@@ -4,11 +4,12 @@ import { describe, expect, it } from "vitest";
 
 const root = resolve(process.cwd());
 const supportedProductionImport =
-  /@\/lib\/recurring-tasks(?:"|\/scheduling"|\/compatibility")/;
-const privateRecurringImport = /@\/lib\/recurring-tasks\/(?!scheduling|compatibility)[^"']+/;
+  /@\/lib\/recurring-tasks(?:"|\/scheduling"|\/compatibility"|\/coverage-read")/;
+const privateRecurringImport = /@\/lib\/recurring-tasks\/(?!scheduling|compatibility|coverage-read)[^"']+/;
 const privateCompositionFiles = new Set([
   "app/api/cron/prewarm-recurring-tasks/route.ts",
   "lib/recurring-tasks/compatibility.ts",
+  "lib/recurring-tasks/coverage-read.ts",
   "lib/recurring-tasks/index.ts",
   "lib/recurring-tasks/scheduling.ts",
   "lib/tasks/commands.ts",
@@ -21,6 +22,12 @@ describe("Recurring Task package surface", () => {
     expect(Object.keys(packageSurface)).toEqual([
       "createAuthenticatedRecurringTaskCapabilities",
     ]);
+  });
+
+  it("exposes the authenticated Coverage Read through its supported subpath", async () => {
+    const coverageReadSurface = await import("@/lib/recurring-tasks/coverage-read");
+
+    expect(Object.keys(coverageReadSurface)).toEqual(["createCoverageRead"]);
   });
 
   it("exports only the authenticated factory and public contract types from the root", () => {
@@ -53,7 +60,7 @@ describe("Recurring Task package surface", () => {
     expect(existsSync(resolve(root, "lib/recurring-tasks/internal"))).toBe(true);
   });
 
-  it("allows production callers to use only the root, scheduling, or compatibility entry points", () => {
+  it("allows production callers to use only the root or declared supported entry points", () => {
     const violations: string[] = [];
     for (const directory of ["app", "components", "lib"]) {
       for (const file of walk(resolve(root, directory))) {

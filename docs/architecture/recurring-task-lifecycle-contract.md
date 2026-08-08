@@ -43,7 +43,7 @@ Delivery policy remains explicit at the channel edge. Task reads may return avai
 
 ### Supported package surface
 
-The root package exports only the authenticated production capability factory and public contract types. The `scheduling` and `compatibility` subpaths are the only supported production subpaths. Persistence state, in-memory storage, concrete Supabase lifecycle classes, telemetry plumbing, focused persistence adapters, and maintenance composition live under the private `lib/recurring-tasks/internal/` boundary.
+The root package exports only the authenticated production capability factory and public contract types. The `scheduling`, `compatibility`, and `coverage-read` subpaths are the only supported production subpaths. Persistence state, in-memory storage, concrete Supabase lifecycle classes, telemetry plumbing, focused persistence adapters, and maintenance composition live under the private `lib/recurring-tasks/internal/` boundary.
 
 The coordinated cutover is complete: creation and Series command behavior is folded behind the authenticated capabilities, visible Task mutations route through shared Task Commands, and the cron delivery uses its separately authorized private maintenance composition. The obsolete creation, Occurrence Adapter, and Series State Adapter entry points are removed. Production architecture tests reject unsupported deep imports, legacy writers, delivery-selected lifecycle adapters, and obsolete exports.
 
