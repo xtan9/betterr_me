@@ -75,6 +75,8 @@ describe("taskTools", () => {
     mockRpc.mockResolvedValue({
       data: {
         status: "complete",
+        type: "complete",
+        task: { id: "t1", is_completed: true, status: "done" },
         series: [],
         occurrences: [],
         intentionalAbsences: [],
@@ -211,17 +213,27 @@ describe("taskTools", () => {
     expect(result).toEqual({ id: "t2", title: "New task" });
   });
 
-  it("deleteTask verifies existence then deletes", async () => {
+  it("deleteTask routes an ordinary skip through shared Task Commands", async () => {
     const ctx = makeCtx();
     const tools = taskTools();
     const deleteTask = tools.find((t) => t.name === "deleteTask")!;
     mockGetTask.mockResolvedValue({ id: "t1" });
-    mockDeleteTask.mockResolvedValue(true);
+    mockRpc.mockResolvedValueOnce({
+      data: { status: "complete", type: "complete" },
+      error: null,
+    });
 
     const result = await deleteTask.execute({ taskId: "t1" }, ctx);
 
     expect(mockGetTask).toHaveBeenCalledWith("t1", "user-123");
-    expect(mockDeleteTask).toHaveBeenCalledWith("t1", "user-123");
+    expect(mockRpc).toHaveBeenCalledWith("task_command_atomic", {
+      p_operation: "skip",
+      p_request: expect.objectContaining({
+        userId: "user-123",
+        taskId: "t1",
+        idempotencyKey: expect.any(String),
+      }),
+    });
     expect(result).toEqual({ success: true });
   });
 
@@ -230,6 +242,10 @@ describe("taskTools", () => {
     const tools = taskTools();
     const deleteTask = tools.find((t) => t.name === "deleteTask")!;
     mockGetTask.mockResolvedValue(null);
+    mockRpc.mockResolvedValueOnce({
+      data: { status: "not-found", type: "not-found" },
+      error: null,
+    });
 
     const result = await deleteTask.execute({ taskId: "t999" }, ctx);
 
@@ -237,7 +253,7 @@ describe("taskTools", () => {
     expect(mockDeleteTask).not.toHaveBeenCalled();
   });
 
-  it("deleteTask skips a recurring occurrence through Task Writes", async () => {
+  it("deleteTask skips a recurring occurrence through the lifecycle port", async () => {
     const ctx = makeCtx();
     const deleteTask = taskTools().find((t) => t.name === "deleteTask")!;
     mockGetTask.mockResolvedValue({
@@ -246,14 +262,20 @@ describe("taskTools", () => {
       recurring_occurrence_id: "occurrence-1",
     });
 
-    const result = await deleteTask.execute({ taskId: "t1" }, ctx);
+    const result = await deleteTask.execute(
+      { taskId: "t1", operationId: "ai-skip-1" },
+      ctx,
+    );
 
     expect(mockRpc).toHaveBeenCalledWith("recurring_task_lifecycle", {
       p_operation: "skip-occurrence",
       p_request: {
         userId: "user-123",
+        taskId: "t1",
         seriesId: "series-1",
         occurrenceId: "occurrence-1",
+        scope: "this",
+        idempotencyKey: "ai-skip-1",
       },
     });
     expect(mockDeleteTask).not.toHaveBeenCalled();
@@ -360,29 +382,26 @@ describe("taskTools", () => {
     ).toBe(false);
   });
 
-  it("toggleTask synchronizes completion through Task Writes", async () => {
+  it("toggleTask chooses an explicit shared completion command", async () => {
     const ctx = makeCtx();
     const toggleTask = taskTools().find((t) => t.name === "toggleTask")!;
     mockGetTask.mockResolvedValue({ id: "t1", is_completed: false });
-    mockUpdateTask.mockResolvedValue({
-      id: "t1",
-      is_completed: true,
-      status: "done",
-    });
-    const result = await toggleTask.execute({ taskId: "t1" }, ctx);
-    expect(mockUpdateTask).toHaveBeenCalledWith(
-      "t1",
-      "user-123",
-      expect.objectContaining({
-        is_completed: true,
-        status: "done",
-        completed_at: expect.any(String),
-      }),
+    const result = await toggleTask.execute(
+      { taskId: "t1", operationId: "ai-complete-1" },
+      ctx,
     );
+    expect(mockRpc).toHaveBeenCalledWith("task_command_atomic", {
+      p_operation: "complete",
+      p_request: {
+        userId: "user-123",
+        taskId: "t1",
+        idempotencyKey: "ai-complete-1",
+      },
+    });
     expect(result).toEqual({ id: "t1", is_completed: true, status: "done" });
   });
 
-  it("requires explicit completion policy for recurring occurrences", async () => {
+  it("routes recurring toggles through explicit lifecycle completion", async () => {
     const ctx = makeCtx();
     const toggleTask = taskTools().find((t) => t.name === "toggleTask")!;
     const currentTask = {
@@ -392,19 +411,33 @@ describe("taskTools", () => {
       recurring_occurrence_id: "occurrence-1",
     };
     mockGetTask.mockResolvedValue(currentTask);
-    mockUpdateTask.mockResolvedValue({
-      ...currentTask,
-      is_completed: true,
-      status: "done",
+    vi.mocked(mockGetTask)
+      .mockResolvedValueOnce(currentTask)
+      .mockResolvedValueOnce(currentTask)
+      .mockResolvedValueOnce({
+        ...currentTask,
+        is_completed: true,
+        status: "done",
+      });
+
+    const result = await toggleTask.execute(
+      { taskId: "t1", operationId: "ai-recurring-complete-1" },
+      ctx,
+    );
+
+    expect(mockRpc).toHaveBeenCalledWith("recurring_task_lifecycle", {
+      p_operation: "complete-occurrence",
+      p_request: {
+        userId: "user-123",
+        taskId: "t1",
+        seriesId: "series-1",
+        occurrenceId: "occurrence-1",
+        scope: "this",
+        idempotencyKey: "ai-recurring-complete-1",
+      },
     });
-
-    const result = await toggleTask.execute({ taskId: "t1" }, ctx);
-
-    expect(mockRpc).not.toHaveBeenCalled();
     expect(mockUpdateTask).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      error: "Lifecycle occurrences require an explicit completion or reopening command",
-    });
+    expect(result).toEqual({ ...currentTask, is_completed: true, status: "done" });
   });
 
   it("updateTask transforms dueDate and projectId, strips undefined", async () => {
@@ -427,23 +460,29 @@ describe("taskTools", () => {
     });
   });
 
-  it("updateTask synchronizes status and completion through Task Writes", async () => {
+  it("updateTask routes completion status through shared Task Commands", async () => {
     const ctx = makeCtx();
     const updateTask = taskTools().find((t) => t.name === "updateTask")!;
-    mockUpdateTask.mockResolvedValue({ id: "t1" });
+    mockRpc.mockResolvedValueOnce({
+      data: {
+        status: "complete",
+        type: "complete",
+        task: { id: "t1", is_completed: true, status: "done" },
+      },
+      error: null,
+    });
     await updateTask.execute(
-      { taskId: "t1", status: "done" },
+      { taskId: "t1", status: "done", operationId: "ai-status-1" },
       ctx,
     );
-    expect(mockUpdateTask).toHaveBeenCalledWith(
-      "t1",
-      "user-123",
-      expect.objectContaining({
-        status: "done",
-        is_completed: true,
-        completed_at: expect.any(String),
-      }),
-    );
+    expect(mockRpc).toHaveBeenCalledWith("task_command_atomic", {
+      p_operation: "complete",
+      p_request: {
+        userId: "user-123",
+        taskId: "t1",
+        idempotencyKey: "ai-status-1",
+      },
+    });
   });
 
   it("updateTask rejects empty and invalid updates like the HTTP task schema", () => {
@@ -495,17 +534,6 @@ describe("taskTools", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-31T12:00:00.000Z"));
     try {
-      mockUpdateTask.mockImplementation(async (_taskId, _userId, updates) => ({
-        id: "t1",
-        ...updates,
-      }));
-      const aiUpdate = taskTools().find((tool) => tool.name === "updateTask")!;
-
-      const aiTask = await aiUpdate.execute(
-        { taskId: "t1", status: "done" },
-        makeCtx(),
-      );
-
       const httpPersistence = makeWritePersistence();
       const httpOutcome = await new TaskWrites(httpPersistence).execute({
         type: "update",
@@ -513,11 +541,31 @@ describe("taskTools", () => {
         taskId: "t1",
         values: taskUpdateSchema.parse({ status: "done" }),
       });
-
-      expect(mockUpdateTask).toHaveBeenCalledWith(
-        ...vi.mocked(httpPersistence.updateTask).mock.calls[0],
+      mockRpc.mockResolvedValueOnce({
+        data: {
+          status: "complete",
+          type: "complete",
+          task: httpOutcome.task,
+        },
+        error: null,
+      });
+      const aiUpdate = taskTools().find((tool) => tool.name === "updateTask")!;
+      const aiTask = await aiUpdate.execute(
+        { taskId: "t1", status: "done", operationId: "parity-status-1" },
+        makeCtx(),
       );
-      expect(aiTask).toEqual(httpOutcome.task);
+
+      expect(mockRpc).toHaveBeenCalledWith("task_command_atomic", {
+        p_operation: "complete",
+        p_request: {
+          userId: "user-123",
+          taskId: "t1",
+          idempotencyKey: "parity-status-1",
+        },
+      });
+      expect(aiTask).toEqual(
+        httpOutcome.task,
+      );
     } finally {
       vi.useRealTimers();
     }

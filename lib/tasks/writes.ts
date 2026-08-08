@@ -89,6 +89,7 @@ export interface TaskDeletionRequest {
   taskId: string;
   scope?: EditScope;
   effectiveDate?: string;
+  operationId?: string;
 }
 
 /** Storage-independent recurring-series deletion intent. */
@@ -347,6 +348,9 @@ export class TaskWrites {
           userId: normalized.userId,
           seriesId,
           occurrenceId,
+          ...(normalized.operationId
+            ? { idempotencyKey: normalized.operationId }
+            : {}),
         }),
       );
     }
@@ -393,6 +397,9 @@ export class TaskWrites {
           userId: normalized.userId,
           seriesId,
           effectiveDate,
+          ...(normalized.operationId
+            ? { idempotencyKey: normalized.operationId }
+            : {}),
         }),
       );
     }
@@ -409,6 +416,9 @@ export class TaskWrites {
         userId: normalized.userId,
         seriesId,
         effectiveDate,
+        ...(normalized.operationId
+          ? { idempotencyKey: normalized.operationId }
+          : {}),
       }),
     );
   }
@@ -942,6 +952,9 @@ function normalizeTaskDeletionRequest(
     ...(request.scope === undefined ? {} : { scope: request.scope }),
     ...(request.effectiveDate?.trim()
       ? { effectiveDate: request.effectiveDate.trim() }
+      : {}),
+    ...(request.operationId?.trim()
+      ? { operationId: request.operationId.trim() }
       : {}),
   };
 }

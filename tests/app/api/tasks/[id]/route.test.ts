@@ -8,6 +8,8 @@ const {
   mockTaskDeleteSeries,
   mockStateFactory,
   mockState,
+  mockTaskCommandFactory,
+  mockTaskCommandExecute,
 } = vi.hoisted(() => {
   const mockTaskExecute = vi.fn(async (intent: any) => {
     if (intent.type === "update") {
@@ -40,6 +42,11 @@ const {
   });
   const mockTaskDelete = vi.fn();
   const mockTaskDeleteSeries = vi.fn();
+  const mockTaskCommandExecute = vi.fn();
+  const mockTaskCommandFactory = vi.fn(() => ({
+    execute: mockTaskCommandExecute,
+    toggle: vi.fn(),
+  }));
   const mockState = {
     editScope: vi.fn(),
   };
@@ -53,6 +60,8 @@ const {
     mockTaskDeleteSeries,
     mockStateFactory: vi.fn(() => mockState),
     mockState,
+    mockTaskCommandFactory,
+    mockTaskCommandExecute,
   };
 });
 
@@ -61,6 +70,13 @@ vi.mock("@/lib/tasks/writes", async () => {
     "@/lib/tasks/writes",
   );
   return { ...actual, createTaskWrites: mockCreateTaskWrites };
+});
+
+vi.mock("@/lib/tasks/commands", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/tasks/commands")>(
+    "@/lib/tasks/commands",
+  );
+  return { ...actual, createAuthenticatedTaskCommands: mockTaskCommandFactory };
 });
 
 // Mock dependencies
@@ -131,6 +147,13 @@ describe("GET /api/tasks/[id]", () => {
 describe("PATCH /api/tasks/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTaskCommandExecute.mockResolvedValue({
+      status: "complete",
+      type: "complete",
+      operation: "complete",
+      operationId: "test-operation",
+      task: { id: "task-1" },
+    });
     vi.mocked(mockTasksDB.getTask).mockResolvedValue({
       id: "task-1",
       user_id: "user-123",
@@ -300,13 +323,11 @@ describe("PATCH /api/tasks/[id]", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mockTasksDB.updateTask).toHaveBeenCalledWith('task-1', 'user-123',
-      expect.objectContaining({
-        status: 'done',
-        is_completed: true,
-        completed_at: expect.any(String),
-      })
-    );
+    expect(mockTaskCommandExecute).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'complete',
+      taskId: 'task-1',
+      operationId: expect.any(String),
+    }));
   });
 
   it('should sync status=todo to is_completed=false and completed_at=null', async () => {
@@ -326,13 +347,11 @@ describe("PATCH /api/tasks/[id]", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mockTasksDB.updateTask).toHaveBeenCalledWith('task-1', 'user-123',
-      expect.objectContaining({
-        status: 'todo',
-        is_completed: false,
-        completed_at: null,
-      })
-    );
+    expect(mockTaskCommandExecute).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'reopen',
+      taskId: 'task-1',
+      operationId: expect.any(String),
+    }));
   });
 
   it('should update project_id when provided', async () => {
@@ -422,9 +441,10 @@ describe("DELETE /api/tasks/[id]", () => {
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(mockTaskDelete).toHaveBeenCalledWith({
+    expect(mockTaskCommandExecute).toHaveBeenCalledWith({
+      type: "skip",
       taskId: "task-1",
-      userId: "user-123",
+      operationId: expect.any(String),
     });
   });
 });
@@ -543,7 +563,7 @@ describe("DELETE /api/tasks/[id] with scope (recurring)", () => {
     mockTaskDeleteSeries.mockResolvedValue({ type: "deleted" });
   });
 
-  it("should delegate scope=this to Task Writes", async () => {
+  it("should route scope=this through shared Task Commands", async () => {
     const request = new NextRequest(
       "http://localhost:3000/api/tasks/task-1?scope=this",
       { method: "DELETE" },
@@ -556,10 +576,11 @@ describe("DELETE /api/tasks/[id] with scope (recurring)", () => {
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(mockTaskDelete).toHaveBeenCalledWith({
+    expect(mockTaskCommandExecute).toHaveBeenCalledWith({
+      type: "skip",
       taskId: "task-1",
-      userId: "user-123",
       scope: "this",
+      operationId: expect.any(String),
     });
   });
 
@@ -579,10 +600,11 @@ describe("DELETE /api/tasks/[id] with scope (recurring)", () => {
       userId: "user-123",
       scope: "all",
       effectiveDate: "2026-08-06",
+      operationId: expect.any(String),
     });
   });
 
-  it("should delegate standalone deletion without inventing a recurring scope", async () => {
+  it("should route standalone deletion through shared Task Commands", async () => {
     const request = new NextRequest(
       "http://localhost:3000/api/tasks/task-1",
       { method: "DELETE" },
@@ -593,14 +615,20 @@ describe("DELETE /api/tasks/[id] with scope (recurring)", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mockTaskDelete).toHaveBeenCalledWith({
+    expect(mockTaskCommandExecute).toHaveBeenCalledWith({
+      type: "skip",
       taskId: "task-1",
-      userId: "user-123",
+      operationId: expect.any(String),
     });
   });
 
   it("maps a typed not-found deletion outcome to 404", async () => {
-    mockTaskDelete.mockResolvedValue({ type: "not-found" });
+    mockTaskCommandExecute.mockResolvedValue({
+      status: "not-found",
+      type: "not-found",
+      operation: "skip",
+      operationId: "test-operation",
+    });
 
     const request = new NextRequest(
       "http://localhost:3000/api/tasks/task-1",
