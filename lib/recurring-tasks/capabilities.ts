@@ -877,7 +877,7 @@ interface DecodedSeriesVersion {
   revisionToken: number;
 }
 
-function encodeSeriesVersion(
+export function encodeSeriesVersion(
   seriesId: string | undefined,
   revisionToken: number,
 ): SeriesVersion {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CreateTaskContent } from '@/components/tasks/create-task-content';
 
@@ -81,11 +81,27 @@ const allTranslations: Record<string, Record<string, string>> = {
     'priorityLabel': 'Priority',
     'dueDateLabel': 'Due Date',
     'dueTimeLabel': 'Due Time',
+    'repeatLabel': 'Repeat',
     'cancel': 'Cancel',
     'create': 'Create Task',
     'save': 'Save Changes',
     'creating': 'Creating...',
     'saving': 'Saving...',
+  },
+  'tasks.recurrence': {
+    'none': 'Does not repeat',
+    'daily': 'Daily',
+    'weekdays': 'Weekdays',
+    'weekly': 'Weekly',
+    'biweekly': 'Every other week',
+    'monthly': 'Monthly',
+    'yearly': 'Yearly',
+    'custom': 'Custom',
+    'ends': 'Ends',
+    'endNever': 'Never',
+    'endAfter': 'After',
+    'endTimes': 'times',
+    'endOn': 'On',
   },
   'tasks.breadcrumb': {
     'newTask': 'New Task',
@@ -278,6 +294,51 @@ describe('CreateTaskContent', () => {
 
     const callBody = JSON.parse(vi.mocked(global.fetch).mock.calls[0][1]!.body as string);
     expect(callBody.due_time).toBe('09:30:00');
+  });
+
+  it('preserves the recurring creation operation ID when the user retries', async () => {
+    vi.mocked(global.fetch)
+      .mockResolvedValueOnce({
+        ok: false,
+        json: () => Promise.resolve({ error: 'Temporary failure' }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ recurring_task: { id: 'rt-1' } }),
+      } as Response);
+
+    render(<CreateTaskContent />);
+
+    await user.type(screen.getByLabelText('Title'), 'Daily review');
+    fireEvent.change(screen.getByLabelText('Due Date'), {
+      target: { value: '2026-08-01' },
+    });
+    const recurrenceSelect = screen.getAllByRole('combobox').at(-1)!;
+    await user.click(recurrenceSelect);
+    await user.click(await screen.findByRole('option', { name: 'Daily' }));
+
+    const createButton = screen.getByRole('button', { name: 'Create Task' });
+    await user.click(createButton);
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith('Failed to create task');
+    });
+
+    await user.click(createButton);
+    await waitFor(() => {
+      expect(mockToastSuccess).toHaveBeenCalledWith('Task created successfully');
+    });
+
+    const calls = vi.mocked(global.fetch).mock.calls;
+    expect(calls).toHaveLength(2);
+    const firstOptions = calls[0][1] as RequestInit;
+    const secondOptions = calls[1][1] as RequestInit;
+    expect(firstOptions.headers).toEqual({
+      'Content-Type': 'application/json',
+      'Idempotency-Key': expect.any(String),
+    });
+    expect(secondOptions.headers).toEqual(firstOptions.headers);
+    expect(calls[0][0]).toBe('/api/recurring-tasks');
+    expect(calls[1][0]).toBe('/api/recurring-tasks');
   });
 
   it('navigates back on cancel', async () => {

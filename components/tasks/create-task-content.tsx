@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useSWRConfig } from "swr";
@@ -27,15 +27,28 @@ export function CreateTaskContent() {
   const tForm = useTranslations("tasks.form");
   const { mutate } = useSWRConfig();
   const [isLoading, setIsLoading] = useState(false);
+  const recurringCreationOperation = useRef<{
+    fingerprint: string;
+    id: string;
+  } | null>(null);
 
   const handleSubmit = async (data: TaskFormValues, recurrence?: RecurrenceConfig) => {
     setIsLoading(true);
     try {
       if (recurrence?.rule) {
         // Create a recurring task template
+        const fingerprint = JSON.stringify({ data, recurrence });
+        const operationId =
+          recurringCreationOperation.current?.fingerprint === fingerprint
+            ? recurringCreationOperation.current.id
+            : crypto.randomUUID();
+        recurringCreationOperation.current = { fingerprint, id: operationId };
         const response = await fetch("/api/recurring-tasks", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": operationId,
+          },
           body: JSON.stringify({
             title: data.title,
             description: data.description || null,
