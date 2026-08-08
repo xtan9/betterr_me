@@ -69,6 +69,36 @@ describe("Household Runway Runtime import boundary", () => {
     expect(violations).toEqual([]);
   });
 
+  it("keeps the supported result components on semantic Runtime facts", () => {
+    const componentFiles = [
+      "components/finance/household-runway.tsx",
+      "components/finance/household-runway-result.tsx",
+      "components/finance/household-runway-result-parts.tsx",
+    ];
+    const violations: string[] = [];
+
+    for (const relative of componentFiles) {
+      const source = readFileSync(resolve(root, relative), "utf8");
+      const forbidden = [
+        /@\/lib\/finance\/household-runway-assessment/,
+        /@\/lib\/finance\/internal\//,
+        /RUNWAY_MODEL_VERSION/,
+      ];
+      if (forbidden.some((pattern) => pattern.test(source))) {
+        violations.push(relative);
+      }
+    }
+
+    const resultSources = componentFiles.slice(1).map((relative) =>
+      readFileSync(resolve(root, relative), "utf8"),
+    );
+    expect(violations).toEqual([]);
+    expect(resultSources.join("\n")).not.toMatch(/Math\.min/);
+    expect(resultSources.join("\n")).not.toMatch(/months_covered/);
+    expect(resultSources.join("\n")).not.toMatch(/assessmentHistory/);
+    expect(resultSources.join("\n")).not.toMatch(/snapshot\.derived/);
+  });
+
   it("keeps browser adapter effects, commands, outcomes, and helpers private", () => {
     const source = readFileSync(
       resolve(root, "lib/finance/household-runway-browser-adapter.ts"),
@@ -108,8 +138,13 @@ describe("Household Runway Runtime import boundary", () => {
     expect(runtimeFacade).not.toMatch(
       /export (?:type|interface) HouseholdRunwayInterviewRuntime(?:Draft|Plan|Report)(?:Request|Outcome)/,
     );
+    expect(runtimeFacade).not.toMatch(
+      /HouseholdRunwayInterviewRuntime(?:DerivedFacts|Capabilities)/,
+    );
+    expect(runtimeFacade).not.toMatch(/(?:SuccessfulHouseholdRunwayAssessment|planInputs|assessmentHistory)/);
     expect(runtimeComposition).not.toMatch(/Object\.definePropert/);
     expect(browserFacade).not.toMatch(/extends HouseholdRunwayInterviewRuntimeOptions/);
+    expect(browserFacade).not.toMatch(/(?:SuccessfulHouseholdRunwayAssessment|planInputs|assessmentHistory)/);
     expect(browserComposition).not.toMatch(/executeHouseholdRunwayBrowserEffect/);
     expect(browserComposition).not.toMatch(/HouseholdRunwayInterviewCommand/);
     expect(browserComposition).not.toMatch(

@@ -19,8 +19,6 @@ import {
   type RunwayCountry,
   type RunwayCurrency,
   type RunwayScenario,
-  type RunwaySimulation,
-  type ScenarioOption,
 } from "@/lib/finance/cushion";
 import {
   MAX_CUSHION_AMOUNT_CENTS,
@@ -47,7 +45,6 @@ import {
   type HouseholdRunwayExpenseCategoryProgress,
   type HouseholdRunwayInterviewState,
   type HouseholdRunwayInterviewStatus,
-  type HouseholdRunwayInterviewAnswers,
   type HouseholdRunwayDraftDeviceAction,
   type HouseholdRunwayPlan,
   type HouseholdRunwayValidationIssue,
@@ -61,10 +58,19 @@ export interface HouseholdRunwayReportPresentation {
   location: string;
   formatMoney: (cents: number) => string;
   formatScenario: (scenario: RunwayScenario) => string;
-  formatSimulation: (simulation: RunwaySimulation) => string;
+  formatSimulation: (simulation: {
+    sustainable: boolean;
+    monthsCovered: number | null;
+  }) => string;
   formatCashTarget: (months: number, cents: number) => string;
   formatLargestReduction: (category: ExpenseCategory, cents: number) => string;
-  precisionAdvice: string;
+  precisionAdvice: (
+    notice:
+      | "cashNotConfirmed"
+      | "takeHomeEstimated"
+      | "quickExpenses"
+      | "coreInputsComplete",
+  ) => string;
 }
 
 export type HouseholdRunwayInterviewRuntimeIssueCode =
@@ -91,7 +97,6 @@ export interface HouseholdRunwayInterviewRuntimeIssue {
 
 export type HouseholdRunwayInterviewRuntimeOperationStatus =
   | "idle"
-  | "dirty"
   | "pending"
   | "succeeded"
   | "failed";
@@ -338,50 +343,250 @@ export type HouseholdRunwayInterviewRuntimeScreenProjection =
   | ({
       kind: "review";
       stage: "review";
-      location: HouseholdRunwayInterviewRuntimeScreenLocation;
-      answers: HouseholdRunwayInterviewAnswers;
-      planInputs: HouseholdRunwayAnswers | null;
-      assessment: SuccessfulHouseholdRunwayAssessment | null;
-      availableScenarios: readonly ScenarioOption[];
-      selectedScenario: RunwayScenario | null;
-      planAdjustment: RunwayAdjustments;
-      assessmentModelVersion: string | null;
-      totals: { current: number; interruption: number };
-      monthlyIncomeCents: number;
-      otherIncomeCents: number;
-      excludedAssetCents: number;
-      ready: boolean;
+      readiness: HouseholdRunwayReviewReadiness;
+      location: HouseholdRunwayReviewLocation;
+      household: HouseholdRunwayReviewHousehold;
+      cash: HouseholdRunwayReviewCash;
+      expenses: HouseholdRunwayReviewExpenses;
+      earnedIncome: HouseholdRunwayReviewEarnedIncome;
+      otherIncome: HouseholdRunwayReviewOtherIncome;
+      liquidInvestments: HouseholdRunwayReviewLiquidInvestments;
+      lastResortAssets: HouseholdRunwayReviewLastResortAssets;
     } & HouseholdRunwayInterviewRuntimeScreenStageFacts)
   | ({
-      kind: "stage";
+      kind: "result";
       stage: "result";
-      planInputs: HouseholdRunwayAnswers | null;
-      assessment: SuccessfulHouseholdRunwayAssessment | null;
-      availableScenarios: readonly ScenarioOption[];
-      selectedScenario: RunwayScenario | null;
-      planAdjustment: RunwayAdjustments;
-      assessmentModelVersion: string | null;
+      readiness: "unavailable";
+    } & HouseholdRunwayInterviewRuntimeScreenStageFacts)
+  | ({
+      kind: "result";
+      stage: "result";
+      readiness: "ready";
+      modelVersion: string;
+      country: RunwayCountry;
+      currency: RunwayCurrency;
+      scenarios: {
+        selected: RunwayScenario;
+        available: readonly { id: RunwayScenario }[];
+      };
+      primary: HouseholdRunwayFocusedRuntimeSimulation;
+      comparisons: {
+        currentLifestyle: HouseholdRunwayRuntimeComparisonFact;
+        interruption: HouseholdRunwayRuntimeComparisonFact;
+        extremeMode: HouseholdRunwayRuntimeComparisonFact;
+      };
+      explanation: {
+        availableCashCents: number;
+        liquidInvestmentsCents: number;
+      };
+      adjustment: HouseholdRunwayAdjustmentProjection;
+      advice: readonly HouseholdRunwayAdviceFact[];
+      precision: {
+        notices: readonly HouseholdRunwayPrecisionNotice[];
+      };
+      history: readonly HouseholdRunwayAssessmentSnapshotFact[];
     } & HouseholdRunwayInterviewRuntimeScreenStageFacts);
+
+export type HouseholdRunwayReviewReadiness = "ready" | "blocked";
+
+export type HouseholdRunwayReviewLocation =
+  | {
+      kind: "complete";
+      country: RunwayCountry;
+      region: string;
+      currency: RunwayCurrency;
+    }
+  | {
+      kind: "incomplete";
+      country: RunwayCountry | null;
+      region: string | null;
+      currency: RunwayCurrency | null;
+    };
+
+export type HouseholdRunwayReviewHousehold = {
+  adultCount: 1 | 2;
+  confidence: "confirmed";
+};
+
+export type HouseholdRunwayReviewCash = {
+  cents: number;
+  confidence: import("@/lib/finance/cushion").InputConfidence;
+};
+
+export type HouseholdRunwayReviewExpenses = {
+  currentMonthlyCents: number;
+  interruptionMonthlyCents: number;
+  confidence: import("@/lib/finance/cushion").InputConfidence;
+};
+
+export type HouseholdRunwayReviewEarnedIncome = {
+  monthlyCents: number;
+  confidence: "confirmed" | "estimated";
+};
+
+export type HouseholdRunwayReviewOtherIncome = {
+  monthlyCents: number;
+  confidence: "confirmed" | "skipped";
+};
+
+export type HouseholdRunwayReviewLiquidInvestments = {
+  cents: number;
+  confidence: import("@/lib/finance/cushion").InputConfidence;
+};
+
+export type HouseholdRunwayReviewLastResortAssets = {
+  cents: number;
+  confidence: "confirmed" | "skipped";
+};
+
+export type HouseholdRunwayResultOutcome =
+  | { kind: "sustainable" }
+  | {
+      kind: "depletes";
+      monthsCovered: number;
+      depletion:
+        | { kind: "dated"; date: string }
+        | { kind: "outsideDateRange" };
+    };
+
+export type HouseholdRunwayGuidanceBand =
+  | "underThree"
+  | "threeToUnderSix"
+  | "sixPlus"
+  | "sustainable";
+
+export type HouseholdRunwayRuntimeComparisonFact = {
+  outcome:
+    | { kind: "sustainable" }
+    | { kind: "depletes"; monthsCovered: number };
+};
+
+export type HouseholdRunwayPoint = {
+  month: number;
+  openingBalanceCents: number;
+  continuingIncomeCents: number;
+  oneTimeFundsCents: number;
+  essentialOutflowCents: number;
+  closingBalanceCents: number;
+};
+
+export type HouseholdRunwaySeries =
+  | {
+      kind: "monthly";
+      throughMonth: number;
+      points: readonly HouseholdRunwayPoint[];
+    }
+  | {
+      kind: "checkpoints";
+      throughMonth: number;
+      completeMonthlyThrough: 12;
+      points: readonly HouseholdRunwayPoint[];
+    };
+
+export type HouseholdRunwayFocusedRuntimeSimulation = {
+  outcome: HouseholdRunwayResultOutcome;
+  confidence: "complete" | "estimated" | "needsReview";
+  guidance: HouseholdRunwayGuidanceBand;
+  resources: {
+    startingCents: number;
+    continuingMonthlyIncomeCents: number;
+    interruptionExpensesCents: number;
+    reducibleExpensesCents: number;
+    excludedAssetsCents: number;
+  };
+  series: HouseholdRunwaySeries;
+};
+
+export type HouseholdRunwayAdjustmentField = {
+  valueCents: number;
+  minimumCents: 0;
+  maximumCents: number;
+};
+
+export type HouseholdRunwayAdjustmentEffect =
+  | { kind: "none" }
+  | { kind: "monthsChanged"; deltaMonths: number }
+  | { kind: "becameSustainable" };
+
+export type HouseholdRunwayAdjustmentProjection = {
+  active: boolean;
+  fields: {
+    expenseReduction: HouseholdRunwayAdjustmentField;
+    addedCash: HouseholdRunwayAdjustmentField;
+    addedMonthlyIncome: HouseholdRunwayAdjustmentField;
+    expectedUnconfirmedFunds: HouseholdRunwayAdjustmentField;
+    usableIlliquidInvestments: HouseholdRunwayAdjustmentField;
+    usableRetirementTaxDeferred: HouseholdRunwayAdjustmentField;
+    usableRetirementTaxFree: HouseholdRunwayAdjustmentField;
+  };
+  effect: HouseholdRunwayAdjustmentEffect;
+};
+
+export type HouseholdRunwayAdviceFact =
+  | { kind: "cashTarget"; targetMonths: 3 | 6; gapCents: number }
+  | {
+      kind: "largestReducibleCategory";
+      category: ExpenseCategory;
+      reducibleCents: number;
+    };
+
+export type HouseholdRunwayPrecisionNotice =
+  | { kind: "cashNotConfirmed" }
+  | { kind: "takeHomeEstimated" }
+  | { kind: "quickExpenses" }
+  | { kind: "coreInputsComplete" };
+
+export type HouseholdRunwayHistoryComparison =
+  | { kind: "noPrevious" }
+  | {
+      kind: "incomparable";
+      reason:
+        | "scenarioChanged"
+        | "modelChanged"
+        | "scenarioAndModelChanged";
+    }
+  | { kind: "unchanged" }
+  | { kind: "monthsChanged"; deltaMonths: number }
+  | { kind: "becameSustainable" }
+  | { kind: "leftSustainable" };
+
+export type HouseholdRunwayAssessmentSnapshotFact = {
+  id: string;
+  scenario: RunwayScenario;
+  modelVersion: string;
+  createdAt: string;
+  outcome:
+    | { kind: "sustainable" }
+    | { kind: "depletes"; monthsCovered: number };
+  comparisonToPrevious: HouseholdRunwayHistoryComparison;
+};
 
 export type HouseholdRunwayInterviewRuntimeScreen =
   HouseholdRunwayInterviewRuntimeDeepReadonly<HouseholdRunwayInterviewRuntimeScreenProjection>;
 
-export interface HouseholdRunwayInterviewRuntimeAffordances {
-  start: boolean;
-  startNew: boolean;
-  continue: boolean;
-  back: boolean;
-  skip: boolean;
-  edit: boolean;
-  savePlan: boolean;
-  downloadReport: boolean;
-  applyPlanAdjustment: boolean;
-  resetPlanAdjustment: boolean;
-}
+export type HouseholdRunwayActionApplicability =
+  | { applicable: true }
+  | { applicable: false };
 
-export interface HouseholdRunwayInterviewRuntimeDerivedFacts {
-  planInputs: HouseholdRunwayAnswers | null;
-  assessment: SuccessfulHouseholdRunwayAssessment | null;
+export interface HouseholdRunwayInterviewRuntimeActions {
+  readonly start: HouseholdRunwayActionApplicability;
+  readonly startNew: HouseholdRunwayActionApplicability;
+  readonly resumeDraft: HouseholdRunwayActionApplicability;
+  readonly resumePlan: HouseholdRunwayActionApplicability;
+  readonly importDraft: HouseholdRunwayActionApplicability;
+  readonly continue: HouseholdRunwayActionApplicability;
+  readonly back: HouseholdRunwayActionApplicability;
+  readonly skip: HouseholdRunwayActionApplicability;
+  readonly discardDraft: HouseholdRunwayActionApplicability;
+  readonly rememberDraft: HouseholdRunwayActionApplicability;
+  readonly clearDeviceDraft: HouseholdRunwayActionApplicability;
+  readonly editCompletedPlan: HouseholdRunwayActionApplicability;
+  readonly selectScenario: HouseholdRunwayActionApplicability;
+  readonly setPlanAdjustment: HouseholdRunwayActionApplicability;
+  readonly applyPlanAdjustment: HouseholdRunwayActionApplicability;
+  readonly resetPlanAdjustment: HouseholdRunwayActionApplicability;
+  readonly savePlan: HouseholdRunwayActionApplicability;
+  readonly downloadReport: HouseholdRunwayActionApplicability;
 }
 
 export interface HouseholdRunwayInterviewRuntimeSnapshot {
@@ -389,14 +594,12 @@ export interface HouseholdRunwayInterviewRuntimeSnapshot {
   readonly interviewStatus: HouseholdRunwayInterviewStatus;
   readonly stage: HouseholdRunwayInterviewStage | null;
   readonly screen: HouseholdRunwayInterviewRuntimeScreen;
-  readonly derived: HouseholdRunwayInterviewRuntimeDeepReadonly<HouseholdRunwayInterviewRuntimeDerivedFacts>;
   readonly plan: HouseholdRunwayInterviewRuntimePlanFacts;
-  readonly assessmentHistory: readonly RunwaySnapshotSummary[];
   readonly draft: HouseholdRunwayInterviewRuntimeDraftFacts;
   readonly issues: readonly HouseholdRunwayInterviewRuntimeIssue[];
   readonly operations: HouseholdRunwayInterviewRuntimeOperations;
   readonly confirmation: HouseholdRunwayInterviewRuntimeConfirmation;
-  readonly affordances: Readonly<HouseholdRunwayInterviewRuntimeAffordances>;
+  readonly actions: Readonly<HouseholdRunwayInterviewRuntimeActions>;
 }
 
 export interface HouseholdRunwayInterviewRuntimeDraftFacts {
@@ -405,13 +608,13 @@ export interface HouseholdRunwayInterviewRuntimeDraftFacts {
   readonly session: boolean;
   readonly device: boolean;
   readonly deviceStorageConsent: boolean;
+  readonly synchronized: boolean;
 }
 
 export interface HouseholdRunwayInterviewRuntimePlanFacts {
   readonly exists: boolean;
   /** Whether the active completed result still matches the committed Plan. */
   readonly current: boolean;
-  readonly inputs?: HouseholdRunwayAnswers;
 }
 
 export type HouseholdRunwayInterviewRuntimeConfirmationAction =
@@ -805,33 +1008,78 @@ function draftCapabilityRequest(
   });
 }
 
-function affordancesFor(
+function action(applicable: boolean): HouseholdRunwayActionApplicability {
+  return applicable ? { applicable: true } : { applicable: false };
+}
+
+function actionsFor(
   state: HouseholdRunwayInterviewState,
   lifecycle: HouseholdRunwayInterviewRuntimeLifecycle,
-): HouseholdRunwayInterviewRuntimeAffordances {
+  storage: RuntimeStorageFacts,
+): HouseholdRunwayInterviewRuntimeActions {
   const screen = state.renderModel;
-  const completed = state.status === "completed" && state.assessment !== null;
+  const ready = lifecycle === "ready";
+  const resultReady =
+    ready &&
+    state.status === "completed" &&
+    state.assessment !== null &&
+    screen.kind === "stage" &&
+    screen.resultProjection.readiness === "ready";
+  const completedResult =
+    ready && state.status === "completed" && screen.kind === "stage";
   const collectingOrReviewing =
     state.status === "collecting" || state.status === "reviewing";
+  const landingHasWork = screen.kind === "landing" && screen.hasDraft;
+  const landingHasCommittedPlan =
+    screen.kind === "landing" && state.committedPlan !== null;
+  const resumeChoice = screen.kind === "resume_choice";
+  const deviceOperationPending = state.operations.deviceDraft.status === "pending";
   return {
-    start: lifecycle === "ready" && state.status === "not_started",
-    startNew:
-      lifecycle === "ready" &&
-      state.status === "not_started" &&
-      screen.kind === "landing" &&
-      screen.hasDraft,
-    continue: lifecycle === "ready" && collectingOrReviewing,
-    back: lifecycle === "ready" && collectingOrReviewing,
-    skip:
-      lifecycle === "ready" &&
-      (state.stage === "otherIncome" || state.stage === "assets"),
-    edit: lifecycle === "ready" && completed,
-    savePlan: lifecycle === "ready" && completed,
-    downloadReport: lifecycle === "ready" && completed,
-    applyPlanAdjustment:
-      lifecycle === "ready" && state.stage === "result" && completed,
-    resetPlanAdjustment:
-      lifecycle === "ready" && state.stage === "result" && completed,
+    start: action(
+      ready &&
+        screen.kind === "landing" &&
+        !screen.hasDraft &&
+        state.committedPlan === null,
+    ),
+    startNew: action(
+      ready &&
+        (landingHasWork || landingHasCommittedPlan || resumeChoice || completedResult),
+    ),
+    resumeDraft: action(ready && resumeChoice),
+    resumePlan: action(ready && resumeChoice),
+    importDraft: action(
+      ready &&
+        state.status !== "not_started" &&
+        storage.device &&
+        !storage.session &&
+        !resumeChoice &&
+        !deviceOperationPending,
+    ),
+    continue: action(ready && collectingOrReviewing),
+    back: action(ready && collectingOrReviewing),
+    skip: action(
+      ready && (state.stage === "otherIncome" || state.stage === "assets"),
+    ),
+    discardDraft: action(
+      ready &&
+        (state.status !== "not_started" || storage.session || storage.device),
+    ),
+    rememberDraft: action(
+      ready &&
+        state.status !== "not_started" &&
+        !storage.deviceStorageConsent &&
+        !deviceOperationPending,
+    ),
+    clearDeviceDraft: action(
+      ready && storage.device && storage.deviceStorageConsent && !deviceOperationPending,
+    ),
+    editCompletedPlan: action(resultReady),
+    selectScenario: action(resultReady),
+    setPlanAdjustment: action(resultReady),
+    applyPlanAdjustment: action(resultReady),
+    resetPlanAdjustment: action(resultReady),
+    savePlan: action(resultReady),
+    downloadReport: action(resultReady),
   };
 }
 
@@ -852,7 +1100,7 @@ function publicOperationFor(
       error: operation.error,
     };
   }
-  return { status: operation.status };
+  return { status: operation.status === "dirty" ? "idle" : operation.status };
 }
 
 function publicOperationsFor(
@@ -934,6 +1182,75 @@ function validatedRunwaySnapshotHistory(
     history.push(entry);
   }
   return history;
+}
+
+function historyOutcomeFor(
+  snapshot: RunwaySnapshotSummary,
+): HouseholdRunwayAssessmentSnapshotFact["outcome"] | null {
+  if (snapshot.sustainable) {
+    return snapshot.months_covered === null ? { kind: "sustainable" } : null;
+  }
+  return typeof snapshot.months_covered === "number" &&
+    Number.isFinite(snapshot.months_covered) &&
+    snapshot.months_covered >= 0
+    ? { kind: "depletes", monthsCovered: snapshot.months_covered }
+    : null;
+}
+
+function historyComparisonFor(
+  current: RunwaySnapshotSummary,
+  previous: RunwaySnapshotSummary | undefined,
+): HouseholdRunwayHistoryComparison | null {
+  if (!previous) return { kind: "noPrevious" };
+
+  const currentOutcome = historyOutcomeFor(current);
+  const previousOutcome = historyOutcomeFor(previous);
+  if (!currentOutcome || !previousOutcome) return null;
+
+  const scenarioChanged = current.scenario !== previous.scenario;
+  const modelChanged = current.model_version !== previous.model_version;
+  if (scenarioChanged || modelChanged) {
+    return {
+      kind: "incomparable",
+      reason:
+        scenarioChanged && modelChanged
+          ? "scenarioAndModelChanged"
+          : scenarioChanged
+            ? "scenarioChanged"
+            : "modelChanged",
+    };
+  }
+
+  if (currentOutcome.kind === "sustainable" && previousOutcome.kind === "sustainable") {
+    return { kind: "unchanged" };
+  }
+  if (currentOutcome.kind === "sustainable") return { kind: "becameSustainable" };
+  if (previousOutcome.kind === "sustainable") return { kind: "leftSustainable" };
+
+  const currentMonths = currentOutcome.monthsCovered;
+  const previousMonths = previousOutcome.monthsCovered;
+  if (currentMonths === previousMonths) return { kind: "unchanged" };
+  return { kind: "monthsChanged", deltaMonths: currentMonths - previousMonths };
+}
+
+function focusedHistoryFor(
+  history: readonly RunwaySnapshotSummary[],
+): HouseholdRunwayAssessmentSnapshotFact[] {
+  return history.flatMap((snapshot, index) => {
+    const outcome = historyOutcomeFor(snapshot);
+    const comparisonToPrevious = historyComparisonFor(snapshot, history[index + 1]);
+    return outcome
+      && comparisonToPrevious
+      ? [{
+          id: snapshot.id,
+          scenario: snapshot.scenario,
+          modelVersion: snapshot.model_version,
+          createdAt: snapshot.created_at,
+          outcome,
+          comparisonToPrevious,
+        }]
+      : [];
+  });
 }
 
 function isDraftState(value: unknown): value is HouseholdRunwayDraftState {
@@ -1040,11 +1357,13 @@ function draftFactsFor(
     session: storage.session,
     device: storage.device,
     deviceStorageConsent: storage.deviceStorageConsent,
+    synchronized: state.operations.draftSynchronization.status === "succeeded",
   };
 }
 
 function projectScreen(
   screen: HouseholdRunwayInterviewRenderModel,
+  assessmentHistory: readonly RunwaySnapshotSummary[],
 ): HouseholdRunwayInterviewRuntimeScreenProjection {
   switch (screen.kind) {
     case "landing":
@@ -1183,35 +1502,27 @@ function projectScreen(
       return {
         kind: screen.kind,
         stage: screen.stage,
-        location: screen.location,
-        answers: screen.answers,
-        planInputs: screen.planInputs,
-        assessment: screen.assessment,
-        availableScenarios: screen.availableScenarios,
-        selectedScenario: screen.selectedScenario,
-        planAdjustment: screen.planAdjustment,
-        assessmentModelVersion: screen.assessmentModelVersion,
-        totals: screen.totals,
-        monthlyIncomeCents: screen.monthlyIncomeCents,
-        otherIncomeCents: screen.otherIncomeCents,
-        excludedAssetCents: screen.excludedAssetCents,
-        ready: screen.ready,
+        ...screen.reviewProjection,
         availableStages: screen.availableStages,
         stageStatus: screen.stageStatus,
       };
     case "stage":
-      return {
-        kind: screen.kind,
-        stage: screen.stage,
-        planInputs: screen.planInputs,
-        assessment: screen.assessment,
-        availableScenarios: screen.availableScenarios,
-        selectedScenario: screen.selectedScenario,
-        planAdjustment: screen.planAdjustment,
-        assessmentModelVersion: screen.assessmentModelVersion,
-        availableStages: screen.availableStages,
-        stageStatus: screen.stageStatus,
-      };
+      return screen.resultProjection.readiness === "ready"
+        ? {
+            kind: "result",
+            stage: screen.stage,
+            ...screen.resultProjection,
+            history: focusedHistoryFor(assessmentHistory),
+            availableStages: screen.availableStages,
+            stageStatus: screen.stageStatus,
+          }
+        : {
+            kind: "result",
+            stage: screen.stage,
+            readiness: "unavailable",
+            availableStages: screen.availableStages,
+            stageStatus: screen.stageStatus,
+          };
   }
 }
 
@@ -1231,11 +1542,7 @@ function snapshotFor(
     lifecycle,
     interviewStatus: state.status,
     stage: state.stage,
-    screen: clonePublicValue(projectScreen(screen)),
-    derived: {
-      planInputs: clonePublicValue(state.planInputs),
-      assessment: clonePublicValue(state.assessment),
-    },
+    screen: clonePublicValue(projectScreen(screen, assessmentHistory)),
     plan: {
       exists: state.committedPlan !== null,
       current:
@@ -1246,16 +1553,12 @@ function snapshotFor(
           state.status,
           state.stage,
         ),
-      ...(state.committedPlan
-        ? { inputs: clonePublicValue(state.committedPlan.inputs) }
-        : {}),
     },
-    assessmentHistory: clonePublicValue(assessmentHistory),
     draft: draftFactsFor(state, storage),
     issues: [...runtimeIssues, ...(issue ? [publicIssueFor(issue)!] : [])],
     operations: publicOperationsFor(state),
     confirmation,
-    affordances: affordancesFor(state, lifecycle),
+    actions: actionsFor(state, lifecycle, storage),
   });
 }
 
