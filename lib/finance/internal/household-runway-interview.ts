@@ -3491,10 +3491,7 @@ function applyPlanAdjustmentToAnswers(
     occurredAt: command.occurredAt,
     incomeSourceId: `plan-adjustment-${command.commandId}`.slice(0, 100),
   });
-  return normalizeAnswers(
-    { ...next, updated_at: command.occurredAt },
-    state.draft.location,
-  );
+  return normalizeAnswers(next, state.draft.location);
 }
 
 function setPlanAdjustment(

@@ -67,6 +67,16 @@ function adjustmentFrom(
   } satisfies RunwayAdjustments;
 }
 
+function resultFrom(
+  runtime: ReturnType<typeof createHouseholdRunwayInterviewRuntime>,
+) {
+  const screen = runtime.getSnapshot().screen;
+  if (screen.kind !== "result" || screen.readiness !== "ready") {
+    throw new Error("expected the completed result");
+  }
+  return screen;
+}
+
 const adjustmentCases = [
   {
     name: "negative values",
@@ -216,6 +226,74 @@ describe("Household Runway Runtime Plan Adjustment boundary", () => {
       adjustment: {
         active: false,
         fields: { expectedUnconfirmedFunds: { valueCents: 0 } },
+      },
+    });
+  });
+
+  it("applies all seven preview fields through the observable Runtime result", () => {
+    const runtime = completedRuntime();
+    const baseline = resultFrom(runtime);
+
+    runtime.send({
+      type: "set_plan_adjustment",
+      patch: {
+        expense_reduction_cents: 100_000,
+        added_cash_cents: 200_000,
+        added_monthly_income_cents: 50_000,
+        expected_unconfirmed_funds_cents: 456_789,
+        usable_illiquid_investments_cents: 75_000,
+        usable_retirement_tax_deferred_cents: 0,
+        usable_retirement_tax_free_cents: 150_000,
+      },
+    });
+
+    const preview = resultFrom(runtime);
+    expect(preview.adjustment.active).toBe(true);
+    expect(preview.adjustment.fields).toMatchObject({
+      expenseReduction: { valueCents: 100_000 },
+      addedCash: { valueCents: 200_000 },
+      addedMonthlyIncome: { valueCents: 50_000 },
+      expectedUnconfirmedFunds: { valueCents: 456_789 },
+      usableIlliquidInvestments: { valueCents: 75_000 },
+      usableRetirementTaxDeferred: { valueCents: 0 },
+      usableRetirementTaxFree: { valueCents: 150_000 },
+    });
+
+    runtime.send({ type: "apply_plan_adjustment" });
+
+    const applied = resultFrom(runtime);
+    expect(applied.adjustment).toMatchObject({
+      active: false,
+      fields: {
+        expenseReduction: { valueCents: 0 },
+        addedCash: { valueCents: 0 },
+        addedMonthlyIncome: { valueCents: 0 },
+        expectedUnconfirmedFunds: { valueCents: 0 },
+        usableIlliquidInvestments: { valueCents: 0 },
+        usableRetirementTaxDeferred: { valueCents: 0 },
+        usableRetirementTaxFree: { valueCents: 0 },
+      },
+    });
+    expect(applied.explanation.availableCashCents).toBe(
+      baseline.explanation.availableCashCents + 200_000,
+    );
+    expect(applied.primary.resources.interruptionExpensesCents).toBe(
+      baseline.primary.resources.interruptionExpensesCents - 100_000,
+    );
+    expect(applied.primary.resources.continuingMonthlyIncomeCents).toBe(
+      baseline.primary.resources.continuingMonthlyIncomeCents + 50_000,
+    );
+    runtime.send({ type: "edit_completed_plan" });
+    runtime.send({ type: "back" });
+    runtime.send({ type: "back" });
+    runtime.send({ type: "back" });
+
+    expect(runtime.getSnapshot().screen).toMatchObject({
+      kind: "assets",
+      extremeAccess: {
+        illiquid_investments_cents: 75_000,
+        retirement_tax_deferred_cents: 0,
+        retirement_tax_free_cents: 150_000,
       },
     });
   });
