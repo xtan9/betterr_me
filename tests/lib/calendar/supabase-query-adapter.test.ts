@@ -3,13 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import * as supabaseCalendarQuery from "@/lib/calendar/supabase-query";
 
-const { createCapabilities, coverageEnsure } = vi.hoisted(() => ({
-  createCapabilities: vi.fn(),
+const { createCoverageRead, coverageEnsure } = vi.hoisted(() => ({
+  createCoverageRead: vi.fn(),
   coverageEnsure: vi.fn(),
 }));
 
-vi.mock("@/lib/recurring-tasks", () => ({
-  createAuthenticatedRecurringTaskCapabilities: createCapabilities,
+vi.mock("@/lib/recurring-tasks/coverage-read", () => ({
+  createCoverageRead,
 }));
 
 const request = {
@@ -37,16 +37,12 @@ describe("Supabase calendar query", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     coverageEnsure.mockResolvedValue({
-      type: "coverage",
       status: "complete",
-      completeness: {
-        status: "complete",
-        type: "complete",
-        requestedRange: request.range,
-        failedSeriesIds: [],
-      },
+      type: "complete",
+      requestedRange: request.range,
+      failedSeriesIds: [],
     });
-    createCapabilities.mockReturnValue({ coverage: { ensure: coverageEnsure } });
+    createCoverageRead.mockReturnValue({ ensure: coverageEnsure });
   });
 
   it("is the adapter's only runtime export", () => {
@@ -69,14 +65,15 @@ describe("Supabase calendar query", () => {
       completeness: { status: "complete", requestedRange: request.range },
     });
 
-    expect(createCapabilities).toHaveBeenCalledWith(
+    expect(createCoverageRead).toHaveBeenCalledWith({
       supabase,
-      { type: "user", userId: "user-1", credential: "cookie" },
-    );
-    expect(coverageEnsure).toHaveBeenCalledWith({
-      operationId: "calendar-read-coverage:user-1:2026-04-01:2026-04-07",
-      range: request.range,
+      principal: { type: "user", userId: "user-1", credential: "cookie" },
+      source: "calendar",
     });
+    expect(coverageEnsure).toHaveBeenCalledWith(
+      request.range,
+      expect.any(Function),
+    );
     expect(client.from).toHaveBeenCalledWith("tasks");
     expect(tasks.select).toHaveBeenCalledWith("*");
     expect(tasks.eq).toHaveBeenCalledWith("user_id", "user-1");

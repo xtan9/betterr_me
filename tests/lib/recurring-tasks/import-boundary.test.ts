@@ -228,7 +228,9 @@ describe("recurring lifecycle import boundary", () => {
       /ensureRecurringTaskCoverage|ensureRecurringTaskCoverageThrough/,
     );
     expect(query).toContain("createCalendarQuery");
-    expect(supabaseQuery).toContain(
+    expect(supabaseQuery).toContain("createCoverageRead");
+    expect(supabaseQuery).toContain('source: "calendar"');
+    expect(supabaseQuery).not.toContain(
       "createAuthenticatedRecurringTaskCapabilities",
     );
     for (const source of [query, supabaseQuery]) {
