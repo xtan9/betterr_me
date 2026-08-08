@@ -3171,7 +3171,7 @@ function internalObservations(
       const statuses = new Map<AggregatePublicClientFamily, GateStatus | undefined>();
       for (const family of MCP_ACCESS_GRANT_FAMILIES) {
         const gateId = `${base}-${family}`;
-        const derived = publicLeaves.get(gateId) as DerivedGate;
+        const derived = publicLeaves.get(gateId) ?? gate(gateId, undefined, undefined, { kind: "missing-observation" });
         const resolved = conflicts.has(gateId)
           ? gate(gateId, "fail", { observedBoundary: "conflict" }, { kind: "conflicting-observation" })
           : derived;
@@ -3486,11 +3486,6 @@ export async function runAggregateCompatibilityEvidence(
     preliminary = finalizeRun(facts, options, start.value, finish.value, true);
     failure = finalizeRun(facts, options, start.value, finish.value, false);
   } catch (error) {
-    console.error(
-      "[mcp-access-grant] aggregate-finalization-error",
-      error instanceof Error ? error.name : typeof error,
-      error instanceof Error && error.stack ? error.stack.split("\n").slice(1).join("\n") : "non-error",
-    );
     discard();
     throw stableFailure(error);
   }

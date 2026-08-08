@@ -130,4 +130,39 @@ describe("MCP live evidence session cutover", () => {
     expect(result.report.requests).toHaveLength(1);
     expect(fixture.artifacts).toHaveLength(1);
   });
+
+  it("materializes missing public cleanup gates when no grant facts exist", async () => {
+    const fixture = createCapabilities();
+    const session = createLiveEvidenceSession({ target, targetConfiguration: configuration, capabilities: fixture.capabilities });
+    const options = await session.aggregateCompatibilityOptions();
+    const result = await runAggregateCompatibilityEvidence(options, async (recorders) => {
+      await recorders.publicClient.record({
+        kind: "registration",
+        role: "primary",
+        family: "ipv4",
+        response: {
+          complete: true,
+          status: 201,
+          body: {
+            client_id: "fixture-client",
+            redirect_uris: ["http://127.0.0.1/oauth/callback"],
+            grant_types: ["authorization_code"],
+            response_types: ["code"],
+            token_endpoint_auth_method: "none",
+          },
+        },
+        request: {
+          method: "POST",
+          url: "https://supabase.example.test/auth/v1/oauth/clients",
+          bodyFields: ["redirect_uris"],
+          authorizationHeaderPresent: false,
+        },
+      });
+    });
+
+    expect(result.report.gates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "consent-cleanup-ipv4", status: "not-proven" }),
+      expect.objectContaining({ id: "consent-cleanup-ipv6", status: "not-proven" }),
+    ]));
+  });
 });
