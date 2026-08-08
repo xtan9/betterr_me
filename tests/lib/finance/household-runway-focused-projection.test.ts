@@ -510,9 +510,9 @@ describe("focused Household Runway Runtime projection", () => {
     expect(focused.plan).toEqual({ exists: false, current: false });
 
     const supported = composition.runtime.getSnapshot();
-    expect(supported).toHaveProperty("assessmentHistory");
-    expect(supported).toHaveProperty("affordances");
-    expect(supported).not.toHaveProperty("actions");
+    expect(supported).not.toHaveProperty("assessmentHistory");
+    expect(supported).not.toHaveProperty("affordances");
+    expect(supported).toHaveProperty("actions");
     expect(supported).not.toHaveProperty("focused");
   });
 
