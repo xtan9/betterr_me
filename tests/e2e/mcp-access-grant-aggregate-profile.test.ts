@@ -323,6 +323,253 @@ function authenticatedOperationFact(): AggregateCompatibilityFact {
   };
 }
 
+async function nestedPublicFamilyFacts(family: "ipv4" | "ipv6"): Promise<AggregatePublicClientFact[]> {
+  const host = family === "ipv4" ? "127.0.0.1" : "[::1]";
+  const registered = `http://${host}/oauth/callback`;
+  const callback = `http://${host}:43123/oauth/callback?code=one-time-code&state=state-value`;
+  const requestCallback = `http://${host}:43123/oauth/callback`;
+  const verifier = `nested-verifier-${family}`;
+  const { privateKey, publicKey } = await generateKeyPair("RS256");
+  const jwk = await exportJWK(publicKey);
+  jwk.kid = `nested-key-${family}`;
+  jwk.alg = "RS256";
+  jwk.use = "sig";
+  jwk.key_ops = ["verify"];
+  const issuedAt = Math.floor(Date.parse(startedAt) / 1000);
+  const token = await new SignJWT({
+    iss: target.expectedAuthorizationServer,
+    sub: `nested-user-${family}`,
+    aud: target.canonicalResource,
+    client_id: `nested-client-${family}`,
+    resource: target.canonicalResource,
+  })
+    .setProtectedHeader({ alg: "RS256", kid: `nested-key-${family}`, typ: "JWT" })
+    .setIssuedAt(issuedAt)
+    .setExpirationTime(issuedAt + 3600)
+    .sign(privateKey);
+
+  return [
+    {
+      kind: "registration",
+      role: "primary",
+      family,
+      response: surface({
+        client_id: `nested-client-${family}`,
+        redirect_uris: [registered],
+        grant_types: ["authorization_code"],
+        response_types: ["code"],
+        token_endpoint_auth_method: "none",
+      }, 201),
+    },
+    ...(["unsupported-client-auth-method", "unsupported-grant-type", "unsupported-response-type", "malformed-metadata", "unsafe-redirect-metadata"] as const).map((caseId) => ({
+      kind: "registration" as const,
+      role: "negative" as const,
+      family,
+      caseId,
+      response: surface({ error: "invalid_client_metadata", error_code: "invalid_client_metadata" }, 400),
+    })),
+    {
+      kind: "consent",
+      role: "metadata",
+      family,
+      observation: {
+        clientNameVisible: true,
+        clientUriVisible: true,
+        logoVisible: true,
+        softwareIdVisible: true,
+        softwareVersionVisible: true,
+        untrustedDisclaimerVisible: true,
+        endorsementText: "This client is not endorsed by BetterR.Me.",
+      },
+    },
+    {
+      kind: "authorization",
+      role: "approval",
+      family,
+      observation: {
+        affirmativeControlVisible: true,
+        denialControlVisible: true,
+        callbackBeforeDecision: false,
+        decision: "affirmative",
+      },
+    },
+    {
+      kind: "authorization",
+      role: "denial",
+      family,
+      observation: {
+        callbackComplete: true,
+        callbackReceived: true,
+        callbackUrl: `http://${host}/oauth/callback?error=access_denied&state=state-value`,
+        expectedState: "state-value",
+        callbackState: "state-value",
+        authorizationError: true,
+        tokenRequestObserved: false,
+      },
+    },
+    {
+      kind: "authorization",
+      role: "abandonment",
+      family,
+      observation: {
+        callbackComplete: true,
+        callbackReceived: false,
+        browserUrl: "http://provider.example.test/authorize",
+        tokenRequestObserved: false,
+      },
+    },
+    {
+      kind: "loopback",
+      role: "callback",
+      family,
+      observation: { registeredRedirectUri: registered, callbackUrl: callback, callbackReceived: true },
+    },
+    {
+      kind: "loopback",
+      role: "request",
+      family,
+      observation: {
+        registeredRedirectUri: registered,
+        requestCallbackUrl: requestCallback,
+        requestResource: target.canonicalResource,
+        portSelectedAtRequest: true,
+      },
+    },
+    {
+      kind: "pkce",
+      role: "exchange",
+      family,
+      observation: {
+        verifier,
+        challenge: s256CodeChallenge(verifier),
+        method: "S256",
+        requestResource: target.canonicalResource,
+      },
+    },
+    {
+      kind: "delegated-token",
+      role: "validation",
+      family,
+      token,
+      jwks: JSON.stringify({ keys: [jwk] }),
+      request: request(`${target.expectedAuthorizationServer}/token`, {
+        requestClientId: `nested-client-${family}`,
+        requestGrantType: "authorization_code",
+        requestResource: target.canonicalResource,
+        status: 200,
+      }),
+    },
+    {
+      kind: "mcp-operation",
+      role: "authenticated",
+      family,
+      observation: {
+        operationUrl: target.canonicalResource,
+        operationResource: target.canonicalResource,
+        sdk: { connected: true, listToolsCompleted: true, callToolCompleted: true, resultIsError: false },
+      },
+      request: request(target.canonicalResource, { authorizationHeaderPresent: true, status: 200 }),
+    },
+    {
+      kind: "grant",
+      role: "cleanup",
+      family,
+      observation: {
+        listRequestObserved: true,
+        listedClientIds: [`nested-client-${family}`],
+        listedGrantIds: [`nested-grant-${family}`],
+        grantId: `nested-grant-${family}`,
+        revokeRequestObserved: true,
+        revokeResponse: surface({}, 204),
+      },
+    },
+    {
+      kind: "cleanup",
+      role: "family",
+      family,
+      observation: { listRequestObserved: true, remainingClientIds: [], remainingGrantIds: [], requestStatus: 200 },
+    },
+  ];
+}
+
+async function compatibilityTailFacts(): Promise<AggregateCompatibilityFact[]> {
+  const postAccessToken = (await delegatedTokenFact()).token as string;
+  return [
+    {
+      kind: "refresh",
+      role: "root",
+      observation: {
+        initial: { accessToken: "root-access-token", refreshToken: "root-refresh-token" },
+      },
+    },
+    {
+      kind: "refresh",
+      role: "replacement",
+      observation: {
+        firstReplacement: {
+          previous: { accessToken: "root-access-token", refreshToken: "root-refresh-token" },
+          replacement: { accessToken: "first-access-token", refreshToken: "first-refresh-token" },
+          response: surface({ access_token: "first-access-token", refresh_token: "first-refresh-token" }),
+        },
+        secondReplacement: {
+          previous: { accessToken: "first-access-token", refreshToken: "first-refresh-token" },
+          replacement: { accessToken: "second-access-token", refreshToken: "second-refresh-token" },
+          response: surface({ access_token: "second-access-token", refresh_token: "second-refresh-token" }),
+        },
+      },
+    },
+    {
+      kind: "refresh",
+      role: "replay",
+      observation: {
+        attempts: ["consumed-root", "consumed-descendant-1", "active-descendant-2"].map((label) => ({
+          label,
+          response: surface({ error: "invalid_grant", error_code: "reused_token" }, 400),
+        })),
+      },
+    },
+    {
+      kind: "grant",
+      role: "identify",
+      observation: {
+        listRequestObserved: true,
+        listResponse: surface({ grants: [] }),
+        listedClientIds: [clientId],
+        listedGrantIds: [grantId],
+        grantId,
+        grantClientId: clientId,
+        grantPresent: true,
+      },
+    },
+    {
+      kind: "grant",
+      role: "revoke",
+      observation: {
+        revokeRequestObserved: true,
+        grantId,
+        grantClientId: clientId,
+        revokeResponse: surface({}, 204),
+      },
+    },
+    {
+      kind: "post-revocation",
+      role: "refresh",
+      observation: { response: surface({ error: "invalid_grant", error_code: "revoked_token" }, 400) },
+    },
+    {
+      kind: "post-revocation",
+      role: "access",
+      observation: { accessToken: postAccessToken, response: surface({ result: "still-valid-within-lifetime" }, 200) },
+      request: request(target.canonicalResource, { authorizationHeaderPresent: true, status: 200 }),
+    },
+    {
+      kind: "cleanup",
+      role: "final",
+      observation: { listRequestObserved: true, remainingClientIds: [], remainingGrantIds: [], grantPresent: false, requestStatus: 200 },
+    },
+  ];
+}
+
 function shadowDiscoveryFacts(): AggregatePublicClientFact[] {
   return [
     {
@@ -344,13 +591,16 @@ function shadowDiscoveryFacts(): AggregatePublicClientFact[] {
   ];
 }
 
-function options(writes: AggregateCompatibilityArtifact[]): AggregateCompatibilityEvidenceOptions {
+function options(writes: AggregateCompatibilityArtifact[], clockCalls?: { count: number }): AggregateCompatibilityEvidenceOptions {
   let call = 0;
   return {
     target,
     versions,
     configuredSecrets: ["configured-secret", "response-secret", "one-time-code", "aggregate-verifier"],
-    clock: () => call++ === 0 ? startedAt : finishedAt,
+    clock: () => {
+      if (clockCalls) clockCalls.count += 1;
+      return call++ === 0 ? startedAt : finishedAt;
+    },
     writer: {
       write: async (artifact) => {
         writes.push(artifact);
@@ -421,6 +671,93 @@ describe("aggregate MCP compatibility evidence profile", () => {
     expect(createHash("sha256").update(result.artifact.contents).digest("hex")).toBe(
       "464221c11813ad229be2ff4b57e4602fcbdfa0e17e265a98a6787408e4e6f41b",
     );
+  });
+
+  it("completes the direct compatibility tail and nested public journey in one outer run", async () => {
+    const writes: AggregateCompatibilityArtifact[] = [];
+    const clockCalls = { count: 0 };
+    const compatibilityFacts = [...await completeFacts(), ...await compatibilityTailFacts()];
+    const nestedFacts = [
+      ...shadowDiscoveryFacts(),
+      ...await nestedPublicFamilyFacts("ipv4"),
+      ...await nestedPublicFamilyFacts("ipv6"),
+    ];
+    const delegatedFactCount = [...compatibilityFacts, ...nestedFacts].filter((fact) => fact.kind === "delegated-token").length;
+    let callbackCount = 0;
+    const result = await runAggregateCompatibilityEvidence(options(writes, clockCalls), async ({ compatibility, publicClient }) => {
+      callbackCount += 1;
+      for (const fact of compatibilityFacts) await compatibility.record(fact);
+      for (const fact of nestedFacts) await publicClient.record(fact);
+    });
+
+    expect(callbackCount).toBe(1);
+    expect(clockCalls.count).toBe(delegatedFactCount + 2);
+    expect(result.report.gates.map(({ id }) => id)).toEqual(COMPATIBILITY_PROFILE.expandedGateIds);
+    expect(new Set(result.report.gates.map(({ id }) => id)).size).toBe(result.report.gates.length);
+    expect(result.report.gates.every(({ status }) => status === "pass")).toBe(true);
+    expect(result.report.outcome).toBe("passed");
+    expect(result.report.gates.find(({ id }) => id === "refresh-rotation")?.evidence).toMatchObject({
+      firstReplacement: expect.objectContaining({
+        accessTokenChanged: true,
+        refreshTokenChanged: true,
+        providerReturnedAccessToken: true,
+        providerReturnedRefreshToken: true,
+      }),
+    });
+    expect(result.report.gates.find(({ id }) => id === "refresh-replay-containment")?.evidence).toMatchObject({
+      rootReplayDetected: true,
+      everyIssuedDescendantRejected: true,
+      familyMemberCountExercised: 3,
+    });
+    expect(result.report.gates.find(({ id }) => id === "grant-identification-revocation")?.evidence).toMatchObject({
+      grantIdentified: true,
+      grantRevoked: true,
+    });
+    expect(result.report.gates.find(({ id }) => id === "post-revocation-refresh")?.evidence).toMatchObject({
+      replacementCredentialsStored: false,
+      succeeded: false,
+    });
+    expect(result.report.gates.find(({ id }) => id === "post-revocation-access")?.evidence).toMatchObject({
+      operationStatus: "authorized",
+      withinDocumentedLifetime: true,
+    });
+    expect(result.report.gates.find(({ id }) => id === "cleanup")?.evidence).toMatchObject({
+      grantRevoked: true,
+    });
+    expect(result.report.gates.find(({ id }) => id === "public-client-registration-both")).toMatchObject({ status: "pass" });
+    expect(result.report.gates.find(({ id }) => id === "registration-negative-validation-both")).toMatchObject({ status: "pass" });
+    expect(result.report.gates.find(({ id }) => id === "consent-cleanup-both")).toMatchObject({ status: "pass" });
+    expect(result.report.gates.find(({ id }) => id === "delegated-token-validation-both")).toMatchObject({ status: "pass" });
+    expect(result.report.gates.find(({ id }) => id === "authenticated-mcp-operation-both")).toMatchObject({ status: "pass" });
+    expect(writes).toHaveLength(1);
+    expect(writes[0]?.contents).toBe(result.artifact.contents);
+    expect(result.artifact.contents).not.toContain("root-access-token");
+    expect(result.artifact.contents).not.toContain("one-time-code");
+  });
+
+  it("keeps the new direct roles compatibility-only and ordered", async () => {
+    const incompatibleFacts = [
+      { kind: "grant", role: "identify", family: "ipv4" },
+      { kind: "post-revocation", role: "access", family: "ipv4" },
+      { kind: "cleanup", role: "final", family: "ipv4" },
+    ];
+    for (const fact of incompatibleFacts) {
+      await expect(runAggregateCompatibilityEvidence(options([]), async ({ compatibility }) => {
+        await compatibility.record(fact as never);
+      })).rejects.toThrow("Aggregate compatibility evidence journey failed.");
+    }
+
+    await expect(runAggregateCompatibilityEvidence(options([]), async ({ publicClient }) => {
+      await publicClient.record({ kind: "refresh", role: "root" } as never);
+    })).rejects.toThrow("Aggregate compatibility evidence journey failed.");
+
+    const result = await runAggregateCompatibilityEvidence(options([]), async ({ compatibility }) => {
+      await compatibility.record({ kind: "refresh", role: "replacement" } as never);
+      await compatibility.record({ kind: "refresh", role: "root" } as never);
+      await compatibility.record({ kind: "refresh", role: "replay" } as never);
+    });
+    expect(result.report.gates.find(({ id }) => id === "refresh-rotation")).toMatchObject({ status: "fail" });
+    expect(result.report.gates.find(({ id }) => id === "refresh-replay-containment")).toMatchObject({ status: "fail" });
   });
 
   it("lets compatibility discovery own shared gates while accepting only public shadow discovery", async () => {

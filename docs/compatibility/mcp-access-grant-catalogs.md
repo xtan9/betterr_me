@@ -88,24 +88,31 @@ gate, with the fixed public leaf and aggregate order preserved.
 No live adapter invokes these new producers yet. The operation remains a
 deterministic integration-branch capability until the planned atomic cutover.
 
-## Issue #912 aggregate compatibility evidence
+## Issue #913 aggregate compatibility evidence
 
 `e2e/mcp-access-grant-aggregate-profile.ts` adds the aggregate
 `runAggregateCompatibilityEvidence` operation. Each invocation owns one private
 session and gives its callback two source-bound recorder ports: the
-compatibility recorder is authoritative, while the public-client recorder can
-submit only closed shadow resource/provider discovery observations. Public
-shadow discovery is retained as context but cannot decide the shared gates.
+compatibility recorder is authoritative, while the public-client recorder
+accepts the closed nested family journey and shadow resource/provider discovery
+observations. Public shadow discovery is retained as ordered request context but
+cannot decide the shared gates.
 
 The operation derives the core compatibility profile in fixed order through
 discovery, registration, authorization, loopback, S256 PKCE, protocol-negative
 proofs, delegated-token verification, and an authenticated MCP operation.
-Credential presence is computed from bounded primitive response surfaces, and
-issuer, resource, client, grant, signing-key, and sampled-time context is
-derived by the deterministic kernel. Family identity and conclusion fields are
-rejected at both recorder layers.
+It then derives refresh rotation and replay containment, grant identity and
+revocation, post-revocation refresh/access behavior, cleanup, and every nested
+IPv4/IPv6 family leaf and aggregate. Credential equality, replacement presence,
+replay rejection, grant identity, revocation, and access-token lifetime are
+computed from bounded primitive surfaces and the injected sampled clock.
+Family identity and conclusion fields are rejected at both recorder layers;
+compatibility grant-management, post-revocation, and final-cleanup facts remain
+family-free and use only their closed compatibility roles.
 
-Refresh, grant revocation, post-revocation behavior, cleanup, and the nested
-public journey remain explicit `not-proven` gates in catalog order. No live
-adapter invokes this operation yet; its deterministic aggregate goldens are
-the evidence boundary for this slice.
+The public journey receives only its recorder and cannot start or finalize a
+second report or artifact. One aggregate invocation emits the complete expanded
+gate manifest once, in catalog order, and performs one optimistic artifact
+write on a sanitized result. No live adapter invokes this operation yet; its
+deterministic aggregate goldens and source-bound profile tests are the evidence
+boundary for this slice.
