@@ -58,19 +58,18 @@ import {
   type PublicClientProfileValidation,
   validatePublicClientProfile,
 } from "./mcp-access-grant-policy";
+import {
+  evaluateMcpAccessGrantTargetConfiguration,
+  type McpAccessGrantTarget,
+  type McpAccessGrantTargetConfiguration,
+} from "./mcp-access-grant-target";
 
 export type GateStatus = EvidenceGateStatus;
-
-export interface McpAccessGrantTarget {
-  name: string;
-  canonicalResource: string;
-  supabaseUrl: string;
-  expectedAuthorizationServer: string;
-  loopbackHosts?: LoopbackHost[];
-  anonKey?: string;
-  email?: string;
-  password?: string;
-}
+export type {
+  McpAccessGrantTarget,
+  McpAccessGrantTargetConfiguration,
+  McpAccessGrantTargetLocality,
+} from "./mcp-access-grant-target";
 
 type RequestEvidence = {
   -readonly [Key in keyof MinimizedRequestObservation]: MinimizedRequestObservation[Key]
@@ -84,16 +83,6 @@ interface CallbackResult {
   accessTokenPresent?: boolean;
   refreshTokenPresent?: boolean;
   idTokenPresent?: boolean;
-}
-
-interface TargetConfig {
-  name?: unknown;
-  canonicalResource?: unknown;
-  supabaseUrl?: unknown;
-  expectedAuthorizationServer?: unknown;
-  loopbackHosts?: unknown;
-  emailEnv?: unknown;
-  passwordEnv?: unknown;
 }
 
 export const PUBLIC_CLIENT_REQUIRED_GATE_IDS = [
@@ -119,13 +108,6 @@ export const PUBLIC_CLIENT_REQUIRED_GATE_IDS = [
 const CALLBACK_WAIT_TIMEOUT_MS = 10_000;
 const LOGO_FIXTURE_PATH = "/mcp-client-logo.svg";
 const LOGO_FIXTURE_CONTENT = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="#0f766e"/><path d="M18 32h28M32 18v28" stroke="#fff" stroke-width="6" stroke-linecap="round"/></svg>`;
-
-const SENSITIVE_ENV_NAMES = [
-  "MCP_TEST_PASSWORD",
-  "SUPABASE_SERVICE_ROLE_KEY",
-  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-  "API_KEY_HMAC_SECRET",
-];
 
 function addGate(
   gates: GateAccumulator,
@@ -281,84 +263,6 @@ function captureBrowserTokenRequests(
 
 function errorDetail(error: unknown): string {
   return sanitizeText(error instanceof Error ? error.message : String(error)).slice(0, 500);
-}
-
-function isLocalHostname(value: string): boolean {
-  try {
-    const hostname = new URL(value).hostname;
-    return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "[::1]" || hostname === "::1";
-  } catch {
-    return false;
-  }
-}
-
-function deriveAuthorizationServer(supabaseUrl: string): string {
-  try {
-    const url = new URL(supabaseUrl);
-    url.pathname = `${url.pathname.replace(/\/$/, "")}/auth/v1`;
-    url.search = "";
-    url.hash = "";
-    return url.toString().replace(/\/$/, "");
-  } catch {
-    return "";
-  }
-}
-
-function parseTarget(raw: TargetConfig, index: number): McpAccessGrantTarget {
-  const supabaseUrl = typeof raw.supabaseUrl === "string" ? raw.supabaseUrl : "";
-  const emailEnv = typeof raw.emailEnv === "string" ? raw.emailEnv : "MCP_TEST_EMAIL";
-  const passwordEnv = typeof raw.passwordEnv === "string" ? raw.passwordEnv : "MCP_TEST_PASSWORD";
-  const configuredLoopbackHosts = Array.isArray(raw.loopbackHosts)
-    ? raw.loopbackHosts
-    : typeof raw.loopbackHosts === "string"
-      ? raw.loopbackHosts.split(",")
-      : [...LOOPBACK_HOSTS];
-  const loopbackHosts = [...new Set(configuredLoopbackHosts.filter(
-    (host): host is LoopbackHost => LOOPBACK_HOSTS.includes(host as LoopbackHost),
-  ))];
-
-  return {
-    name: typeof raw.name === "string" ? raw.name : `target-${index + 1}`,
-    canonicalResource: typeof raw.canonicalResource === "string" ? raw.canonicalResource : "",
-    supabaseUrl,
-    expectedAuthorizationServer:
-      typeof raw.expectedAuthorizationServer === "string" && raw.expectedAuthorizationServer.length > 0
-        ? raw.expectedAuthorizationServer
-        : deriveAuthorizationServer(supabaseUrl),
-    loopbackHosts,
-    email: process.env[emailEnv],
-    password: process.env[passwordEnv],
-  };
-}
-
-export function loadMcpAccessGrantTargets(): McpAccessGrantTarget[] {
-  const rawTargets = process.env.MCP_ACCESS_GRANT_TARGETS;
-
-  if (rawTargets) {
-    try {
-      const parsed: unknown = JSON.parse(rawTargets);
-      if (Array.isArray(parsed)) {
-        return parsed.map((target, index) =>
-          parseTarget(target && typeof target === "object" ? (target as TargetConfig) : {}, index),
-        );
-      }
-    } catch {
-      return [parseTarget({}, 0)];
-    }
-  }
-
-  return [
-    parseTarget(
-      {
-        name: process.env.MCP_ACCESS_GRANT_TARGET_NAME ?? "configured-target",
-        canonicalResource: process.env.MCP_ACCESS_GRANT_CANONICAL_RESOURCE,
-        supabaseUrl: process.env.MCP_SUPABASE_URL,
-        expectedAuthorizationServer: process.env.MCP_SUPABASE_AUTH_ISSUER,
-        loopbackHosts: process.env.MCP_ACCESS_GRANT_LOOPBACK_HOSTS,
-      },
-      0,
-    ),
-  ];
 }
 
 class LoopbackCallback {
@@ -1991,6 +1895,7 @@ export async function runPublicClientLoopbackConsentCompatibility(
   target: McpAccessGrantTarget,
   page: Page,
   testInfo: TestInfo,
+  targetConfiguration: McpAccessGrantTargetConfiguration,
 ): Promise<CompatibilityReport> {
   const startedAt = new Date().toISOString();
   const run: LiveEvidenceRun = {
@@ -2001,14 +1906,10 @@ export async function runPublicClientLoopbackConsentCompatibility(
       canonicalResource: sanitizeUrl(target.canonicalResource),
       supabaseUrl: sanitizeUrl(target.supabaseUrl),
       expectedAuthorizationServer: sanitizeUrl(target.expectedAuthorizationServer),
-      loopbackHosts: target.loopbackHosts ?? [...LOOPBACK_HOSTS],
+      loopbackHosts: target.loopbackHosts,
     },
     versions: await collectVersions(),
-    configuredSecrets: [
-      ...SENSITIVE_ENV_NAMES.map((name) => process.env[name] ?? ""),
-      target.email ?? "",
-      target.password ?? "",
-    ],
+    configuredSecrets: targetConfiguration.configuredValues,
   };
   const report: CompatibilityReport = {
     issue: run.issue,
@@ -2022,19 +1923,7 @@ export async function runPublicClientLoopbackConsentCompatibility(
   };
   const gates = new GateAccumulator();
 
-  const configured = (() => {
-    try {
-      new URL(target.canonicalResource);
-      new URL(target.supabaseUrl);
-      new URL(target.expectedAuthorizationServer);
-      return true;
-    } catch {
-      return false;
-    }
-  })();
-  const nonProduction = isLocalHostname(target.canonicalResource) && isLocalHostname(target.supabaseUrl) &&
-    isLocalHostname(target.expectedAuthorizationServer) ||
-    process.env.MCP_ACCESS_GRANT_NON_PRODUCTION_ACK === "true";
+  const { configured, nonProduction } = evaluateMcpAccessGrantTargetConfiguration(target);
 
   addGate(
     gates,
@@ -2047,7 +1936,7 @@ export async function runPublicClientLoopbackConsentCompatibility(
       : "Canonical Resource, Supabase URL, and expected authorization-server issuer must be configured as URLs.",
     {
       hasProviderCredentials: Boolean(target.email && target.password),
-      loopbackHosts: target.loopbackHosts ?? [...LOOPBACK_HOSTS],
+      loopbackHosts: target.loopbackHosts,
       canonicalResource: sanitizeUrl(target.canonicalResource),
       supabaseUrl: sanitizeUrl(target.supabaseUrl),
       expectedAuthorizationServer: sanitizeUrl(target.expectedAuthorizationServer),
@@ -2148,7 +2037,7 @@ export async function runPublicClientLoopbackConsentCompatibility(
     return finishReport(run, gates, report.requests, testInfo);
   }
 
-  const configuredLoopbackHosts = target.loopbackHosts ?? [...LOOPBACK_HOSTS];
+  const configuredLoopbackHosts = target.loopbackHosts;
   for (const host of LOOPBACK_HOSTS) {
     const family = familyName(host);
     if (!configuredLoopbackHosts.includes(host)) {
