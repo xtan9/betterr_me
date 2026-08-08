@@ -1,8 +1,12 @@
-import crypto from "node:crypto";
 import type {
   OAuthClientInformationMixed,
-  OAuthClientMetadata,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
+
+import {
+  DEFAULT_LOOPBACK_CALLBACK_PATH,
+  s256CodeChallenge,
+  type LoopbackHost,
+} from "./mcp-access-grant-journey";
 
 export const ALLOWED_DELEGATED_JWT_ALGORITHMS = ["RS256", "ES256"] as const;
 
@@ -84,10 +88,6 @@ export function isAllowedDelegatedJwtAlgorithm(
     typeof algorithm === "string" &&
     (ALLOWED_DELEGATED_JWT_ALGORITHMS as readonly string[]).includes(algorithm)
   );
-}
-
-export function s256CodeChallenge(verifier: string): string {
-  return crypto.createHash("sha256").update(verifier).digest("base64url");
 }
 
 export function matchesS256CodeChallenge(
@@ -249,30 +249,6 @@ export function publicBoundaryRejects(
   return (status === 401 || status === 403) && !responseContainsCredentials;
 }
 
-export type LoopbackHost = "127.0.0.1" | "::1";
-
-export const LOOPBACK_HOSTS = ["127.0.0.1", "::1"] as const satisfies readonly LoopbackHost[];
-
-export const DEFAULT_LOOPBACK_CALLBACK_PATH = "/oauth/callback";
-
-export interface LoopbackUrls {
-  registrationUrl: string;
-  callbackUrl: string;
-}
-
-export function buildLoopbackUrls(
-  host: LoopbackHost,
-  port: number,
-  callbackPath = DEFAULT_LOOPBACK_CALLBACK_PATH,
-): LoopbackUrls {
-  const normalizedPath = callbackPath.startsWith("/") ? callbackPath : `/${callbackPath}`;
-  const hostname = host === "::1" ? `[${host}]` : host;
-  return {
-    registrationUrl: `http://${hostname}${normalizedPath}`,
-    callbackUrl: `http://${hostname}:${port}${normalizedPath}`,
-  };
-}
-
 export function isSupportedLoopbackRegistrationRedirect(
   value: string,
   expectedHost: LoopbackHost,
@@ -294,36 +270,6 @@ export function isSupportedLoopbackRegistrationRedirect(
   } catch {
     return false;
   }
-}
-
-export interface PublicNativeClientMetadataInput {
-  registrationRedirectUri: string;
-  clientName: string;
-  clientUri: string;
-  logoUri: string;
-  softwareId: string;
-  softwareVersion: string;
-}
-
-export function buildPublicNativeClientMetadata({
-  registrationRedirectUri,
-  clientName,
-  clientUri,
-  logoUri,
-  softwareId,
-  softwareVersion,
-}: PublicNativeClientMetadataInput): OAuthClientMetadata {
-  return {
-    client_name: clientName,
-    client_uri: clientUri,
-    logo_uri: logoUri,
-    redirect_uris: [registrationRedirectUri],
-    grant_types: ["authorization_code"],
-    response_types: ["code"],
-    token_endpoint_auth_method: "none",
-    software_id: softwareId,
-    software_version: softwareVersion,
-  };
 }
 
 export interface PublicClientProfileValidation {
@@ -370,39 +316,4 @@ export function validatePublicClientProfile(
     supportedResponseTypes,
     publicTokenAuthentication,
   };
-}
-
-export interface RegistrationNegativeCase {
-  id: string;
-  metadata: Record<string, unknown>;
-}
-
-export function buildRegistrationNegativeCases(
-  metadata: OAuthClientMetadata,
-): RegistrationNegativeCase[] {
-  return [
-    { id: "unsupported-client-auth-method", metadata: { ...metadata, token_endpoint_auth_method: "client_secret_post" } },
-    { id: "unsupported-grant-type", metadata: { ...metadata, grant_types: ["client_credentials"] } },
-    { id: "unsupported-response-type", metadata: { ...metadata, response_types: ["token"] } },
-    { id: "malformed-metadata", metadata: { ...metadata, redirect_uris: ["not-a-loopback-uri"] } },
-    { id: "unsafe-redirect-metadata", metadata: { ...metadata, redirect_uris: ["https://untrusted-client.example.test/callback"] } },
-  ];
-}
-
-export function grantClientId(grant: unknown): string | undefined {
-  if (!grant || typeof grant !== "object") return undefined;
-
-  const record = grant as Record<string, unknown>;
-  if (typeof record.client_id === "string") return record.client_id;
-
-  if (record.client && typeof record.client === "object") {
-    const client = record.client as Record<string, unknown>;
-    return typeof client.id === "string"
-      ? client.id
-      : typeof client.client_id === "string"
-        ? client.client_id
-        : undefined;
-  }
-
-  return undefined;
 }

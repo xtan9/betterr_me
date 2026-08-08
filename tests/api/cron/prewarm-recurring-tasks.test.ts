@@ -3,13 +3,13 @@ import { NextRequest } from "next/server";
 
 const {
   mockCreateAdminClient,
-  mockCreateLifecycle,
-  mockPrewarm,
+  mockCreateMaintenance,
+  mockRunMaintenance,
   mockLog,
 } = vi.hoisted(() => ({
   mockCreateAdminClient: vi.fn(),
-  mockCreateLifecycle: vi.fn(),
-  mockPrewarm: vi.fn(),
+  mockCreateMaintenance: vi.fn(),
+  mockRunMaintenance: vi.fn(),
   mockLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
@@ -17,12 +17,12 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: mockCreateAdminClient,
 }));
 
-vi.mock("@/lib/recurring-tasks/supabase-lifecycle", () => ({
-  createSupabaseRecurringTaskLifecycle: mockCreateLifecycle,
-}));
-
-vi.mock("@/lib/recurring-tasks/prewarming", () => ({
-  prewarmActiveRecurringTaskCoverage: mockPrewarm,
+vi.mock("@/lib/recurring-tasks", () => ({
+  createRecurringTaskMaintenanceCapability: mockCreateMaintenance,
+  RECURRING_TASK_MAINTENANCE_AUTHORITY: {
+    type: "cron",
+    serviceId: "recurring-task-maintenance",
+  },
 }));
 
 vi.mock("@/lib/logger", () => ({ log: mockLog }));
@@ -42,15 +42,19 @@ describe("GET /api/cron/prewarm-recurring-tasks", () => {
     vi.clearAllMocks();
     vi.stubEnv("CRON_SECRET", CRON_SECRET);
     mockCreateAdminClient.mockReturnValue({ rpc: vi.fn() });
-    mockCreateLifecycle.mockReturnValue({});
-    mockPrewarm.mockResolvedValue({
+    mockCreateMaintenance.mockReturnValue({ run: mockRunMaintenance });
+    mockRunMaintenance.mockResolvedValue({
       status: "partial",
       type: "partial",
       seriesCount: 2,
       warmedSeriesCount: 1,
       skippedSeriesCount: 0,
-      failedSeriesIds: ["series-2"],
-      attempts: [{ seriesId: "series-2", attempts: 3, status: "failed" }],
+      failedSeriesCount: 1,
+      operationalFailures: {
+        total: 1,
+        activeSeriesScan: 0,
+        coveragePrewarm: 1,
+      },
     });
   });
 
@@ -61,24 +65,33 @@ describe("GET /api/cron/prewarm-recurring-tasks", () => {
   it("requires the cron authorization", async () => {
     const response = await GET(request(""));
     expect(response.status).toBe(401);
-    expect(mockPrewarm).not.toHaveBeenCalled();
+    expect(mockCreateMaintenance).not.toHaveBeenCalled();
   });
 
-  it("runs the narrow prewarming boundary and returns per-Series outcomes", async () => {
+  it("runs the narrow maintenance boundary and returns aggregate outcomes", async () => {
     const response = await GET(request());
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
+    const payload = await response.json();
+    expect(payload).toMatchObject({
       status: "partial",
       series_count: 2,
       warmed_series_count: 1,
-      failed_series_ids: ["series-2"],
+      failed_series_count: 1,
+      operational_failure_count: 1,
     });
-    expect(mockCreateLifecycle).toHaveBeenCalledWith(expect.anything());
-    expect(mockPrewarm).toHaveBeenCalledWith(expect.anything());
+    expect(payload).not.toHaveProperty("failed_series_ids");
+    expect(payload).not.toHaveProperty("attempts");
+    expect(mockCreateMaintenance).toHaveBeenCalledWith({
+      supabase: expect.anything(),
+      authority: expect.objectContaining({
+        serviceId: "recurring-task-maintenance",
+      }),
+    });
+    expect(mockRunMaintenance).toHaveBeenCalledTimes(1);
   });
 
   it("does not put lifecycle errors or user content into diagnostics", async () => {
-    mockPrewarm.mockRejectedValueOnce(new Error("SECRET_DESCRIPTION"));
+    mockRunMaintenance.mockRejectedValueOnce(new Error("SECRET_DESCRIPTION"));
     const response = await GET(request());
 
     expect(response.status).toBe(500);
