@@ -1924,7 +1924,7 @@ function blockingIssueFor(
   return stage ? current ?? draft.validationIssues[stage] ?? null : null;
 }
 
-interface HouseholdRunwayReviewProjection {
+export interface HouseholdRunwayReviewProjection {
   readiness: "ready" | "blocked";
   location:
     | {
@@ -2019,7 +2019,7 @@ interface HouseholdRunwayResultComparison {
     | { kind: "depletes"; monthsCovered: number };
 }
 
-type HouseholdRunwayResultProjection =
+export type HouseholdRunwayResultProjection =
   | { readiness: "unavailable" }
   | {
       readiness: "ready";
