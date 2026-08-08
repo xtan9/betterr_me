@@ -247,6 +247,51 @@ describe("Household Runway Runtime Plan Adjustment boundary", () => {
     });
   });
 
+  it("treats a throwing field getter as an unusable present value", () => {
+    const runtime = completedRuntime();
+    const patch = { added_monthly_income_cents: 234_567 } as Record<
+      string,
+      unknown
+    >;
+    Object.defineProperty(patch, "added_cash_cents", {
+      enumerable: true,
+      get() {
+        throw new Error("unusable patch value");
+      },
+    });
+
+    expect(() =>
+      runtime.send({
+        type: "set_plan_adjustment",
+        patch: patch as Partial<RunwayAdjustments>,
+      }),
+    ).not.toThrow();
+
+    expect(adjustmentFrom(runtime)).toMatchObject({
+      added_cash_cents: 0,
+      added_monthly_income_cents: 234_567,
+    });
+  });
+
+  it("treats an unusable object-like patch as an empty partial patch", () => {
+    const runtime = completedRuntime();
+    runtime.send({
+      type: "set_plan_adjustment",
+      patch: { added_cash_cents: 123_456 },
+    });
+    const { proxy, revoke } = Proxy.revocable({}, {});
+    revoke();
+
+    expect(() =>
+      runtime.send({
+        type: "set_plan_adjustment",
+        patch: proxy as Partial<RunwayAdjustments>,
+      }),
+    ).not.toThrow();
+
+    expect(adjustmentFrom(runtime).added_cash_cents).toBe(123_456);
+  });
+
   it("preserves unpatched fields while ignoring unknown fields", () => {
     const runtime = completedRuntime();
     runtime.send({
