@@ -1,6 +1,6 @@
 import type { EndType, RecurrenceRule } from "@/lib/db/types";
-import { addLocalDays } from "./recurrence";
-import { encodeSeriesVersion, RECURRING_TASK_OPERATION_IDS } from "./capabilities";
+import { addLocalDays } from "./internal/recurrence";
+import { RECURRING_TASK_OPERATION_IDS } from "./internal/capabilities";
 import type {
   CreateSeriesCommand,
   RecurringTaskFailure,
@@ -9,8 +9,7 @@ import type {
   SeriesProjection,
   SeriesStateCommand,
   SeriesVersion,
-} from "./capabilities";
-import type { RecurringTaskSeries } from "./lifecycle";
+} from "./internal/capabilities";
 
 /** Supported compatibility subpath for legacy HTTP and AI translation. */
 
@@ -195,6 +194,17 @@ export interface SeriesStateCompatibilityInput {
   coverage?: { from: string; to: string };
 }
 
+/** Resolve a transport date once at the compatibility boundary. */
+export function resolveSeriesEffectiveDate(
+  explicitDate?: string,
+  inferredDate?: string,
+): string | undefined {
+  const explicit = explicitDate?.trim();
+  if (explicit) return explicit;
+  const inferred = inferredDate?.trim();
+  return inferred || undefined;
+}
+
 /** Translate a state action into the shared public command contract. */
 export function toSeriesStateCommand(
   input: SeriesStateCompatibilityInput,
@@ -231,7 +241,7 @@ export function toLifecycleRecurrenceDates(startDate: string): {
  * this compatibility boundary.
  */
 export function toRecurringTaskResponse(
-  series: SeriesProjection | RecurringTaskSeries,
+  series: SeriesProjection,
   ownerId: string,
 ): RecurringTaskResponse {
   const revision = series.revisions.find(
@@ -249,10 +259,6 @@ export function toRecurringTaskResponse(
     : series.lastScheduledDate !== null
       ? "on_date"
       : "never";
-  const version = "version" in series
-    ? series.version
-    : encodeSeriesVersion(series.id, series.revisionToken);
-
   return {
     id: series.id,
     user_id: ownerId,
@@ -270,7 +276,7 @@ export function toRecurringTaskResponse(
     end_date: series.lastScheduledDate,
     end_count: series.occurrenceLimit,
     status: series.status === "ended" ? "archived" : series.status,
-    version,
+    version: series.version,
     created_at: series.createdAt,
     updated_at: series.updatedAt,
   };

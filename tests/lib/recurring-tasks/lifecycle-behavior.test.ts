@@ -5,7 +5,7 @@ import {
   type RecurringTaskLifecyclePersistence,
   type RecurringTaskLifecycleState,
   RecurringTaskLifecycle,
-} from "@/lib/recurring-tasks/lifecycle";
+} from "@/lib/recurring-tasks/internal/lifecycle";
 
 function defaults(title: string, priority: 0 | 1 | 2 | 3 = 0) {
   return {

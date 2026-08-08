@@ -18,7 +18,7 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-vi.mock("@/lib/recurring-tasks/capabilities", () => ({
+vi.mock("@/lib/recurring-tasks", () => ({
   createAuthenticatedRecurringTaskCapabilities: mockCreateCapabilities,
 }));
 

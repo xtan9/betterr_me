@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { z } from "zod";
-import type { AuthenticatedRecurringTaskPrincipal } from "@/lib/recurring-tasks/capabilities";
+import type { AuthenticatedRecurringTaskPrincipal } from "@/lib/recurring-tasks";
 
 export interface ToolContext {
   userId: string;

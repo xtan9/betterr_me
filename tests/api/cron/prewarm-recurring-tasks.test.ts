@@ -17,7 +17,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: mockCreateAdminClient,
 }));
 
-vi.mock("@/lib/recurring-tasks", () => ({
+vi.mock("@/lib/recurring-tasks/internal/maintenance", () => ({
   createRecurringTaskMaintenanceCapability: mockCreateMaintenance,
   RECURRING_TASK_MAINTENANCE_AUTHORITY: {
     type: "cron",

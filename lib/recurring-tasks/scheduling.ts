@@ -12,9 +12,9 @@ export {
   getNextOccurrence,
   getOccurrencesInRange,
   isValidLocalDate,
-} from "./recurrence";
+} from "./internal/recurrence";
 export type {
   LocalDateRange,
   ScheduledDateCalculation,
-} from "./recurrence";
+} from "./internal/recurrence";
 export type { RecurrenceRule } from "@/lib/db/types";

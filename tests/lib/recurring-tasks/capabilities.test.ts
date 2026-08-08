@@ -7,14 +7,14 @@ import {
   RECURRING_TASK_OPERATION_IDS,
   type AuthenticatedRecurringTaskCapabilities,
   type CreateSeriesCommand,
-} from "@/lib/recurring-tasks/capabilities";
-import { createInMemoryRecurringTaskCapabilities } from "@/lib/recurring-tasks/reference-capabilities";
+} from "@/lib/recurring-tasks/internal/capabilities";
+import { createInMemoryRecurringTaskCapabilities } from "@/lib/recurring-tasks/internal/reference-capabilities";
 import {
   InMemoryRecurringTaskLifecyclePersistence,
   RecurringTaskLifecycle,
   type RecurringTaskSeries,
   type UserCoverageOutcome,
-} from "@/lib/recurring-tasks/lifecycle";
+} from "@/lib/recurring-tasks/internal/lifecycle";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const principal = {

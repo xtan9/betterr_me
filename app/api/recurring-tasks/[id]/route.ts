@@ -7,7 +7,7 @@ import { recurringTaskUpdateSchema } from '@/lib/validations/recurring-task';
 import {
   addLocalDays,
   isValidLocalDate,
-} from '@/lib/recurring-tasks/recurrence';
+} from '@/lib/recurring-tasks/scheduling';
 import {
   createAuthenticatedRecurringTaskCapabilities,
   type AuthenticatedRecurringTaskCapabilities,

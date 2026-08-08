@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   InMemoryRecurringTaskLifecyclePersistence,
   RecurringTaskLifecycle,
-} from "@/lib/recurring-tasks/lifecycle";
+} from "@/lib/recurring-tasks/internal/lifecycle";
 
 describe("Recurring Task Lifecycle", () => {
   it("materializes an activation-bounded schedule from an independent anchor and converges on retry", async () => {

@@ -11,11 +11,6 @@ import type { EditScope } from '@/lib/validations/recurring-task';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { TasksDB } from '@/lib/db';
 import { getBottomSortOrder } from './sort-order';
-import type {
-  LifecycleOutcome,
-  OccurrenceOverrides,
-  RecurringTaskLifecyclePort,
-} from '@/lib/recurring-tasks/lifecycle';
 
 export type TaskReminderType = 'relative' | 'absolute';
 export type TaskReminderChannel = 'push' | 'email';
@@ -83,112 +78,12 @@ export interface TaskReminderConfigurationPersistence {
   ): Promise<TaskReminderConfigurationPersistenceOutcome>;
 }
 
-/** Storage-independent, owner-scoped task deletion intent. */
-export interface TaskDeletionRequest {
-  userId: string;
-  taskId: string;
-  scope?: EditScope;
-  effectiveDate?: string;
-  operationId?: string;
-}
-
-/** Storage-independent recurring-series deletion intent. */
-export interface TaskSeriesDeletionRequest {
-  userId: string;
-  seriesId: string;
-  effectiveDate?: string;
-}
-
-export type TaskDeletionPersistenceOutcome =
-  | { type: 'deleted' }
-  | { type: 'not-found' };
-
-export interface TaskDeletionPersistence {
-  deleteTask(
-    taskId: string,
-    userId: string,
-  ): Promise<TaskDeletionPersistenceOutcome>;
-}
-
-export type TaskDeletionOutcome =
-  | TaskDeletionPersistenceOutcome
-  | {
-      type: 'invalid-transition';
-      reason: string;
-    }
-  | {
-      type: 'conflict';
-      reason?: string;
-      expectedRevisionToken?: number;
-      actualRevisionToken?: number;
-    }
-  | {
-      type: 'coverage-unavailable';
-      requestedRange: { from: string; to: string };
-      coverageHorizon: string | null;
-      reason: string;
-    };
-
-export type TaskSeriesDeletionOutcome = TaskDeletionOutcome;
-
-export type TaskDeletionPresentationContext =
-  | 'task'
-  | 'occurrence'
-  | 'series';
-
-export function taskDeletionErrorMessage(
-  outcome: Exclude<TaskDeletionOutcome, { type: 'deleted' }>,
-  context: TaskDeletionPresentationContext = 'task',
-): string {
-  switch (outcome.type) {
-    case 'not-found':
-      return context === 'series' ? 'Recurring task not found' : 'Task not found';
-    case 'conflict':
-      return context === 'series'
-        ? 'Recurring task changed concurrently'
-        : context === 'occurrence'
-          ? 'Task occurrence conflict'
-          : 'Task deletion conflict';
-    case 'coverage-unavailable':
-      return 'Recurring task coverage is temporarily unavailable';
-    case 'invalid-transition':
-      return outcome.reason;
-  }
-}
-
-export function taskDeletionHttpFailure(
-  outcome: Exclude<TaskDeletionOutcome, { type: 'deleted' }>,
-  context: TaskDeletionPresentationContext = 'task',
-): { error: string; status: 400 | 404 | 409 | 503 } {
-  switch (outcome.type) {
-    case 'not-found':
-      return { error: taskDeletionErrorMessage(outcome, context), status: 404 };
-    case 'conflict':
-      return { error: taskDeletionErrorMessage(outcome, context), status: 409 };
-    case 'coverage-unavailable':
-      return { error: taskDeletionErrorMessage(outcome, context), status: 503 };
-    case 'invalid-transition':
-      return { error: taskDeletionErrorMessage(outcome, context), status: 400 };
-  }
-}
-
 export interface TaskWritePersistence {
   getMaxSortOrder(userId: string): Promise<number | null>;
   createTask(task: TaskInsert): Promise<Task>;
   getTask(taskId: string, userId: string): Promise<Task | null>;
   updateTask(taskId: string, userId: string, updates: TaskUpdate): Promise<Task>;
-  deleteTask?: TaskDeletionPersistence['deleteTask'];
   configureTaskReminders?: TaskReminderConfigurationPersistence['configureTaskReminders'];
-  lifecycle?: Pick<
-    RecurringTaskLifecyclePort,
-    | 'editOccurrence'
-    | 'completeOccurrence'
-    | 'reopenOccurrence'
-    | 'getSeries'
-    | 'skipOccurrence'
-    | 'endSeries'
-    | 'deleteSeries'
-  >;
 }
 
 export type TaskWriteIntent =
@@ -205,18 +100,6 @@ type Clock = () => Date;
 
 export function createTaskWrites(
   supabase: SupabaseClient,
-  options: {
-    lifecycle?: Pick<
-      RecurringTaskLifecyclePort,
-      | 'editOccurrence'
-      | 'completeOccurrence'
-      | 'reopenOccurrence'
-      | 'getSeries'
-      | 'skipOccurrence'
-      | 'endSeries'
-      | 'deleteSeries'
-    >;
-  } = {},
 ): TaskWrites {
   const tasksDB = new TasksDB(supabase);
   const taskReminderPersistence = new SupabaseTaskReminderConfigurationPersistence(
@@ -239,15 +122,9 @@ export function createTaskWrites(
     createTask: tasksDB.createTask.bind(tasksDB),
     getTask: tasksDB.getTask.bind(tasksDB),
     updateTask: tasksDB.updateTask.bind(tasksDB),
-    async deleteTask(taskId, userId) {
-      return (await tasksDB.deleteTask(taskId, userId))
-        ? { type: 'deleted' }
-        : { type: 'not-found' };
-    },
     configureTaskReminders: taskReminderPersistence.configureTaskReminders.bind(
       taskReminderPersistence,
     ),
-    lifecycle: options.lifecycle,
   });
 }
 
@@ -288,174 +165,6 @@ export class TaskWrites {
     return this.persistence.configureTaskReminders(normalized.value);
   }
 
-  async delete(request: TaskDeletionRequest): Promise<TaskDeletionOutcome> {
-    const normalized = normalizeTaskDeletionRequest(request);
-    if (!normalized.userId || !normalized.taskId) return { type: 'not-found' };
-
-    const task = await this.persistence.getTask(
-      normalized.taskId,
-      normalized.userId,
-    );
-    if (!task) return { type: 'not-found' };
-
-    const recurring = isRecurringTask(task);
-    if (!recurring) {
-      if (normalized.scope !== undefined) {
-        return {
-          type: 'invalid-transition',
-          reason: 'Recurring deletion scope requires a Task Occurrence',
-        };
-      }
-      if (!this.persistence.deleteTask) {
-        throw new Error('Task deletion persistence is not configured');
-      }
-      return this.persistence.deleteTask(
-        normalized.taskId,
-        normalized.userId,
-      );
-    }
-
-    const seriesId = task.recurring_series_id;
-    const occurrenceId = task.recurring_occurrence_id;
-    if (!seriesId || !occurrenceId) {
-      return {
-        type: 'invalid-transition',
-        reason: 'Recurring Task Occurrence metadata is incomplete',
-      };
-    }
-
-    const scope = normalized.scope ?? 'this';
-    const occurrenceState = task.recurrence_occurrence_state;
-    if (occurrenceState === 'skipped' || occurrenceState === 'withdrawn') {
-      return { type: 'not-found' };
-    }
-
-    if (scope === 'this') {
-      if (task.is_completed || occurrenceState === 'completed') {
-        return {
-          type: 'invalid-transition',
-          reason: 'Completed Task Occurrences retain history',
-        };
-      }
-      if (!this.persistence.lifecycle?.skipOccurrence) {
-        return {
-          type: 'invalid-transition',
-          reason: 'Recurring task deletion requires lifecycle persistence',
-        };
-      }
-      return mapDeletionLifecycleOutcome(
-        await this.persistence.lifecycle.skipOccurrence({
-          userId: normalized.userId,
-          seriesId,
-          occurrenceId,
-          ...(normalized.operationId
-            ? { idempotencyKey: normalized.operationId }
-            : {}),
-        }),
-      );
-    }
-
-    const scheduledDate = task.scheduled_date;
-    if (!scheduledDate) {
-      return {
-        type: 'invalid-transition',
-        reason: 'Recurring Task Occurrence is missing its Scheduled Date',
-      };
-    }
-    if (
-      !this.persistence.lifecycle?.getSeries
-      || (!this.persistence.lifecycle.endSeries && !this.persistence.lifecycle.deleteSeries)
-    ) {
-      return {
-        type: 'invalid-transition',
-        reason: 'Recurring task deletion requires lifecycle persistence',
-      };
-    }
-
-    const seriesOutcome = await this.persistence.lifecycle.getSeries(
-      normalized.userId,
-      seriesId,
-    );
-    if (seriesOutcome.status === 'not-found') return { type: 'not-found' };
-    if (!isLifecycleSuccess(seriesOutcome)) {
-      return mapDeletionLifecycleOutcome(seriesOutcome);
-    }
-    if (seriesOutcome.series.status === 'ended') return { type: 'not-found' };
-
-    const effectiveDate = normalized.effectiveDate ?? scheduledDate;
-    if (scope === 'all') {
-      const endSeries = this.persistence.lifecycle.endSeries
-        ?? this.persistence.lifecycle.deleteSeries;
-      if (!endSeries) {
-        return {
-          type: 'invalid-transition',
-          reason: 'Recurring task deletion requires lifecycle persistence',
-        };
-      }
-      return mapDeletionLifecycleOutcome(
-        await endSeries({
-          userId: normalized.userId,
-          seriesId,
-          effectiveDate,
-          ...(normalized.operationId
-            ? { idempotencyKey: normalized.operationId }
-            : {}),
-        }),
-      );
-    }
-
-    if (!this.persistence.lifecycle.endSeries) {
-      return {
-        type: 'invalid-transition',
-        reason: 'Recurring task deletion requires lifecycle persistence',
-      };
-    }
-
-    return mapDeletionLifecycleOutcome(
-      await this.persistence.lifecycle.endSeries({
-        userId: normalized.userId,
-        seriesId,
-        effectiveDate,
-        ...(normalized.operationId
-          ? { idempotencyKey: normalized.operationId }
-          : {}),
-      }),
-    );
-  }
-
-  async deleteSeries(
-    request: TaskSeriesDeletionRequest,
-  ): Promise<TaskSeriesDeletionOutcome> {
-    const userId = request.userId.trim();
-    const seriesId = request.seriesId.trim();
-    if (!userId || !seriesId) return { type: 'not-found' };
-    const endSeries = this.persistence.lifecycle?.endSeries
-      ?? this.persistence.lifecycle?.deleteSeries;
-    if (!this.persistence.lifecycle?.getSeries || !endSeries) {
-      throw new Error('Recurring series deletion requires lifecycle persistence');
-    }
-
-    const seriesOutcome = await this.persistence.lifecycle.getSeries(
-      userId,
-      seriesId,
-    );
-    if (seriesOutcome.status === 'not-found') return { type: 'not-found' };
-    if (!isLifecycleSuccess(seriesOutcome)) {
-      return mapDeletionLifecycleOutcome(seriesOutcome);
-    }
-    if (seriesOutcome.series.status === 'ended') return { type: 'not-found' };
-
-    return mapDeletionLifecycleOutcome(
-      await endSeries({
-        userId,
-        seriesId,
-        ...(request.effectiveDate?.trim()
-          ? { effectiveDate: request.effectiveDate.trim() }
-          : {}),
-      }),
-    );
-  }
-
   async execute(
     intent: Extract<TaskWriteIntent, { type: 'create' }>,
   ): Promise<{ type: 'created'; task: Task }>;
@@ -473,26 +182,6 @@ export class TaskWrites {
   ): Promise<{ type: 'ordered'; task: Task }>;
   async execute(intent: TaskWriteIntent): Promise<TaskWriteOutcome> {
     if (intent.type === 'order') {
-      if (this.persistence.lifecycle) {
-        const current = await this.persistence.getTask(intent.taskId, intent.userId);
-        if (!current) {
-          const task = await this.persistence.updateTask(intent.taskId, intent.userId, {
-            sort_order: intent.sortOrder,
-          });
-          return { type: 'ordered', task };
-        }
-        if (current.recurring_series_id && current.recurring_occurrence_id) {
-          assertLifecycleSuccess(await this.persistence.lifecycle.editOccurrence({
-            userId: intent.userId,
-            seriesId: current.recurring_series_id,
-            occurrenceId: current.recurring_occurrence_id,
-            updates: { sortOrder: intent.sortOrder },
-          }));
-          const task = await this.persistence.getTask(intent.taskId, intent.userId);
-          if (!task) throw new TaskNotFoundError();
-          return { type: 'ordered', task };
-        }
-      }
       const task = await this.persistence.updateTask(intent.taskId, intent.userId, {
         sort_order: intent.sortOrder,
       });
@@ -502,24 +191,6 @@ export class TaskWrites {
     if (intent.type === 'toggle-completion') {
       const current = await this.persistence.getTask(intent.taskId, intent.userId);
       if (!current) throw new TaskNotFoundError();
-      if (
-        current.recurring_series_id
-        && current.recurring_occurrence_id
-        && this.persistence.lifecycle
-      ) {
-        const request = {
-          userId: intent.userId,
-          seriesId: current.recurring_series_id,
-          occurrenceId: current.recurring_occurrence_id,
-        };
-        const result = current.is_completed
-          ? await this.persistence.lifecycle.reopenOccurrence(request)
-          : await this.persistence.lifecycle.completeOccurrence(request);
-        assertLifecycleSuccess(result);
-        const task = await this.persistence.getTask(intent.taskId, intent.userId);
-        if (!task) throw new TaskNotFoundError();
-        return { type: 'toggled', task };
-      }
       const task = await this.persistence.updateTask(
         intent.taskId,
         intent.userId,
@@ -532,43 +203,8 @@ export class TaskWrites {
       const updates = this.prepareUpdate(intent.values);
       if (intent.scope) {
         throw new Error(
-          `Scoped task updates must use the Recurring Task Lifecycle adapter (scope: ${intent.scope})`,
+          `Scoped task updates must use Task Commands (scope: ${intent.scope})`,
         );
-      }
-      if (this.persistence.lifecycle) {
-        const current = await this.persistence.getTask(intent.taskId, intent.userId);
-        if (!current) {
-          const task = await this.persistence.updateTask(
-            intent.taskId,
-            intent.userId,
-            updates,
-          );
-          return { type: 'updated', task };
-        }
-        if (current.recurring_series_id && current.recurring_occurrence_id) {
-          if (isCompletionSynchronizationOnly(updates)) {
-            const request = {
-              userId: intent.userId,
-              seriesId: current.recurring_series_id,
-              occurrenceId: current.recurring_occurrence_id,
-            };
-            const result = updates.is_completed
-              ? await this.persistence.lifecycle.completeOccurrence(request)
-              : await this.persistence.lifecycle.reopenOccurrence(request);
-            assertLifecycleSuccess(result);
-          } else {
-            assertLifecycleSuccess(await this.persistence.lifecycle.editOccurrence({
-              userId: intent.userId,
-              seriesId: current.recurring_series_id,
-              occurrenceId: current.recurring_occurrence_id,
-              updates: taskUpdatesToOccurrenceOverrides(updates),
-              completed: updates.is_completed,
-            }));
-          }
-          const task = await this.persistence.getTask(intent.taskId, intent.userId);
-          if (!task) throw new TaskNotFoundError();
-          return { type: 'updated', task };
-        }
       }
       const task = await this.persistence.updateTask(
         intent.taskId,
@@ -941,129 +577,4 @@ export function toTaskReminderResponse(reminder: TaskReminderRecord) {
     sent_at: reminder.sentAt,
     created_at: reminder.createdAt,
   };
-}
-
-function normalizeTaskDeletionRequest(
-  request: TaskDeletionRequest,
-): TaskDeletionRequest {
-  return {
-    userId: request.userId.trim(),
-    taskId: request.taskId.trim(),
-    ...(request.scope === undefined ? {} : { scope: request.scope }),
-    ...(request.effectiveDate?.trim()
-      ? { effectiveDate: request.effectiveDate.trim() }
-      : {}),
-    ...(request.operationId?.trim()
-      ? { operationId: request.operationId.trim() }
-      : {}),
-  };
-}
-
-function isRecurringTask(task: Task): boolean {
-  return Boolean(
-    task.recurring_series_id
-      || task.recurring_occurrence_id
-      || task.scheduled_date
-      || task.recurrence_occurrence_state,
-  );
-}
-
-function isLifecycleSuccess<T>(
-  outcome: LifecycleOutcome<T>,
-): outcome is Extract<
-  LifecycleOutcome<T>,
-  { status: 'complete' | 'already-applied' }
-> {
-  return outcome.status === 'complete' || outcome.status === 'already-applied';
-}
-
-function mapDeletionLifecycleOutcome<T>(
-  outcome: LifecycleOutcome<T> | undefined,
-): TaskDeletionOutcome {
-  if (!outcome) {
-    return {
-      type: 'invalid-transition',
-      reason: 'Recurring task deletion requires lifecycle persistence',
-    };
-  }
-  if (outcome.status === 'complete') return { type: 'deleted' };
-  if (outcome.status === 'already-applied') return { type: 'not-found' };
-  if (outcome.status === 'not-found') return { type: 'not-found' };
-  if (outcome.status === 'conflict') {
-    return {
-      type: 'conflict',
-      ...(outcome.reason === undefined ? {} : { reason: outcome.reason }),
-      ...(outcome.expectedRevisionToken === undefined
-        ? {}
-        : { expectedRevisionToken: outcome.expectedRevisionToken }),
-      ...(outcome.actualRevisionToken === undefined
-        ? {}
-        : { actualRevisionToken: outcome.actualRevisionToken }),
-    };
-  }
-  if (outcome.status === 'coverage-unavailable') {
-    return {
-      type: 'coverage-unavailable',
-      requestedRange: outcome.requestedRange,
-      coverageHorizon: outcome.coverageHorizon,
-      reason: outcome.reason,
-    };
-  }
-  if (outcome.status === 'invalid-transition') {
-    return { type: 'invalid-transition', reason: outcome.reason };
-  }
-  return {
-    type: 'invalid-transition',
-    reason: String(outcome.reason),
-  };
-}
-
-function taskUpdatesToOccurrenceOverrides(
-  updates: TaskUpdate,
-): OccurrenceOverrides {
-  return {
-    ...(updates.title === undefined ? {} : { title: updates.title }),
-    ...(updates.description === undefined
-      ? {}
-      : { description: updates.description }),
-    ...(updates.priority === undefined ? {} : { priority: updates.priority }),
-    ...(updates.category_id === undefined
-      ? {}
-      : { categoryId: updates.category_id }),
-    ...(updates.due_date === undefined ? {} : { dueDate: updates.due_date }),
-    ...(updates.due_time === undefined ? {} : { dueTime: updates.due_time }),
-    ...(updates.status === undefined ? {} : { status: updates.status }),
-    ...(updates.section === undefined ? {} : { section: updates.section }),
-    ...(updates.project_id === undefined
-      ? {}
-      : { projectId: updates.project_id }),
-    ...(updates.sort_order === undefined
-      ? {}
-      : { sortOrder: updates.sort_order }),
-  };
-}
-
-function isCompletionSynchronizationOnly(updates: TaskUpdate): boolean {
-  return typeof updates.is_completed === 'boolean'
-    && updates.status === (updates.is_completed ? 'done' : 'todo')
-    && Object.keys(updates).every((key) =>
-      key === 'is_completed' || key === 'status' || key === 'completed_at'
-    );
-}
-
-function assertLifecycleSuccess<T>(
-  outcome: LifecycleOutcome<T>,
-): Extract<LifecycleOutcome<T>, { status: 'complete' | 'already-applied' }> {
-  if (outcome.status === 'complete' || outcome.status === 'already-applied') {
-    return outcome as Extract<LifecycleOutcome<T>, {
-      status: 'complete' | 'already-applied';
-    }>;
-  }
-  if (outcome.status === 'conflict') {
-    throw new Error(
-      `Recurring task lifecycle conflict: expected revision ${outcome.expectedRevisionToken}, actual ${outcome.actualRevisionToken}`,
-    );
-  }
-  if ('reason' in outcome) throw new Error(String(outcome.reason));
-  throw new Error('Recurring task lifecycle mutation failed');
 }

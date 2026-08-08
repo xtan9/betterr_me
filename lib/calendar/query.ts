@@ -2,7 +2,7 @@ import type {
   AuthenticatedRecurringTaskPrincipal,
   CoverageCompleteness,
   CoverageUnavailable,
-} from "@/lib/recurring-tasks/capabilities";
+} from "@/lib/recurring-tasks";
 
 import {
   queryCalendarOverlayFeed,

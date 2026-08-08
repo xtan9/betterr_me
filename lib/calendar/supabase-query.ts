@@ -5,8 +5,8 @@ import {
   type AuthenticatedRecurringTaskPrincipal,
   type CoverageCapabilityResult,
   type CoverageCompleteness,
-} from "@/lib/recurring-tasks/capabilities";
-import type { LocalDateRange } from "@/lib/recurring-tasks/lifecycle";
+  type LocalDateRange,
+} from "@/lib/recurring-tasks";
 import type { Habit, HabitLog, Task, Workout } from "@/lib/db/types";
 
 import {

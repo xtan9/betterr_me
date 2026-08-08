@@ -69,7 +69,7 @@ vi.mock("@/lib/db/workouts", () => ({
   },
 }));
 
-vi.mock("@/lib/recurring-tasks/capabilities", () => ({
+vi.mock("@/lib/recurring-tasks", () => ({
   createAuthenticatedRecurringTaskCapabilities: mockCreateCapabilities,
 }));
 

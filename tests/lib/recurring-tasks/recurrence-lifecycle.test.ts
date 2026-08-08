@@ -4,8 +4,8 @@ import type { RecurrenceRule } from "@/lib/db/types";
 import {
   InMemoryRecurringTaskLifecyclePersistence,
   RecurringTaskLifecycle,
-} from "@/lib/recurring-tasks/lifecycle";
-import { calculateScheduledDates } from "@/lib/recurring-tasks/recurrence";
+} from "@/lib/recurring-tasks/internal/lifecycle";
+import { calculateScheduledDates } from "@/lib/recurring-tasks/internal/recurrence";
 
 describe("calculateScheduledDates", () => {
   it("uses the recurrence anchor for phase and activation date for eligibility", () => {
