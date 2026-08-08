@@ -4,7 +4,6 @@ import {
   useMemo,
   useCallback,
   useEffect,
-  useRef,
   useState,
 } from "react";
 
@@ -18,7 +17,7 @@ import { ChatInput } from "@/components/chat/chat-input";
 import { ChatEmptyState } from "@/components/chat/chat-empty-state";
 import { ConversationSidebar } from "@/components/chat/conversation-sidebar";
 import { dbMessageToUIMessage } from "@/lib/chat/message-utils";
-import { DEFAULT_MODEL_ID, AVAILABLE_MODELS } from "@/lib/ai/models";
+import { DEFAULT_MODEL_ID } from "@/lib/ai/models";
 import { getLocalDateString } from "@/lib/utils";
 import { log } from "@/lib/logger";
 import { useChatPersistence } from "./use-chat-persistence";
@@ -54,8 +53,6 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   const [chatId, setChatId] = useState(conversationId ?? "new");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
-  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL_ID);
-  const submittedTurnModelRef = useRef(selectedModel);
 
   // SWR for conversation list
   const { data: convData, mutate: mutateConversations } = useSWR<{
@@ -70,8 +67,8 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const transport = useMemo(
-    () => new DefaultChatTransport({ api: "/api/chat", body: { model: selectedModel, date: localDate, timezone: userTimezone } }),
-    [selectedModel, localDate, userTimezone]
+    () => new DefaultChatTransport({ api: "/api/chat", body: { model: DEFAULT_MODEL_ID, date: localDate, timezone: userTimezone } }),
+    [localDate, userTimezone]
   );
 
   const { messages, sendMessage, regenerate, setMessages, stop, status, error } = useChat({
@@ -124,7 +121,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
     messages,
     activeConversationId,
     setActiveConversationId,
-    submittedTurnModelRef.current,
+    DEFAULT_MODEL_ID,
     mutateConversations,
   );
   const isChatInputDisabled = isPersisting || Boolean(persistenceError);
@@ -141,35 +138,14 @@ export function ChatContent({ conversationId }: ChatContentProps) {
       // Just send to LLM — user message shown optimistically in useChat buffer.
       // Persistence (conversation creation + user + assistant messages) is handled
       // in the stream-complete effect, so a mid-stream refresh leaves no partial data.
-      submittedTurnModelRef.current = selectedModel;
       sendMessage({ text, files });
     },
-    [isChatInputDisabled, selectedModel, sendMessage]
+    [isChatInputDisabled, sendMessage]
   );
 
   const handleStop = useCallback(() => {
     stop();
   }, [stop]);
-
-  const handleModelChange = useCallback(
-    async (modelId: string) => {
-      const previousModel = selectedModel;
-      setSelectedModel(modelId);
-      if (activeConversationId) {
-        try {
-          await fetchJSON(`/api/conversations/${activeConversationId}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model: modelId }),
-          });
-        } catch (err) {
-          log.error("[chat] Failed to update model", err);
-          setSelectedModel(previousModel);
-        }
-      }
-    },
-    [activeConversationId, selectedModel]
-  );
 
   // Find the last user message text for resend on error
   const lastUserMessage = useMemo(() => {
@@ -190,9 +166,8 @@ export function ChatContent({ conversationId }: ChatContentProps) {
       return;
     }
     if (!lastUserMessage) return;
-    submittedTurnModelRef.current = selectedModel;
     regenerate();
-  }, [lastUserMessage, persistenceError, regenerate, retryPersistence, selectedModel]);
+  }, [lastUserMessage, persistenceError, regenerate, retryPersistence]);
 
   const displayedError = persistenceError ?? error;
 
@@ -231,12 +206,8 @@ export function ChatContent({ conversationId }: ChatContentProps) {
       setChatId(id);
       window.history.replaceState(null, "", `/chat?id=${id}`);
       setSidebarOpen(false);
-      const conv = conversations.find((c) => c.id === id);
-      const storedModel = conv?.model;
-      const isValid = storedModel && AVAILABLE_MODELS.some((m) => m.id === storedModel);
-      setSelectedModel(isValid ? storedModel : DEFAULT_MODEL_ID);
     },
-    [clearPersistenceError, conversations]
+    [clearPersistenceError]
   );
 
   // New chat
@@ -245,7 +216,6 @@ export function ChatContent({ conversationId }: ChatContentProps) {
     setActiveConversationId(null);
     setChatId("new");
     setMessages([]);
-    setSelectedModel(DEFAULT_MODEL_ID);
     window.history.replaceState(null, "", "/chat");
     setSidebarOpen(false);
   }, [clearPersistenceError, setMessages]);
@@ -339,8 +309,6 @@ export function ChatContent({ conversationId }: ChatContentProps) {
           onStop={handleStop}
           isStreaming={isStreaming}
           disabled={isChatInputDisabled}
-          modelId={selectedModel}
-          onModelChange={handleModelChange}
         />
       </div>
     </div>

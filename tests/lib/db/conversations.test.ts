@@ -109,7 +109,7 @@ describe('ConversationsDB', () => {
         turnId: 'turn-1',
         userContent: 'Plan my week',
         assistantContent: 'Let us start with your priorities.',
-        assistantModel: 'gpt-5.4-mini',
+        assistantModel: 'gpt-5.3-codex-spark',
         title: 'Plan my week',
       });
 
@@ -122,7 +122,7 @@ describe('ConversationsDB', () => {
           p_turn_id: 'turn-1',
           p_user_content: 'Plan my week',
           p_assistant_content: 'Let us start with your priorities.',
-          p_assistant_model: 'gpt-5.4-mini',
+          p_assistant_model: 'gpt-5.3-codex-spark',
           p_title: 'Plan my week',
         }],
       });
@@ -137,7 +137,7 @@ describe('ConversationsDB', () => {
         turnId: 'turn-1',
         userContent: 'Plan my week',
         assistantContent: 'Let us start with your priorities.',
-        assistantModel: 'gpt-5.4-mini',
+        assistantModel: 'gpt-5.3-codex-spark',
         title: 'Plan my week',
       })).rejects.toEqual(error);
     });

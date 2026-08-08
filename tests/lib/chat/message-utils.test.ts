@@ -37,7 +37,7 @@ describe('message-utils', () => {
         content: 'Hi there!',
         turn_id: 'turn-1',
         turn_position: 1,
-        model: 'gpt-5.4-mini',
+        model: 'gpt-5.3-codex-spark',
         created_at: '2026-01-01T00:01:00Z',
       };
 
