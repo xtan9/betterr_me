@@ -97,6 +97,20 @@ describe("Household Runway Runtime import boundary", () => {
     expect(resultSources.join("\n")).not.toMatch(/months_covered/);
     expect(resultSources.join("\n")).not.toMatch(/assessmentHistory/);
     expect(resultSources.join("\n")).not.toMatch(/snapshot\.derived/);
+    expect(resultSources.join("\n")).not.toMatch(/firstScenario|assessHouseholdRunway/);
+    expect(resultSources.join("\n")).not.toMatch(/monthsCovered\s*[-+*/]/);
+  });
+
+  it("keeps plan freshness and Draft synchronization as separate public facts", () => {
+    const shell = readFileSync(
+      resolve(root, "components/finance/household-runway.tsx"),
+      "utf8",
+    );
+
+    expect(shell).not.toMatch(/data-runway-plan-operation=\{planOperationState\}/);
+    expect(shell).toMatch(/data-runway-plan-operation=\{planOperation\.status\}/);
+    expect(shell).toMatch(/data-runway-plan-current=/);
+    expect(shell).not.toMatch(/status === "dirty"/);
   });
 
   it("keeps browser adapter effects, commands, outcomes, and helpers private", () => {
@@ -142,6 +156,8 @@ describe("Household Runway Runtime import boundary", () => {
       /HouseholdRunwayInterviewRuntime(?:DerivedFacts|Capabilities)/,
     );
     expect(runtimeFacade).not.toMatch(/(?:SuccessfulHouseholdRunwayAssessment|planInputs|assessmentHistory)/);
+    expect(runtimeFacade).not.toMatch(/HouseholdRunwayFocusedRuntimeSnapshot|getFocusedSnapshot/);
+    expect(runtimeComposition).not.toMatch(/HouseholdRunwayFocusedRuntimeSnapshot|getFocusedSnapshot/);
     expect(runtimeComposition).not.toMatch(/Object\.definePropert/);
     expect(browserFacade).not.toMatch(/extends HouseholdRunwayInterviewRuntimeOptions/);
     expect(browserFacade).not.toMatch(/(?:SuccessfulHouseholdRunwayAssessment|planInputs|assessmentHistory)/);
