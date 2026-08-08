@@ -9,10 +9,9 @@ import {
   isValidLocalDate,
 } from '@/lib/recurring-tasks/recurrence';
 import {
-  createSupabaseSeriesStateAdapter,
   createAuthenticatedRecurringTaskCapabilities,
-  isSeriesStateSuccess,
-  seriesStateHttpFailure,
+  type AuthenticatedRecurringTaskCapabilities,
+  type SeriesVersion,
 } from '@/lib/recurring-tasks';
 import type {
   SeriesCommands,
@@ -22,9 +21,10 @@ import type {
 import {
   recurringTaskFailureHttpStatus,
   recurringTaskFailureMessage,
+  toReviseSeriesCommand,
+  toSeriesStateCommand,
   toRecurringTaskResponse,
 } from '@/lib/recurring-tasks/compatibility';
-import type { RecurringTaskUpdateValues } from '@/lib/validations/recurring-task';
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ['cookie'],
@@ -114,16 +114,53 @@ export async function PATCH(
         { status: 400 },
       );
     }
+    const capabilities = createAuthenticatedRecurringTaskCapabilities({
+      supabase,
+      principal: auth.principal,
+    });
+    let metadata = readMutationMetadata(request);
+
     // Handle quick actions
-    if (action === 'pause' || action === 'resume' || action === 'end') {
-      const outcome = await runSeriesStateCommand(
-        seriesCommands,
-        action,
-        id,
-        readSeriesCommandMetadata(request),
-        dateParam,
+    if (action === 'pause') {
+      const outcome = await capabilities.seriesCommands.pauseSeries(
+        toSeriesStateCommand({
+          operationId: metadata.operationId,
+          seriesId: id,
+          version: metadata.version,
+          effectiveDate: dateParam,
+        }),
       );
-      return seriesCommandResponse(outcome, userId);
+      if (!isSeriesCommandSuccess(outcome)) {
+        return NextResponse.json(
+          { error: recurringTaskFailureMessage(outcome) },
+          { status: recurringTaskFailureHttpStatus(outcome) },
+        );
+      }
+      return NextResponse.json({
+        recurring_task: toRecurringTaskResponse(outcome.series, userId),
+      });
+    }
+    if (action === 'resume') {
+      const outcome = await capabilities.seriesCommands.resumeSeries(
+        toSeriesStateCommand({
+          operationId: metadata.operationId,
+          seriesId: id,
+          version: metadata.version,
+          effectiveDate: dateParam,
+          coverage: dateParam
+            ? { from: dateParam, to: addLocalDays(dateParam, 7) }
+            : undefined,
+        }),
+      );
+      if (!isSeriesCommandSuccess(outcome)) {
+        return NextResponse.json(
+          { error: recurringTaskFailureMessage(outcome) },
+          { status: recurringTaskFailureHttpStatus(outcome) },
+        );
+      }
+      return NextResponse.json({
+        recurring_task: toRecurringTaskResponse(outcome.series, userId),
+      });
     }
     if (action) {
       return NextResponse.json(
@@ -132,53 +169,97 @@ export async function PATCH(
       );
     }
 
-    // Handle general updates
+    // Handle general effective-dated Series definition updates.
     const body = await request.json();
+    metadata = readMutationMetadata(request, body);
     const validation = validateRequestBody(body, recurringTaskUpdateSchema);
     if (!validation.success) return validation.response;
 
-    if (validation.data.status) {
-      const nonStateFields = Object.keys(body).filter(
-        (key) => !['status', 'operationId', 'operation_id', 'version'].includes(key),
+    const effectiveDate = dateParam ?? readString(body, 'effective_date', 'effectiveDate');
+    if (effectiveDate && !isValidLocalDate(effectiveDate)) {
+      return NextResponse.json(
+        { error: 'Invalid effective Scheduled Date. Must be a valid YYYY-MM-DD local date' },
+        { status: 400 },
       );
-      if (nonStateFields.length > 0) {
+    }
+    if (validation.data.start_date !== undefined) {
+      return NextResponse.json(
+        { error: 'Recurrence Anchor edits are not supported by the Series lifecycle' },
+        { status: 400 },
+      );
+    }
+
+    if (validation.data.status === 'paused') {
+      const outcome = await capabilities.seriesCommands.pauseSeries(
+        toSeriesStateCommand({
+          operationId: metadata.operationId,
+          seriesId: id,
+          version: metadata.version,
+          effectiveDate,
+        }),
+      );
+      return respondToSeriesCommand(outcome, userId);
+    }
+    if (validation.data.status === 'archived') {
+      const outcome = await capabilities.seriesCommands.endSeries(
+        toSeriesStateCommand({
+          operationId: metadata.operationId,
+          seriesId: id,
+          version: metadata.version,
+          effectiveDate,
+        }),
+      );
+      return respondToSeriesCommand(outcome, userId);
+    }
+    if (validation.data.status === 'active') {
+      const current = await capabilities.seriesQueries.getSeries({ seriesId: id });
+      if (!isSeriesQuerySuccess(current)) {
         return NextResponse.json(
-          { error: 'Series state changes must be sent separately from Series revisions' },
+          { error: recurringTaskFailureMessage(current) },
+          { status: recurringTaskFailureHttpStatus(current) },
+        );
+      }
+      if (current.series.status === 'paused') {
+        const outcome = await capabilities.seriesCommands.resumeSeries(
+          toSeriesStateCommand({
+            operationId: metadata.operationId,
+            seriesId: id,
+            version: metadata.version,
+            effectiveDate,
+            coverage: effectiveDate
+              ? { from: effectiveDate, to: addLocalDays(effectiveDate, 7) }
+              : undefined,
+          }),
+        );
+        return respondToSeriesCommand(outcome, userId);
+      }
+      if (current.series.status === 'ended') {
+        return NextResponse.json(
+          { error: 'Ended Series cannot be resumed' },
           { status: 400 },
         );
       }
-      const outcome = await runSeriesStateCommand(
-        seriesCommands,
-        validation.data.status === 'active'
-          ? 'resume'
-          : validation.data.status === 'paused'
-            ? 'pause'
-            : 'end',
-        id,
-        readSeriesCommandMetadata(request, body),
-        dateParam,
-      );
-      return seriesCommandResponse(outcome, userId);
     }
 
-    const state = createSupabaseSeriesStateAdapter(supabase);
-
-    const outcome = await state.update(
-      toSeriesRevisionInput(
-        id,
-        userId,
-        validation.data,
-        dateParam,
-      ),
+    const outcome = await capabilities.seriesCommands.reviseSeries(
+      toReviseSeriesCommand({
+        operationId: metadata.operationId,
+        seriesId: id,
+        version: metadata.version,
+        effectiveDate: effectiveDate ?? '',
+        title: validation.data.title,
+        description: validation.data.description,
+        priority: validation.data.priority,
+        categoryId: validation.data.category_id,
+        dueTime: validation.data.due_time,
+        recurrenceRule: validation.data.recurrence_rule,
+        scope: validation.data.scope,
+        endType: validation.data.end_type,
+        endDate: validation.data.end_date,
+        endCount: validation.data.end_count,
+      }),
     );
-    if (!isSeriesStateSuccess(outcome)) {
-      const failure = seriesStateHttpFailure(outcome);
-      return NextResponse.json(
-        { error: failure.error },
-        { status: failure.status },
-      );
-    }
-    return NextResponse.json({ recurring_task: outcome.recurringTask });
+    return respondToSeriesCommand(outcome, userId);
   } catch (error: unknown) {
     log.error('PATCH /api/recurring-tasks/[id] error', error);
 
@@ -211,11 +292,7 @@ export async function DELETE(
         { status: auth.status },
       );
     }
-    const { principal: { userId }, client: supabase } = auth;
-    const seriesCommands = createAuthenticatedRecurringTaskCapabilities({
-      supabase,
-      principal: auth.principal,
-    }).seriesCommands;
+    const { client: supabase } = auth;
 
     const dateParam = request.nextUrl.searchParams.get('date')?.trim() || undefined;
     if (dateParam && !isValidLocalDate(dateParam)) {
@@ -224,15 +301,26 @@ export async function DELETE(
         { status: 400 },
       );
     }
-    const outcome = await runSeriesStateCommand(
-      seriesCommands,
-      'end',
-      id,
-      readSeriesCommandMetadata(request),
-      dateParam,
+    const capabilities = createAuthenticatedRecurringTaskCapabilities({
+      supabase,
+      principal: auth.principal,
+    });
+    const metadata = readMutationMetadata(request);
+    const outcome = await capabilities.seriesCommands.endSeries(
+      toSeriesStateCommand({
+        operationId: metadata.operationId,
+        seriesId: id,
+        version: metadata.version,
+        effectiveDate: dateParam,
+      }),
     );
-    if (outcome.type === 'ended') return NextResponse.json({ success: true });
-    return seriesCommandResponse(outcome, userId);
+    if (!isSeriesCommandSuccess(outcome)) {
+      return NextResponse.json(
+        { error: recurringTaskFailureMessage(outcome) },
+        { status: recurringTaskFailureHttpStatus(outcome) },
+      );
+    }
+    return NextResponse.json({ success: true });
   } catch (error) {
     log.error('DELETE /api/recurring-tasks/[id] error', error);
     return NextResponse.json(
@@ -242,135 +330,79 @@ export async function DELETE(
   }
 }
 
-type SeriesStateAction = 'pause' | 'resume' | 'end';
+type SeriesCommandResult =
+  | Awaited<ReturnType<AuthenticatedRecurringTaskCapabilities['seriesCommands']['reviseSeries']>>
+  | Awaited<ReturnType<AuthenticatedRecurringTaskCapabilities['seriesCommands']['pauseSeries']>>
+  | Awaited<ReturnType<AuthenticatedRecurringTaskCapabilities['seriesCommands']['resumeSeries']>>
+  | Awaited<ReturnType<AuthenticatedRecurringTaskCapabilities['seriesCommands']['endSeries']>>;
 
-interface SeriesCommandMetadata {
-  operationId: string;
-  version: SeriesVersion;
+type SeriesQueryResult = Awaited<
+  ReturnType<AuthenticatedRecurringTaskCapabilities['seriesQueries']['getSeries']>
+>;
+
+function respondToSeriesCommand(
+  outcome: SeriesCommandResult,
+  ownerId: string,
+): NextResponse {
+  if (!isSeriesCommandSuccess(outcome)) {
+    return NextResponse.json(
+      { error: recurringTaskFailureMessage(outcome) },
+      { status: recurringTaskFailureHttpStatus(outcome) },
+    );
+  }
+  return NextResponse.json({
+    recurring_task: toRecurringTaskResponse(outcome.series, ownerId),
+  });
 }
 
-function readSeriesCommandMetadata(
-  request: NextRequest,
-  body?: unknown,
-): SeriesCommandMetadata {
-  const searchParams = request.nextUrl.searchParams;
-  const operationId = firstNonEmpty(
-    request.headers.get('Idempotency-Key'),
-    request.headers.get('X-Operation-Id'),
-    readString(body, 'operationId'),
-    readString(body, 'operation_id'),
-    searchParams.get('operationId'),
-    searchParams.get('operation_id'),
-  ) ?? '';
-  const version = firstNonEmpty(
-    normalizeOpaqueHeader(request.headers.get('If-Match')),
-    readString(body, 'version'),
-    searchParams.get('version'),
-  ) ?? '';
+function isSeriesCommandSuccess(
+  outcome: SeriesCommandResult,
+): outcome is Extract<SeriesCommandResult, { series: unknown }> {
+  return 'series' in outcome && (
+    outcome.status === 'complete' || outcome.status === 'already-applied'
+  );
+}
 
+function isSeriesQuerySuccess(
+  outcome: SeriesQueryResult,
+): outcome is Extract<typeof outcome, { type: 'found'; series: unknown }> {
+  return outcome.type === 'found';
+}
+
+function readMutationMetadata(request: NextRequest, body?: unknown): {
+  operationId: string;
+  version: SeriesVersion;
+} {
+  const operationId = request.headers.get('Idempotency-Key')?.trim()
+    || readString(body, 'operation_id', 'operationId')
+    || '';
+  const version = stripEntityTag(
+    request.headers.get('If-Match')?.trim()
+      || readString(body, 'version', 'expected_version', 'expectedVersion')
+      || '',
+  );
   return {
     operationId,
     version: version as SeriesVersion,
   };
 }
 
-function firstNonEmpty(...values: Array<string | null | undefined>): string | undefined {
-  return values.find((value) => value?.trim())?.trim();
-}
-
-function normalizeOpaqueHeader(value: string | null): string | undefined {
-  const normalized = value?.trim();
-  if (!normalized) return undefined;
-  const withoutWeakPrefix = normalized.startsWith('W/')
-    ? normalized.slice(2).trim()
-    : normalized;
-  return withoutWeakPrefix.replace(/^"(.*)"$/, '$1');
-}
-
-function readString(value: unknown, key: string): string | undefined {
-  if (!value || typeof value !== 'object' || !(key in value)) return undefined;
-  const candidate = (value as Record<string, unknown>)[key];
-  return typeof candidate === 'string' ? candidate : undefined;
-}
-
-async function runSeriesStateCommand(
-  commands: SeriesCommands,
-  action: SeriesStateAction,
-  seriesId: string,
-  metadata: SeriesCommandMetadata,
-  effectiveDate?: string,
-) {
-  const input: SeriesStateCommand = {
-    operationId: metadata.operationId,
-    seriesId,
-    version: metadata.version,
-    ...(effectiveDate === undefined ? {} : { effectiveDate }),
-  };
-
-  if (action === 'pause') return commands.pauseSeries(input);
-  if (action === 'resume') {
-    return commands.resumeSeries({
-      ...input,
-      ...(effectiveDate === undefined
-        ? {}
-        : { coverage: { from: effectiveDate, to: addLocalDays(effectiveDate, 7) } }),
-    });
+function readString(
+  value: unknown,
+  ...keys: string[]
+): string | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  for (const key of keys) {
+    const candidate = (value as Record<string, unknown>)[key];
+    if (typeof candidate === 'string') return candidate.trim();
   }
-  return commands.endSeries(input);
+  return undefined;
 }
 
-function seriesCommandResponse(
-  outcome: Awaited<ReturnType<SeriesCommands['pauseSeries']>>
-    | Awaited<ReturnType<SeriesCommands['resumeSeries']>>
-    | Awaited<ReturnType<SeriesCommands['endSeries']>>,
-  userId: string,
-) {
-  if (outcome.type === 'paused' || outcome.type === 'resumed' || outcome.type === 'ended') {
-    return NextResponse.json({
-      recurring_task: toRecurringTaskResponse(outcome.series, userId),
-    });
+function stripEntityTag(value: string): string {
+  if (value.startsWith('W/')) value = value.slice(2);
+  if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+    return value.slice(1, -1);
   }
-  const failure = recurringTaskFailureHttpStatusAndMessage(outcome);
-  return NextResponse.json(
-    { error: failure.error },
-    { status: failure.status },
-  );
-}
-
-function recurringTaskFailureHttpStatusAndMessage(
-  outcome: Exclude<
-    Awaited<ReturnType<SeriesCommands['pauseSeries']>>
-      | Awaited<ReturnType<SeriesCommands['resumeSeries']>>
-      | Awaited<ReturnType<SeriesCommands['endSeries']>>,
-    { type: 'paused' | 'resumed' | 'ended' }
-  >,
-) {
-  return {
-    error: recurringTaskFailureMessage(outcome),
-    status: recurringTaskFailureHttpStatus(outcome),
-  };
-}
-
-function toSeriesRevisionInput(
-  seriesId: string,
-  userId: string,
-  values: RecurringTaskUpdateValues,
-  effectiveDate?: string,
-) {
-  return {
-    seriesId,
-    userId,
-    title: values.title,
-    description: values.description,
-    priority: values.priority,
-    categoryId: values.category_id,
-    dueTime: values.due_time,
-    recurrenceRule: values.recurrence_rule,
-    startDate: values.start_date,
-    endType: values.end_type,
-    endDate: values.end_date,
-    endCount: values.end_count,
-    seriesStatus: values.status,
-    effectiveDate,
-  };
+  return value;
 }

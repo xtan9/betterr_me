@@ -93,6 +93,12 @@
     "cleanup": "transactional"
   },
   {
+    "path": "recurring_task_series_revision_capabilities.sql",
+    "domain": "recurring-tasks",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
     "path": "recurring_task_coverage_horizons.sql",
     "domain": "recurring-tasks",
     "role": "constrained",

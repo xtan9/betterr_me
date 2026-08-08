@@ -5,6 +5,7 @@ import type { ToolContext } from "@/lib/ai/tools/types";
 const {
   mockRpc,
   mockCreateSeries,
+  mockReviseSeries,
   mockPauseSeries,
   mockResumeSeries,
   mockEndSeries,
@@ -20,6 +21,7 @@ const {
     pause: vi.fn(),
   };
   const mockCreateSeries = vi.fn();
+  const mockReviseSeries = vi.fn();
   const mockPauseSeries = vi.fn();
   const mockResumeSeries = vi.fn();
   const mockEndSeries = vi.fn();
@@ -28,6 +30,7 @@ const {
   const mockCapabilities = {
     seriesCommands: {
       createSeries: mockCreateSeries,
+      reviseSeries: mockReviseSeries,
       pauseSeries: mockPauseSeries,
       resumeSeries: mockResumeSeries,
       endSeries: mockEndSeries,
@@ -39,6 +42,7 @@ const {
   return {
     mockRpc: vi.fn(),
     mockCreateSeries,
+    mockReviseSeries,
     mockPauseSeries,
     mockResumeSeries,
     mockEndSeries,
@@ -175,6 +179,34 @@ describe("recurring task tools", () => {
       operationId: "ai-operation-1",
       series: capabilitySeries("rt1"),
     });
+    mockReviseSeries.mockResolvedValue({
+      type: "revised",
+      status: "complete",
+      operation: "recurring-task.series.revise",
+      operationId: "ai-revise-1",
+      series: capabilitySeries("rt1"),
+    });
+    mockPauseSeries.mockResolvedValue({
+      type: "paused",
+      status: "complete",
+      operation: "recurring-task.series.pause",
+      operationId: "ai-pause-1",
+      series: capabilitySeries("rt1", "paused"),
+    });
+    mockResumeSeries.mockResolvedValue({
+      type: "resumed",
+      status: "complete",
+      operation: "recurring-task.series.resume",
+      operationId: "ai-resume-1",
+      series: capabilitySeries("rt1"),
+    });
+    mockEndSeries.mockResolvedValue({
+      type: "ended",
+      status: "complete",
+      operation: "recurring-task.series.end",
+      operationId: "ai-end-1",
+      series: capabilitySeries("rt1", "ended"),
+    });
     mockState.update.mockResolvedValue({
       status: "complete",
       type: "complete",
@@ -265,55 +297,82 @@ describe("recurring task tools", () => {
     expect(result).toEqual({ id: "rt2", title: "Daily standup" });
   });
 
-  it("updateRecurringTask removes undefined and passes to DB", async () => {
+  it("updateRecurringTask routes a revision with operation identity and version", async () => {
     const ctx = makeCtx();
     await findTool("updateRecurringTask").execute(
-      { recurringTaskId: "rt1", title: "Updated title" },
-      ctx,
-    );
-    expect(mockState.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        seriesId: "rt1",
-        userId: "user-123",
-        title: "Updated title",
-      }),
-    );
-  });
-
-  it("pauseRecurringTask calls pauseRecurringTask", async () => {
-    const ctx = makeCtx();
-    await findTool("pauseRecurringTask").execute(
       {
+        operationId: "ai-revise-1",
         recurringTaskId: "rt1",
-        operationId: "pause-1",
-        version: "rt-series-v1.pause-version",
+        version: "rt-series-v1.test-version",
+        effectiveDate: "2026-04-11",
+        title: "Updated title",
       },
       ctx,
     );
-    expect(mockPauseSeries).toHaveBeenCalledWith(
+    expect(mockReviseSeries).toHaveBeenCalledWith(
       expect.objectContaining({
-        operationId: "pause-1",
+        operationId: "ai-revise-1",
         seriesId: "rt1",
-        version: "rt-series-v1.pause-version",
-        effectiveDate: "2026-04-10",
+        version: "rt-series-v1.test-version",
+        effectiveDate: "2026-04-11",
+        defaults: { title: "Updated title" },
       }),
     );
   });
 
-  it("deleteRecurringTask translates the legacy identifier to endSeries", async () => {
+  it("pauseRecurringTask calls the pause capability", async () => {
+    const ctx = makeCtx();
+    await findTool("pauseRecurringTask").execute(
+      {
+        operationId: "ai-pause-1",
+        recurringTaskId: "rt1",
+        version: "rt-series-v1.test-version",
+      },
+      ctx,
+    );
+    expect(mockPauseSeries).toHaveBeenCalledWith({
+      operationId: "ai-pause-1",
+      seriesId: "rt1",
+      version: "rt-series-v1.test-version",
+      effectiveDate: "2026-04-10",
+    });
+  });
+
+  it("resumeRecurringTask passes its effective date and coverage to the capability", async () => {
+    const ctx = makeCtx();
+    await findTool("resumeRecurringTask").execute(
+      {
+        operationId: "ai-resume-1",
+        recurringTaskId: "rt1",
+        version: "rt-series-v1.test-version",
+        effectiveDate: "2026-04-12",
+      },
+      ctx,
+    );
+    expect(mockResumeSeries).toHaveBeenCalledWith({
+      operationId: "ai-resume-1",
+      seriesId: "rt1",
+      version: "rt-series-v1.test-version",
+      effectiveDate: "2026-04-12",
+      coverage: { from: "2026-04-12", to: "2026-04-19" },
+    });
+  });
+
+  it("deleteRecurringTask ends a series through the capability", async () => {
     const ctx = makeCtx();
     const result = await findTool("deleteRecurringTask").execute(
       {
+        operationId: "ai-end-1",
         recurringTaskId: "rt1",
-        operationId: "end-1",
-        version: "rt-series-v1.end-version",
+        version: "rt-series-v1.test-version",
+        effectiveDate: "2026-04-10",
       },
       ctx,
     );
     expect(mockEndSeries).toHaveBeenCalledWith({
-      operationId: "end-1",
+      operationId: "ai-end-1",
       seriesId: "rt1",
-      version: "rt-series-v1.end-version",
+      version: "rt-series-v1.test-version",
       effectiveDate: "2026-04-10",
     });
     expect(result).toEqual({ success: true });
@@ -322,16 +381,16 @@ describe("recurring task tools", () => {
   it("deleteRecurringTask returns error when not found", async () => {
     const ctx = makeCtx();
     mockEndSeries.mockResolvedValue({
-      type: "not-found",
       status: "not-found",
+      type: "not-found",
       operation: "recurring-task.series.end",
-      operationId: "end-2",
+      operationId: "ai-missing-end",
     });
     const result = await findTool("deleteRecurringTask").execute(
       {
+        operationId: "missing",
         recurringTaskId: "rt999",
-        operationId: "end-2",
-        version: "rt-series-v1.end-version",
+        version: "rt-series-v1.test-version",
       },
       ctx,
     );

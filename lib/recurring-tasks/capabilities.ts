@@ -84,7 +84,8 @@ export interface ReviseSeriesCommand {
   operationId: RecurringTaskOperationId;
   seriesId: string;
   version: SeriesVersion;
-  effectiveDate?: string;
+  /** The first Scheduled Date on which the new Series Revision applies. */
+  effectiveDate: string;
   recurrenceRule?: RecurrenceRule;
   defaults?: Partial<SeriesDefaults>;
   scope?: "following" | "all";
@@ -397,6 +398,33 @@ export function createRecurringTaskCapabilitiesForLifecycle(
       );
       if (operationValidation) return operationValidation;
       const operationId = input.operationId;
+      if (typeof input?.seriesId !== "string" || !input.seriesId.trim()) {
+        return validationFailure(
+          RECURRING_TASK_OPERATION_IDS.reviseSeries,
+          operationId,
+          "seriesId",
+          "Series ID is required",
+        );
+      }
+      if (
+        typeof input?.effectiveDate !== "string"
+        || !input.effectiveDate.trim()
+      ) {
+        return validationFailure(
+          RECURRING_TASK_OPERATION_IDS.reviseSeries,
+          operationId,
+          "effectiveDate",
+          "Effective Scheduled Date is required",
+        );
+      }
+      if (!isValidLocalDate(input.effectiveDate)) {
+        return validationFailure(
+          RECURRING_TASK_OPERATION_IDS.reviseSeries,
+          operationId,
+          "effectiveDate",
+          "Effective Scheduled Date must be a valid local date",
+        );
+      }
       const version = parseSeriesVersion(input.version, input.seriesId);
       if (!version) {
         return validationFailure(
@@ -927,9 +955,11 @@ export function encodeSeriesVersion(
 
 function parseSeriesVersion(
   value: unknown,
-  seriesId: string,
+  seriesId: unknown,
 ): DecodedSeriesVersion | undefined {
-  if (typeof value !== "string" || !value.trim()) return undefined;
+  if (typeof value !== "string" || typeof seriesId !== "string") {
+    return undefined;
+  }
   const decoded = parseEncodedVersion(value);
   return decoded?.seriesId === seriesId ? decoded : undefined;
 }
