@@ -91,7 +91,7 @@ export const OWNERSHIP_REGISTRY = [
   rule("layout", [/^hooks\/use-mobile\.ts$/, /^lib\/sidebar-styles\.ts$/], targetedE2E(LAYOUT_SPECS)),
   rule("authentication", [/^app\/(?:auth|api\/auth|\.well-known)\//, /^components\/auth(?:\/|-)/, /^lib\/(?:auth|supabase)\//], fullE2E()),
   rule("shared-platform", [/^app\/(?:globals\.css|layout\.tsx|page\.tsx|favicon\.ico|mcp\/)/, /^components\/(?:categories|layouts|providers|shared|ui)\//, /^components\/[^/]+\.tsx$/, /^hooks\/(?:use-keyboard-shortcuts|use-swipe)\./, /^lib\/(?:db\/(?:categories|ensure-profile|index|types)|hooks\/(?:use-categories|use-debounce|use-projects|use-sidebar-counts|use-tasks-realtime|use-toggling-set)|logger|utils|fetcher|constants|types\/database)/], fullE2E()),
-  rule("other-product", [/^app\/api\/(?:api-keys|categories|insights|mcp|oauth|sidebar)\//, /^emails\//, /^public\//, /^lib\/(?:categories\/|data\/|db\/(?:api-keys|categories|insights|journal-entry-links)|mcp\/|oauth\/|scheduling\/|validations\/(?:api|api-key|category|csv-import|oauth|push))/,], fullE2E()),
+  rule("other-product", [/^app\/api\/(?:api-keys|categories|insights|mcp|oauth|sidebar)\//, /^emails\//, /^public\//, /^lib\/(?:categories\/|data\/|db\/(?:api-keys|categories|insights|journal-entry-links)|mcp\/|oauth\/|scheduling\/|sidebar\/|validations\/(?:api|api-key|category|csv-import|oauth|push))/,], fullE2E()),
   rule("database-platform", [/^supabase\//], { ...fullE2E({ fullTests: true }), migrations: true }),
   rule("e2e-tests", [/^e2e\//], product({ directE2E: true })),
   ...MUTATION_SCOPES.map((scope) =>

@@ -56,9 +56,9 @@
       "invariants": ["Series identity, Series Revision effective dates, Coverage Horizon, occurrence lineage, and lifecycle state"],
       "atomicity": "Series mutations use lifecycle transaction boundaries; reads may use focused query adapters after coverage is ensured.",
       "migrationStatus": "migrated",
-      "owningTicket": "#659 / #681 / #682 / #686 / #687 / #688 / #692 / #886",
+      "owningTicket": "#659 / #681 / #682 / #686 / #687 / #688 / #692 / #886 / #887 / #888 / #893",
       "authority": "Authenticated Series capabilities over the private recurring-task lifecycle, with the declared compatibility adapter at delivery edges",
-      "evidence": "Recurring-task creation, queries, Series revisions, pause/resume, and ending route through the authenticated capability boundary in HTTP and AI; task-scoped occurrence compatibility remains private, ordinary task queries remain task-model queries, direct recurring persistence writes and legacy projection writers are absent, and the storage/lineage/rollback/RLS proof is in docs/architecture/recurring-task-lifecycle-contract.md and the registered SQL fixtures. The #886 evidence covers stable operation IDs, opaque optimistic versions, explicit effective dates, typed conflicts, idempotent replay, HTTP/AI parity, and dual implementation conformance."
+      "evidence": "Recurring-task creation, queries, Series revisions, pause/resume, ending, and occurrence commands route through authenticated capability or shared Task Command boundaries in HTTP and AI; task-scoped compatibility remains private, ordinary task queries remain task-model queries, focused sidebar and calendar Coverage orchestration is isolated in their query modules, direct recurring persistence writes and legacy projection writers are absent, and the storage/lineage/rollback/RLS proof is in docs/architecture/recurring-task-lifecycle-contract.md and the registered SQL fixtures. The evidence covers stable operation IDs, opaque optimistic versions, explicit effective dates, typed conflicts, idempotent replay, HTTP/AI parity, and focused Coverage-backed delivery."
     },
     {
       "id": "habits-completion",

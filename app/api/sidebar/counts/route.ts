@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
-import { HabitsDB, TasksDB } from "@/lib/db";
 import { getLocalDateString } from "@/lib/utils";
 import { log } from "@/lib/logger";
-import {
-  ensureRecurringTaskCoverageThrough,
-  recurringCoverageWarning,
-} from "@/lib/recurring-tasks/coverage";
+import { createSupabaseSidebarCountsQuery } from "@/lib/sidebar/supabase-query";
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ["cookie"],
@@ -23,10 +19,7 @@ export async function GET(request: NextRequest) {
         { status: auth.status },
       );
     }
-    const { principal: { userId }, client: supabase } = auth;
-
-    const habitsDB = new HabitsDB(supabase);
-    const tasksDB = new TasksDB(supabase);
+    const { principal, client: supabase } = auth;
 
     // Accept date from query param (client sends local date)
     const searchParams = request.nextUrl.searchParams;
@@ -40,41 +33,21 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const recurringCoverage = await ensureRecurringTaskCoverageThrough(
+    const outcome = await createSupabaseSidebarCountsQuery(
       supabase,
-      userId,
-      date,
-      date,
-    );
-    if (recurringCoverage.status === "partial") {
+      principal,
+    ).read({ date });
+    if (outcome.status === "failed") {
       return NextResponse.json(
         {
-          error: "Recurring task coverage is temporarily unavailable",
-          warning: recurringCoverage.warning
-            ?? recurringCoverageWarning({ from: date, to: date }),
+          error: outcome.error.message,
+          warning: outcome.warning,
         },
         { status: 503 },
       );
     }
 
-    // Run both queries in parallel
-    const [habitsWithStatus, tasksDueToday] = await Promise.all([
-      habitsDB.getHabitsWithTodayStatus(userId, date),
-      tasksDB.getTodayTasks(userId, date),
-    ]);
-
-    // Count incomplete habits (active habits not completed today)
-    const habitsIncomplete = habitsWithStatus.filter(
-      (h) => !h.completed_today
-    ).length;
-
-    // Count incomplete tasks due today or overdue
-    const tasksDue = tasksDueToday.filter((t) => !t.is_completed).length;
-
-    return NextResponse.json({
-      habits_incomplete: habitsIncomplete,
-      tasks_due: tasksDue,
-    });
+    return NextResponse.json(outcome.counts);
   } catch (error) {
     log.error("GET /api/sidebar/counts error", error);
     return NextResponse.json(
