@@ -3486,6 +3486,11 @@ export async function runAggregateCompatibilityEvidence(
     preliminary = finalizeRun(facts, options, start.value, finish.value, true);
     failure = finalizeRun(facts, options, start.value, finish.value, false);
   } catch (error) {
+    console.error(
+      "[mcp-access-grant] aggregate-finalization-error",
+      error instanceof Error ? error.name : typeof error,
+      error instanceof Error && error.stack ? error.stack.split("\n").slice(1).join("\n") : "non-error",
+    );
     discard();
     throw stableFailure(error);
   }
