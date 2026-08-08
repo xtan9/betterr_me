@@ -220,6 +220,29 @@ describe("Household Runway public result Runtime contract", () => {
     expect(result.adjustment.effect).toEqual({ kind: "becameSustainable" });
   });
 
+  it("keeps Plan freshness semantic across a no-op review and a changed review", () => {
+    const runtime = completedRuntime();
+
+    expect(runtime.getSnapshot().plan).toEqual({ exists: true, current: true });
+
+    runtime.send({ type: "edit_completed_plan" });
+    expect(runtime.getSnapshot().plan).toEqual({ exists: true, current: false });
+
+    runtime.send({ type: "continue" });
+    expect(runtime.getSnapshot().screen.kind).toBe("result");
+    expect(runtime.getSnapshot().plan).toEqual({ exists: true, current: true });
+
+    runtime.send({ type: "edit_completed_plan" });
+    runtime.send({
+      type: "update_answers",
+      patch: { available_cash: { cents: 3_100_000, confidence: "confirmed" } },
+    });
+    runtime.send({ type: "continue" });
+    expect(runtime.getSnapshot().screen.kind).toBe("result");
+    expect(runtime.getSnapshot().plan).toEqual({ exists: true, current: false });
+    expect(runtime.getSnapshot().actions.savePlan).toEqual({ applicable: true });
+  });
+
   it("orders zero, one, and two advice facts from the adjusted preview", () => {
     expect(readyResult(completedRuntime(completedAnswers({ current: 400_000, interruption: 400_000 }))).advice).toEqual([]);
     expect(readyResult(completedRuntime()).advice).toEqual([

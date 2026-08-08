@@ -37,7 +37,6 @@ import {
   type HouseholdRunwayInterviewCommand,
   type HouseholdRunwayInterviewCommandInput,
   type HouseholdRunwayInterviewEffect,
-  type HouseholdRunwayInterviewRenderModel,
   type HouseholdRunwayInterviewStage,
   type HouseholdRunwayInterviewStageStatus,
   type HouseholdRunwayCurrencySelection,
@@ -47,8 +46,6 @@ import {
   type HouseholdRunwayInterviewStatus,
   type HouseholdRunwayDraftDeviceAction,
   type HouseholdRunwayPlan,
-  type HouseholdRunwayReviewProjection,
-  type HouseholdRunwayResultProjection,
   type HouseholdRunwayValidationIssue,
 } from "@/lib/finance/internal/household-runway-interview";
 import type { HouseholdRunwayDraftState } from "@/lib/finance/internal/household-runway-draft-codec";
@@ -61,10 +58,6 @@ import {
   type HouseholdRunwayActionContext,
   type HouseholdRunwayAssessmentSnapshotFact,
   type HouseholdRunwayOperationProjectionInput,
-  type HouseholdRunwayRuntimeActions as FocusedRuntimeActions,
-  type HouseholdRunwayRuntimeDraftFacts as FocusedRuntimeDraftFacts,
-  type HouseholdRunwayRuntimeOperations as FocusedRuntimeOperations,
-  type HouseholdRunwayRuntimePlanFacts as FocusedRuntimePlanFacts,
 } from "@/lib/finance/internal/household-runway-focused-projection";
 
 export type {
@@ -598,41 +591,6 @@ export interface HouseholdRunwayInterviewRuntimeSnapshot {
   readonly actions: Readonly<HouseholdRunwayInterviewRuntimeActions>;
 }
 
-type HouseholdRunwayFocusedReviewScreen = {
-  kind: "review";
-} & HouseholdRunwayInterviewRuntimeDeepReadonly<HouseholdRunwayReviewProjection>;
-
-type HouseholdRunwayFocusedNonResultScreen = Exclude<
-  HouseholdRunwayInterviewRuntimeScreen,
-  { kind: "review" | "stage" }
->;
-
-type HouseholdRunwayFocusedResultScreen =
-  | { kind: "result"; readiness: "unavailable" }
-  | ({ kind: "result" } & HouseholdRunwayInterviewRuntimeDeepReadonly<
-      Extract<HouseholdRunwayResultProjection, { readiness: "ready" }>
-    > & {
-      history: readonly HouseholdRunwayAssessmentSnapshotFact[];
-    });
-
-export type HouseholdRunwayFocusedRuntimeScreen =
-  | HouseholdRunwayFocusedNonResultScreen
-  | HouseholdRunwayFocusedReviewScreen
-  | HouseholdRunwayFocusedResultScreen;
-
-export interface HouseholdRunwayFocusedRuntimeSnapshot {
-  readonly lifecycle: HouseholdRunwayInterviewRuntimeLifecycle;
-  readonly interviewStatus: HouseholdRunwayInterviewStatus;
-  readonly stage: HouseholdRunwayInterviewStage | null;
-  readonly screen: HouseholdRunwayFocusedRuntimeScreen;
-  readonly plan: HouseholdRunwayInterviewRuntimeDeepReadonly<FocusedRuntimePlanFacts>;
-  readonly draft: HouseholdRunwayInterviewRuntimeDeepReadonly<FocusedRuntimeDraftFacts>;
-  readonly issues: readonly HouseholdRunwayInterviewRuntimeIssue[];
-  readonly operations: HouseholdRunwayInterviewRuntimeDeepReadonly<FocusedRuntimeOperations>;
-  readonly confirmation: HouseholdRunwayInterviewRuntimeConfirmation;
-  readonly actions: HouseholdRunwayInterviewRuntimeDeepReadonly<FocusedRuntimeActions>;
-}
-
 export interface HouseholdRunwayInterviewRuntimeDraftFacts {
   readonly current: boolean;
   readonly stored: boolean;
@@ -804,8 +762,6 @@ export type HouseholdRunwayInterviewRuntimeEnvironmentMessage =
 
 export interface HouseholdRunwayInterviewRuntimeComposition {
   runtime: HouseholdRunwayInterviewRuntime;
-  /** Private pre-cutover focused projection for the atomic public migration. */
-  getFocusedSnapshot(): HouseholdRunwayFocusedRuntimeSnapshot;
   dispatchEnvironment(
     message: HouseholdRunwayInterviewRuntimeEnvironmentMessage,
   ): void;
@@ -1041,115 +997,6 @@ function draftCapabilityRequest(
   });
 }
 
-function action(applicable: boolean): HouseholdRunwayActionApplicability {
-  return applicable ? { applicable: true } : { applicable: false };
-}
-
-function actionsFor(
-  state: HouseholdRunwayInterviewState,
-  lifecycle: HouseholdRunwayInterviewRuntimeLifecycle,
-  storage: RuntimeStorageFacts,
-): HouseholdRunwayInterviewRuntimeActions {
-  const screen = state.renderModel;
-  const ready = lifecycle === "ready";
-  const resultReady =
-    ready &&
-    state.status === "completed" &&
-    state.assessment !== null &&
-    screen.kind === "stage" &&
-    screen.resultProjection.readiness === "ready";
-  const completedResult =
-    ready && state.status === "completed" && screen.kind === "stage";
-  const collectingOrReviewing =
-    state.status === "collecting" || state.status === "reviewing";
-  const landingHasWork = screen.kind === "landing" && screen.hasDraft;
-  const landingHasCommittedPlan =
-    screen.kind === "landing" && state.committedPlan !== null;
-  const resumeChoice = screen.kind === "resume_choice";
-  const deviceOperationPending = state.operations.deviceDraft.status === "pending";
-  return {
-    start: action(
-      ready &&
-        screen.kind === "landing" &&
-        !screen.hasDraft &&
-        state.committedPlan === null,
-    ),
-    startNew: action(
-      ready &&
-        (landingHasWork || landingHasCommittedPlan || resumeChoice || completedResult),
-    ),
-    resumeDraft: action(ready && resumeChoice),
-    resumePlan: action(ready && resumeChoice),
-    importDraft: action(
-      ready &&
-        state.status !== "not_started" &&
-        storage.device &&
-        !storage.session &&
-        !resumeChoice &&
-        !deviceOperationPending,
-    ),
-    continue: action(ready && collectingOrReviewing),
-    back: action(ready && collectingOrReviewing),
-    skip: action(
-      ready && (state.stage === "otherIncome" || state.stage === "assets"),
-    ),
-    discardDraft: action(
-      ready &&
-        (state.status !== "not_started" || storage.session || storage.device),
-    ),
-    rememberDraft: action(
-      ready &&
-        state.status !== "not_started" &&
-        !storage.deviceStorageConsent &&
-        !deviceOperationPending,
-    ),
-    clearDeviceDraft: action(
-      ready && storage.device && storage.deviceStorageConsent && !deviceOperationPending,
-    ),
-    editCompletedPlan: action(resultReady),
-    selectScenario: action(resultReady),
-    setPlanAdjustment: action(resultReady),
-    applyPlanAdjustment: action(resultReady),
-    resetPlanAdjustment: action(resultReady),
-    savePlan: action(resultReady),
-    downloadReport: action(resultReady),
-  };
-}
-
-function publicOperationFor(
-  operation:
-    | HouseholdRunwayInterviewState["operations"]["draftSynchronization"]
-    | HouseholdRunwayInterviewState["operations"]["deviceDraft"]
-    | HouseholdRunwayInterviewState["operations"]["planPersistence"]
-    | HouseholdRunwayInterviewState["operations"]["reportDownload"]
-    | HouseholdRunwayInterviewState["operations"]["analytics"],
-): HouseholdRunwayInterviewRuntimeOperation {
-  if (operation.status === "failed") {
-    if (operation.error === "stale_result") {
-      return { status: "idle" };
-    }
-    return {
-      status: "failed",
-      error: operation.error,
-    };
-  }
-  return { status: operation.status === "dirty" ? "idle" : operation.status };
-}
-
-function publicOperationsFor(
-  state: HouseholdRunwayInterviewState,
-): HouseholdRunwayInterviewRuntimeOperations {
-  return {
-    draftSynchronization: publicOperationFor(
-      state.operations.draftSynchronization,
-    ),
-    deviceDraft: publicOperationFor(state.operations.deviceDraft),
-    planPersistence: publicOperationFor(state.operations.planPersistence),
-    reportDownload: publicOperationFor(state.operations.reportDownload),
-    analytics: publicOperationFor(state.operations.analytics),
-  };
-}
-
 function publicIssueFor(
   issue: HouseholdRunwayValidationIssue | null,
 ): HouseholdRunwayInterviewRuntimeIssue | null {
@@ -1311,7 +1158,7 @@ function isPlanPersistenceFailure(
 function draftFactsFor(
   state: HouseholdRunwayInterviewState,
   storage: RuntimeStorageFacts,
-): HouseholdRunwayInterviewRuntimeDraftFacts {
+): Omit<HouseholdRunwayInterviewRuntimeDraftFacts, "synchronized"> {
   return {
     current:
       state.status !== "not_started" ||
@@ -1321,14 +1168,87 @@ function draftFactsFor(
     session: storage.session,
     device: storage.device,
     deviceStorageConsent: storage.deviceStorageConsent,
-    synchronized: state.operations.draftSynchronization.status === "succeeded",
   };
 }
 
-function projectScreen(
-  screen: HouseholdRunwayInterviewRenderModel,
+type RuntimeOperationState =
+  HouseholdRunwayInterviewState["operations"][keyof HouseholdRunwayInterviewState["operations"]];
+
+function focusedOperationInputFor(
+  operation: RuntimeOperationState,
+): HouseholdRunwayOperationProjectionInput {
+  return operation.status === "failed"
+    ? { status: "failed", error: operation.error }
+    : { status: operation.status };
+}
+
+function focusedActionScreenFor(
+  state: HouseholdRunwayInterviewState,
+): HouseholdRunwayActionContext["screen"] {
+  const screen = state.renderModel;
+  if (screen.kind === "landing") {
+    return { kind: "landing", hasDraft: screen.hasDraft };
+  }
+  if (screen.kind === "resume_choice") {
+    return {
+      kind: "resume_choice",
+      draftAvailable: state.resumeChoice !== null,
+      planAvailable: state.committedPlan !== null,
+    };
+  }
+  if (screen.kind === "review") {
+    return { kind: "review", readiness: screen.reviewProjection.readiness };
+  }
+  if (screen.kind === "stage") {
+    return {
+      kind: "result",
+      readiness:
+        screen.resultProjection.readiness === "ready"
+          ? "ready"
+          : "unavailable",
+    };
+  }
+  return {
+    kind: "collecting",
+    stage: screen.stage as Exclude<HouseholdRunwayInterviewStage, "result">,
+  };
+}
+
+function screenFor(
+  state: HouseholdRunwayInterviewState,
   assessmentHistory: readonly RunwaySnapshotSummary[],
 ): HouseholdRunwayInterviewRuntimeScreenProjection {
+  const screen = state.renderModel;
+  if (screen.kind === "review") {
+    return {
+      kind: "review",
+      stage: screen.stage,
+      ...clonePublicValue(screen.reviewProjection),
+      availableStages: screen.availableStages,
+      stageStatus: screen.stageStatus,
+    };
+  }
+  if (screen.kind === "stage") {
+    if (screen.resultProjection.readiness === "unavailable") {
+      return {
+        kind: "result",
+        stage: screen.stage,
+        readiness: "unavailable",
+        availableStages: screen.availableStages,
+        stageStatus: screen.stageStatus,
+      };
+    }
+    return {
+      kind: "result",
+      stage: screen.stage,
+      ...clonePublicValue(screen.resultProjection),
+      history: clonePublicValue(
+        projectHouseholdRunwayAssessmentSnapshotHistory(assessmentHistory),
+      ),
+      availableStages: screen.availableStages,
+      stageStatus: screen.stageStatus,
+    };
+  }
   switch (screen.kind) {
     case "landing":
       return {
@@ -1462,117 +1382,16 @@ function projectScreen(
         availableStages: screen.availableStages,
         stageStatus: screen.stageStatus,
       };
-    case "review":
-      return {
-        kind: screen.kind,
-        stage: screen.stage,
-        ...screen.reviewProjection,
-        availableStages: screen.availableStages,
-        stageStatus: screen.stageStatus,
-      };
-    case "stage":
-      return screen.resultProjection.readiness === "ready"
-        ? {
-            kind: "result",
-            stage: screen.stage,
-            ...screen.resultProjection,
-            history: projectHouseholdRunwayAssessmentSnapshotHistory(assessmentHistory),
-            availableStages: screen.availableStages,
-            stageStatus: screen.stageStatus,
-          }
-        : {
-            kind: "result",
-            stage: screen.stage,
-            readiness: "unavailable",
-            availableStages: screen.availableStages,
-            stageStatus: screen.stageStatus,
-          };
   }
 }
 
-type RuntimeOperationState =
-  HouseholdRunwayInterviewState["operations"][keyof HouseholdRunwayInterviewState["operations"]];
-
-function focusedOperationInputFor(
-  operation: RuntimeOperationState,
-): HouseholdRunwayOperationProjectionInput {
-  return operation.status === "failed"
-    ? { status: "failed", error: operation.error }
-    : { status: operation.status };
-}
-
-function focusedActionScreenFor(
+function operationInputsFor(
   state: HouseholdRunwayInterviewState,
-): HouseholdRunwayActionContext["screen"] {
-  const screen = state.renderModel;
-  if (screen.kind === "landing") {
-    return { kind: "landing", hasDraft: screen.hasDraft };
-  }
-  if (screen.kind === "resume_choice") {
-    return {
-      kind: "resume_choice",
-      draftAvailable: state.resumeChoice !== null,
-      planAvailable: state.committedPlan !== null,
-    };
-  }
-  if (screen.kind === "review") {
-    return { kind: "review", readiness: screen.reviewProjection.readiness };
-  }
-  if (screen.kind === "stage") {
-    return {
-      kind: "result",
-      readiness:
-        screen.resultProjection.readiness === "ready"
-          ? "ready"
-          : "unavailable",
-    };
-  }
+): Record<
+  keyof HouseholdRunwayInterviewRuntimeOperations,
+  HouseholdRunwayOperationProjectionInput
+> {
   return {
-    kind: "collecting",
-    stage: screen.stage as Exclude<HouseholdRunwayInterviewStage, "result">,
-  };
-}
-
-function focusedScreenFor(
-  state: HouseholdRunwayInterviewState,
-  assessmentHistory: readonly RunwaySnapshotSummary[],
-): HouseholdRunwayFocusedRuntimeScreen {
-  const screen = state.renderModel;
-  if (screen.kind === "review") {
-    return {
-      kind: "review",
-      ...clonePublicValue(screen.reviewProjection),
-    };
-  }
-  if (screen.kind === "stage") {
-    if (screen.resultProjection.readiness === "unavailable") {
-      return { kind: "result", readiness: "unavailable" };
-    }
-    return {
-      kind: "result",
-      ...clonePublicValue(screen.resultProjection),
-      history: clonePublicValue(
-        projectHouseholdRunwayAssessmentSnapshotHistory(assessmentHistory),
-      ),
-    };
-  }
-  return projectScreen(screen, assessmentHistory) as HouseholdRunwayFocusedNonResultScreen;
-}
-
-function focusedSnapshotFor(
-  state: HouseholdRunwayInterviewState,
-  lifecycle: HouseholdRunwayInterviewRuntimeLifecycle,
-  storage: RuntimeStorageFacts,
-  runtimeIssues: readonly HouseholdRunwayInterviewRuntimeIssue[],
-  confirmation: HouseholdRunwayInterviewRuntimeConfirmation,
-  assessmentHistory: readonly RunwaySnapshotSummary[],
-): HouseholdRunwayFocusedRuntimeSnapshot {
-  const screen = state.renderModel;
-  const issue =
-    state.validationIssue ??
-    ("blockingIssue" in screen ? screen.blockingIssue : null);
-  const draft = draftFactsFor(state, storage);
-  const operationInputs = {
     draftSynchronization: focusedOperationInputFor(
       state.operations.draftSynchronization,
     ),
@@ -1580,10 +1399,23 @@ function focusedSnapshotFor(
     planPersistence: focusedOperationInputFor(state.operations.planPersistence),
     reportDownload: focusedOperationInputFor(state.operations.reportDownload),
     analytics: focusedOperationInputFor(state.operations.analytics),
-  } satisfies Record<
-    keyof FocusedRuntimeOperations,
-    HouseholdRunwayOperationProjectionInput
-  >;
+  };
+}
+
+function snapshotFor(
+  state: HouseholdRunwayInterviewState,
+  lifecycle: HouseholdRunwayInterviewRuntimeLifecycle,
+  storage: RuntimeStorageFacts = EMPTY_STORAGE_FACTS,
+  runtimeIssues: readonly HouseholdRunwayInterviewRuntimeIssue[] = [],
+  confirmation: HouseholdRunwayInterviewRuntimeConfirmation = { status: "idle" },
+  assessmentHistory: readonly RunwaySnapshotSummary[] = [],
+): HouseholdRunwayInterviewRuntimeSnapshot {
+  const screen = state.renderModel;
+  const issue =
+    state.validationIssue ??
+    ("blockingIssue" in screen ? screen.blockingIssue : null);
+  const draft = draftFactsFor(state, storage);
+  const operationInputs = operationInputsFor(state);
   const actions = projectHouseholdRunwayActions({
     lifecycle,
     status: state.status,
@@ -1602,62 +1434,22 @@ function focusedSnapshotFor(
         state.stage,
       ),
   });
-  const focusedDraft = projectHouseholdRunwayDraftFacts({
+  const publicDraft = projectHouseholdRunwayDraftFacts({
     ...draft,
-    synchronization: focusedOperationInputFor(
-      state.operations.draftSynchronization,
-    ),
+    synchronization: operationInputs.draftSynchronization,
   });
 
   return deepFreeze({
     lifecycle,
     interviewStatus: state.status,
     stage: state.stage,
-    screen: clonePublicValue(
-      focusedScreenFor(state, assessmentHistory),
-    ),
+    screen: clonePublicValue(screenFor(state, assessmentHistory)),
     plan,
-    draft: focusedDraft,
+    draft: publicDraft,
     issues: [...runtimeIssues, ...(issue ? [publicIssueFor(issue)!] : [])],
     operations: projectHouseholdRunwayOperations(operationInputs),
     confirmation,
     actions,
-  });
-}
-
-function snapshotFor(
-  state: HouseholdRunwayInterviewState,
-  lifecycle: HouseholdRunwayInterviewRuntimeLifecycle,
-  storage: RuntimeStorageFacts = EMPTY_STORAGE_FACTS,
-  runtimeIssues: readonly HouseholdRunwayInterviewRuntimeIssue[] = [],
-  confirmation: HouseholdRunwayInterviewRuntimeConfirmation = { status: "idle" },
-  assessmentHistory: readonly RunwaySnapshotSummary[] = [],
-): HouseholdRunwayInterviewRuntimeSnapshot {
-  const screen = state.renderModel;
-  const issue =
-    state.validationIssue ??
-    ("blockingIssue" in screen ? screen.blockingIssue : null);
-  return deepFreeze({
-    lifecycle,
-    interviewStatus: state.status,
-    stage: state.stage,
-    screen: clonePublicValue(projectScreen(screen, assessmentHistory)),
-    plan: {
-      exists: state.committedPlan !== null,
-      current:
-        state.committedPlan !== null &&
-        householdRunwayDraftMatchesPlanContent(
-          state.draft,
-          state.committedPlan,
-          state.status,
-          state.stage,
-        ),
-    },
-    draft: draftFactsFor(state, storage),
-    issues: [...runtimeIssues, ...(issue ? [publicIssueFor(issue)!] : [])],
-    operations: publicOperationsFor(state),
-    confirmation,
-    actions: actionsFor(state, lifecycle, storage),
   });
 }
 
@@ -1708,14 +1500,6 @@ export function createHouseholdRunwayInterviewRuntimeComposition(
     confirmation,
     assessmentHistory,
   );
-  let focusedSnapshot = focusedSnapshotFor(
-    state,
-    lifecycle,
-    storageFacts,
-    runtimeIssues,
-    confirmation,
-    assessmentHistory,
-  );
   let draining = false;
   const messages: RuntimeMessage[] = [];
   const listeners = new Set<() => void>();
@@ -1730,23 +1514,8 @@ export function createHouseholdRunwayInterviewRuntimeComposition(
       confirmation,
       assessmentHistory,
     );
-    const nextFocused = focusedSnapshotFor(
-      state,
-      lifecycle,
-      storageFacts,
-      runtimeIssues,
-      confirmation,
-      assessmentHistory,
-    );
-    const publicChanged = snapshotSignature(next) !== snapshotSignature(snapshot);
-    const focusedChanged =
-      snapshotSignature(nextFocused) !== snapshotSignature(focusedSnapshot);
-    if (!publicChanged && !focusedChanged) {
-      return;
-    }
+    if (snapshotSignature(next) === snapshotSignature(snapshot)) return;
     snapshot = next;
-    focusedSnapshot = nextFocused;
-    if (!publicChanged) return;
     for (const listener of [...listeners]) {
       try {
         listener();
@@ -2880,14 +2649,6 @@ export function createHouseholdRunwayInterviewRuntimeComposition(
         confirmation,
         assessmentHistory,
       );
-      focusedSnapshot = focusedSnapshotFor(
-        state,
-        lifecycle,
-        storageFacts,
-        runtimeIssues,
-        confirmation,
-        assessmentHistory,
-      );
     },
   };
 
@@ -2897,11 +2658,7 @@ export function createHouseholdRunwayInterviewRuntimeComposition(
     if (!disposed) enqueue({ type: "environment", message });
   };
 
-  return {
-    runtime,
-    getFocusedSnapshot: () => focusedSnapshot,
-    dispatchEnvironment,
-  };
+  return { runtime, dispatchEnvironment };
 }
 
 export function createHouseholdRunwayInterviewRuntimeWithCapabilities(
