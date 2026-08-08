@@ -67,6 +67,11 @@ import {
   type HouseholdRunwayRuntimePlanFacts as FocusedRuntimePlanFacts,
 } from "@/lib/finance/internal/household-runway-focused-projection";
 
+export type {
+  HouseholdRunwayAssessmentSnapshotFact,
+  HouseholdRunwayHistoryComparison,
+} from "@/lib/finance/internal/household-runway-focused-projection";
+
 /** User-facing retention policy; storage/version details remain internal. */
 export const HOUSEHOLD_RUNWAY_DRAFT_RETENTION_DAYS = 30;
 
@@ -551,31 +556,6 @@ export type HouseholdRunwayPrecisionNotice =
   | { kind: "takeHomeEstimated" }
   | { kind: "quickExpenses" }
   | { kind: "coreInputsComplete" };
-
-export type HouseholdRunwayHistoryComparison =
-  | { kind: "noPrevious" }
-  | {
-      kind: "incomparable";
-      reason:
-        | "scenarioChanged"
-        | "modelChanged"
-        | "scenarioAndModelChanged";
-    }
-  | { kind: "unchanged" }
-  | { kind: "monthsChanged"; deltaMonths: number }
-  | { kind: "becameSustainable" }
-  | { kind: "leftSustainable" };
-
-export type HouseholdRunwayAssessmentSnapshotFact = {
-  id: string;
-  scenario: RunwayScenario;
-  modelVersion: string;
-  createdAt: string;
-  outcome:
-    | { kind: "sustainable" }
-    | { kind: "depletes"; monthsCovered: number };
-  comparisonToPrevious: HouseholdRunwayHistoryComparison;
-};
 
 export type HouseholdRunwayInterviewRuntimeScreen =
   HouseholdRunwayInterviewRuntimeDeepReadonly<HouseholdRunwayInterviewRuntimeScreenProjection>;
@@ -1237,75 +1217,6 @@ function validatedRunwaySnapshotHistory(
   return history;
 }
 
-function historyOutcomeFor(
-  snapshot: RunwaySnapshotSummary,
-): HouseholdRunwayAssessmentSnapshotFact["outcome"] | null {
-  if (snapshot.sustainable) {
-    return snapshot.months_covered === null ? { kind: "sustainable" } : null;
-  }
-  return typeof snapshot.months_covered === "number" &&
-    Number.isFinite(snapshot.months_covered) &&
-    snapshot.months_covered >= 0
-    ? { kind: "depletes", monthsCovered: snapshot.months_covered }
-    : null;
-}
-
-function historyComparisonFor(
-  current: RunwaySnapshotSummary,
-  previous: RunwaySnapshotSummary | undefined,
-): HouseholdRunwayHistoryComparison | null {
-  if (!previous) return { kind: "noPrevious" };
-
-  const currentOutcome = historyOutcomeFor(current);
-  const previousOutcome = historyOutcomeFor(previous);
-  if (!currentOutcome || !previousOutcome) return null;
-
-  const scenarioChanged = current.scenario !== previous.scenario;
-  const modelChanged = current.model_version !== previous.model_version;
-  if (scenarioChanged || modelChanged) {
-    return {
-      kind: "incomparable",
-      reason:
-        scenarioChanged && modelChanged
-          ? "scenarioAndModelChanged"
-          : scenarioChanged
-            ? "scenarioChanged"
-            : "modelChanged",
-    };
-  }
-
-  if (currentOutcome.kind === "sustainable" && previousOutcome.kind === "sustainable") {
-    return { kind: "unchanged" };
-  }
-  if (currentOutcome.kind === "sustainable") return { kind: "becameSustainable" };
-  if (previousOutcome.kind === "sustainable") return { kind: "leftSustainable" };
-
-  const currentMonths = currentOutcome.monthsCovered;
-  const previousMonths = previousOutcome.monthsCovered;
-  if (currentMonths === previousMonths) return { kind: "unchanged" };
-  return { kind: "monthsChanged", deltaMonths: currentMonths - previousMonths };
-}
-
-function focusedHistoryFor(
-  history: readonly RunwaySnapshotSummary[],
-): HouseholdRunwayAssessmentSnapshotFact[] {
-  return history.flatMap((snapshot, index) => {
-    const outcome = historyOutcomeFor(snapshot);
-    const comparisonToPrevious = historyComparisonFor(snapshot, history[index + 1]);
-    return outcome
-      && comparisonToPrevious
-      ? [{
-          id: snapshot.id,
-          scenario: snapshot.scenario,
-          modelVersion: snapshot.model_version,
-          createdAt: snapshot.created_at,
-          outcome,
-          comparisonToPrevious,
-        }]
-      : [];
-  });
-}
-
 function isDraftState(value: unknown): value is HouseholdRunwayDraftState {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<HouseholdRunwayDraftState>;
@@ -1565,7 +1476,7 @@ function projectScreen(
             kind: "result",
             stage: screen.stage,
             ...screen.resultProjection,
-            history: focusedHistoryFor(assessmentHistory),
+            history: projectHouseholdRunwayAssessmentSnapshotHistory(assessmentHistory),
             availableStages: screen.availableStages,
             stageStatus: screen.stageStatus,
           }
@@ -1645,7 +1556,7 @@ function focusedScreenFor(
       ),
     };
   }
-  return projectScreen(screen) as HouseholdRunwayFocusedNonResultScreen;
+  return projectScreen(screen, assessmentHistory) as HouseholdRunwayFocusedNonResultScreen;
 }
 
 function focusedSnapshotFor(
