@@ -36,7 +36,7 @@ import {
   type DelegatedJwtClaims,
   type DelegatedJwtHeader,
 } from "./mcp-access-grant-policy";
-import type { LoopbackHost } from "./mcp-access-grant-journey";
+import { s256CodeChallenge, type LoopbackHost } from "./mcp-access-grant-journey";
 import { compactVerify, decodeJwt, decodeProtectedHeader, importJWK, type JWK } from "jose";
 
 /**
@@ -80,6 +80,7 @@ export interface PublicClientRequestInput {
   readonly requestCodeChallengePresent?: boolean;
   readonly requestCodePresent?: boolean;
   readonly requestCodeVerifierPresent?: boolean;
+  readonly requestCodeVerifierHash?: string;
   readonly status?: number;
   readonly response?: PublicClientResponseSurface;
 }
@@ -148,6 +149,7 @@ export interface PublicClientPkceObservation {
   readonly challenge?: string;
   readonly method?: string;
   readonly requestResource?: string;
+  readonly authorizationRequest?: PublicClientRequestInput;
 }
 
 export interface PublicClientCleanupObservation {
@@ -322,12 +324,17 @@ export type PublicClientArtifactWriter =
   | ((artifact: PublicClientArtifact) => void | Promise<void>)
   | { readonly write: (artifact: PublicClientArtifact) => void | Promise<void> };
 
+export interface PublicClientEvidenceRequestSource {
+  readonly snapshot: () => readonly MinimizedRequestObservation[];
+}
+
 export interface PublicClientEvidenceOptions {
   readonly target: CompatibilityReportTarget;
   readonly versions: Readonly<Record<string, string>>;
   readonly configuredSecrets?: readonly string[];
   readonly clock: () => string;
   readonly writer: PublicClientArtifactWriter;
+  readonly requestSource?: PublicClientEvidenceRequestSource;
 }
 
 export interface PublicClientEvidenceResult {
@@ -350,6 +357,8 @@ interface NormalizedSurface {
 interface NormalizedRequest {
   readonly request: MinimizedRequestObservation;
   readonly responseCredentialPresence: PublicClientCredentialPresence;
+  readonly requestStateHash?: string;
+  readonly requestCodeChallenge?: string;
 }
 
 interface NormalizedFact {
@@ -737,6 +746,17 @@ function normalizeRequest(value: unknown): NormalizedRequest | undefined {
   const requestRedirectUri = boundedString(value.requestRedirectUri ?? value.redirectUri);
   const requestResource = boundedString(value.requestResource ?? value.resource);
   const requestCodeChallengeMethod = boundedString(value.requestCodeChallengeMethod ?? value.codeChallengeMethod);
+  let requestStateHash: string | undefined;
+  let requestCodeChallenge: string | undefined;
+  try {
+    const parsedUrl = new URL(url);
+    const state = parsedUrl.searchParams.get("state");
+    requestCodeChallenge = parsedUrl.searchParams.get("code_challenge") ?? undefined;
+    requestStateHash = state ? s256CodeChallenge(state) : undefined;
+  } catch {
+    requestStateHash = undefined;
+    requestCodeChallenge = undefined;
+  }
   const request: MinimizedRequestObservation = {
     method: method.toUpperCase(),
     url: sanitizeUrl(url),
@@ -752,6 +772,7 @@ function normalizeRequest(value: unknown): NormalizedRequest | undefined {
     ...(typeof value.requestCodeChallengePresent === "boolean" ? { requestCodeChallengePresent: value.requestCodeChallengePresent } : {}),
     ...(typeof value.requestCodePresent === "boolean" ? { requestCodePresent: value.requestCodePresent } : {}),
     ...(typeof value.requestCodeVerifierPresent === "boolean" ? { requestCodeVerifierPresent: value.requestCodeVerifierPresent } : {}),
+    ...(boundedString(value.requestCodeVerifierHash) ? { requestCodeVerifierHash: value.requestCodeVerifierHash as string } : {}),
     ...(boundedNumber(value.status) !== undefined ? { status: boundedNumber(value.status) } : {}),
     ...(response.credentialPresence === "present"
       ? { responseContainsCredentials: true }
@@ -759,7 +780,7 @@ function normalizeRequest(value: unknown): NormalizedRequest | undefined {
         ? { responseContainsCredentials: false }
         : {}),
   };
-  return { request, responseCredentialPresence: response.credentialPresence };
+  return { request, responseCredentialPresence: response.credentialPresence, requestStateHash, requestCodeChallenge };
 }
 
 function normalizeStringList(value: unknown): string[] | undefined {
@@ -1131,6 +1152,7 @@ async function normalizeFact(
     const browserUrl = boundedString(observation.browserUrl);
     const callbackEvidence = urlCredentialEvidence(callbackUrl);
     const browserEvidence = browserUrl ? browserUrlCredentialEvidence(browserUrl) : undefined;
+    const request = normalizeRequest(raw.request);
     const expectedState = boundedString(observation.expectedState);
     const callbackState = boundedString(observation.callbackState);
     const tokenResponse = normalizeSurface(observation.tokenResponse);
@@ -1157,9 +1179,11 @@ async function normalizeFact(
         callbackReceived: boundedBoolean(observation.callbackReceived) ?? Boolean(observation.callbackComplete && callbackUrl),
         callbackComplete: observation.callbackComplete === true,
         authorizationError: boundedBoolean(observation.authorizationError),
-        stateMatches: expectedState !== undefined && callbackState !== undefined
-          ? expectedState === callbackState
-          : undefined,
+        stateMatches: request?.requestStateHash !== undefined && callbackState !== undefined
+          ? request.requestStateHash === s256CodeChallenge(callbackState)
+          : expectedState !== undefined && callbackState !== undefined
+            ? expectedState === callbackState
+            : undefined,
         tokenRequestObserved: boundedBoolean(observation.tokenRequestObserved),
         credentialPresence,
         authorizationCodePresent,
@@ -1169,7 +1193,7 @@ async function normalizeFact(
         unexpectedCredentialObserved: credentialPresence === "present" && !authorizationCodePresent && !accessTokenObserved && !refreshTokenObserved && !idTokenObserved,
         callbackUrl: callbackUrl ? sanitizeUrl(callbackUrl) : undefined,
       },
-      request: normalizeRequest(raw.request),
+      request,
     };
   }
 
@@ -1205,21 +1229,27 @@ async function normalizeFact(
     const observation = isRecord(raw.observation) ? raw.observation : {};
     const verifier = boundedString(observation.verifier);
     const challenge = boundedString(observation.challenge);
+    const request = normalizeRequest(raw.request);
+    const authorizationRequest = normalizeRequest(observation.authorizationRequest);
+    const effectiveChallenge = challenge ?? authorizationRequest?.requestCodeChallenge;
+    const verifierHash = request?.request.requestCodeVerifierHash;
     return {
       identity: `pkce|exchange|${family}`,
       kind,
       role,
       family,
       data: {
-        verifierPresent: Boolean(verifier),
-        challengePresent: Boolean(challenge),
-        verifierMatchesChallenge: verifier && challenge
-          ? matchesS256CodeChallenge(verifier, challenge, boundedString(observation.method))
-          : undefined,
+        verifierPresent: Boolean(verifier) || request?.request.requestCodeVerifierPresent === true,
+        challengePresent: effectiveChallenge !== undefined,
+        verifierMatchesChallenge: verifier && effectiveChallenge
+          ? matchesS256CodeChallenge(verifier, effectiveChallenge, boundedString(observation.method))
+          : verifierHash !== undefined && effectiveChallenge !== undefined
+            ? verifierHash === effectiveChallenge
+            : undefined,
         method: boundedString(observation.method),
         requestResource: boundedString(observation.requestResource),
       },
-      request: normalizeRequest(raw.request),
+      request,
     };
   }
 
@@ -1857,7 +1887,7 @@ function factFingerprint(fact: NormalizedFact): string {
 }
 
 function snapshotOptions(options: PublicClientEvidenceOptions): PublicClientEvidenceOptions {
-  if (!isRecord(options) || !hasOnlyOwnDataKeys(options, ["target", "versions", "configuredSecrets", "clock", "writer"])) throw new PublicClientEvidenceBoundaryError();
+  if (!isRecord(options) || !hasOnlyOwnDataKeys(options, ["target", "versions", "configuredSecrets", "clock", "writer", "requestSource"])) throw new PublicClientEvidenceBoundaryError();
   if (!isRecord(options.target) || !hasOnlyOwnDataKeys(options.target, ["name", "canonicalResource", "supabaseUrl", "expectedAuthorizationServer", "loopbackHosts"])) throw new PublicClientEvidenceBoundaryError();
   if (!nonEmptyBoundedString(options.target.name) || !validHttpUrl(options.target.canonicalResource) || !validHttpUrl(options.target.supabaseUrl) || !validHttpUrl(options.target.expectedAuthorizationServer)) {
     throw new PublicClientEvidenceBoundaryError();
@@ -1871,6 +1901,9 @@ function snapshotOptions(options: PublicClientEvidenceOptions): PublicClientEvid
   }
   const configuredSecrets = options.configuredSecrets === undefined ? [] : options.configuredSecrets;
   if (!isDenseArray(configuredSecrets, MAX_CONFIGURED_SECRETS) || configuredSecrets.some((secret) => !nonEmptyConfiguredSecret(secret)) || new Set(configuredSecrets).size !== configuredSecrets.length) {
+    throw new PublicClientEvidenceBoundaryError();
+  }
+  if (options.requestSource !== undefined && (!isRecord(options.requestSource) || !hasOnlyOwnDataKeys(options.requestSource, ["snapshot"]) || typeof options.requestSource.snapshot !== "function")) {
     throw new PublicClientEvidenceBoundaryError();
   }
   const versions = Object.fromEntries(Object.entries(options.versions).map(([key, value]) => {
@@ -1905,6 +1938,7 @@ function snapshotOptions(options: PublicClientEvidenceOptions): PublicClientEvid
     configuredSecrets: [...configuredSecrets],
     clock: options.clock,
     writer,
+    ...(options.requestSource === undefined ? {} : { requestSource: { snapshot: options.requestSource.snapshot } }),
   });
 }
 
@@ -1949,6 +1983,7 @@ function makeArtifact(contents: string): PublicClientArtifact {
 function internalObservations(
   facts: readonly NormalizedFact[],
   target: CompatibilityReportTarget,
+  includeFactRequests: boolean,
 ): EvidenceObservation[] {
   const observations: EvidenceObservation[] = [];
   const shared = new Map<string, DerivedGate>();
@@ -2057,8 +2092,10 @@ function internalObservations(
     observations.push(normalizedGate(aggregateGate(base, statuses)));
   }
 
-  for (const fact of facts) {
-    if (fact.request) observations.push({ kind: "request", request: fact.request.request });
+  if (includeFactRequests) {
+    for (const fact of facts) {
+      if (fact.request) observations.push({ kind: "request", request: fact.request.request });
+    }
   }
   return observations;
 }
@@ -2088,11 +2125,16 @@ function finalizeRun(
     time: { startedAt, finishedAt },
     versions: options.versions,
   });
+  const requestSource = options.requestSource;
+  const observations = internalObservations(facts, options.target, requestSource === undefined);
+  if (requestSource !== undefined) {
+    observations.push(...requestSource.snapshot().map((request) => ({ kind: "request" as const, request })));
+  }
   return finalizeEvidence({
     issue: PUBLIC_CLIENT_PROFILE.issue,
     target: options.target,
     requiredGateIds: PUBLIC_CLIENT_PROFILE.expandedGateIds,
-    observations: internalObservations(facts, options.target),
+    observations,
     ...(artifactWriteSucceeded !== undefined ? { artifactWriteSucceeded } : {}),
   }, context);
 }

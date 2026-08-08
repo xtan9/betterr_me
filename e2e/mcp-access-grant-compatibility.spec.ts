@@ -1,9 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-import {
-  REQUIRED_GATE_IDS,
-  runMcpAccessGrantCompatibility,
-} from "./mcp-access-grant-compatibility";
+import { runMcpAccessGrantCompatibility } from "./mcp-access-grant-compatibility";
+import { COMPATIBILITY_REQUIRED_GATE_IDS as REQUIRED_GATE_IDS } from "./mcp-access-grant-catalogs";
 import { loadMcpAccessGrantConfiguration } from "./mcp-access-grant-target";
 
 test.describe.configure({ mode: "serial" });

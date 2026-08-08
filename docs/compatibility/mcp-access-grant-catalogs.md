@@ -65,13 +65,12 @@ gates. The artifact writer is injected, so fixed-clock tests exercise the whole
 callback-to-artifact path without ambient time, filesystem, environment,
 browser, SDK, or network access.
 
-This issue deliberately does not invoke either live adapter. Delegated-token
-validation and authenticated MCP-operation producers remain `not-proven` in
-this profile until the later producer slices land; the adapter cutover remains
-out of scope. The local deterministic contract is therefore the exact
-integration limitation for #910: it proves the recorder/report/artifact
-boundary and all earlier facts without claiming live provider or browser
-execution.
+The standalone live public-client adapter invokes this operation exactly once
+through the canonical live session. It supplies only primitive browser, SDK,
+provider, and grant observations; the profile remains the sole authority for
+delegated-token, authenticated-operation, cleanup, gate, report, and artifact
+decisions. Deterministic tests still exercise the same recorder boundary
+without claiming live provider or browser execution.
 
 ## Issue #911 public-client security producers
 
@@ -85,8 +84,10 @@ grant history. MCP outcomes are derived from the protected-resource request and
 primitive SDK observations. Grant and cleanup facts share one family cleanup
 gate, with the fixed public leaf and aggregate order preserved.
 
-No live adapter invokes these new producers yet. The operation remains a
-deterministic integration-branch capability until the planned atomic cutover.
+The standalone public-client adapter now records these producers through the
+same private session as its discovery, registration, consent, and loopback
+facts. It does not verify tokens, classify outcomes, or persist an intermediate
+report; the deterministic operation performs all of those decisions.
 
 ## Issue #913 aggregate compatibility evidence
 
@@ -110,9 +111,9 @@ Family identity and conclusion fields are rejected at both recorder layers;
 compatibility grant-management, post-revocation, and final-cleanup facts remain
 family-free and use only their closed compatibility roles.
 
-The public journey receives only its recorder and cannot start or finalize a
-second report or artifact. One aggregate invocation emits the complete expanded
-gate manifest once, in catalog order, and performs one optimistic artifact
-write on a sanitized result. No live adapter invokes this operation yet; its
-deterministic aggregate goldens and source-bound profile tests are the evidence
-boundary for this slice.
+The public journey receives only its nested recorder and cannot start or
+finalize a second report or artifact. The aggregate adapter invokes this
+operation once, emits the complete expanded gate manifest once in catalog
+order, and performs one authoritative artifact write through the session. Its
+deterministic aggregate goldens and source-bound profile tests remain the
+evidence boundary for the report contract.

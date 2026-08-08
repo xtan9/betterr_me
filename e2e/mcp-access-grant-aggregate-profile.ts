@@ -36,6 +36,7 @@ import {
   type DelegatedJwtClaims,
   type DelegatedJwtHeader,
 } from "./mcp-access-grant-policy";
+import { s256CodeChallenge } from "./mcp-access-grant-journey";
 
 /**
  * The deterministic aggregate compatibility profile for Candidate 2.
@@ -100,6 +101,7 @@ export interface AggregateCompatibilityRequest {
   readonly requestCodeChallengePresent?: boolean;
   readonly requestCodePresent?: boolean;
   readonly requestCodeVerifierPresent?: boolean;
+  readonly requestCodeVerifierHash?: string;
   readonly status?: number;
   readonly response?: AggregateCompatibilityResponseSurface;
 }
@@ -138,6 +140,7 @@ export interface AggregateCompatibilityPkceObservation {
   readonly method?: string;
   readonly requestResource?: string;
   readonly redirectUri?: string;
+  readonly authorizationRequest?: AggregateCompatibilityRequest;
 }
 
 export interface AggregateCompatibilityMcpObservation {
@@ -583,12 +586,17 @@ export type AggregateCompatibilityArtifactWriter =
   | ((artifact: AggregateCompatibilityArtifact) => void | Promise<void>)
   | { readonly write: (artifact: AggregateCompatibilityArtifact) => void | Promise<void> };
 
+export interface AggregateCompatibilityEvidenceRequestSource {
+  readonly snapshot: () => readonly MinimizedRequestObservation[];
+}
+
 export interface AggregateCompatibilityEvidenceOptions {
   readonly target: CompatibilityReportTarget;
   readonly versions: Readonly<Record<string, string>>;
   readonly configuredSecrets?: readonly string[];
   readonly clock: () => string;
   readonly writer: AggregateCompatibilityArtifactWriter;
+  readonly requestSource?: AggregateCompatibilityEvidenceRequestSource;
 }
 
 export interface AggregateCompatibilityEvidenceResult {
@@ -612,6 +620,8 @@ interface NormalizedRequest {
   readonly request: MinimizedRequestObservation;
   readonly response?: NormalizedSurface;
   readonly responseCredentialPresence: AggregateCompatibilityCredentialPresence;
+  readonly requestStateHash?: string;
+  readonly requestCodeChallenge?: string;
 }
 
 interface DelegatedTokenData {
@@ -980,6 +990,17 @@ function normalizeRequest(value: unknown): NormalizedRequest | undefined {
   const response = "response" in value ? normalizeSurface(value.response) : undefined;
   const responseCredentialPresence = response?.credentialPresence ?? "unknown";
   const bodyFields = boundedStringList(value.bodyFields) ?? [];
+  let requestStateHash: string | undefined;
+  let requestCodeChallenge: string | undefined;
+  try {
+    const parsedUrl = new URL(url);
+    const state = parsedUrl.searchParams.get("state");
+    requestCodeChallenge = parsedUrl.searchParams.get("code_challenge") ?? undefined;
+    requestStateHash = state ? s256CodeChallenge(state) : undefined;
+  } catch {
+    requestStateHash = undefined;
+    requestCodeChallenge = undefined;
+  }
   const request: MinimizedRequestObservation = {
     method,
     url: sanitizeUrl(url),
@@ -993,11 +1014,12 @@ function normalizeRequest(value: unknown): NormalizedRequest | undefined {
     ...(boundedBoolean(value.requestCodeChallengePresent) !== undefined ? { requestCodeChallengePresent: value.requestCodeChallengePresent as boolean } : {}),
     ...(boundedBoolean(value.requestCodePresent) !== undefined ? { requestCodePresent: value.requestCodePresent as boolean } : {}),
     ...(boundedBoolean(value.requestCodeVerifierPresent) !== undefined ? { requestCodeVerifierPresent: value.requestCodeVerifierPresent as boolean } : {}),
+    ...(boundedString(value.requestCodeVerifierHash) ? { requestCodeVerifierHash: value.requestCodeVerifierHash as string } : {}),
     ...(boundedNumber(value.status) !== undefined ? { status: value.status as number } : response?.status !== undefined ? { status: response.status } : {}),
     ...(response?.location ? { responseLocation: response.location } : {}),
     ...(response ? { responseBody: response.body, responseCredentialFields: Object.keys(response.body).filter((key) => CREDENTIAL_KEY.test(key)).sort(), responseContainsCredentials: response.credentialPresence === "present" } : {}),
   };
-  return { request, response, responseCredentialPresence };
+  return { request, response, responseCredentialPresence, requestStateHash, requestCodeChallenge };
 }
 
 function bodyString(body: Record<string, unknown>, ...keys: string[]): string | undefined {
@@ -1928,6 +1950,7 @@ function normalizePublicFamilyFact(value: AggregatePublicClientFact, sampledAtMi
     const browserUrl = boundedString(rawObservation.browserUrl);
     const callback = urlCredentialFlags(callbackUrl);
     const browser = urlCredentialFlags(browserUrl);
+    const request = normalizeRequest(raw.request);
     const tokenResponse = normalizeSurface(rawObservation.tokenResponse);
     const tokenResponsePresence = "tokenResponse" in rawObservation ? tokenResponse.credentialPresence : "absent";
     const credentialPresence = combineCredentialPresence([
@@ -1950,9 +1973,11 @@ function normalizePublicFamilyFact(value: AggregatePublicClientFact, sampledAtMi
         callbackReceived: boundedBoolean(rawObservation.callbackReceived) ?? Boolean(rawObservation.callbackComplete && callbackUrl),
         callbackComplete: rawObservation.callbackComplete === true,
         authorizationError: boundedBoolean(rawObservation.authorizationError),
-        stateMatches: boundedString(rawObservation.expectedState) !== undefined && boundedString(rawObservation.callbackState) !== undefined
-          ? rawObservation.expectedState === rawObservation.callbackState
-          : undefined,
+        stateMatches: request?.requestStateHash !== undefined && boundedString(rawObservation.callbackState) !== undefined
+          ? request.requestStateHash === s256CodeChallenge(boundedString(rawObservation.callbackState) as string)
+          : boundedString(rawObservation.expectedState) !== undefined && boundedString(rawObservation.callbackState) !== undefined
+            ? rawObservation.expectedState === rawObservation.callbackState
+            : undefined,
         tokenRequestObserved: boundedBoolean(rawObservation.tokenRequestObserved),
         credentialPresence,
         authorizationCodePresent,
@@ -1962,7 +1987,7 @@ function normalizePublicFamilyFact(value: AggregatePublicClientFact, sampledAtMi
         unexpectedCredentialObserved: credentialPresence === "present" && !authorizationCodePresent && !accessTokenObserved && !refreshTokenObserved && !idTokenObserved,
         callbackUrl: callbackUrl ? sanitizeUrl(callbackUrl) : undefined,
       },
-      request: normalizeRequest(raw.request),
+      request,
     };
   }
 
@@ -2000,6 +2025,10 @@ function normalizePublicFamilyFact(value: AggregatePublicClientFact, sampledAtMi
     const rawObservation = observation as Record<string, unknown>;
     const verifier = boundedString(rawObservation.verifier);
     const challenge = boundedString(rawObservation.challenge);
+    const request = normalizeRequest(raw.request);
+    const authorizationRequest = normalizeRequest(rawObservation.authorizationRequest);
+    const effectiveChallenge = challenge ?? authorizationRequest?.requestCodeChallenge;
+    const verifierHash = request?.request.requestCodeVerifierHash;
     return {
       source: "public-client",
       identity: `public-client|pkce|exchange|${family}`,
@@ -2007,15 +2036,17 @@ function normalizePublicFamilyFact(value: AggregatePublicClientFact, sampledAtMi
       role,
       family,
       data: {
-        verifierPresent: Boolean(verifier),
-        challengePresent: Boolean(challenge),
-        verifierMatchesChallenge: verifier && challenge
-          ? matchesS256CodeChallenge(verifier, challenge, boundedString(rawObservation.method))
-          : undefined,
+        verifierPresent: Boolean(verifier) || request?.request.requestCodeVerifierPresent === true,
+        challengePresent: effectiveChallenge !== undefined,
+        verifierMatchesChallenge: verifier && effectiveChallenge
+          ? matchesS256CodeChallenge(verifier, effectiveChallenge, boundedString(rawObservation.method))
+          : verifierHash !== undefined && effectiveChallenge !== undefined
+            ? verifierHash === effectiveChallenge
+            : undefined,
         method: boundedString(rawObservation.method),
         requestResource: boundedString(rawObservation.requestResource),
       },
-      request: normalizeRequest(raw.request),
+      request,
     };
   }
 
@@ -2984,6 +3015,7 @@ function publicFamilyGateId(fact: NormalizedFact): string | undefined {
 function internalObservations(
   facts: readonly NormalizedFact[],
   target: CompatibilityReportTarget,
+  includeFactRequests: boolean,
 ): EvidenceObservation[] {
   const compatibilityFacts = facts.filter((fact) => fact.source === "compatibility");
   const publicFamilyFacts = facts.filter((fact) => fact.source === "public-client" && fact.family !== undefined);
@@ -3139,7 +3171,7 @@ function internalObservations(
       const statuses = new Map<AggregatePublicClientFamily, GateStatus | undefined>();
       for (const family of MCP_ACCESS_GRANT_FAMILIES) {
         const gateId = `${base}-${family}`;
-        const derived = publicLeaves.get(gateId) as DerivedGate;
+        const derived = publicLeaves.get(gateId) ?? gate(gateId, undefined, undefined, { kind: "missing-observation" });
         const resolved = conflicts.has(gateId)
           ? gate(gateId, "fail", { observedBoundary: "conflict" }, { kind: "conflicting-observation" })
           : derived;
@@ -3156,12 +3188,15 @@ function internalObservations(
     else observations.set(gateId, derived);
   }
 
-  return [
+  const result = [
     ...COMPATIBILITY_PROFILE.expandedGateIds
       .filter((gateId) => observations.has(gateId))
       .map((gateId) => normalizedGate(observations.get(gateId) as DerivedGate)),
-    ...facts.flatMap((fact) => fact.request ? [{ kind: "request" as const, request: fact.request.request }] : []),
   ];
+  if (includeFactRequests) {
+    result.push(...facts.flatMap((fact) => fact.request ? [{ kind: "request" as const, request: fact.request.request }] : []));
+  }
+  return result;
 }
 
 function classifierForCatalogGate(gateId: string): string {
@@ -3206,7 +3241,7 @@ function factFingerprint(fact: NormalizedFact): string {
 }
 
 function snapshotOptions(options: AggregateCompatibilityEvidenceOptions): AggregateCompatibilityEvidenceOptions {
-  if (!isRecord(options) || !hasOnlyOwnDataKeys(options, ["target", "versions", "configuredSecrets", "clock", "writer"])) throw new AggregateCompatibilityEvidenceBoundaryError();
+  if (!isRecord(options) || !hasOnlyOwnDataKeys(options, ["target", "versions", "configuredSecrets", "clock", "writer", "requestSource"])) throw new AggregateCompatibilityEvidenceBoundaryError();
   if (!isRecord(options.target) || !hasOnlyOwnDataKeys(options.target, ["name", "canonicalResource", "supabaseUrl", "expectedAuthorizationServer", "loopbackHosts"])) throw new AggregateCompatibilityEvidenceBoundaryError();
   if (!nonEmptyBoundedString(options.target.name) || !validHttpUrl(options.target.canonicalResource) || !validHttpUrl(options.target.supabaseUrl) || !validHttpUrl(options.target.expectedAuthorizationServer)) {
     throw new AggregateCompatibilityEvidenceBoundaryError();
@@ -3220,6 +3255,9 @@ function snapshotOptions(options: AggregateCompatibilityEvidenceOptions): Aggreg
   }
   const configuredSecrets = options.configuredSecrets === undefined ? [] : options.configuredSecrets;
   if (!isDenseArray(configuredSecrets, MAX_CONFIGURED_SECRETS) || configuredSecrets.some((secret) => !nonEmptyConfiguredSecret(secret)) || new Set(configuredSecrets).size !== configuredSecrets.length) {
+    throw new AggregateCompatibilityEvidenceBoundaryError();
+  }
+  if (options.requestSource !== undefined && (!isRecord(options.requestSource) || !hasOnlyOwnDataKeys(options.requestSource, ["snapshot"]) || typeof options.requestSource.snapshot !== "function")) {
     throw new AggregateCompatibilityEvidenceBoundaryError();
   }
   const versions = Object.fromEntries(Object.entries(options.versions).map(([key, value]) => {
@@ -3248,7 +3286,14 @@ function snapshotOptions(options: AggregateCompatibilityEvidenceOptions): Aggreg
   } catch {
     throw new AggregateCompatibilityEvidenceBoundaryError();
   }
-  return deepFreeze({ target, versions, configuredSecrets: [...configuredSecrets], clock: options.clock, writer });
+  return deepFreeze({
+    target,
+    versions,
+    configuredSecrets: [...configuredSecrets],
+    clock: options.clock,
+    writer,
+    ...(options.requestSource === undefined ? {} : { requestSource: { snapshot: options.requestSource.snapshot } }),
+  });
 }
 
 function sampleClock(clock: () => string, previous?: number): { readonly value: string; readonly millis: number } {
@@ -3314,11 +3359,16 @@ function finalizeRun(
     time: { startedAt, finishedAt },
     versions: options.versions,
   });
+  const requestSource = options.requestSource;
+  const observations = internalObservations(facts, options.target, requestSource === undefined);
+  if (requestSource !== undefined) {
+    observations.push(...requestSource.snapshot().map((request) => ({ kind: "request" as const, request })));
+  }
   return finalizeEvidence({
     issue: COMPATIBILITY_PROFILE.issue,
     target: options.target,
     requiredGateIds: COMPATIBILITY_PROFILE.expandedGateIds,
-    observations: internalObservations(facts, options.target),
+    observations,
     ...(artifactWriteSucceeded !== undefined ? { artifactWriteSucceeded } : {}),
   }, context);
 }
