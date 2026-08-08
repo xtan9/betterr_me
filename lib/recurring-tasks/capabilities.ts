@@ -651,6 +651,14 @@ async function runStateCommand(
   const operationValidation = validateOperationId(operation, input?.operationId);
   if (operationValidation) return operationValidation;
   const operationId = input.operationId;
+  if (typeof input?.seriesId !== "string" || !input.seriesId.trim()) {
+    return validationFailure(
+      operation,
+      operationId,
+      "seriesId",
+      "Series ID is required",
+    );
+  }
   const version = parseSeriesVersion(input.version, input.seriesId);
   if (!version) {
     return validationFailure(

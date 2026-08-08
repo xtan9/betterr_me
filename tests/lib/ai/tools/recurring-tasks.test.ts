@@ -217,6 +217,27 @@ describe("recurring task tools", () => {
       type: "complete",
       recurringTask: { id: "rt1", status: "paused" },
     });
+    mockPauseSeries.mockResolvedValue({
+      type: "paused",
+      status: "complete",
+      operation: "recurring-task.series.pause",
+      operationId: "pause-1",
+      series: capabilitySeries("rt1", "paused"),
+    });
+    mockResumeSeries.mockResolvedValue({
+      type: "resumed",
+      status: "complete",
+      operation: "recurring-task.series.resume",
+      operationId: "resume-1",
+      series: capabilitySeries("rt1", "active"),
+    });
+    mockEndSeries.mockResolvedValue({
+      type: "ended",
+      status: "complete",
+      operation: "recurring-task.series.end",
+      operationId: "end-1",
+      series: capabilitySeries("rt1", "ended"),
+    });
   });
 
   it("taskTools includes recurring task tools", () => {

@@ -37,7 +37,6 @@ type LifecycleOperation =
   | "pause-series"
   | "resume-series"
   | "end-series"
-  | "delete-series"
   | "get-series";
 
 /**
@@ -123,7 +122,10 @@ export class SupabaseRecurringTaskLifecycle
   }
 
   async deleteSeries(request: SeriesCommandRequest) {
-    return this.call("delete-series", request, "recurring_task_delete_series");
+    // Legacy writers may still expose this method, but ending is the sole
+    // destructive Series lifecycle command. Keep this alias at the
+    // compatibility edge so it cannot reach a competing delete RPC.
+    return this.endSeries(request);
   }
 
   async getSeries(userId: string, seriesId: string) {

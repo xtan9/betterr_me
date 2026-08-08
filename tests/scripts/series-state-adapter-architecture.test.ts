@@ -24,6 +24,11 @@ describe("Series capability architecture boundaries", () => {
       "export async function PATCH",
       "export async function DELETE",
     );
+    const recurringStateActions = section(
+      recurringPatch,
+      "// Handle quick actions",
+      "// Handle general updates",
+    );
     const recurringDelete = section(
       recurringRoute,
       "export async function DELETE",
@@ -38,6 +43,7 @@ describe("Series capability architecture boundaries", () => {
     expect(recurringPatch).toContain("createAuthenticatedRecurringTaskCapabilities");
     expect(recurringPatch).toContain("seriesCommands");
     expect(recurringPatch).toContain("toReviseSeriesCommand");
+    expect(recurringStateActions).toContain("seriesCommands");
     expect(recurringPatch).not.toContain("createSupabaseSeriesStateAdapter");
     expect(recurringPatch).not.toContain("createSupabaseRecurringTaskLifecycle");
     expect(recurringPatch).not.toContain("new RecurringTasksDB");
@@ -103,6 +109,11 @@ describe("Series capability architecture boundaries", () => {
       expect(operation).toContain("createSupabaseSeriesStateAdapter(");
       expect(operation).toContain("ctx.supabase");
       expect(operation).not.toContain("createSupabaseRecurringTaskLifecycle(ctx.supabase)");
+    }
+    for (const operation of [pause, resume]) {
+      expect(operation).toContain("recurringTaskCapabilities(ctx)");
+      expect(operation).toContain("seriesCommands");
+      expect(operation).not.toContain("createSupabaseSeriesStateAdapter(");
     }
     expect(deleteTask).toContain("createTaskWrites(ctx.supabase,");
     expect(deleteTask).toContain(".delete({");
