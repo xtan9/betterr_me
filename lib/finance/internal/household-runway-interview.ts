@@ -25,6 +25,7 @@ import {
   type RunwayCurrency,
   type RunwayScenario,
   type RunwaySnapshotSummary,
+  type RunwaySimulation,
   type ScenarioOption,
 } from "@/lib/finance/cushion";
 import {
@@ -638,6 +639,8 @@ export interface HouseholdRunwayGenericStageRenderModel {
   selectedScenario: RunwayScenario | null;
   planAdjustment: RunwayAdjustments;
   assessmentModelVersion: typeof RUNWAY_MODEL_VERSION | null;
+  /** Private focused facts for the later supported result projection cutover. */
+  resultProjection: HouseholdRunwayResultProjection;
 }
 
 export type HouseholdRunwayInterviewRenderModel =
@@ -1958,6 +1961,87 @@ interface HouseholdRunwayReviewProjection {
   };
 }
 
+type HouseholdRunwayResultOutcome =
+  | { kind: "sustainable" }
+  | {
+      kind: "depletes";
+      monthsCovered: number;
+      depletion:
+        | { kind: "dated"; date: string }
+        | { kind: "outsideDateRange" };
+    };
+
+type HouseholdRunwayResultGuidance =
+  | "underThree"
+  | "threeToUnderSix"
+  | "sixPlus"
+  | "sustainable";
+
+interface HouseholdRunwayResultPoint {
+  month: number;
+  openingBalanceCents: number;
+  continuingIncomeCents: number;
+  oneTimeFundsCents: number;
+  essentialOutflowCents: number;
+  closingBalanceCents: number;
+}
+
+type HouseholdRunwayResultSeries =
+  | {
+      kind: "monthly";
+      throughMonth: number;
+      points: readonly HouseholdRunwayResultPoint[];
+    }
+  | {
+      kind: "checkpoints";
+      throughMonth: number;
+      completeMonthlyThrough: 12;
+      points: readonly HouseholdRunwayResultPoint[];
+    };
+
+interface HouseholdRunwayFocusedResultSimulation {
+  outcome: HouseholdRunwayResultOutcome;
+  confidence: "complete" | "estimated" | "needsReview";
+  guidance: HouseholdRunwayResultGuidance;
+  resources: {
+    startingCents: number;
+    continuingMonthlyIncomeCents: number;
+    interruptionExpensesCents: number;
+    reducibleExpensesCents: number;
+    excludedAssetsCents: number;
+  };
+  series: HouseholdRunwayResultSeries;
+}
+
+interface HouseholdRunwayResultComparison {
+  outcome:
+    | { kind: "sustainable" }
+    | { kind: "depletes"; monthsCovered: number };
+}
+
+type HouseholdRunwayResultProjection =
+  | { readiness: "unavailable" }
+  | {
+      readiness: "ready";
+      modelVersion: string;
+      country: RunwayCountry;
+      currency: RunwayCurrency;
+      scenarios: {
+        selected: RunwayScenario;
+        available: readonly { id: RunwayScenario }[];
+      };
+      primary: HouseholdRunwayFocusedResultSimulation;
+      comparisons: {
+        currentLifestyle: HouseholdRunwayResultComparison;
+        interruption: HouseholdRunwayResultComparison;
+        extremeMode: HouseholdRunwayResultComparison;
+      };
+      explanation: {
+        availableCashCents: number;
+        liquidInvestmentsCents: number;
+      };
+    };
+
 interface HouseholdRunwayReviewDerivation {
   planInputs: HouseholdRunwayAnswers | null;
   assessment: SuccessfulHouseholdRunwayAssessment | null;
@@ -2027,6 +2111,136 @@ function focusedReviewProjectionForDraft(
     lastResortAssets: {
       cents: lastResortCents,
       confidence: lastResortCents ? "confirmed" : "skipped",
+    },
+  };
+}
+
+function resultOutcomeFor(
+  simulation: RunwaySimulation,
+): HouseholdRunwayResultOutcome {
+  if (simulation.sustainable) return { kind: "sustainable" };
+
+  const monthsCovered =
+    typeof simulation.months_covered === "number" &&
+    Number.isFinite(simulation.months_covered)
+      ? Math.max(0, simulation.months_covered)
+      : 0;
+  const depletionDate =
+    simulation.depletion_date &&
+    /^\d{4}-\d{2}-\d{2}$/.test(simulation.depletion_date)
+      ? { kind: "dated" as const, date: simulation.depletion_date }
+      : { kind: "outsideDateRange" as const };
+  return {
+    kind: "depletes",
+    monthsCovered,
+    depletion: depletionDate,
+  };
+}
+
+function resultGuidanceFor(
+  outcome: HouseholdRunwayResultOutcome,
+): HouseholdRunwayResultGuidance {
+  if (outcome.kind === "sustainable") return "sustainable";
+  if (outcome.monthsCovered < 3) return "underThree";
+  if (outcome.monthsCovered < 6) return "threeToUnderSix";
+  return "sixPlus";
+}
+
+function resultPointFor(
+  point: RunwaySimulation["months"][number],
+): HouseholdRunwayResultPoint {
+  return {
+    month: point.month,
+    openingBalanceCents: point.opening_balance_cents,
+    continuingIncomeCents: point.continuing_income_cents,
+    oneTimeFundsCents: point.one_time_funds_cents,
+    essentialOutflowCents: point.essential_outflow_cents,
+    closingBalanceCents: point.closing_balance_cents,
+  };
+}
+
+function focusedResultSimulationFor(
+  simulation: RunwaySimulation,
+): HouseholdRunwayFocusedResultSimulation {
+  const outcome = resultOutcomeFor(simulation);
+  const throughMonth =
+    simulation.months[simulation.months.length - 1]?.month ?? 0;
+  const points = simulation.months.map(resultPointFor);
+
+  return {
+    outcome,
+    confidence:
+      simulation.confidence === "needs_review"
+        ? "needsReview"
+        : simulation.confidence,
+    guidance: resultGuidanceFor(outcome),
+    resources: {
+      startingCents: simulation.starting_resources_cents,
+      continuingMonthlyIncomeCents: simulation.continuing_monthly_income_cents,
+      interruptionExpensesCents: simulation.interruption_expenses_cents,
+      reducibleExpensesCents: simulation.reducible_expenses_cents,
+      excludedAssetsCents: simulation.excluded_assets_cents,
+    },
+    series:
+      throughMonth <= 240
+        ? { kind: "monthly", throughMonth, points }
+        : { kind: "checkpoints", throughMonth, completeMonthlyThrough: 12, points },
+  };
+}
+
+function resultComparisonFor(
+  simulation: RunwaySimulation,
+): HouseholdRunwayResultComparison {
+  const outcome = resultOutcomeFor(simulation);
+  return outcome.kind === "sustainable"
+    ? { outcome }
+    : { outcome: { kind: "depletes", monthsCovered: outcome.monthsCovered } };
+}
+
+function focusedResultProjectionForDraft(
+  draft: HouseholdRunwayInterviewDraft,
+  reviewProjection: HouseholdRunwayReviewDerivation | null,
+): HouseholdRunwayResultProjection {
+  const assessment = reviewProjection?.assessment;
+  const selectedScenario = draft.selectedScenario;
+  const selectedAssessment = assessment?.scenarios.find(
+    (item) => item.scenario === selectedScenario,
+  );
+  const selectedIsApplicable = draft.availableScenarios.some(
+    ({ id }) => id === selectedScenario,
+  );
+  if (
+    !assessment ||
+    !selectedScenario ||
+    !selectedIsApplicable ||
+    !selectedAssessment
+  ) {
+    return { readiness: "unavailable" };
+  }
+
+  const answers = assessment.answers;
+  return {
+    readiness: "ready",
+    modelVersion: assessment.modelVersion,
+    country: answers.country,
+    currency: answers.currency,
+    scenarios: {
+      selected: selectedScenario,
+      available: draft.availableScenarios.map(({ id }) => ({ id })),
+    },
+    primary: focusedResultSimulationFor(selectedAssessment.adjusted),
+    comparisons: {
+      currentLifestyle: resultComparisonFor(
+        selectedAssessment.comparisons.currentLifestyle,
+      ),
+      interruption: resultComparisonFor(selectedAssessment.baseline),
+      extremeMode: resultComparisonFor(
+        selectedAssessment.comparisons.extremeMode,
+      ),
+    },
+    explanation: {
+      availableCashCents: answers.available_cash.cents,
+      liquidInvestmentsCents: answers.assets.liquid_investments.cents,
     },
   };
 }
@@ -2344,6 +2558,7 @@ function renderFor(
     selectedScenario: draft.selectedScenario,
     planAdjustment: draft.planAdjustment,
     assessmentModelVersion: reviewProjection?.assessment?.modelVersion ?? null,
+    resultProjection: focusedResultProjectionForDraft(draft, reviewProjection),
   };
 }
 
