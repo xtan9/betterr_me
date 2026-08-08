@@ -2,10 +2,7 @@ import { z } from "zod";
 import { TasksDB } from "@/lib/db";
 import type { RecurrenceRule } from "@/lib/db";
 import type { Task } from "@/lib/db/types";
-import {
-  createTaskWrites,
-  taskDeletionErrorMessage,
-} from "@/lib/tasks/writes";
+import { createTaskWrites } from "@/lib/tasks/writes";
 import {
   createSupabaseLegacyTaskToggle,
   createTaskCommandsForUser,
@@ -24,19 +21,8 @@ import {
   createAuthenticatedRecurringTaskCapabilities,
   type SeriesVersion,
 } from "@/lib/recurring-tasks";
-import {
-  isOccurrenceSuccess,
-  occurrenceErrorMessage,
-  toOccurrenceEditIntent,
-} from "@/lib/recurring-tasks/occurrence-adapter";
-import { createSupabaseOccurrenceAdapter } from "@/lib/recurring-tasks/supabase-occurrence-adapter";
 import { addLocalDays } from "@/lib/recurring-tasks/recurrence";
-import {
-  createSupabaseSeriesStateAdapter,
-  isSeriesStateSuccess,
-  resolveSeriesEffectiveDate,
-  seriesStateErrorMessage,
-} from "@/lib/recurring-tasks";
+import { resolveSeriesEffectiveDate } from "@/lib/recurring-tasks";
 import {
   initialSeriesCoverage,
   recurringTaskFailureMessage,
