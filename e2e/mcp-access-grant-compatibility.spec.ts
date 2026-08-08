@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
 
 import {
-  loadMcpAccessGrantTargets,
   REQUIRED_GATE_IDS,
   runMcpAccessGrantCompatibility,
 } from "./mcp-access-grant-compatibility";
+import { loadMcpAccessGrantConfiguration } from "./mcp-access-grant-target";
 
 test.describe.configure({ mode: "serial" });
 
@@ -17,9 +17,11 @@ const REQUIRED_ISSUE_768_GATES = [
   "cleanup",
 ];
 
-for (const target of loadMcpAccessGrantTargets()) {
+const targetConfiguration = loadMcpAccessGrantConfiguration();
+
+for (const target of targetConfiguration.targets) {
   test(`MCP Access Grant compatibility: ${target.name}`, async ({ page }, testInfo) => {
-    const report = await runMcpAccessGrantCompatibility(target, page, testInfo);
+    const report = await runMcpAccessGrantCompatibility(target, page, testInfo, targetConfiguration);
 
     expect(report.issue).toBe("#768");
     expect(report.gates.length).toBeGreaterThan(0);
