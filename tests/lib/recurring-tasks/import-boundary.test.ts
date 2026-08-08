@@ -80,6 +80,35 @@ describe("recurring lifecycle import boundary", () => {
     expect(ai).not.toContain("recurring-tasks/creation");
   });
 
+  it("keeps compatibility execution on the narrow authenticated command port", () => {
+    const compatibility = readFileSync(
+      resolve(process.cwd(), "lib/recurring-tasks/compatibility.ts"),
+      "utf8",
+    );
+    const http = readFileSync(
+      resolve(process.cwd(), "app/api/recurring-tasks/[id]/route.ts"),
+      "utf8",
+    );
+    const ai = readFileSync(
+      resolve(process.cwd(), "lib/ai/tools/tasks.ts"),
+      "utf8",
+    );
+    const compatibilityImports = compatibility.slice(
+      0,
+      compatibility.indexOf("/** Supported"),
+    );
+
+    expect(compatibility).toContain("SeriesCompatibilityCommandPort");
+    expect(compatibility).toContain("executeSeriesCompatibilityIntent");
+    expect(compatibilityImports).not.toMatch(
+      /(?:Supabase|NextRequest|NextResponse|authenticate|AuthenticatedPrincipal|SeriesQueries|logger|persistence|lifecycle)/i,
+    );
+    expect(http).not.toMatch(/seriesCommands\.(?:pause|resume|end)Series\s*\(/);
+    expect(ai).not.toMatch(/seriesCommands\.(?:pause|resume|end)Series\s*\(/);
+    expect(http).not.toContain("addLocalDays(");
+    expect(ai).not.toContain("addLocalDays(");
+  });
+
   it("keeps date-bounded delivery and read modules off legacy writes and materialization", () => {
     for (const relativePath of lifecycleBoundarySources) {
       const source = readFileSync(resolve(process.cwd(), relativePath), "utf8");
