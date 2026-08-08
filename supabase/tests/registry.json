@@ -50,13 +50,6 @@
     "cleanup": "transactional"
   },
   {
-    "path": "control_plane_authorization.sql",
-    "domain": "control-plane",
-    "role": "admin",
-    "cleanup": "self-cleaning",
-    "adminReason": "seeds control-plane membership and disposable auth identities for role assertions"
-  },
-  {
     "path": "finance_cushion_rls.sql",
     "domain": "finance",
     "role": "admin",
