@@ -209,7 +209,8 @@ describe("recurring lifecycle import boundary", () => {
     expect(sidebarRoute).not.toContain("createAuthenticatedRecurringTaskCapabilities");
     expect(sidebarQuery).toContain("createSidebarCountsQuery");
     expect(sidebarQuery).toContain('status: "failed"');
-    expect(sidebarComposition).toContain(
+    expect(sidebarComposition).toContain("createCoverageRead");
+    expect(sidebarComposition).not.toContain(
       "createAuthenticatedRecurringTaskCapabilities",
     );
     expect(sidebarComposition).toContain("createSidebarCountsQuery");
