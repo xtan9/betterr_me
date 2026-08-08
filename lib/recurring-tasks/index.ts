@@ -1,54 +1,20 @@
-export { getOccurrencesInRange, getNextOccurrence, describeRecurrence } from './recurrence';
-export { toRecurringTaskResponse } from './compatibility';
-export * from './lifecycle';
-export {
-  createActivatedRecurringTaskLifecycle,
-  RECURRING_TASK_LIFECYCLE_CUTOVER,
-} from './activation';
-export {
-  SupabaseRecurringTaskLifecycle,
-  createSupabaseRecurringTaskLifecycle,
-} from './supabase-lifecycle';
-export {
-  ensureRecurringTaskCoverage,
-  ensureRecurringTaskCoverageThrough,
-  recurringCoverageWarning,
-  RecurringCoverageUnavailableError,
-  taskReadCoverageRange,
-  type RecurringCoverageResult,
-  type RecurringCoverageWarning,
-  type TaskReadCoverageRequest,
-} from './coverage';
-export {
-  prewarmActiveRecurringTaskCoverage,
-  type PrewarmAttemptResult,
-  type PrewarmOptions,
-  type PrewarmResult,
-  type RecurringTaskPrewarmingLifecycle,
-} from './prewarming';
-export * from './occurrence-adapter';
-export {
-  createSupabaseOccurrenceAdapter,
-  type SupabaseOccurrenceAdapterOptions,
-} from './supabase-occurrence-adapter';
-export * from './series-state-adapter';
-export {
-  createSupabaseSeriesStateAdapter,
-  type SupabaseSeriesStateAdapterOptions,
-} from './supabase-series-state-adapter';
+/**
+ * Supported authenticated production boundary for recurring tasks.
+ *
+ * Persistence, lifecycle composition, maintenance, telemetry, and the
+ * in-memory reference implementation are intentionally not part of this
+ * package surface. Use `scheduling` for pure recurrence and `compatibility`
+ * for legacy HTTP/AI translation.
+ */
 export {
   createAuthenticatedRecurringTaskCapabilities,
-  createRecurringTaskCapabilities,
-  RECURRING_TASK_OPERATION_IDS,
-} from './capabilities';
-export {
-  createRecurringTaskMaintenanceCapability,
-  RECURRING_TASK_MAINTENANCE_AUTHORITY,
-} from './maintenance';
+} from "./internal/capabilities";
+
 export type {
-  AuthenticatedRecurringTaskCapabilityOptions,
   AuthenticatedRecurringTaskCapabilities,
+  AuthenticatedRecurringTaskCapabilityOptions,
   AuthenticatedRecurringTaskPrincipal,
+  ConflictFailure,
   CoverageCapability,
   CoverageCapabilityResult,
   CoverageCompleteness,
@@ -57,15 +23,18 @@ export type {
   CoveragePartial,
   CoverageResult,
   CoverageUnavailable,
+  CoverageUnavailableFailure,
   CreateSeriesCommand,
   CreateSeriesResult,
   CreateSeriesSuccess,
   EndSeriesResult,
   EndSeriesSuccess,
   InvalidTransitionFailure,
+  LocalDateRange,
   NotFoundFailure,
   PauseSeriesResult,
   PauseSeriesSuccess,
+  RecurringSeriesStatus,
   RecurringTaskFailure,
   RecurringTaskFailureType,
   RecurringTaskOperation,
@@ -75,6 +44,7 @@ export type {
   ReviseSeriesSuccess,
   SeriesCommandSuccess,
   SeriesCommands,
+  SeriesDefaults,
   SeriesDetailQuery,
   SeriesDetailResult,
   SeriesDetailSuccess,
@@ -83,14 +53,9 @@ export type {
   SeriesListSuccess,
   SeriesProjection,
   SeriesQueries,
+  SeriesRevision,
   SeriesStateCommand,
   SeriesVersion,
+  TaskOccurrence,
   ValidationFailure,
-} from './capabilities';
-export type {
-  RecurringTaskMaintenanceAuthority,
-  RecurringTaskMaintenanceCapability,
-  RecurringTaskMaintenanceCapabilityOptions,
-  RecurringTaskMaintenanceFailures,
-  RecurringTaskMaintenanceResult,
-} from './maintenance';
+} from "./internal/capabilities";

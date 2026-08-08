@@ -12,7 +12,7 @@ import {
 import type {
   SeriesProjection,
   SeriesVersion,
-} from "@/lib/recurring-tasks/capabilities";
+} from "@/lib/recurring-tasks/internal/capabilities";
 
 function publicSeries(): SeriesProjection {
   return {

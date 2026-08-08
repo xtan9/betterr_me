@@ -13,7 +13,7 @@ import {
   taskCommandTypeFromUpdate,
   taskCommandHttpFailure,
 } from '@/lib/tasks/commands';
-import { isValidLocalDate } from '@/lib/recurring-tasks/recurrence';
+import { isValidLocalDate } from '@/lib/recurring-tasks/scheduling';
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ['apiKey', 'cookie'],

@@ -1,16 +1,13 @@
 import type { Task, TaskFilters } from "@/lib/db/types";
-import type { AuthenticatedRecurringTaskPrincipal } from "@/lib/recurring-tasks/capabilities";
 import type {
+  AuthenticatedRecurringTaskPrincipal,
   CoverageCompleteness,
+  LocalDateRange,
   CoverageUnavailable,
-} from "@/lib/recurring-tasks/capabilities";
-import {
-  taskReadCoverageRange,
-  type TaskReadCoverageRequest,
-} from "@/lib/recurring-tasks/coverage";
-import type { LocalDateRange } from "@/lib/recurring-tasks/lifecycle";
+} from "@/lib/recurring-tasks";
+import { addLocalDays } from "@/lib/recurring-tasks/scheduling";
 
-export type { CoverageCompleteness } from "@/lib/recurring-tasks/capabilities";
+export type { CoverageCompleteness } from "@/lib/recurring-tasks";
 
 export type TaskReadQuery =
   | {
@@ -162,15 +159,16 @@ function taskQueryCoverageRange(
   if (request.type === "list") {
     const dueDate = request.filters?.due_date;
     if (!dueDate || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return undefined;
-    return taskReadCoverageRange({ dueDate });
+    return { from: dueDate, to: dueDate };
   }
 
-  const coverageRequest: TaskReadCoverageRequest = {
-    view: request.type,
-    date: request.date,
-    ...(request.type === "upcoming" ? { days: request.days } : {}),
-  };
-  return taskReadCoverageRange(coverageRequest);
+  if (request.type === "upcoming") {
+    return {
+      from: request.date,
+      to: addLocalDays(request.date, request.days ?? 7),
+    };
+  }
+  return { from: request.date, to: request.date };
 }
 
 function requireUserPrincipal(

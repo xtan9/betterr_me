@@ -4,7 +4,7 @@ import {
   InMemoryRecurringTaskLifecyclePersistence,
   RecurringTaskLifecycle,
   type RecurringLifecycleSignal,
-} from "@/lib/recurring-tasks/lifecycle";
+} from "@/lib/recurring-tasks/internal/lifecycle";
 
 function defaults(title: string) {
   return {

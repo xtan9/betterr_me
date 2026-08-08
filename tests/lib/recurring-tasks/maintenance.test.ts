@@ -4,17 +4,17 @@ import {
   createRecurringTaskMaintenanceCapability,
   createRecurringTaskMaintenanceCapabilityForLifecycle,
   RECURRING_TASK_MAINTENANCE_AUTHORITY,
-} from "@/lib/recurring-tasks/maintenance";
+} from "@/lib/recurring-tasks/internal/maintenance";
 import {
   createAuthenticatedRecurringTaskCapabilitiesWithTelemetry,
-} from "@/lib/recurring-tasks/capabilities";
+} from "@/lib/recurring-tasks/internal/capabilities";
 import type {
   ActiveSeriesSummary,
   LifecycleOutcome,
   PrewarmCoverageRequest,
   RecurringTaskSeries,
-} from "@/lib/recurring-tasks/lifecycle";
-import type { RecurringTaskPrewarmingLifecycle } from "@/lib/recurring-tasks/prewarming";
+} from "@/lib/recurring-tasks/internal/lifecycle";
+import type { RecurringTaskPrewarmingLifecycle } from "@/lib/recurring-tasks/internal/prewarming";
 
 const now = () => new Date("2026-08-01T12:00:00.000Z");
 

@@ -20,7 +20,7 @@ describe("Recurring Task lifecycle cutover boundary", () => {
   });
 
   it("couples the application activation identifier to the release migration", () => {
-    const activation = source("lib/recurring-tasks/activation.ts");
+    const activation = source("lib/recurring-tasks/internal/activation.ts");
     const migration = source(
       "supabase/migrations/20260803000001_activate_recurring_task_lifecycle.sql",
     );

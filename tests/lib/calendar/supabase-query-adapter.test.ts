@@ -8,7 +8,7 @@ const { createCapabilities, coverageEnsure } = vi.hoisted(() => ({
   coverageEnsure: vi.fn(),
 }));
 
-vi.mock("@/lib/recurring-tasks/capabilities", () => ({
+vi.mock("@/lib/recurring-tasks", () => ({
   createAuthenticatedRecurringTaskCapabilities: createCapabilities,
 }));
 

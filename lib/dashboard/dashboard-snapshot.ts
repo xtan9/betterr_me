@@ -17,9 +17,8 @@ import {
 import type { WorkoutsDB } from "@/lib/db/workouts";
 import { computeMissedDays } from "@/lib/habits/absence";
 import { log } from "@/lib/logger";
-import type { CoverageCompleteness } from "@/lib/recurring-tasks/capabilities";
-import type { LocalDateRange } from "@/lib/recurring-tasks/lifecycle";
-import { addLocalDays } from "@/lib/recurring-tasks/recurrence";
+import type { CoverageCompleteness, LocalDateRange } from "@/lib/recurring-tasks";
+import { addLocalDays } from "@/lib/recurring-tasks/scheduling";
 
 export interface DashboardSnapshotDependencies {
   habits: Pick<HabitsDB, "getHabitsWithTodayStatusAcquisition">;

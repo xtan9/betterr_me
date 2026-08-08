@@ -1,12 +1,12 @@
 import type { DashboardData } from "@/lib/db/types";
-import type { AuthenticatedRecurringTaskPrincipal } from "@/lib/recurring-tasks/capabilities";
 import type {
+  AuthenticatedRecurringTaskPrincipal,
   CoverageCompleteness,
   CoverageComplete,
+  LocalDateRange,
   CoverageUnavailable,
-} from "@/lib/recurring-tasks/capabilities";
-import type { LocalDateRange } from "@/lib/recurring-tasks/lifecycle";
-import { addLocalDays } from "@/lib/recurring-tasks/recurrence";
+} from "@/lib/recurring-tasks";
+import { addLocalDays } from "@/lib/recurring-tasks/scheduling";
 
 import type {
   DashboardSnapshot,

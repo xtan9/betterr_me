@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AuthenticatedRecurringTaskPrincipal } from "@/lib/recurring-tasks/capabilities";
+import type { AuthenticatedRecurringTaskPrincipal } from "@/lib/recurring-tasks";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ToolDefinition, ToolContext } from "./types";
 import { habitTools } from "./habits";

@@ -13,8 +13,8 @@ import {
   type AuthenticatedRecurringTaskPrincipal,
   type CoverageCapabilityResult,
   type CoverageCompleteness,
-} from "@/lib/recurring-tasks/capabilities";
-import type { LocalDateRange } from "@/lib/recurring-tasks/lifecycle";
+  type LocalDateRange,
+} from "@/lib/recurring-tasks";
 
 import { createDashboardQuery, unavailableDashboardCoverage, type DashboardQuery } from "./query";
 import { createDashboardSnapshot } from "./dashboard-snapshot";

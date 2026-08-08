@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "review": {
-    "reviewedAt": "2026-08-01",
+    "reviewedAt": "2026-08-08",
     "owningTicket": "#658",
     "policy": "Every named HTTP, AI, or operational delivery source is checked for write-capable persistence adapter calls and raw database mutations. Query-only persistence access remains allowed. The qualifying direct-write exception list is permanently empty; completed authorities retain linked behavior, persistence, transactional database, and import-boundary verification."
   },
@@ -27,14 +27,14 @@
     {
       "id": "tasks-task-writes",
       "domain": "Tasks",
-      "operation": "Task creation, editing, ordering, completion, and status intent",
+      "operation": "Task creation",
       "channels": ["HTTP", "AI"],
-      "invariants": ["Task defaults, ownership, status synchronization, ordering, and recurring delegation"],
-      "atomicity": "Task Writes uses narrow persistence capabilities and transactional recurring lifecycle boundaries where required.",
+      "invariants": ["Task defaults, ownership, status synchronization, and placement"],
+      "atomicity": "Task Writes owns ordinary Task creation; Task Commands owns interactive Task completion, editing, ordering, and recurring state transitions.",
       "migrationStatus": "migrated",
-      "owningTicket": "#483 / #493 / #681",
-      "authority": "lib/tasks/writes.ts",
-      "evidence": "HTTP task routes and lib/ai/tools/tasks.ts call createTaskWrites; no qualifying TasksDB write call remains in delivery sources."
+      "owningTicket": "#483 / #493 / #681 / #888 / #896",
+      "authority": "lib/tasks/writes.ts for ordinary creation; lib/tasks/commands.ts for interactive Task commands",
+      "evidence": "HTTP and AI Task creation call createTaskWrites, while Task HTTP/UI/AI mutation callers use the shared Task Commands boundary; no qualifying TasksDB write call remains in delivery sources."
     },
     {
       "id": "tasks-task-deletion",
@@ -44,9 +44,9 @@
       "invariants": ["Ownership-safe not-found outcomes, recurring scopes, completed-history preservation, and regeneration prevention"],
       "atomicity": "Recurring deletion scopes commit task, occurrence, and series effects through one database transaction boundary.",
       "migrationStatus": "migrated",
-      "owningTicket": "#633",
-      "authority": "Task Writes.delete and Task Writes.deleteSeries",
-      "evidence": "app/api/tasks/[id]/route.ts, app/api/recurring-tasks/[id]/route.ts, and lib/ai/tools/tasks.ts route deletion through Task Writes."
+      "owningTicket": "#633 / #888 / #896",
+      "authority": "lib/tasks/commands.ts for Task-scoped commands and the authenticated recurring-task capabilities for Series ending",
+      "evidence": "app/api/tasks/[id]/route.ts and lib/ai/tools/tasks.ts route Task deletion-shaped commands through Task Commands, while app/api/recurring-tasks/[id]/route.ts and the AI Series tool route Series ending through the authenticated capability; the obsolete Task Writes deletion path is removed."
     },
     {
       "id": "tasks-recurring-lifecycle",
@@ -56,9 +56,9 @@
       "invariants": ["Series identity, Series Revision effective dates, Coverage Horizon, occurrence lineage, and lifecycle state"],
       "atomicity": "Series mutations use lifecycle transaction boundaries; reads may use focused query adapters after coverage is ensured.",
       "migrationStatus": "migrated",
-      "owningTicket": "#659 / #681 / #682 / #686 / #687 / #688 / #692 / #886 / #887 / #888 / #893",
-      "authority": "Authenticated Series capabilities over the private recurring-task lifecycle, with the declared compatibility adapter at delivery edges",
-      "evidence": "Recurring-task creation, queries, Series revisions, pause/resume, ending, and occurrence commands route through authenticated capability or shared Task Command boundaries in HTTP and AI; task-scoped compatibility remains private, ordinary task queries remain task-model queries, focused sidebar and calendar Coverage orchestration is isolated in their query modules, direct recurring persistence writes and legacy projection writers are absent, and the storage/lineage/rollback/RLS proof is in docs/architecture/recurring-task-lifecycle-contract.md and the registered SQL fixtures. The evidence covers stable operation IDs, opaque optimistic versions, explicit effective dates, typed conflicts, idempotent replay, HTTP/AI parity, and focused Coverage-backed delivery."
+      "owningTicket": "#659 / #681 / #682 / #686 / #687 / #688 / #692 / #886 / #887 / #888 / #893 / #894 / #895 / #896",
+      "authority": "The authenticated production capability factory at lib/recurring-tasks/index.ts over the private recurring-task lifecycle; shared Task Commands for visible Task identity; separately authorized private maintenance composition; and only the scheduling and compatibility subpaths",
+      "evidence": "Recurring-task creation, queries, Series revisions, pause/resume, ending, and occurrence commands route through the authenticated capability or shared Task Command boundaries in HTTP and AI; the cron route uses the narrow private maintenance capability, ordinary task queries remain task-model queries, focused sidebar and calendar Coverage orchestration is isolated in their query modules, direct recurring persistence writes and legacy projection writers are absent, unsupported deep imports and delivery-selected lifecycle adapters are rejected by tests/scripts/recurring-package-architecture.test.ts, obsolete creation/Occurrence/Series State adapters are removed, and the storage/lineage/rollback/RLS proof is in docs/architecture/recurring-task-lifecycle-contract.md and the registered SQL fixtures. The evidence covers stable operation IDs, opaque optimistic versions, explicit effective dates, typed conflicts, idempotent replay, HTTP/AI parity, the shared reference/production conformance suite, and focused Coverage-backed delivery."
     },
     {
       "id": "habits-completion",

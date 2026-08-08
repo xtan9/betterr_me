@@ -39,7 +39,7 @@ import { getProjectColor } from "@/lib/projects/colors";
 import type { Task } from "@/lib/db/types";
 import type { RecurringTaskResponse } from "@/lib/recurring-tasks/compatibility";
 import type { EditScope } from "@/lib/validations/recurring-task";
-import { describeRecurrence } from "@/lib/recurring-tasks/recurrence";
+import { describeRecurrence } from "@/lib/recurring-tasks/scheduling";
 import { fetcher } from "@/lib/fetcher";
 
 interface TaskDetailContentProps {

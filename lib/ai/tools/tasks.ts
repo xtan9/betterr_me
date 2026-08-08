@@ -17,12 +17,10 @@ import {
 } from "@/lib/tasks/query";
 import { createSupabaseTaskQuery } from "@/lib/tasks/supabase-query";
 import {
-  createActivatedRecurringTaskLifecycle,
   createAuthenticatedRecurringTaskCapabilities,
   type SeriesVersion,
 } from "@/lib/recurring-tasks";
-import { addLocalDays } from "@/lib/recurring-tasks/recurrence";
-import { resolveSeriesEffectiveDate } from "@/lib/recurring-tasks";
+import { addLocalDays } from "@/lib/recurring-tasks/scheduling";
 import {
   initialSeriesCoverage,
   recurringTaskFailureMessage,
@@ -31,6 +29,7 @@ import {
   toReviseSeriesCommand,
   toSeriesStateCommand,
   toRecurringTaskResponse,
+  resolveSeriesEffectiveDate,
 } from "@/lib/recurring-tasks/compatibility";
 import {
   hasTaskUpdateValues,
@@ -229,9 +228,7 @@ export function taskTools(): ToolDefinition[] {
         params: z.infer<typeof createTaskParameters>,
         ctx: ToolContext,
       ) => {
-        const outcome = await createTaskWrites(ctx.supabase, {
-          lifecycle: createActivatedRecurringTaskLifecycle(ctx.supabase),
-        }).execute({
+        const outcome = await createTaskWrites(ctx.supabase).execute({
           type: "create",
           userId: ctx.userId,
           values: {

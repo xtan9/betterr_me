@@ -3,11 +3,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AuthenticatedPrincipal } from "@/lib/auth/request-context";
 import { TasksDB } from "@/lib/db";
 import type { Task } from "@/lib/db/types";
-import { createActivatedRecurringTaskLifecycle } from "@/lib/recurring-tasks/activation";
+import { createActivatedRecurringTaskLifecycle } from "@/lib/recurring-tasks/internal/activation";
 import {
   decodeSeriesVersion,
   encodeSeriesVersion,
-} from "@/lib/recurring-tasks/capabilities";
+} from "@/lib/recurring-tasks/internal/capabilities";
 import type {
   OccurrenceOverrides,
   LifecycleOutcome,
@@ -16,7 +16,7 @@ import type {
   RecurringTaskLifecyclePort,
   ReviseSeriesRequest,
   SeriesCommandRequest,
-} from "@/lib/recurring-tasks/lifecycle";
+} from "@/lib/recurring-tasks/internal/lifecycle";
 import type { TaskUpdateValues } from "@/lib/validations/task";
 
 export { decodeSeriesVersion, encodeSeriesVersion };
