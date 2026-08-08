@@ -89,6 +89,7 @@ export interface TaskDeletionRequest {
   taskId: string;
   scope?: EditScope;
   effectiveDate?: string;
+  operationId?: string;
 }
 
 /** Storage-independent recurring-series deletion intent. */
@@ -347,6 +348,9 @@ export class TaskWrites {
           userId: normalized.userId,
           seriesId,
           occurrenceId,
+          ...(normalized.operationId
+            ? { idempotencyKey: normalized.operationId }
+            : {}),
         }),
       );
     }
@@ -380,17 +384,22 @@ export class TaskWrites {
 
     const effectiveDate = normalized.effectiveDate ?? scheduledDate;
     if (scope === 'all') {
-      if (!this.persistence.lifecycle.deleteSeries) {
+      const endSeries = this.persistence.lifecycle.endSeries
+        ?? this.persistence.lifecycle.deleteSeries;
+      if (!endSeries) {
         return {
           type: 'invalid-transition',
           reason: 'Recurring task deletion requires lifecycle persistence',
         };
       }
       return mapDeletionLifecycleOutcome(
-        await this.persistence.lifecycle.deleteSeries({
+        await endSeries({
           userId: normalized.userId,
           seriesId,
           effectiveDate,
+          ...(normalized.operationId
+            ? { idempotencyKey: normalized.operationId }
+            : {}),
         }),
       );
     }
@@ -407,6 +416,9 @@ export class TaskWrites {
         userId: normalized.userId,
         seriesId,
         effectiveDate,
+        ...(normalized.operationId
+          ? { idempotencyKey: normalized.operationId }
+          : {}),
       }),
     );
   }
@@ -417,7 +429,9 @@ export class TaskWrites {
     const userId = request.userId.trim();
     const seriesId = request.seriesId.trim();
     if (!userId || !seriesId) return { type: 'not-found' };
-    if (!this.persistence.lifecycle?.getSeries || !this.persistence.lifecycle.deleteSeries) {
+    const endSeries = this.persistence.lifecycle?.endSeries
+      ?? this.persistence.lifecycle?.deleteSeries;
+    if (!this.persistence.lifecycle?.getSeries || !endSeries) {
       throw new Error('Recurring series deletion requires lifecycle persistence');
     }
 
@@ -432,7 +446,7 @@ export class TaskWrites {
     if (seriesOutcome.series.status === 'ended') return { type: 'not-found' };
 
     return mapDeletionLifecycleOutcome(
-      await this.persistence.lifecycle.deleteSeries({
+      await endSeries({
         userId,
         seriesId,
         ...(request.effectiveDate?.trim()
@@ -939,6 +953,9 @@ function normalizeTaskDeletionRequest(
     ...(request.effectiveDate?.trim()
       ? { effectiveDate: request.effectiveDate.trim() }
       : {}),
+    ...(request.operationId?.trim()
+      ? { operationId: request.operationId.trim() }
+      : {}),
   };
 }
 
@@ -961,8 +978,14 @@ function isLifecycleSuccess<T>(
 }
 
 function mapDeletionLifecycleOutcome<T>(
-  outcome: LifecycleOutcome<T>,
+  outcome: LifecycleOutcome<T> | undefined,
 ): TaskDeletionOutcome {
+  if (!outcome) {
+    return {
+      type: 'invalid-transition',
+      reason: 'Recurring task deletion requires lifecycle persistence',
+    };
+  }
   if (outcome.status === 'complete') return { type: 'deleted' };
   if (outcome.status === 'already-applied') return { type: 'not-found' };
   if (outcome.status === 'not-found') return { type: 'not-found' };

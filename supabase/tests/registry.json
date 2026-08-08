@@ -75,6 +75,12 @@
     "cleanup": "transactional"
   },
   {
+    "path": "recurring_task_series_commands.sql",
+    "domain": "recurring-tasks",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
     "path": "recurring_task_deletion_lifecycle.sql",
     "domain": "recurring-tasks",
     "role": "constrained",
@@ -82,6 +88,12 @@
   },
   {
     "path": "recurring_task_series_coverage.sql",
+    "domain": "recurring-tasks",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
+    "path": "recurring_task_series_revision_capabilities.sql",
     "domain": "recurring-tasks",
     "role": "constrained",
     "cleanup": "transactional"
@@ -114,6 +126,18 @@
   {
     "path": "recurring_task_occurrence_lifecycle.sql",
     "domain": "recurring-tasks",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
+    "path": "task_command_atomic.sql",
+    "domain": "tasks",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
+    "path": "task_command_scoped.sql",
+    "domain": "tasks",
     "role": "constrained",
     "cleanup": "transactional"
   },

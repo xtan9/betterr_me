@@ -15,32 +15,42 @@ function section(contents: string, start: string, end: string): string {
 }
 
 describe("Occurrence adapter architecture boundaries", () => {
-  it("routes HTTP occurrence edits and commands through the adapter", () => {
+  it("routes every HTTP Task edit and deletion scope through Task Commands", () => {
     const route = source("app/api/tasks/[id]/route.ts");
     const toggleRoute = source("app/api/tasks/[id]/toggle/route.ts");
 
-    expect(route).toContain("createSupabaseOccurrenceAdapter(supabase)");
-    expect(route).toContain("occurrenceHttpFailure(outcome)");
+    expect(route).toContain("createAuthenticatedTaskCommands(");
+    expect(route).toContain("taskCommandTypeFromUpdate");
+    expect(route).toContain("expectedSeriesVersion(request)");
+    expect(route).not.toContain("createSupabaseOccurrenceAdapter");
+    expect(route).not.toContain("createSupabaseSeriesStateAdapter");
+    expect(route).not.toContain("createTaskWrites");
+    expect(route).toContain("taskCommandHttpFailure(outcome)");
     expect(route).not.toContain('message.includes("not found")');
-    expect(toggleRoute).toContain("createSupabaseOccurrenceAdapter(supabase)");
-    expect(toggleRoute).toContain("occurrenceHttpFailure(outcome)");
+    expect(toggleRoute).toContain("createSupabaseLegacyTaskToggle(supabase)");
+    expect(toggleRoute).toContain("taskCommandHttpFailure(outcome)");
+    expect(toggleRoute).not.toContain("createSupabaseOccurrenceAdapter");
     expect(toggleRoute).not.toContain("createSupabaseRecurringTaskLifecycle");
     expect(toggleRoute).not.toContain("message.includes");
   });
 
-  it("routes AI occurrence edits through the adapter and deletion through Task Writes", () => {
+  it("routes every AI Task edit and deletion scope through Task Commands", () => {
     const tools = source("lib/ai/tools/tasks.ts");
     const toggle = section(tools, 'name: "toggleTask"', 'name: "updateTask"');
     const update = section(tools, 'name: "updateTask"', 'name: "deleteTask"');
     const deletion = section(tools, 'name: "deleteTask"', 'name: "getRecurringTasks"');
 
-    for (const operation of [toggle, update]) {
-      expect(operation).toContain("createSupabaseOccurrenceAdapter(ctx.supabase)");
-      expect(operation).toContain("occurrenceErrorMessage(outcome)");
-    }
-    expect(deletion).toContain("createTaskWrites(ctx.supabase,");
-    expect(deletion).toContain(".delete({");
-    expect(deletion).toMatch(/taskDeletionErrorMessage\(\s*outcome/);
+    expect(toggle).toContain("createSupabaseLegacyTaskToggle(ctx.supabase)");
+    expect(toggle).toContain("taskCommandErrorMessage(outcome)");
+    expect(toggle).not.toContain("createSupabaseOccurrenceAdapter(ctx.supabase)");
+    expect(update).toContain("createTaskCommandsForUser(");
+    expect(update).not.toContain("createSupabaseOccurrenceAdapter(ctx.supabase)");
+    expect(update).not.toContain("createSupabaseSeriesStateAdapter(ctx.supabase)");
+    expect(update).toContain("taskCommandErrorMessage(commandOutcome)");
+    expect(deletion).toContain("createTaskCommandsForUser(");
+    expect(deletion).not.toContain("createTaskWrites(ctx.supabase,");
+    expect(deletion).not.toContain(".delete({");
+    expect(deletion).toContain("taskCommandErrorMessage(commandOutcome)");
     expect(deletion).not.toContain("createSupabaseOccurrenceAdapter(ctx.supabase)");
     expect(deletion).not.toContain("occurrenceErrorMessage(outcome)");
     expect(deletion).toContain("Always confirm with the user first");

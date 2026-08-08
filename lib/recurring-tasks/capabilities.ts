@@ -84,7 +84,8 @@ export interface ReviseSeriesCommand {
   operationId: RecurringTaskOperationId;
   seriesId: string;
   version: SeriesVersion;
-  effectiveDate?: string;
+  /** The first Scheduled Date on which the new Series Revision applies. */
+  effectiveDate: string;
   recurrenceRule?: RecurrenceRule;
   defaults?: Partial<SeriesDefaults>;
   scope?: "following" | "all";
@@ -397,6 +398,33 @@ export function createRecurringTaskCapabilitiesForLifecycle(
       );
       if (operationValidation) return operationValidation;
       const operationId = input.operationId;
+      if (typeof input?.seriesId !== "string" || !input.seriesId.trim()) {
+        return validationFailure(
+          RECURRING_TASK_OPERATION_IDS.reviseSeries,
+          operationId,
+          "seriesId",
+          "Series ID is required",
+        );
+      }
+      if (
+        typeof input?.effectiveDate !== "string"
+        || !input.effectiveDate.trim()
+      ) {
+        return validationFailure(
+          RECURRING_TASK_OPERATION_IDS.reviseSeries,
+          operationId,
+          "effectiveDate",
+          "Effective Scheduled Date is required",
+        );
+      }
+      if (!isValidLocalDate(input.effectiveDate)) {
+        return validationFailure(
+          RECURRING_TASK_OPERATION_IDS.reviseSeries,
+          operationId,
+          "effectiveDate",
+          "Effective Scheduled Date must be a valid local date",
+        );
+      }
       const version = parseSeriesVersion(input.version, input.seriesId);
       if (!version) {
         return validationFailure(
@@ -623,6 +651,14 @@ async function runStateCommand(
   const operationValidation = validateOperationId(operation, input?.operationId);
   if (operationValidation) return operationValidation;
   const operationId = input.operationId;
+  if (typeof input?.seriesId !== "string" || !input.seriesId.trim()) {
+    return validationFailure(
+      operation,
+      operationId,
+      "seriesId",
+      "Series ID is required",
+    );
+  }
   const version = parseSeriesVersion(input.version, input.seriesId);
   if (!version) {
     return validationFailure(
@@ -900,7 +936,7 @@ function isOpaqueSeriesVersion(value: string): value is SeriesVersion {
   return value.startsWith("rt-series-v1.") && parseEncodedVersion(value) !== undefined;
 }
 
-interface DecodedSeriesVersion {
+export interface DecodedSeriesVersion {
   seriesId: string;
   revisionToken: number;
 }
@@ -918,14 +954,27 @@ export function encodeSeriesVersion(
 }
 
 function parseSeriesVersion(
-  value: SeriesVersion,
-  seriesId: string,
+  value: unknown,
+  seriesId: unknown,
 ): DecodedSeriesVersion | undefined {
-  const decoded = parseEncodedVersion(value);
-  return decoded?.seriesId === seriesId ? decoded : undefined;
+  return decodeSeriesVersion(value, seriesId);
 }
 
-function parseEncodedVersion(value: string): DecodedSeriesVersion | undefined {
+/** Decode an opaque Series version only at the command/lifecycle boundary. */
+export function decodeSeriesVersion(
+  value: unknown,
+  seriesId?: unknown,
+): DecodedSeriesVersion | undefined {
+  if (typeof value !== "string") return undefined;
+  const decoded = parseEncodedVersion(value);
+  if (!decoded) return undefined;
+  return typeof seriesId !== "string" || decoded.seriesId === seriesId
+    ? decoded
+    : undefined;
+}
+
+function parseEncodedVersion(value: unknown): DecodedSeriesVersion | undefined {
+  if (typeof value !== "string") return undefined;
   if (!value.startsWith("rt-series-v1.")) return undefined;
   try {
     const json = decodeBase64Url(value.slice("rt-series-v1.".length));

@@ -264,8 +264,8 @@ describe("SupabaseRecurringTaskLifecycle", () => {
       effectiveDate: "2026-08-04",
     });
 
-    expect(rpc).toHaveBeenNthCalledWith(3, "recurring_task_delete_series", {
-      p_operation: "delete-series",
+    expect(rpc).toHaveBeenNthCalledWith(3, "recurring_task_lifecycle", {
+      p_operation: "end-series",
       p_request: {
         userId: "user-1",
         seriesId: "series-1",

@@ -7,21 +7,13 @@ import { log } from '@/lib/logger';
 import { taskUpdateSchema } from '@/lib/validations/task';
 import { editScopeSchema } from '@/lib/validations/recurring-task';
 import {
-  createTaskWrites,
-  taskDeletionHttpFailure,
-} from '@/lib/tasks/writes';
-import {
-  createSupabaseOccurrenceAdapter,
-  createSupabaseSeriesStateAdapter,
-  createActivatedRecurringTaskLifecycle,
-  isOccurrenceSuccess,
-  occurrenceHttpFailure,
-  isSeriesStateSuccess,
-  seriesStateHttpFailure,
-  toOccurrenceEditIntent,
-} from '@/lib/recurring-tasks';
+  createAuthenticatedTaskCommands,
+  isTaskCommandSuccess,
+  operationIdFromRequest,
+  taskCommandTypeFromUpdate,
+  taskCommandHttpFailure,
+} from '@/lib/tasks/commands';
 import { isValidLocalDate } from '@/lib/recurring-tasks/recurrence';
-import type { TaskUpdateValues } from '@/lib/validations/task';
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ['apiKey', 'cookie'],
@@ -80,7 +72,7 @@ export async function PATCH(
     if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
-    const { principal: { userId }, client: supabase } = auth;
+    const { principal, client: supabase } = auth;
 
     const body = await request.json();
     const searchParams = request.nextUrl.searchParams;
@@ -107,55 +99,52 @@ export async function PATCH(
       const validation = validateRequestBody(body, taskUpdateSchema);
       if (!validation.success) return validation.response;
 
-      if (scopeResult.data === 'this') {
-        const outcome = await createSupabaseOccurrenceAdapter(supabase).edit(
-          toOccurrenceEditIntent({
-            userId,
-            taskId: id,
-            ...toOccurrenceInput(validation.data),
-            scope: 'this',
-          }),
-        );
-        if (!isOccurrenceSuccess(outcome)) {
-          const failure = occurrenceHttpFailure(outcome);
-          return NextResponse.json(
-            { error: failure.error },
-            { status: failure.status },
-          );
-        }
-        return NextResponse.json({ success: true });
-      }
-
-      const outcome = await createSupabaseSeriesStateAdapter(supabase).editScope({
+      const scope = scopeResult.data;
+      const commandType = scope === 'this'
+        ? taskCommandTypeFromUpdate(validation.data) ?? 'edit'
+        : 'edit';
+      const outcome = await createAuthenticatedTaskCommands(
+        supabase,
+        principal,
+      ).execute({
+        type: commandType,
         taskId: id,
-        userId,
-        scope: scopeResult.data,
-        effectiveDate: dateParam,
-        ...toSeriesScopeInput(validation.data),
+        scope,
+        operationId: operationIdFromRequest(request),
+        ...(commandType === 'edit' ? { updates: validation.data } : {}),
+        ...(dateParam === undefined ? {} : { effectiveDate: dateParam }),
+        ...expectedSeriesVersion(request),
       });
-      if (!isSeriesStateSuccess(outcome)) {
-        const failure = seriesStateHttpFailure(outcome);
+      if (!isTaskCommandSuccess(outcome)) {
+        const failure = taskCommandHttpFailure(outcome);
         return NextResponse.json(
           { error: failure.error },
           { status: failure.status },
         );
       }
-      return NextResponse.json({ success: true });
+      return NextResponse.json({
+        success: true,
+        ...(outcome.task ? { task: outcome.task } : {}),
+      });
     }
 
     // Validate with Zod schema
     const validation = validateRequestBody(body, taskUpdateSchema);
     if (!validation.success) return validation.response;
 
-    const outcome = await createSupabaseOccurrenceAdapter(supabase).edit(
-      toOccurrenceEditIntent({
-        userId,
-        taskId: id,
-        ...toOccurrenceInput(validation.data),
-      }),
-    );
-    if (!isOccurrenceSuccess(outcome)) {
-      const failure = occurrenceHttpFailure(outcome);
+    const commandType = taskCommandTypeFromUpdate(validation.data) ?? 'edit';
+    const outcome = await createAuthenticatedTaskCommands(
+      supabase,
+      principal,
+    ).execute({
+      type: commandType,
+      taskId: id,
+      operationId: operationIdFromRequest(request),
+      ...(commandType === 'edit' ? { updates: validation.data } : {}),
+      ...expectedSeriesVersion(request),
+    });
+    if (!isTaskCommandSuccess(outcome)) {
+      const failure = taskCommandHttpFailure(outcome);
       return NextResponse.json(
         { error: failure.error },
         { status: failure.status },
@@ -185,7 +174,7 @@ export async function DELETE(
     if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
-    const { principal: { userId }, client: supabase } = auth;
+    const { principal, client: supabase } = auth;
 
     const searchParams = request.nextUrl.searchParams;
     const scopeParam = searchParams.get('scope');
@@ -208,20 +197,41 @@ export async function DELETE(
       }
       scope = scopeResult.data;
     }
+    const operationId = operationIdFromRequest(request);
 
-    const outcome = await createTaskWrites(supabase, {
-      lifecycle: createActivatedRecurringTaskLifecycle(supabase),
-    }).delete({
+    if (scope === undefined || scope === 'this') {
+      const outcome = await createAuthenticatedTaskCommands(
+        supabase,
+        principal,
+      ).execute({
+        type: 'skip',
+        taskId: id,
+        ...(scope === undefined ? {} : { scope }),
+        operationId,
+      });
+      if (!isTaskCommandSuccess(outcome)) {
+        const failure = taskCommandHttpFailure(outcome);
+        return NextResponse.json(
+          { error: failure.error },
+          { status: failure.status },
+        );
+      }
+      return NextResponse.json({ success: true });
+    }
+
+    const outcome = await createAuthenticatedTaskCommands(
+      supabase,
+      principal,
+    ).execute({
+      type: 'skip',
       taskId: id,
-      userId,
-      ...(scope === undefined ? {} : { scope }),
+      scope,
       ...(dateParam === undefined ? {} : { effectiveDate: dateParam }),
+      operationId,
+      ...expectedSeriesVersion(request),
     });
-    if (outcome.type !== 'deleted') {
-      const failure = taskDeletionHttpFailure(
-        outcome,
-        scope === 'following' || scope === 'all' ? 'series' : 'occurrence',
-      );
+    if (!isTaskCommandSuccess(outcome)) {
+      const failure = taskCommandHttpFailure(outcome);
       return NextResponse.json(
         { error: failure.error },
         { status: failure.status },
@@ -237,35 +247,11 @@ export async function DELETE(
   }
 }
 
-function toOccurrenceInput(values: TaskUpdateValues) {
-  return {
-    title: values.title,
-    description: values.description,
-    priority: values.priority,
-    categoryId: values.category_id,
-    dueDate: values.due_date,
-    dueTime: values.due_time,
-    status: values.status,
-    completed: values.is_completed,
-    section: values.section,
-    sortOrder: values.sort_order,
-    projectId: values.project_id,
-    completionDifficulty: values.completion_difficulty,
-  };
-}
-
-function toSeriesScopeInput(values: TaskUpdateValues) {
-  return {
-    title: values.title,
-    description: values.description,
-    priority: values.priority,
-    categoryId: values.category_id,
-    dueDate: values.due_date,
-    dueTime: values.due_time,
-    status: values.status,
-    completed: values.is_completed,
-    section: values.section,
-    sortOrder: values.sort_order,
-    projectId: values.project_id,
-  };
+function expectedSeriesVersion(
+  request: Pick<NextRequest, 'headers'>,
+): { expectedVersion?: string } {
+  const supplied = request.headers.get('If-Match')
+    ?? request.headers.get('X-Series-Version');
+  const value = supplied?.trim().replace(/^"|"$/g, '');
+  return value ? { expectedVersion: value } : {};
 }

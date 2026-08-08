@@ -5,6 +5,10 @@ import type { ToolContext } from "@/lib/ai/tools/types";
 const {
   mockRpc,
   mockCreateSeries,
+  mockReviseSeries,
+  mockPauseSeries,
+  mockResumeSeries,
+  mockEndSeries,
   mockListSeries,
   mockCreateCapabilities,
   mockCapabilities,
@@ -17,10 +21,20 @@ const {
     pause: vi.fn(),
   };
   const mockCreateSeries = vi.fn();
+  const mockReviseSeries = vi.fn();
+  const mockPauseSeries = vi.fn();
+  const mockResumeSeries = vi.fn();
+  const mockEndSeries = vi.fn();
   const mockListSeries = vi.fn();
   const mockCreateCapabilities = vi.fn();
   const mockCapabilities = {
-    seriesCommands: { createSeries: mockCreateSeries },
+    seriesCommands: {
+      createSeries: mockCreateSeries,
+      reviseSeries: mockReviseSeries,
+      pauseSeries: mockPauseSeries,
+      resumeSeries: mockResumeSeries,
+      endSeries: mockEndSeries,
+    },
     seriesQueries: { listSeries: mockListSeries },
     coverage: { ensure: vi.fn() },
   };
@@ -28,6 +42,10 @@ const {
   return {
     mockRpc: vi.fn(),
     mockCreateSeries,
+    mockReviseSeries,
+    mockPauseSeries,
+    mockResumeSeries,
+    mockEndSeries,
     mockListSeries,
     mockCreateCapabilities,
     mockCapabilities,
@@ -161,6 +179,34 @@ describe("recurring task tools", () => {
       operationId: "ai-operation-1",
       series: capabilitySeries("rt1"),
     });
+    mockReviseSeries.mockResolvedValue({
+      type: "revised",
+      status: "complete",
+      operation: "recurring-task.series.revise",
+      operationId: "ai-revise-1",
+      series: capabilitySeries("rt1"),
+    });
+    mockPauseSeries.mockResolvedValue({
+      type: "paused",
+      status: "complete",
+      operation: "recurring-task.series.pause",
+      operationId: "ai-pause-1",
+      series: capabilitySeries("rt1", "paused"),
+    });
+    mockResumeSeries.mockResolvedValue({
+      type: "resumed",
+      status: "complete",
+      operation: "recurring-task.series.resume",
+      operationId: "ai-resume-1",
+      series: capabilitySeries("rt1"),
+    });
+    mockEndSeries.mockResolvedValue({
+      type: "ended",
+      status: "complete",
+      operation: "recurring-task.series.end",
+      operationId: "ai-end-1",
+      series: capabilitySeries("rt1", "ended"),
+    });
     mockState.update.mockResolvedValue({
       status: "complete",
       type: "complete",
@@ -170,6 +216,27 @@ describe("recurring task tools", () => {
       status: "complete",
       type: "complete",
       recurringTask: { id: "rt1", status: "paused" },
+    });
+    mockPauseSeries.mockResolvedValue({
+      type: "paused",
+      status: "complete",
+      operation: "recurring-task.series.pause",
+      operationId: "pause-1",
+      series: capabilitySeries("rt1", "paused"),
+    });
+    mockResumeSeries.mockResolvedValue({
+      type: "resumed",
+      status: "complete",
+      operation: "recurring-task.series.resume",
+      operationId: "resume-1",
+      series: capabilitySeries("rt1", "active"),
+    });
+    mockEndSeries.mockResolvedValue({
+      type: "ended",
+      status: "complete",
+      operation: "recurring-task.series.end",
+      operationId: "end-1",
+      series: capabilitySeries("rt1", "ended"),
     });
   });
 
@@ -230,61 +297,101 @@ describe("recurring task tools", () => {
     expect(result).toEqual({ id: "rt2", title: "Daily standup" });
   });
 
-  it("updateRecurringTask removes undefined and passes to DB", async () => {
+  it("updateRecurringTask routes a revision with operation identity and version", async () => {
     const ctx = makeCtx();
     await findTool("updateRecurringTask").execute(
-      { recurringTaskId: "rt1", title: "Updated title" },
+      {
+        operationId: "ai-revise-1",
+        recurringTaskId: "rt1",
+        version: "rt-series-v1.test-version",
+        effectiveDate: "2026-04-11",
+        title: "Updated title",
+      },
       ctx,
     );
-    expect(mockState.update).toHaveBeenCalledWith(
+    expect(mockReviseSeries).toHaveBeenCalledWith(
       expect.objectContaining({
+        operationId: "ai-revise-1",
         seriesId: "rt1",
-        userId: "user-123",
-        title: "Updated title",
+        version: "rt-series-v1.test-version",
+        effectiveDate: "2026-04-11",
+        defaults: { title: "Updated title" },
       }),
     );
   });
 
-  it("pauseRecurringTask calls pauseRecurringTask", async () => {
+  it("pauseRecurringTask calls the pause capability", async () => {
     const ctx = makeCtx();
     await findTool("pauseRecurringTask").execute(
-      { recurringTaskId: "rt1" },
+      {
+        operationId: "ai-pause-1",
+        recurringTaskId: "rt1",
+        version: "rt-series-v1.test-version",
+      },
       ctx,
     );
-    expect(mockState.pause).toHaveBeenCalledWith(
-      expect.objectContaining({ seriesId: "rt1", userId: "user-123" }),
-    );
+    expect(mockPauseSeries).toHaveBeenCalledWith({
+      operationId: "ai-pause-1",
+      seriesId: "rt1",
+      version: "rt-series-v1.test-version",
+      effectiveDate: "2026-04-10",
+    });
   });
 
-  it("deleteRecurringTask ends a series through Task Writes", async () => {
+  it("resumeRecurringTask passes its effective date and coverage to the capability", async () => {
     const ctx = makeCtx();
-    const result = await findTool("deleteRecurringTask").execute(
-      { recurringTaskId: "rt1" },
+    await findTool("resumeRecurringTask").execute(
+      {
+        operationId: "ai-resume-1",
+        recurringTaskId: "rt1",
+        version: "rt-series-v1.test-version",
+        effectiveDate: "2026-04-12",
+      },
       ctx,
     );
-    expect(mockRpc).toHaveBeenNthCalledWith(1, "recurring_task_lifecycle", {
-      p_operation: "get-series",
-      p_request: { userId: "user-123", seriesId: "rt1" },
+    expect(mockResumeSeries).toHaveBeenCalledWith({
+      operationId: "ai-resume-1",
+      seriesId: "rt1",
+      version: "rt-series-v1.test-version",
+      effectiveDate: "2026-04-12",
+      coverage: { from: "2026-04-12", to: "2026-04-19" },
     });
-    expect(mockRpc).toHaveBeenNthCalledWith(2, "recurring_task_delete_series", {
-      p_operation: "delete-series",
-      p_request: {
-        userId: "user-123",
-        seriesId: "rt1",
+  });
+
+  it("deleteRecurringTask ends a series through the capability", async () => {
+    const ctx = makeCtx();
+    const result = await findTool("deleteRecurringTask").execute(
+      {
+        operationId: "ai-end-1",
+        recurringTaskId: "rt1",
+        version: "rt-series-v1.test-version",
         effectiveDate: "2026-04-10",
       },
+      ctx,
+    );
+    expect(mockEndSeries).toHaveBeenCalledWith({
+      operationId: "ai-end-1",
+      seriesId: "rt1",
+      version: "rt-series-v1.test-version",
+      effectiveDate: "2026-04-10",
     });
     expect(result).toEqual({ success: true });
   });
 
   it("deleteRecurringTask returns error when not found", async () => {
     const ctx = makeCtx();
-    mockRpc.mockResolvedValue({
-      data: { status: "not-found", type: "not-found" },
-      error: null,
+    mockEndSeries.mockResolvedValue({
+      status: "not-found",
+      type: "not-found",
+      operation: "recurring-task.series.end",
+      operationId: "ai-missing-end",
     });
     const result = await findTool("deleteRecurringTask").execute(
-      { recurringTaskId: "rt999" },
+      {
+        operationId: "missing",
+        recurringTaskId: "rt999",
+        version: "rt-series-v1.test-version",
+      },
       ctx,
     );
     expect(result).toEqual({ error: "Recurring task not found" });
