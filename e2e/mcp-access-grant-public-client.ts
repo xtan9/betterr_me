@@ -59,6 +59,9 @@ import {
   validatePublicClientProfile,
 } from "./mcp-access-grant-policy";
 import {
+  PUBLIC_CLIENT_REQUIRED_GATE_IDS as CATALOG_PUBLIC_CLIENT_REQUIRED_GATE_IDS,
+} from "./mcp-access-grant-catalogs";
+import {
   evaluateMcpAccessGrantTargetConfiguration,
   type McpAccessGrantTarget,
   type McpAccessGrantTargetConfiguration,
@@ -85,25 +88,7 @@ interface CallbackResult {
   idTokenPresent?: boolean;
 }
 
-export const PUBLIC_CLIENT_REQUIRED_GATE_IDS = [
-  "resource-discovery",
-  "provider-discovery",
-  "public-client-registration-both",
-  "registration-negative-validation-both",
-  "untrusted-client-metadata-both",
-  "authorization-consent-both",
-  "consent-denial-both",
-  "consent-abandonment-both",
-  "consent-cleanup-both",
-  "loopback-both",
-  "loopback-request-both",
-  "loopback-pkce-both",
-  "delegated-token-validation-both",
-  "authenticated-mcp-operation-both",
-  "reproducible-configuration",
-  "sanitized-evidence",
-  "versions",
-] as const;
+export const PUBLIC_CLIENT_REQUIRED_GATE_IDS = CATALOG_PUBLIC_CLIENT_REQUIRED_GATE_IDS;
 
 const CALLBACK_WAIT_TIMEOUT_MS = 10_000;
 const LOGO_FIXTURE_PATH = "/mcp-client-logo.svg";

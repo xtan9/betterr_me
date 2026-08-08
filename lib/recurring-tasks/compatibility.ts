@@ -1,7 +1,19 @@
 import type { EndType, RecurrenceRule } from "@/lib/db/types";
+import { addLocalDays } from "./recurrence";
+import { encodeSeriesVersion, RECURRING_TASK_OPERATION_IDS } from "./capabilities";
+import type {
+  CreateSeriesCommand,
+  RecurringTaskFailure,
+  RecurringTaskOperationId,
+  SeriesProjection,
+  SeriesVersion,
+} from "./capabilities";
 import type { RecurringTaskSeries } from "./lifecycle";
 
 /** Supported compatibility subpath for legacy HTTP and AI translation. */
+
+/** The product's initial lifecycle Coverage window. */
+export const INITIAL_COVERAGE_DAYS = 7;
 
 /** The historical HTTP/AI response retained only at this adapter boundary. */
 export interface RecurringTaskResponse {
@@ -18,8 +30,78 @@ export interface RecurringTaskResponse {
   end_date: string | null;
   end_count: number | null;
   status: "active" | "paused" | "archived";
+  version: SeriesVersion;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * Transport-neutral creation input used by the HTTP and AI compatibility
+ * adapters. Ownership is deliberately absent; the authenticated capability
+ * factory supplies it from the principal.
+ */
+export interface SeriesCreationCompatibilityInput {
+  operationId: RecurringTaskOperationId;
+  title: string;
+  description: string | null;
+  priority: 0 | 1 | 2 | 3;
+  categoryId: string | null;
+  dueTime: string | null;
+  recurrenceRule: RecurrenceRule;
+  recurrenceAnchor: string;
+  activationDate: string;
+  endType: "never" | "after_count" | "on_date";
+  endDate: string | null;
+  endCount: number | null;
+  coverageThrough: string;
+}
+
+/**
+ * Derive the initial inclusive Coverage range from the Recurrence Anchor.
+ * A future anchor gets a full window of its own rather than an inverted range
+ * against today's product window.
+ */
+export function initialSeriesCoverage(
+  recurrenceAnchor: string,
+  referenceDate: string = recurrenceAnchor,
+) {
+  const coverageStart =
+    recurrenceAnchor > referenceDate ? recurrenceAnchor : referenceDate;
+  return {
+    from: recurrenceAnchor,
+    to: addLocalDays(coverageStart, INITIAL_COVERAGE_DAYS),
+  };
+}
+
+/** Translate legacy creation values into the authenticated command contract. */
+export function toCreateSeriesCommand(
+  input: SeriesCreationCompatibilityInput,
+): CreateSeriesCommand {
+  const recurrenceAnchor = input.recurrenceAnchor.trim();
+  const normalizedDueTime = normalizeDueTime(input.dueTime);
+  const command: CreateSeriesCommand = {
+    operationId: input.operationId,
+    recurrenceRule: input.recurrenceRule,
+    recurrenceAnchor,
+    activationDate: input.activationDate.trim(),
+    defaults: {
+      title: input.title.trim(),
+      description: input.description?.trim() || null,
+      priority: input.priority,
+      categoryId: input.categoryId?.trim() || null,
+      dueTime: normalizedDueTime,
+    },
+    occurrenceLimit:
+      input.endType === "after_count" ? input.endCount : null,
+    lastScheduledDate:
+      input.endType === "on_date" ? input.endDate?.trim() || null : null,
+    coverage: {
+      from: recurrenceAnchor,
+      to: input.coverageThrough.trim(),
+    },
+  };
+
+  return command;
 }
 
 /**
@@ -43,7 +125,8 @@ export function toLifecycleRecurrenceDates(startDate: string): {
  * this compatibility boundary.
  */
 export function toRecurringTaskResponse(
-  series: RecurringTaskSeries,
+  series: SeriesProjection | RecurringTaskSeries,
+  ownerId: string,
 ): RecurringTaskResponse {
   const revision = series.revisions.find(
     (candidate) => candidate.id === series.currentRevisionId,
@@ -60,10 +143,13 @@ export function toRecurringTaskResponse(
     : series.lastScheduledDate !== null
       ? "on_date"
       : "never";
+  const version = "version" in series
+    ? series.version
+    : encodeSeriesVersion(series.id, series.revisionToken);
 
   return {
     id: series.id,
-    user_id: series.userId,
+    user_id: ownerId,
     title: defaults.title,
     description: defaults.description,
     priority: defaults.priority,
@@ -78,7 +164,54 @@ export function toRecurringTaskResponse(
     end_date: series.lastScheduledDate,
     end_count: series.occurrenceLimit,
     status: series.status === "ended" ? "archived" : series.status,
+    version,
     created_at: series.createdAt,
     updated_at: series.updatedAt,
   };
+}
+
+/** Map a typed capability failure to stable delivery text. */
+export function recurringTaskFailureMessage(
+  failure: RecurringTaskFailure,
+): string {
+  switch (failure.type) {
+    case "validation":
+      return failure.reason;
+    case "not-found":
+      return "Recurring task not found";
+    case "conflict":
+      return failure.operation === RECURRING_TASK_OPERATION_IDS.createSeries
+        ? "Recurring task creation conflict"
+        : "Recurring task operation conflict";
+    case "invalid-transition":
+      return failure.reason;
+    case "coverage-unavailable":
+      return "Recurring task coverage is temporarily unavailable";
+  }
+}
+
+/** Map a typed capability failure to the HTTP status for its delivery edge. */
+export function recurringTaskFailureHttpStatus(
+  failure: RecurringTaskFailure,
+): 400 | 404 | 409 | 503 {
+  switch (failure.type) {
+    case "validation":
+    case "invalid-transition":
+      return 400;
+    case "not-found":
+      return 404;
+    case "conflict":
+      return 409;
+    case "coverage-unavailable":
+      return 503;
+  }
+}
+
+function normalizeDueTime(value: string | null): string | null {
+  if (value === null) return null;
+  const normalized = value.trim();
+  if (!normalized) return null;
+  return /^\d{2}:\d{2}$/.test(normalized)
+    ? `${normalized}:00`
+    : normalized;
 }

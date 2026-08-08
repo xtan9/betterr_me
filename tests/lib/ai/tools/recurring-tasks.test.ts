@@ -4,7 +4,11 @@ import type { ToolContext } from "@/lib/ai/tools/types";
 
 const {
   mockRpc,
-  mockToRecurringTaskCompatibility,
+  mockCreateSeries,
+  mockListSeries,
+  mockCreateCapabilities,
+  mockCapabilities,
+  mockToRecurringTaskResponse,
   mockState,
   mockStateFactory,
 } = vi.hoisted(() => {
@@ -12,10 +16,22 @@ const {
     update: vi.fn(),
     pause: vi.fn(),
   };
+  const mockCreateSeries = vi.fn();
+  const mockListSeries = vi.fn();
+  const mockCreateCapabilities = vi.fn();
+  const mockCapabilities = {
+    seriesCommands: { createSeries: mockCreateSeries },
+    seriesQueries: { listSeries: mockListSeries },
+    coverage: { ensure: vi.fn() },
+  };
 
   return {
     mockRpc: vi.fn(),
-    mockToRecurringTaskCompatibility: vi.fn(),
+    mockCreateSeries,
+    mockListSeries,
+    mockCreateCapabilities,
+    mockCapabilities,
+    mockToRecurringTaskResponse: vi.fn(),
     mockState: state,
     mockStateFactory: vi.fn(() => state),
   };
@@ -25,16 +41,20 @@ vi.mock("@/lib/recurring-tasks", async () => {
   const actual = await vi.importActual<typeof import("@/lib/recurring-tasks")>(
     "@/lib/recurring-tasks",
   );
-  return { ...actual, createSupabaseSeriesStateAdapter: mockStateFactory };
+  return {
+    ...actual,
+    createSupabaseSeriesStateAdapter: mockStateFactory,
+    createAuthenticatedRecurringTaskCapabilities: mockCreateCapabilities,
+  };
 });
 
-vi.mock("@/lib/recurring-tasks/creation", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/recurring-tasks/creation")>(
-    "@/lib/recurring-tasks/creation",
+vi.mock("@/lib/recurring-tasks/compatibility", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/recurring-tasks/compatibility")>(
+    "@/lib/recurring-tasks/compatibility",
   );
   return {
     ...actual,
-    toRecurringTaskCompatibility: mockToRecurringTaskCompatibility,
+    toRecurringTaskResponse: mockToRecurringTaskResponse,
   };
 });
 
@@ -77,6 +97,14 @@ function lifecycleSeries(id: string, status: "active" | "paused" | "ended" = "ac
   };
 }
 
+function capabilitySeries(id: string, status: "active" | "paused" | "ended" = "active") {
+  const { userId: _userId, revisionToken: _revisionToken, ...projection } = lifecycleSeries(id, status);
+  return {
+    ...projection,
+    version: "rt-series-v1.test-version",
+  };
+}
+
 function makeCtx(overrides?: Partial<ToolContext>): ToolContext {
   return {
     userId: "user-123",
@@ -94,6 +122,7 @@ function findTool(name: string) {
 describe("recurring task tools", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCreateCapabilities.mockReturnValue(mockCapabilities);
     mockRpc.mockImplementation(async (_name, request) => {
       if (request?.p_request?.operationKey === "missing") {
         return { data: { status: "not-found", type: "not-found" }, error: null };
@@ -116,9 +145,21 @@ describe("recurring task tools", () => {
         error: null,
       };
     });
-    mockToRecurringTaskCompatibility.mockReturnValue({
+    mockToRecurringTaskResponse.mockReturnValue({
       id: "rt2",
       title: "Daily standup",
+    });
+    mockListSeries.mockResolvedValue({
+      type: "listed",
+      operation: "recurring-task.series.list",
+      series: [capabilitySeries("rt1")],
+    });
+    mockCreateSeries.mockResolvedValue({
+      type: "created",
+      status: "complete",
+      operation: "recurring-task.series.create",
+      operationId: "ai-operation-1",
+      series: capabilitySeries("rt1"),
     });
     mockState.update.mockResolvedValue({
       status: "complete",
@@ -142,43 +183,49 @@ describe("recurring task tools", () => {
     expect(names).toContain("deleteRecurringTask");
   });
 
-  it("getRecurringTasks reads lifecycle Series and translates at the adapter", async () => {
+  it("getRecurringTasks reads through the authenticated query capability", async () => {
     const ctx = makeCtx();
     const result = await findTool("getRecurringTasks").execute(
       { status: "active" },
       ctx,
     );
-    expect(mockRpc).toHaveBeenCalledWith("recurring_task_lifecycle", {
-      p_operation: "list-series",
-      p_request: { userId: "user-123", status: "active" },
-    });
-    expect(mockToRecurringTaskCompatibility.mock.calls[0]?.[0]).toEqual(
+    expect(mockListSeries).toHaveBeenCalledWith({ status: "active" });
+    expect(mockToRecurringTaskResponse.mock.calls[0]).toEqual([
       expect.objectContaining({ id: "rt1", status: "active" }),
-    );
+      "user-123",
+    ]);
+    expect(mockCreateCapabilities).toHaveBeenCalledWith({
+      supabase: expect.anything(),
+      principal: {
+        type: "user",
+        userId: "user-123",
+        credential: "mcp",
+      },
+    });
     expect(result).toEqual([{ id: "rt2", title: "Daily standup" }]);
   });
 
-  it("createRecurringTask uses the shared initial coverage window", async () => {
+  it("createRecurringTask propagates the caller operation ID through the command capability", async () => {
     const ctx = makeCtx();
     const result = await findTool("createRecurringTask").execute(
       {
+        operationId: "ai-operation-1",
         title: "Daily standup",
         startDate: "2026-04-10",
         recurrenceRule: { frequency: "daily", interval: 1 },
       },
       ctx,
     );
-    expect(mockRpc).toHaveBeenCalledWith(
-      "recurring_task_lifecycle",
-      expect.objectContaining({
-        p_operation: "create-series",
-        p_request: expect.objectContaining({
-          userId: "user-123",
-          recurrenceAnchor: "2026-04-10",
-          activationDate: "2026-04-10",
-          coverage: { from: "2026-04-10", to: "2026-04-17" },
-        }),
-      }),
+    expect(mockCreateSeries).toHaveBeenCalledWith(expect.objectContaining({
+      operationId: "ai-operation-1",
+      recurrenceAnchor: "2026-04-10",
+      activationDate: "2026-04-10",
+      coverage: { from: "2026-04-10", to: "2026-04-17" },
+    }));
+    expect(mockCreateSeries.mock.calls[0]?.[0]).not.toHaveProperty("userId");
+    expect(mockToRecurringTaskResponse).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "rt1" }),
+      "user-123",
     );
     expect(result).toEqual({ id: "rt2", title: "Daily standup" });
   });

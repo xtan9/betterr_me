@@ -50,9 +50,25 @@ import {
   type HouseholdRunwayInterviewAnswers,
   type HouseholdRunwayDraftDeviceAction,
   type HouseholdRunwayPlan,
+  type HouseholdRunwayReviewProjection,
+  type HouseholdRunwayResultProjection,
   type HouseholdRunwayValidationIssue,
 } from "@/lib/finance/internal/household-runway-interview";
 import type { HouseholdRunwayDraftState } from "@/lib/finance/internal/household-runway-draft-codec";
+import {
+  projectHouseholdRunwayActions,
+  projectHouseholdRunwayAssessmentSnapshotHistory,
+  projectHouseholdRunwayDraftFacts,
+  projectHouseholdRunwayOperations,
+  projectHouseholdRunwayPlanFacts,
+  type HouseholdRunwayActionContext,
+  type HouseholdRunwayAssessmentSnapshotFact,
+  type HouseholdRunwayOperationProjectionInput,
+  type HouseholdRunwayRuntimeActions as FocusedRuntimeActions,
+  type HouseholdRunwayRuntimeDraftFacts as FocusedRuntimeDraftFacts,
+  type HouseholdRunwayRuntimeOperations as FocusedRuntimeOperations,
+  type HouseholdRunwayRuntimePlanFacts as FocusedRuntimePlanFacts,
+} from "@/lib/finance/internal/household-runway-focused-projection";
 
 /** User-facing retention policy; storage/version details remain internal. */
 export const HOUSEHOLD_RUNWAY_DRAFT_RETENTION_DAYS = 30;
@@ -399,6 +415,41 @@ export interface HouseholdRunwayInterviewRuntimeSnapshot {
   readonly affordances: Readonly<HouseholdRunwayInterviewRuntimeAffordances>;
 }
 
+type HouseholdRunwayFocusedReviewScreen = {
+  kind: "review";
+} & HouseholdRunwayInterviewRuntimeDeepReadonly<HouseholdRunwayReviewProjection>;
+
+type HouseholdRunwayFocusedNonResultScreen = Exclude<
+  HouseholdRunwayInterviewRuntimeScreen,
+  { kind: "review" | "stage" }
+>;
+
+type HouseholdRunwayFocusedResultScreen =
+  | { kind: "result"; readiness: "unavailable" }
+  | ({ kind: "result" } & HouseholdRunwayInterviewRuntimeDeepReadonly<
+      Extract<HouseholdRunwayResultProjection, { readiness: "ready" }>
+    > & {
+      history: readonly HouseholdRunwayAssessmentSnapshotFact[];
+    });
+
+export type HouseholdRunwayFocusedRuntimeScreen =
+  | HouseholdRunwayFocusedNonResultScreen
+  | HouseholdRunwayFocusedReviewScreen
+  | HouseholdRunwayFocusedResultScreen;
+
+export interface HouseholdRunwayFocusedRuntimeSnapshot {
+  readonly lifecycle: HouseholdRunwayInterviewRuntimeLifecycle;
+  readonly interviewStatus: HouseholdRunwayInterviewStatus;
+  readonly stage: HouseholdRunwayInterviewStage | null;
+  readonly screen: HouseholdRunwayFocusedRuntimeScreen;
+  readonly plan: HouseholdRunwayInterviewRuntimeDeepReadonly<FocusedRuntimePlanFacts>;
+  readonly draft: HouseholdRunwayInterviewRuntimeDeepReadonly<FocusedRuntimeDraftFacts>;
+  readonly issues: readonly HouseholdRunwayInterviewRuntimeIssue[];
+  readonly operations: HouseholdRunwayInterviewRuntimeDeepReadonly<FocusedRuntimeOperations>;
+  readonly confirmation: HouseholdRunwayInterviewRuntimeConfirmation;
+  readonly actions: HouseholdRunwayInterviewRuntimeDeepReadonly<FocusedRuntimeActions>;
+}
+
 export interface HouseholdRunwayInterviewRuntimeDraftFacts {
   readonly current: boolean;
   readonly stored: boolean;
@@ -570,6 +621,8 @@ export type HouseholdRunwayInterviewRuntimeEnvironmentMessage =
 
 export interface HouseholdRunwayInterviewRuntimeComposition {
   runtime: HouseholdRunwayInterviewRuntime;
+  /** Private pre-cutover focused projection for the atomic public migration. */
+  getFocusedSnapshot(): HouseholdRunwayFocusedRuntimeSnapshot;
   dispatchEnvironment(
     message: HouseholdRunwayInterviewRuntimeEnvironmentMessage,
   ): void;
@@ -748,7 +801,7 @@ function clonePublicValue<T>(value: T): T {
   return value;
 }
 
-function snapshotSignature(snapshot: HouseholdRunwayInterviewRuntimeSnapshot) {
+function snapshotSignature<T>(snapshot: T) {
   return JSON.stringify(snapshot);
 }
 
@@ -1215,6 +1268,141 @@ function projectScreen(
   }
 }
 
+type RuntimeOperationState =
+  HouseholdRunwayInterviewState["operations"][keyof HouseholdRunwayInterviewState["operations"]];
+
+function focusedOperationInputFor(
+  operation: RuntimeOperationState,
+): HouseholdRunwayOperationProjectionInput {
+  return operation.status === "failed"
+    ? { status: "failed", error: operation.error }
+    : { status: operation.status };
+}
+
+function focusedActionScreenFor(
+  state: HouseholdRunwayInterviewState,
+): HouseholdRunwayActionContext["screen"] {
+  const screen = state.renderModel;
+  if (screen.kind === "landing") {
+    return { kind: "landing", hasDraft: screen.hasDraft };
+  }
+  if (screen.kind === "resume_choice") {
+    return {
+      kind: "resume_choice",
+      draftAvailable: state.resumeChoice !== null,
+      planAvailable: state.committedPlan !== null,
+    };
+  }
+  if (screen.kind === "review") {
+    return { kind: "review", readiness: screen.reviewProjection.readiness };
+  }
+  if (screen.kind === "stage") {
+    return {
+      kind: "result",
+      readiness:
+        screen.resultProjection.readiness === "ready"
+          ? "ready"
+          : "unavailable",
+    };
+  }
+  return {
+    kind: "collecting",
+    stage: screen.stage as Exclude<HouseholdRunwayInterviewStage, "result">,
+  };
+}
+
+function focusedScreenFor(
+  state: HouseholdRunwayInterviewState,
+  assessmentHistory: readonly RunwaySnapshotSummary[],
+): HouseholdRunwayFocusedRuntimeScreen {
+  const screen = state.renderModel;
+  if (screen.kind === "review") {
+    return {
+      kind: "review",
+      ...clonePublicValue(screen.reviewProjection),
+    };
+  }
+  if (screen.kind === "stage") {
+    if (screen.resultProjection.readiness === "unavailable") {
+      return { kind: "result", readiness: "unavailable" };
+    }
+    return {
+      kind: "result",
+      ...clonePublicValue(screen.resultProjection),
+      history: clonePublicValue(
+        projectHouseholdRunwayAssessmentSnapshotHistory(assessmentHistory),
+      ),
+    };
+  }
+  return projectScreen(screen) as HouseholdRunwayFocusedNonResultScreen;
+}
+
+function focusedSnapshotFor(
+  state: HouseholdRunwayInterviewState,
+  lifecycle: HouseholdRunwayInterviewRuntimeLifecycle,
+  storage: RuntimeStorageFacts,
+  runtimeIssues: readonly HouseholdRunwayInterviewRuntimeIssue[],
+  confirmation: HouseholdRunwayInterviewRuntimeConfirmation,
+  assessmentHistory: readonly RunwaySnapshotSummary[],
+): HouseholdRunwayFocusedRuntimeSnapshot {
+  const screen = state.renderModel;
+  const issue =
+    state.validationIssue ??
+    ("blockingIssue" in screen ? screen.blockingIssue : null);
+  const draft = draftFactsFor(state, storage);
+  const operationInputs = {
+    draftSynchronization: focusedOperationInputFor(
+      state.operations.draftSynchronization,
+    ),
+    deviceDraft: focusedOperationInputFor(state.operations.deviceDraft),
+    planPersistence: focusedOperationInputFor(state.operations.planPersistence),
+    reportDownload: focusedOperationInputFor(state.operations.reportDownload),
+    analytics: focusedOperationInputFor(state.operations.analytics),
+  } satisfies Record<
+    keyof FocusedRuntimeOperations,
+    HouseholdRunwayOperationProjectionInput
+  >;
+  const actions = projectHouseholdRunwayActions({
+    lifecycle,
+    status: state.status,
+    screen: focusedActionScreenFor(state),
+    planAvailable: state.committedPlan !== null,
+    draft,
+  });
+  const plan = projectHouseholdRunwayPlanFacts({
+    exists: state.committedPlan !== null,
+    current:
+      state.committedPlan !== null &&
+      householdRunwayDraftMatchesPlanContent(
+        state.draft,
+        state.committedPlan,
+        state.status,
+        state.stage,
+      ),
+  });
+  const focusedDraft = projectHouseholdRunwayDraftFacts({
+    ...draft,
+    synchronization: focusedOperationInputFor(
+      state.operations.draftSynchronization,
+    ),
+  });
+
+  return deepFreeze({
+    lifecycle,
+    interviewStatus: state.status,
+    stage: state.stage,
+    screen: clonePublicValue(
+      focusedScreenFor(state, assessmentHistory),
+    ),
+    plan,
+    draft: focusedDraft,
+    issues: [...runtimeIssues, ...(issue ? [publicIssueFor(issue)!] : [])],
+    operations: projectHouseholdRunwayOperations(operationInputs),
+    confirmation,
+    actions,
+  });
+}
+
 function snapshotFor(
   state: HouseholdRunwayInterviewState,
   lifecycle: HouseholdRunwayInterviewRuntimeLifecycle,
@@ -1306,6 +1494,14 @@ export function createHouseholdRunwayInterviewRuntimeComposition(
     confirmation,
     assessmentHistory,
   );
+  let focusedSnapshot = focusedSnapshotFor(
+    state,
+    lifecycle,
+    storageFacts,
+    runtimeIssues,
+    confirmation,
+    assessmentHistory,
+  );
   let draining = false;
   const messages: RuntimeMessage[] = [];
   const listeners = new Set<() => void>();
@@ -1320,8 +1516,23 @@ export function createHouseholdRunwayInterviewRuntimeComposition(
       confirmation,
       assessmentHistory,
     );
-    if (snapshotSignature(next) === snapshotSignature(snapshot)) return;
+    const nextFocused = focusedSnapshotFor(
+      state,
+      lifecycle,
+      storageFacts,
+      runtimeIssues,
+      confirmation,
+      assessmentHistory,
+    );
+    const publicChanged = snapshotSignature(next) !== snapshotSignature(snapshot);
+    const focusedChanged =
+      snapshotSignature(nextFocused) !== snapshotSignature(focusedSnapshot);
+    if (!publicChanged && !focusedChanged) {
+      return;
+    }
     snapshot = next;
+    focusedSnapshot = nextFocused;
+    if (!publicChanged) return;
     for (const listener of [...listeners]) {
       try {
         listener();
@@ -2455,6 +2666,14 @@ export function createHouseholdRunwayInterviewRuntimeComposition(
         confirmation,
         assessmentHistory,
       );
+      focusedSnapshot = focusedSnapshotFor(
+        state,
+        lifecycle,
+        storageFacts,
+        runtimeIssues,
+        confirmation,
+        assessmentHistory,
+      );
     },
   };
 
@@ -2464,7 +2683,11 @@ export function createHouseholdRunwayInterviewRuntimeComposition(
     if (!disposed) enqueue({ type: "environment", message });
   };
 
-  return { runtime, dispatchEnvironment };
+  return {
+    runtime,
+    getFocusedSnapshot: () => focusedSnapshot,
+    dispatchEnvironment,
+  };
 }
 
 export function createHouseholdRunwayInterviewRuntimeWithCapabilities(
