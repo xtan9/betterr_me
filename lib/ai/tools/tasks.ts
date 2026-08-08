@@ -5,7 +5,10 @@ import {
   createTaskWrites,
   taskDeletionErrorMessage,
 } from "@/lib/tasks/writes";
-import { createActivatedRecurringTaskLifecycle } from "@/lib/recurring-tasks";
+import {
+  createActivatedRecurringTaskLifecycle,
+  createAuthenticatedRecurringTaskCapabilities,
+} from "@/lib/recurring-tasks";
 import {
   isOccurrenceSuccess,
   occurrenceErrorMessage,
@@ -25,12 +28,12 @@ import {
   seriesStateErrorMessage,
 } from "@/lib/recurring-tasks";
 import {
-  createSeriesCreation,
   initialSeriesCoverage,
-  normalizeSeriesCreationIntent,
-  toRecurringTaskCompatibility,
-} from "@/lib/recurring-tasks/creation";
-import { toLifecycleRecurrenceDates } from "@/lib/recurring-tasks/compatibility";
+  recurringTaskFailureMessage,
+  toCreateSeriesCommand,
+  toLifecycleRecurrenceDates,
+  toRecurringTaskResponse,
+} from "@/lib/recurring-tasks/compatibility";
 import {
   hasTaskUpdateValues,
   taskFormSchema,
@@ -342,12 +345,15 @@ export function taskTools(): ToolDefinition[] {
           .describe("Filter by status (default: all)"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const lifecycle = createActivatedRecurringTaskLifecycle(ctx.supabase);
-        const result = await lifecycle.listSeries(
-          ctx.userId,
-          params.status === "archived" ? "ended" : params.status,
+        const result = await recurringTaskCapabilities(ctx).seriesQueries.listSeries({
+          status: params.status === "archived" ? "ended" : params.status,
+        });
+        if (result.type !== "listed") {
+          return { error: recurringTaskFailureMessage(result) };
+        }
+        return result.series.map((series) =>
+          toRecurringTaskResponse(series, ctx.userId),
         );
-        return result.series.map(toRecurringTaskCompatibility);
       },
     },
     {
@@ -355,6 +361,10 @@ export function taskTools(): ToolDefinition[] {
       description:
         "Create a new recurring task that generates instances automatically. Always confirm with the user before calling this tool.",
       parameters: z.object({
+        operationId: z
+          .string()
+          .min(1)
+          .describe("Caller-stable operation ID; reuse it when retrying this creation"),
         title: z.string().describe("Task title"),
         description: z.string().optional().describe("Task description"),
         priority: z
@@ -419,9 +429,9 @@ export function taskTools(): ToolDefinition[] {
       }),
       execute: async (params, ctx: ToolContext) => {
         const recurrenceDates = toLifecycleRecurrenceDates(params.startDate);
-        const result = await createSeriesCreation(ctx.supabase).create(
-          normalizeSeriesCreationIntent({
-            userId: ctx.userId,
+        const result = await recurringTaskCapabilities(ctx).seriesCommands.createSeries(
+          toCreateSeriesCommand({
+            operationId: params.operationId,
             title: params.title,
             description: params.description ?? null,
             priority: (params.priority ?? 0) as 0 | 1 | 2 | 3,
@@ -441,20 +451,10 @@ export function taskTools(): ToolDefinition[] {
             ).to,
           }),
         );
-        const outcome = result.outcome;
-        if (outcome.status === "complete" || outcome.status === "already-applied") {
-          return toRecurringTaskCompatibility(outcome.series);
+        if (result.type === "created") {
+          return toRecurringTaskResponse(result.series, ctx.userId);
         }
-        if (outcome.status === "conflict") {
-          return { error: "Recurring task creation conflict" };
-        }
-        if (outcome.status === "coverage-unavailable") {
-          return { error: "Recurring task coverage is temporarily unavailable" };
-        }
-        if (outcome.status === "not-found") {
-          return { error: "Recurring task not found" };
-        }
-        return { error: outcome.reason };
+        return { error: recurringTaskFailureMessage(result) };
       },
     },
     {
@@ -564,6 +564,17 @@ export function taskTools(): ToolDefinition[] {
       },
     },
   ];
+}
+
+function recurringTaskCapabilities(ctx: ToolContext) {
+  return createAuthenticatedRecurringTaskCapabilities({
+    supabase: ctx.supabase,
+    principal: {
+      type: "user",
+      userId: ctx.userId,
+      credential: "mcp",
+    },
+  });
 }
 
 async function ensureAiRecurringCoverage(

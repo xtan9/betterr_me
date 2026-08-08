@@ -15,7 +15,6 @@ const lifecycleBoundarySources = [
   "lib/calendar/supabase-overlay-feed.ts",
   "lib/calendar/display.ts",
   "lib/ai/tools/tasks.ts",
-  "lib/recurring-tasks/creation.ts",
   "lib/recurring-tasks/supabase-occurrence-adapter.ts",
   "lib/recurring-tasks/supabase-series-state-adapter.ts",
   "lib/recurring-tasks/activation.ts",
@@ -45,13 +44,15 @@ describe("recurring lifecycle import boundary", () => {
       .not.toContain("recurring-tasks");
   });
 
+  it("retires the obsolete creation adapter after the capability cutover", () => {
+    expect(
+      existsSync(resolve(process.cwd(), "lib/recurring-tasks/creation.ts")),
+    ).toBe(false);
+  });
+
   it("confines transport translation to the declared compatibility adapter", () => {
     const compatibility = readFileSync(
       resolve(process.cwd(), "lib/recurring-tasks/compatibility.ts"),
-      "utf8",
-    );
-    const creation = readFileSync(
-      resolve(process.cwd(), "lib/recurring-tasks/creation.ts"),
       "utf8",
     );
     const http = readFileSync(
@@ -64,14 +65,16 @@ describe("recurring lifecycle import boundary", () => {
     );
 
     expect(compatibility).toContain("toRecurringTaskResponse");
+    expect(compatibility).toContain("toCreateSeriesCommand");
     expect(compatibility).toContain("toLifecycleRecurrenceDates");
     expect(compatibility).toContain("start_date");
-    expect(creation).toContain("recurrenceAnchor");
-    expect(creation).toContain("activationDate");
-    expect(creation).not.toContain("start_date");
-    expect(creation).not.toContain("startDate");
+    expect(compatibility).toContain("version");
     expect(http).toContain("toLifecycleRecurrenceDates");
     expect(ai).toContain("toLifecycleRecurrenceDates");
+    expect(http).toContain("createAuthenticatedRecurringTaskCapabilities");
+    expect(ai).toContain("createAuthenticatedRecurringTaskCapabilities");
+    expect(http).not.toContain("recurring-tasks/creation");
+    expect(ai).not.toContain("recurring-tasks/creation");
   });
 
   it("keeps date-bounded delivery and read modules off legacy writes and materialization", () => {
