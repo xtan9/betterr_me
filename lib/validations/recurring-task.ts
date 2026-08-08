@@ -96,6 +96,7 @@ export const recurringTaskUpdateSchema = z
       .optional(),
     end_count: z.number().int().min(1).nullable().optional(),
     status: z.enum(["active", "paused", "archived"]).optional(),
+    scope: z.enum(["following", "all"]).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided",
