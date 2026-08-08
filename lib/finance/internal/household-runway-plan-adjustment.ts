@@ -272,6 +272,9 @@ export function applyHouseholdRunwayPlanAdjustment({
       },
     };
   }
+
+  // Expected unconfirmed funds are preview-only and have no durable Draft
+  // input. Deliberately leave them out of the transformation.
   return { ...next, updated_at: occurredAt };
 }
 
