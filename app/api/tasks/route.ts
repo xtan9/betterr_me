@@ -1,20 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/auth/authenticated-request';
 import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
-import { TasksDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { taskFormSchema } from '@/lib/validations/task';
 import { ensureProfile } from '@/lib/db/ensure-profile';
-import {
-  recurringCoverageWarning,
-  ensureRecurringTaskCoverageThrough,
-  taskReadCoverageRange,
-  type RecurringCoverageWarning,
-} from '@/lib/recurring-tasks/coverage';
 import { getLocalDateString } from '@/lib/utils';
 import { createTaskWrites } from '@/lib/tasks/writes';
 import type { TaskFilters } from '@/lib/db/types';
+import {
+  taskCoverageWarning,
+  type CoverageCompleteness,
+} from '@/lib/tasks/query';
+import { createSupabaseTaskQuery } from '@/lib/tasks/supabase-query';
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ['apiKey', 'cookie'],
@@ -44,9 +42,9 @@ export async function GET(request: NextRequest) {
     if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
-    const { principal: { userId }, client: supabase } = auth;
+    const { client: supabase } = auth;
 
-    const tasksDB = new TasksDB(supabase);
+    const taskQuery = createSupabaseTaskQuery(supabase, auth.principal);
     const searchParams = request.nextUrl.searchParams;
     const view = searchParams.get('view');
 
@@ -59,8 +57,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Materialize exactly the requested local-date horizon before reading.
-    let recurringCoverageWarningResult: RecurringCoverageWarning | undefined;
     let upcomingDays = 7;
     if (view === 'today' || view === 'upcoming' || view === 'overdue') {
       upcomingDays = view === 'upcoming'
@@ -72,47 +68,44 @@ export async function GET(request: NextRequest) {
           { status: 400 }
         );
       }
-      const coverageRange = taskReadCoverageRange({
-        view,
-        date,
-        days: upcomingDays,
-      });
-      try {
-        const coverage = await ensureRecurringTaskCoverageThrough(
-          supabase,
-          userId,
-          coverageRange!.from,
-          coverageRange!.to,
-        );
-        if (coverage.status === 'partial') {
-          recurringCoverageWarningResult = coverage.warning
-            ?? recurringCoverageWarning(coverageRange!);
-        }
-      } catch (err) {
-        log.error('ensure recurring task coverage failed on tasks', err, { userId });
-        recurringCoverageWarningResult = recurringCoverageWarning(coverageRange!);
-      }
     }
 
-    const withCoverageWarning = (response: Record<string, unknown>) =>
-      recurringCoverageWarningResult
-        ? { ...response, _warnings: [recurringCoverageWarningResult] }
-        : response;
+    const withCoverageWarning = (
+      response: Record<string, unknown>,
+      completeness: CoverageCompleteness | null,
+    ) => completeness && completeness.status !== 'complete'
+      ? { ...response, _warnings: [taskCoverageWarning(completeness)] }
+      : response;
 
     // Handle special views
     if (view === 'today') {
-      const tasks = await tasksDB.getTodayTasks(userId, date);
-      return NextResponse.json(withCoverageWarning({ tasks }));
+      const result = await taskQuery.read(
+        { type: 'today', date },
+        { onIncomplete: 'return-available' },
+      );
+      return NextResponse.json(
+        withCoverageWarning({ tasks: result.tasks }, result.completeness),
+      );
     }
 
     if (view === 'upcoming') {
-      const tasks = await tasksDB.getUpcomingTasks(userId, date, upcomingDays);
-      return NextResponse.json(withCoverageWarning({ tasks }));
+      const result = await taskQuery.read(
+        { type: 'upcoming', date, days: upcomingDays },
+        { onIncomplete: 'return-available' },
+      );
+      return NextResponse.json(
+        withCoverageWarning({ tasks: result.tasks }, result.completeness),
+      );
     }
 
     if (view === 'overdue') {
-      const tasks = await tasksDB.getOverdueTasks(userId, date);
-      return NextResponse.json(withCoverageWarning({ tasks }));
+      const result = await taskQuery.read(
+        { type: 'overdue', date },
+        { onIncomplete: 'return-available' },
+      );
+      return NextResponse.json(
+        withCoverageWarning({ tasks: result.tasks }, result.completeness),
+      );
     }
 
     // Handle regular filtering
@@ -138,30 +131,13 @@ export async function GET(request: NextRequest) {
       filters.project_id = projectId === 'null' ? null : projectId;
     }
 
-    if (filters.due_date && /^\d{4}-\d{2}-\d{2}$/.test(filters.due_date)) {
-      const coverageRange = taskReadCoverageRange({
-        date,
-        dueDate: filters.due_date,
-      });
-      try {
-        const coverage = await ensureRecurringTaskCoverageThrough(
-          supabase,
-          userId,
-          coverageRange!.from,
-          coverageRange!.to,
-        );
-        if (coverage.status === 'partial') {
-          recurringCoverageWarningResult = coverage.warning
-            ?? recurringCoverageWarning(coverageRange!);
-        }
-      } catch (err) {
-        log.error('ensure recurring task coverage failed on filtered tasks', err, { userId });
-        recurringCoverageWarningResult = recurringCoverageWarning(coverageRange!);
-      }
-    }
-
-    const tasks = await tasksDB.getUserTasks(userId, filters);
-    return NextResponse.json(withCoverageWarning({ tasks }));
+    const result = await taskQuery.read(
+      { type: 'list', filters },
+      { onIncomplete: 'return-available' },
+    );
+    return NextResponse.json(
+      withCoverageWarning({ tasks: result.tasks }, result.completeness),
+    );
   } catch (error) {
     log.error('GET /api/tasks error', error);
     return NextResponse.json(

@@ -6,6 +6,19 @@ function source(path: string): string {
 }
 
 describe("Recurring Task lifecycle cutover boundary", () => {
+  it("keeps cron delivery on the separate aggregate maintenance capability", () => {
+    const route = source("app/api/cron/prewarm-recurring-tasks/route.ts");
+
+    expect(route).toContain("createRecurringTaskMaintenanceCapability");
+    expect(route).toContain("RECURRING_TASK_MAINTENANCE_AUTHORITY");
+    expect(route).toContain("operational_failure_count");
+    expect(route).not.toMatch(
+      /@\/lib\/recurring-tasks\/(activation|prewarming|observability|supabase-lifecycle)/,
+    );
+    expect(route).not.toContain("failed_series_ids");
+    expect(route).not.toContain("attempts");
+  });
+
   it("couples the application activation identifier to the release migration", () => {
     const activation = source("lib/recurring-tasks/activation.ts");
     const migration = source(

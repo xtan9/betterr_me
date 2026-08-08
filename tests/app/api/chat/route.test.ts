@@ -187,6 +187,11 @@ describe('POST /api/chat', () => {
       supabase: expect.anything(),
       date: '2026-04-08',
       timezone: 'America/Toronto',
+      principal: expect.objectContaining({
+        type: 'user',
+        userId: 'user-123',
+        credential: 'cookie',
+      }),
     });
 
     expect(mockStreamText).toHaveBeenCalledWith(

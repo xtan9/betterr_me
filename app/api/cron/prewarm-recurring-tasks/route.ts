@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { authorizeCronRequest } from "@/lib/cron/auth";
 import { log } from "@/lib/logger";
-import { prewarmActiveRecurringTaskCoverage } from "@/lib/recurring-tasks/prewarming";
-import { createActivatedRecurringTaskLifecycle } from "@/lib/recurring-tasks/activation";
-import { errorType } from "@/lib/recurring-tasks/observability";
+import {
+  createRecurringTaskMaintenanceCapability,
+  RECURRING_TASK_MAINTENANCE_AUTHORITY,
+} from "@/lib/recurring-tasks";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -27,20 +28,23 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const lifecycle = createActivatedRecurringTaskLifecycle(createAdminClient());
-    const result = await prewarmActiveRecurringTaskCoverage(lifecycle);
+    const maintenance = createRecurringTaskMaintenanceCapability({
+      supabase: createAdminClient(),
+      authority: RECURRING_TASK_MAINTENANCE_AUTHORITY,
+    });
+    const result = await maintenance.run();
     return NextResponse.json({
       status: result.status,
       type: result.type,
       series_count: result.seriesCount,
       warmed_series_count: result.warmedSeriesCount,
       skipped_series_count: result.skippedSeriesCount,
-      failed_series_ids: result.failedSeriesIds,
-      attempts: result.attempts,
+      failed_series_count: result.failedSeriesCount,
+      operational_failure_count: result.operationalFailures.total,
     });
   } catch (error) {
     log.error("[recurring-prewarm] failed", undefined, {
-      errorType: errorType(error),
+      errorType: error instanceof Error && error.name ? error.name : typeof error,
     });
     return NextResponse.json(
       { error: "Recurring task prewarming failed" },

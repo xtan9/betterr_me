@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { AuthenticatedRecurringTaskPrincipal } from "@/lib/recurring-tasks/capabilities";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ToolDefinition, ToolContext } from "./types";
 import { habitTools } from "./habits";
@@ -30,13 +31,15 @@ export async function createChatTools({
   supabase,
   date,
   timezone,
+  principal,
 }: {
   userId: string;
   supabase: SupabaseClient;
   date: string;
   timezone: string;
+  principal: AuthenticatedRecurringTaskPrincipal;
 }) {
-  const ctx: ToolContext = { userId, supabase, date, timezone };
+  const ctx: ToolContext = { userId, supabase, date, timezone, principal };
   return toChatTools(getAllTools(), ctx);
 }
 
