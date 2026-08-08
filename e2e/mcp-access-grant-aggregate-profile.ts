@@ -2,7 +2,9 @@ import { compactVerify, decodeJwt, decodeProtectedHeader, importJWK } from "jose
 
 import {
   classifyFactIdentity,
+  classifyNegativeRegistration,
   MCP_ACCESS_GRANT_CATALOGS,
+  MCP_ACCESS_GRANT_FAMILIES,
   COMPATIBILITY_PROFILE,
   MCP_ACCESS_GRANT_ARTIFACT_NAME,
   MCP_ACCESS_GRANT_LOOPBACK_HOSTS,
@@ -11,6 +13,8 @@ import {
   type GateStatus,
 } from "./mcp-access-grant-catalogs";
 import {
+  classifyAuthorizationOutcome,
+  classifyConsentPresentation,
   createEvidenceRunContext,
   finalizeEvidence,
   sanitizeText,
@@ -23,6 +27,7 @@ import {
   type MinimizedRequestObservation,
 } from "./mcp-access-grant-evidence";
 import {
+  ALLOWED_DELEGATED_JWT_ALGORITHMS,
   evaluateDelegatedJwtPolicy,
   isSupportedLoopbackRegistrationRedirect,
   matchesS256CodeChallenge,
@@ -37,8 +42,9 @@ import {
  *
  * This is the only new value entry point in this slice. It owns one private
  * session and exposes two source-bound recorder ports: compatibility facts
- * are authoritative for the aggregate profile, while public-client facts are
- * accepted only as closed shadow discovery observations.
+ * are authoritative for the aggregate profile, while public-client discovery
+ * is shadow context and the nested family facts are authoritative for their
+ * closed family leaves.
  */
 
 export type AggregateCompatibilityCredentialPresence = "present" | "absent" | "unknown";
@@ -141,6 +147,185 @@ export interface AggregateCompatibilityMcpObservation {
   readonly listToolsCompleted?: boolean;
   readonly callToolCompleted?: boolean;
   readonly resultIsError?: boolean;
+}
+
+export type AggregatePublicClientFamily = "ipv4" | "ipv6";
+
+export type AggregatePublicClientNegativeRegistrationCase =
+  | "unsupported-client-auth-method"
+  | "unsupported-grant-type"
+  | "unsupported-response-type"
+  | "malformed-metadata"
+  | "unsafe-redirect-metadata";
+
+export interface AggregatePublicClientConsentObservation {
+  readonly clientNameVisible?: boolean;
+  readonly clientUriVisible?: boolean;
+  readonly logoVisible?: boolean;
+  readonly softwareIdVisible?: boolean;
+  readonly softwareVersionVisible?: boolean;
+  readonly untrustedDisclaimerVisible?: boolean;
+  readonly endorsementText?: string;
+  readonly endorsementLanguageVisible?: boolean;
+}
+
+export interface AggregatePublicClientAuthorizationObservation {
+  readonly affirmativeControlVisible?: boolean;
+  readonly denialControlVisible?: boolean;
+  readonly callbackBeforeDecision?: boolean;
+  readonly decision?: "affirmative" | "denial" | "abandonment";
+  readonly callbackComplete?: boolean;
+  readonly callbackReceived?: boolean;
+  readonly callbackUrl?: string;
+  readonly browserUrl?: string;
+  readonly expectedState?: string;
+  readonly callbackState?: string;
+  readonly authorizationError?: boolean;
+  readonly tokenRequestObserved?: boolean;
+  readonly tokenResponse?: AggregateCompatibilityResponseSurface;
+}
+
+export interface AggregatePublicClientLoopbackObservation {
+  readonly registeredRedirectUri: string;
+  readonly callbackUrl?: string;
+  readonly callbackReceived?: boolean;
+  readonly requestCallbackUrl?: string;
+  readonly requestResource?: string;
+  readonly portSelectedAtRequest?: boolean;
+}
+
+export interface AggregatePublicClientPkceObservation {
+  readonly verifier?: string;
+  readonly challenge?: string;
+  readonly method?: string;
+  readonly requestResource?: string;
+}
+
+export interface AggregatePublicClientDelegatedTokenObservation {
+  readonly token?: string;
+  readonly jwks?: string | AggregateCompatibilityJsonValue;
+}
+
+export interface AggregatePublicClientMcpSdkObservation {
+  readonly connected?: boolean;
+  readonly listToolsCompleted?: boolean;
+  readonly listToolsObserved?: boolean;
+  readonly callToolCompleted?: boolean;
+  readonly callToolObserved?: boolean;
+  readonly resultIsError?: boolean;
+  readonly toolName?: string;
+}
+
+export interface AggregatePublicClientMcpOperationObservation {
+  readonly operationUrl?: string;
+  readonly operationResource?: string;
+  readonly connected?: boolean;
+  readonly listToolsCompleted?: boolean;
+  readonly callToolCompleted?: boolean;
+  readonly resultIsError?: boolean;
+  readonly sdk?: AggregatePublicClientMcpSdkObservation;
+  readonly response?: AggregateCompatibilityResponseSurface;
+  readonly request?: AggregateCompatibilityRequest;
+}
+
+export interface AggregatePublicClientGrantObservation {
+  readonly listRequestObserved?: boolean;
+  readonly grantListObserved?: boolean;
+  readonly listResponse?: AggregateCompatibilityResponseSurface;
+  readonly listResponseStatus?: number;
+  readonly listedClientIds?: readonly string[];
+  readonly listedGrantIds?: readonly string[];
+  readonly grantId?: string;
+  readonly grantClientId?: string;
+  readonly clientId?: string;
+  readonly grantPresent?: boolean;
+  readonly revokeRequestObserved?: boolean;
+  readonly revokeObserved?: boolean;
+  readonly revokeResponse?: AggregateCompatibilityResponseSurface;
+  readonly revokeResponseStatus?: number;
+  readonly request?: AggregateCompatibilityRequest;
+}
+
+export interface AggregatePublicClientCleanupObservation {
+  readonly listRequestObserved?: boolean;
+  readonly remainingClientIds?: readonly string[];
+  readonly remainingGrantIds?: readonly string[];
+  readonly grantPresent?: boolean;
+  readonly requestStatus?: number;
+  readonly request?: AggregateCompatibilityRequest;
+  readonly response?: AggregateCompatibilityResponseSurface;
+}
+
+export interface AggregateCompatibilityCredentialSnapshot {
+  readonly accessToken?: string;
+  readonly refreshToken?: string;
+  readonly access_token?: string;
+  readonly refresh_token?: string;
+}
+
+export interface AggregateCompatibilityRefreshReplacementObservation {
+  readonly previous?: AggregateCompatibilityCredentialSnapshot;
+  readonly replacement?: AggregateCompatibilityCredentialSnapshot;
+  readonly previousAccessToken?: string;
+  readonly previousRefreshToken?: string;
+  readonly accessToken?: string;
+  readonly refreshToken?: string;
+  readonly access_token?: string;
+  readonly refresh_token?: string;
+  readonly response?: AggregateCompatibilityResponseSurface;
+  readonly request?: AggregateCompatibilityRequest;
+}
+
+export interface AggregateCompatibilityRefreshAttemptObservation {
+  readonly label?: string;
+  readonly refreshToken?: string;
+  readonly refresh_token?: string;
+  readonly response?: AggregateCompatibilityResponseSurface;
+  readonly request?: AggregateCompatibilityRequest;
+}
+
+export interface AggregateCompatibilityRefreshObservation {
+  readonly initial?: AggregateCompatibilityCredentialSnapshot;
+  readonly initialTokens?: AggregateCompatibilityCredentialSnapshot;
+  readonly tokens?: AggregateCompatibilityCredentialSnapshot;
+  readonly firstReplacement?: AggregateCompatibilityRefreshReplacementObservation;
+  readonly secondReplacement?: AggregateCompatibilityRefreshReplacementObservation;
+  readonly replacement?: AggregateCompatibilityRefreshReplacementObservation;
+  readonly attempts?: readonly AggregateCompatibilityRefreshAttemptObservation[];
+  readonly replacementOperation?: AggregateCompatibilityMcpObservation;
+}
+
+export interface AggregateCompatibilityGrantObservation {
+  readonly listRequestObserved?: boolean;
+  readonly grantListObserved?: boolean;
+  readonly listResponse?: AggregateCompatibilityResponseSurface;
+  readonly listResponseStatus?: number;
+  readonly listedClientIds?: readonly string[];
+  readonly listedGrantIds?: readonly string[];
+  readonly grantId?: string;
+  readonly grantClientId?: string;
+  readonly clientId?: string;
+  readonly grantPresent?: boolean;
+  readonly revokeRequestObserved?: boolean;
+  readonly revokeObserved?: boolean;
+  readonly revokeResponse?: AggregateCompatibilityResponseSurface;
+  readonly revokeResponseStatus?: number;
+}
+
+export interface AggregateCompatibilityPostRevocationObservation {
+  readonly response?: AggregateCompatibilityResponseSurface;
+  readonly request?: AggregateCompatibilityRequest;
+  readonly accessToken?: string;
+  readonly access_token?: string;
+}
+
+export interface AggregateCompatibilityCleanupObservation {
+  readonly listRequestObserved?: boolean;
+  readonly remainingClientIds?: readonly string[];
+  readonly remainingGrantIds?: readonly string[];
+  readonly grantPresent?: boolean;
+  readonly requestStatus?: number;
+  readonly response?: AggregateCompatibilityResponseSurface;
 }
 
 export type AggregatePkceNegativeCase =
@@ -262,6 +447,30 @@ export type AggregateCompatibilityFact =
       readonly role: "authenticated";
       readonly observation?: AggregateCompatibilityMcpObservation;
       readonly request?: AggregateCompatibilityRequest;
+    }
+  | {
+      readonly kind: "refresh";
+      readonly role: "root" | "replacement" | "replay";
+      readonly observation?: AggregateCompatibilityRefreshObservation;
+      readonly request?: AggregateCompatibilityRequest;
+    }
+  | {
+      readonly kind: "grant";
+      readonly role: "identify" | "revoke";
+      readonly observation?: AggregateCompatibilityGrantObservation;
+      readonly request?: AggregateCompatibilityRequest;
+    }
+  | {
+      readonly kind: "post-revocation";
+      readonly role: "refresh" | "access";
+      readonly observation?: AggregateCompatibilityPostRevocationObservation;
+      readonly request?: AggregateCompatibilityRequest;
+    }
+  | {
+      readonly kind: "cleanup";
+      readonly role: "final";
+      readonly observation?: AggregateCompatibilityCleanupObservation;
+      readonly request?: AggregateCompatibilityRequest;
     };
 
 export type AggregatePublicClientFact =
@@ -288,6 +497,71 @@ export type AggregatePublicClientFact =
       readonly tokenEndpointAuthMethodsSupported?: readonly string[];
       readonly codeChallengeMethodsSupported?: readonly string[];
       readonly observation?: AggregateCompatibilityDiscoveryObservation;
+      readonly request?: AggregateCompatibilityRequest;
+    }
+  | {
+      readonly kind: "registration";
+      readonly role: "primary" | "negative";
+      readonly family: AggregatePublicClientFamily;
+      readonly caseId?: AggregatePublicClientNegativeRegistrationCase;
+      readonly response?: AggregateCompatibilityResponseSurface;
+      readonly request?: AggregateCompatibilityRequest;
+    }
+  | {
+      readonly kind: "consent";
+      readonly role: "metadata";
+      readonly family: AggregatePublicClientFamily;
+      readonly observation?: AggregatePublicClientConsentObservation;
+    }
+  | {
+      readonly kind: "authorization";
+      readonly role: "approval" | "denial" | "abandonment";
+      readonly family: AggregatePublicClientFamily;
+      readonly observation?: AggregatePublicClientAuthorizationObservation;
+      readonly request?: AggregateCompatibilityRequest;
+    }
+  | {
+      readonly kind: "loopback";
+      readonly role: "callback" | "request";
+      readonly family: AggregatePublicClientFamily;
+      readonly observation?: AggregatePublicClientLoopbackObservation;
+      readonly request?: AggregateCompatibilityRequest;
+    }
+  | {
+      readonly kind: "pkce";
+      readonly role: "exchange";
+      readonly family: AggregatePublicClientFamily;
+      readonly observation?: AggregatePublicClientPkceObservation;
+      readonly request?: AggregateCompatibilityRequest;
+    }
+  | {
+      readonly kind: "delegated-token";
+      readonly role: "validation";
+      readonly family: AggregatePublicClientFamily;
+      readonly token?: string;
+      readonly jwks?: string | AggregateCompatibilityJsonValue;
+      readonly observation?: AggregatePublicClientDelegatedTokenObservation;
+      readonly request?: AggregateCompatibilityRequest;
+    }
+  | {
+      readonly kind: "mcp-operation";
+      readonly role: "authenticated";
+      readonly family: AggregatePublicClientFamily;
+      readonly observation?: AggregatePublicClientMcpOperationObservation;
+      readonly request?: AggregateCompatibilityRequest;
+    }
+  | {
+      readonly kind: "grant";
+      readonly role: "cleanup";
+      readonly family: AggregatePublicClientFamily;
+      readonly observation?: AggregatePublicClientGrantObservation;
+      readonly request?: AggregateCompatibilityRequest;
+    }
+  | {
+      readonly kind: "cleanup";
+      readonly role: "family";
+      readonly family: AggregatePublicClientFamily;
+      readonly observation?: AggregatePublicClientCleanupObservation;
       readonly request?: AggregateCompatibilityRequest;
     };
 
@@ -358,6 +632,7 @@ interface NormalizedFact {
   readonly identity: string;
   readonly kind: CatalogFactKind;
   readonly role: string;
+  readonly family?: AggregatePublicClientFamily;
   readonly caseId?: string;
   readonly data: Record<string, unknown>;
   readonly request?: NormalizedRequest;
@@ -372,6 +647,13 @@ interface AggregateHistory {
   jwksUri?: string;
   grantId?: string;
 }
+
+interface PublicFamilyHistory {
+  acceptedClientId?: string;
+  acceptedGrantId?: string;
+}
+
+type PublicSessionHistory = Map<AggregatePublicClientFamily, PublicFamilyHistory>;
 
 interface DerivedGate {
   readonly gateId: string;
@@ -397,6 +679,9 @@ const CONCLUSION_KEYS = new Set([
   "profile", "source", "gateId", "gate", "status", "outcome", "issue", "template", "templateFamily",
   "evidenceProjection", "detail", "finalize", "finalizeEvidence", "finalizeReport", "artifactFilename",
   "authorized", "rejected", "passed", "failed", "valid", "success", "signatureValid", "algorithmAllowed",
+  "accessTokenChanged", "refreshTokenChanged", "providerReturnedAccessToken", "providerReturnedRefreshToken",
+  "rootReplayDetected", "everyIssuedDescendantRejected", "replacementCredentialsStored", "grantIdentified",
+  "grantRevoked", "withinDocumentedLifetime", "operationStatus", "succeeded",
 ]);
 
 const PKCE_NEGATIVE_CASES: readonly AggregatePkceNegativeCase[] = [
@@ -425,6 +710,44 @@ const DELEGATED_NEGATIVE_CASES: readonly AggregateDelegatedTokenNegativeCase[] =
   "missing-client-context",
 ];
 
+const PUBLIC_FAMILY_GATE_BASES = [
+  "public-client-registration",
+  "registration-negative-validation",
+  "untrusted-client-metadata",
+  "authorization-consent",
+  "consent-denial",
+  "consent-abandonment",
+  "consent-cleanup",
+  "loopback",
+  "loopback-request",
+  "loopback-pkce",
+  "delegated-token-validation",
+  "authenticated-mcp-operation",
+] as const;
+
+const PUBLIC_NEGATIVE_REGISTRATION_CASES: readonly AggregatePublicClientNegativeRegistrationCase[] = [
+  "unsupported-client-auth-method",
+  "unsupported-grant-type",
+  "unsupported-response-type",
+  "malformed-metadata",
+  "unsafe-redirect-metadata",
+];
+
+const PUBLIC_FAMILY_PREREQUISITES: Readonly<Partial<Record<typeof PUBLIC_FAMILY_GATE_BASES[number], readonly string[]>>> = {
+  "public-client-registration": ["provider-discovery"],
+  "registration-negative-validation": ["provider-discovery"],
+  "untrusted-client-metadata": ["public-client-registration"],
+  "authorization-consent": ["untrusted-client-metadata"],
+  "consent-denial": ["untrusted-client-metadata"],
+  "consent-abandonment": ["untrusted-client-metadata"],
+  "consent-cleanup": ["delegated-token-validation"],
+  loopback: ["public-client-registration"],
+  "loopback-request": ["loopback"],
+  "loopback-pkce": ["loopback-request"],
+  "delegated-token-validation": ["loopback-pkce"],
+  "authenticated-mcp-operation": ["delegated-token-validation"],
+};
+
 class AggregateCompatibilityEvidenceBoundaryError extends Error {
   constructor() {
     super("Aggregate compatibility evidence journey failed.");
@@ -440,6 +763,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function boundedString(value: unknown): string | undefined {
   return typeof value === "string" && value.length <= MAX_STRING_LENGTH ? value : undefined;
+}
+
+function boundedCredential(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 && value.length <= MAX_TOKEN_LENGTH ? value : undefined;
 }
 
 function boundedBoolean(value: unknown): boolean | undefined {
@@ -490,7 +817,7 @@ function inspectJson(
   if (typeof value === "string") {
     const keyPresence = key && CREDENTIAL_KEY.test(key) && value.length > 0 ? "present" : "absent";
     const sensitive = key && SENSITIVE_KEY.test(key) && value.length > 0;
-    if (value.length > MAX_STRING_LENGTH) return { value: "[REDACTED: length limit]", credentialPresence: "unknown", complete: false };
+    if (value.length > MAX_STRING_LENGTH) return { value: "[REDACTED: length limit]", credentialPresence: keyPresence === "present" ? "present" : "unknown", complete: false };
     const embedded = /Bearer\s+[^\s]+|\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b|(?:^|[?&#\s])(?:code|access_token|refresh_token|id_token|client_secret|token)=([^&#\s]+)/i.test(value)
       ? "present"
       : "absent";
@@ -654,15 +981,21 @@ function classifyIdentity(
   source: "compatibility" | "public-client",
   kind: CatalogFactKind,
   role: string,
+  family: CatalogFamily = "none",
 ): void {
   const result = classifyFactIdentity({
     profile: "compatibility",
     source,
     kind,
     role,
-    family: "none" as CatalogFamily,
+    family,
   });
-  if (!result.accepted || (source === "compatibility" && result.authority !== "authoritative") || (source === "public-client" && result.authority !== "shadow")) {
+  const expectedAuthority = source === "compatibility"
+    ? "authoritative"
+    : kind === "resource-discovery" || kind === "provider-discovery"
+      ? "shadow"
+      : "authoritative";
+  if (!result.accepted || result.authority !== expectedAuthority) {
     throw new AggregateCompatibilityEvidenceBoundaryError();
   }
 }
@@ -703,6 +1036,169 @@ function minimizeSigningKey(value: unknown): DelegatedJwk | undefined {
 
 function normalizeSigningKeys(keys: readonly DelegatedJwk[]): DelegatedJwk[] {
   return keys.slice(0, MAX_JWKS_KEYS).map((key) => minimizeSigningKey(key) ?? ({} as DelegatedJwk));
+}
+
+interface RawCredentialSnapshot {
+  readonly accessToken?: string;
+  readonly refreshToken?: string;
+}
+
+function rawCredentialSnapshot(value: unknown): RawCredentialSnapshot {
+  if (!isRecord(value)) return {};
+  const response = isRecord(value.response) ? value.response : undefined;
+  const responseBody = response && isRecord(response.body) ? response.body : undefined;
+  const body = isRecord(value.body) ? value.body : undefined;
+  const tokens = isRecord(value.tokens) ? value.tokens : undefined;
+  const tokenResponse = isRecord(value.tokenResponse) ? value.tokenResponse : undefined;
+  const tokenResponseBody = tokenResponse && isRecord(tokenResponse.body) ? tokenResponse.body : undefined;
+  const providerResponse = isRecord(value.providerResponse) ? value.providerResponse : undefined;
+  const providerResponseBody = providerResponse && isRecord(providerResponse.body) ? providerResponse.body : undefined;
+  const sources = [value, tokens, body, responseBody, tokenResponseBody, providerResponseBody].filter((source): source is Record<string, unknown> => source !== undefined);
+  const read = (keys: readonly string[]): string | undefined => {
+    for (const source of sources) {
+      for (const key of keys) {
+        const token = boundedCredential(source[key]);
+        if (token !== undefined) return token;
+      }
+    }
+    return undefined;
+  };
+  return {
+    accessToken: read(["accessToken", "access_token"]),
+    refreshToken: read(["refreshToken", "refresh_token"]),
+  };
+}
+
+function credentialSummary(snapshot: RawCredentialSnapshot): Record<string, unknown> {
+  return {
+    accessTokenPresent: snapshot.accessToken !== undefined,
+    refreshTokenPresent: snapshot.refreshToken !== undefined,
+  };
+}
+
+function responseCredentialPresenceFromRaw(value: unknown): AggregateCompatibilityCredentialPresence {
+  if (!isRecord(value)) return "unknown";
+  const request = isRecord(value.request) ? value.request : undefined;
+  const response = value.response ?? value.tokenResponse ?? value.providerResponse ?? request?.response;
+  if (response === undefined) return "absent";
+  return normalizeSurface(response).credentialPresence;
+}
+
+function replacementEvidence(value: unknown): Record<string, unknown> {
+  const raw = isRecord(value) ? value : {};
+  const previousValue = raw.previous ?? raw.prior ?? raw.before;
+  const replacementValue = raw.replacement ?? raw.next ?? raw.after ?? raw.response ?? raw.tokenResponse ?? raw.providerResponse;
+  const previous = rawCredentialSnapshot(previousValue ?? {
+    accessToken: raw.previousAccessToken,
+    refreshToken: raw.previousRefreshToken,
+  });
+  const replacement = rawCredentialSnapshot(replacementValue ?? {
+    tokens: raw.tokens,
+    accessToken: raw.accessToken ?? raw.access_token,
+    refreshToken: raw.refreshToken ?? raw.refresh_token,
+  });
+  const responseValue = isRecord(raw.response)
+    ? raw.response
+    : isRecord(raw.tokenResponse)
+      ? raw.tokenResponse
+      : isRecord(raw.providerResponse)
+        ? raw.providerResponse
+        : isRecord(raw.request) && isRecord(raw.request.response) ? raw.request.response : undefined;
+  const responsePresence = responseCredentialPresenceFromRaw(raw);
+  const responseBody = responseValue && isRecord(responseValue.body) ? responseValue.body : undefined;
+  const providerReturnedAccessToken = responsePresence === "present" && responseBody !== undefined && Object.keys(responseBody).some((key) => /^(?:access[_-]?token)$/i.test(key));
+  const providerReturnedRefreshToken = responsePresence === "present" && responseBody !== undefined && Object.keys(responseBody).some((key) => /^(?:refresh[_-]?token)$/i.test(key));
+  const responseStatus = responseValue ? boundedNumber(responseValue.status) : undefined;
+  const requestStatus = isRecord(raw.request) ? boundedNumber(raw.request.status) : undefined;
+  return {
+    previous: credentialSummary(previous),
+    replacement: credentialSummary(replacement),
+    providerReturnedAccessToken,
+    providerReturnedRefreshToken,
+    accessTokenChanged: previous.accessToken !== undefined && replacement.accessToken !== undefined && previous.accessToken !== replacement.accessToken,
+    refreshTokenChanged: previous.refreshToken !== undefined && replacement.refreshToken !== undefined && previous.refreshToken !== replacement.refreshToken,
+    tokenEndpointStatus: responseStatus ?? requestStatus ?? "not-observed",
+    request: normalizeRequest(raw.request)?.request,
+  };
+}
+
+function refreshAttemptEvidence(value: unknown): Record<string, unknown> {
+  const raw = isRecord(value) ? value : {};
+  const request = normalizeRequest(raw.request);
+  const response = normalizeSurface(raw.response ?? raw.tokenResponse ?? raw.providerResponse ?? request?.response);
+  const tokens = rawCredentialSnapshot(raw.tokens ?? raw.tokenResponse ?? raw.providerResponse ?? raw.response);
+  const responseStatus = response.status ?? request?.request.status;
+  const credentialPresence = combineCredentialPresence([
+    response.credentialPresence,
+    tokens.accessToken !== undefined || tokens.refreshToken !== undefined ? "present" : "absent",
+  ]);
+  const errorObserved = bodyString(response.body, "error", "error_code") !== undefined;
+  const rejected = response.complete && responseStatus !== undefined && credentialPresence !== "present" && ((responseStatus >= 400 && responseStatus < 500) || errorObserved);
+  const succeeded = response.complete && responseStatus !== undefined && responseStatus >= 200 && responseStatus < 300 && credentialPresence === "present";
+  return {
+    label: boundedString(raw.label) ?? "unlabeled",
+    status: succeeded ? "succeeded" : rejected ? "rejected" : "not-proven",
+    succeeded,
+    responseStatus: responseStatus ?? "not-observed",
+    responseCredentialPresence: credentialPresence,
+    providerReturnedAccessToken: tokens.accessToken !== undefined || Object.keys(response.body).some((key) => /^(?:access[_-]?token)$/i.test(key)),
+    providerReturnedRefreshToken: tokens.refreshToken !== undefined || Object.keys(response.body).some((key) => /^(?:refresh[_-]?token)$/i.test(key)),
+    request: request?.request,
+  };
+}
+
+function accessTokenLifetime(rawToken: string | undefined, sampledAtMillis: number): Record<string, unknown> {
+  if (!rawToken) {
+    return {
+      accessTokenHasIssuedAt: false,
+      accessTokenHasExpiry: false,
+      documentedLifetimeSeconds: "unavailable",
+      secondsRemaining: "unavailable",
+      withinDocumentedLifetime: false,
+    };
+  }
+  try {
+    const claims = decodeJwt(rawToken);
+    const issuedAt = typeof claims.iat === "number" ? claims.iat : undefined;
+    const expiresAt = typeof claims.exp === "number" ? claims.exp : undefined;
+    const now = Math.floor(sampledAtMillis / 1000);
+    return {
+      accessTokenHasIssuedAt: issuedAt !== undefined,
+      accessTokenHasExpiry: expiresAt !== undefined,
+      documentedLifetimeSeconds: issuedAt !== undefined && expiresAt !== undefined ? expiresAt - issuedAt : "unavailable",
+      secondsRemaining: expiresAt !== undefined ? expiresAt - now : "unavailable",
+      withinDocumentedLifetime: expiresAt !== undefined && expiresAt > now,
+    };
+  } catch {
+    return {
+      accessTokenHasIssuedAt: false,
+      accessTokenHasExpiry: false,
+      documentedLifetimeSeconds: "unavailable",
+      secondsRemaining: "unavailable",
+      withinDocumentedLifetime: false,
+    };
+  }
+}
+
+function normalizeMcpObservation(value: Record<string, unknown>): Record<string, unknown> {
+  const observationValue = value.observation ?? value;
+  const observation = observationValue === undefined ? {} : observationValue;
+  assertPrimitiveObservation(observation);
+  const sdkValue = observation.sdk === undefined ? {} : observation.sdk;
+  assertPrimitiveObservation(sdkValue);
+  const sdk = sdkValue as Record<string, unknown>;
+  const raw = observation as Record<string, unknown>;
+  const response = normalizeSurface(raw.response);
+  return {
+    operationUrl: boundedString(raw.operationUrl),
+    operationResource: boundedString(raw.operationResource),
+    connected: boundedBoolean(raw.connected ?? sdk.connected),
+    listToolsCompleted: boundedBoolean(raw.listToolsCompleted ?? sdk.listToolsCompleted ?? sdk.listToolsObserved),
+    callToolCompleted: boundedBoolean(raw.callToolCompleted ?? sdk.callToolCompleted ?? sdk.callToolObserved),
+    resultIsError: boundedBoolean(raw.resultIsError ?? sdk.resultIsError),
+    toolName: boundedString(sdk.toolName),
+    response,
+  };
 }
 
 async function normalizeDelegatedToken(raw: Record<string, unknown>, sampledAtMillis: number): Promise<DelegatedTokenData> {
@@ -825,11 +1321,14 @@ function normalizeFact(
 ): Promise<NormalizedFact> | NormalizedFact {
   if (!isRecord(value)) throw new AggregateCompatibilityEvidenceBoundaryError();
   assertNoConclusionFields(value);
-  assertNoFamily(value);
+  if (source === "compatibility" || !("family" in value)) assertNoFamily(value);
   const kind = value.kind;
   const role = value.role;
   if (typeof kind !== "string" || typeof role !== "string") throw new AggregateCompatibilityEvidenceBoundaryError();
-  classifyIdentity(source, kind as CatalogFactKind, role);
+  const family = source === "public-client" && "family" in value
+    ? value.family
+    : "none";
+  classifyIdentity(source, kind as CatalogFactKind, role, family as CatalogFamily);
 
   if (kind === "resource-discovery" || kind === "provider-discovery") {
     if (role !== (source === "compatibility" ? "primary" : "shadow")) throw new AggregateCompatibilityEvidenceBoundaryError();
@@ -843,6 +1342,7 @@ function normalizeFact(
       request: normalizeRequest(value.request),
     };
   }
+  if (source === "public-client") return normalizePublicFamilyFact(value as AggregatePublicClientFact, sampledAtMillis);
   if (source !== "compatibility") throw new AggregateCompatibilityEvidenceBoundaryError();
   if (kind === "configuration") {
     if (role !== "snapshot") throw new AggregateCompatibilityEvidenceBoundaryError();
@@ -1026,6 +1526,488 @@ function normalizeFact(
       request: normalizeRequest(value.request),
     };
   }
+  if (kind === "refresh") {
+    if (role !== "root" && role !== "replacement" && role !== "replay") throw new AggregateCompatibilityEvidenceBoundaryError();
+    const observation = value.observation === undefined ? {} : value.observation;
+    assertPrimitiveObservation(observation);
+    const rawObservation = observation as unknown as Record<string, unknown>;
+    if (role === "root") {
+      const initial = rawCredentialSnapshot(rawObservation.initial ?? rawObservation.initialTokens ?? rawObservation.tokens ?? rawObservation);
+      const requestResponse = isRecord(rawObservation.request) ? rawObservation.request.response : undefined;
+      const responseValue = rawObservation.response ?? rawObservation.tokenResponse ?? rawObservation.providerResponse ?? requestResponse;
+      return {
+        source,
+        identity: "compatibility|refresh|root",
+        kind,
+        role,
+        data: {
+          initial: credentialSummary(initial),
+          initialAccessTokenPresent: initial.accessToken !== undefined,
+          initialRefreshTokenPresent: initial.refreshToken !== undefined,
+          responseCredentialPresence: responseCredentialPresenceFromRaw(rawObservation),
+          response: normalizeSurface(responseValue),
+        },
+        request: normalizeRequest(value.request ?? rawObservation.request),
+      };
+    }
+    if (role === "replacement") {
+      const first = rawObservation.firstReplacement ?? rawObservation.replacement;
+      const second = rawObservation.secondReplacement;
+      const firstEvidence = first === undefined ? undefined : replacementEvidence(first);
+      const secondEvidence = second === undefined ? undefined : replacementEvidence(second);
+      const replacementOperation = isRecord(rawObservation.replacementOperation)
+        ? normalizeMcpObservation(rawObservation.replacementOperation)
+        : undefined;
+      return {
+        source,
+        identity: "compatibility|refresh|replacement",
+        kind,
+        role,
+        data: {
+          firstReplacement: firstEvidence,
+          secondReplacement: secondEvidence,
+          replacementOperation,
+        },
+        request: normalizeRequest(value.request ?? rawObservation.request),
+      };
+    }
+    const attempts = Array.isArray(rawObservation.attempts) && rawObservation.attempts.length <= MAX_ARRAY_ITEMS
+      ? rawObservation.attempts.map((attempt) => refreshAttemptEvidence(attempt))
+      : [];
+    return {
+      source,
+      identity: "compatibility|refresh|replay",
+      kind,
+      role,
+      data: {
+        attempts,
+        attemptCount: attempts.length,
+      },
+      request: normalizeRequest(value.request ?? rawObservation.request),
+    };
+  }
+  if (kind === "grant") {
+    if (role !== "identify" && role !== "revoke") throw new AggregateCompatibilityEvidenceBoundaryError();
+    const observation = value.observation === undefined ? {} : value.observation;
+    assertPrimitiveObservation(observation);
+    const rawObservation = observation as unknown as Record<string, unknown>;
+    const request = normalizeRequest(value.request ?? rawObservation.request);
+    const listResponse = normalizeSurface(rawObservation.listResponse ?? (role === "identify" ? request?.response : undefined));
+    const revokeResponse = normalizeSurface(rawObservation.revokeResponse ?? (role === "revoke" ? request?.response : undefined));
+    const listResponseStatus = boundedNumber(rawObservation.listResponseStatus) ?? (role === "identify" ? request?.request.status : undefined);
+    const revokeResponseStatus = boundedNumber(rawObservation.revokeResponseStatus) ?? (role === "revoke" ? request?.request.status : undefined);
+    return {
+      source,
+      identity: `compatibility|grant|${role}`,
+      kind,
+      role,
+      data: {
+        listRequestObserved: boundedBoolean(rawObservation.listRequestObserved ?? rawObservation.grantListObserved) ?? (role === "identify" && request !== undefined),
+        listResponse: listResponseStatus !== undefined ? { ...listResponse, complete: true, status: listResponseStatus } : listResponse,
+        listedClientIds: boundedStringList(rawObservation.listedClientIds),
+        listedGrantIds: boundedStringList(rawObservation.listedGrantIds),
+        grantId: boundedString(rawObservation.grantId),
+        grantClientId: boundedString(rawObservation.grantClientId ?? rawObservation.clientId),
+        grantPresent: boundedBoolean(rawObservation.grantPresent),
+        revokeRequestObserved: boundedBoolean(rawObservation.revokeRequestObserved ?? rawObservation.revokeObserved) ?? (role === "revoke" && request !== undefined),
+        revokeResponse: revokeResponseStatus !== undefined ? { ...revokeResponse, complete: true, status: revokeResponseStatus } : revokeResponse,
+      },
+      request,
+    };
+  }
+  if (kind === "post-revocation") {
+    if (role !== "refresh" && role !== "access") throw new AggregateCompatibilityEvidenceBoundaryError();
+    const observation = value.observation === undefined ? {} : value.observation;
+    assertPrimitiveObservation(observation);
+    const rawObservation = observation as unknown as Record<string, unknown>;
+    const request = normalizeRequest(value.request ?? rawObservation.request);
+    const responseValue = rawObservation.response ?? rawObservation.tokenResponse ?? rawObservation.providerResponse ?? request?.response;
+    const response = normalizeSurface(responseValue);
+    const accessToken = rawCredentialSnapshot(rawObservation).accessToken;
+    const responseAccessToken = rawCredentialSnapshot(responseValue).accessToken;
+    return {
+      source,
+      identity: `compatibility|post-revocation|${role}`,
+      kind,
+      role,
+      data: {
+        response,
+        accessTokenObserved: accessToken !== undefined || responseAccessToken !== undefined,
+        ...accessTokenLifetime(accessToken ?? responseAccessToken, sampledAtMillis),
+      },
+      request,
+    };
+  }
+  if (kind === "cleanup") {
+    if (role !== "final") throw new AggregateCompatibilityEvidenceBoundaryError();
+    const observation = value.observation === undefined ? {} : value.observation;
+    assertPrimitiveObservation(observation);
+    const rawObservation = observation as unknown as Record<string, unknown>;
+    const request = normalizeRequest(value.request ?? rawObservation.request);
+    const requestResponse = isRecord(rawObservation.request) ? rawObservation.request.response : undefined;
+    const responseValue = rawObservation.response ?? requestResponse;
+    const response = normalizeSurface(responseValue);
+    return {
+      source,
+      identity: "compatibility|cleanup|final",
+      kind,
+      role,
+      data: {
+        listRequestObserved: boundedBoolean(rawObservation.listRequestObserved),
+        remainingClientIds: boundedStringList(rawObservation.remainingClientIds),
+        remainingGrantIds: boundedStringList(rawObservation.remainingGrantIds),
+        grantPresent: boundedBoolean(rawObservation.grantPresent),
+        requestStatus: boundedNumber(rawObservation.requestStatus) ?? response.status ?? request?.request.status,
+      },
+      request,
+    };
+  }
+  throw new AggregateCompatibilityEvidenceBoundaryError();
+}
+
+interface PublicLoopbackUrl {
+  readonly url: string;
+  readonly protocol?: string;
+  readonly host?: string;
+  readonly path?: string;
+  readonly port?: number;
+  readonly hasQuery?: boolean;
+  readonly hasFragment?: boolean;
+  readonly hasCredential: boolean;
+}
+
+function publicLoopbackHost(family: AggregatePublicClientFamily): "127.0.0.1" | "::1" {
+  return family === "ipv4" ? "127.0.0.1" : "::1";
+}
+
+function normalizePublicLoopbackUrl(value: unknown): PublicLoopbackUrl | undefined {
+  const raw = boundedString(value);
+  if (!raw) return undefined;
+  try {
+    const url = new URL(raw);
+    return {
+      url: sanitizeUrl(raw),
+      protocol: url.protocol,
+      host: url.hostname.replace(/^\[|\]$/g, ""),
+      path: url.pathname,
+      port: url.port ? Number(url.port) : undefined,
+      hasQuery: url.search.length > 0,
+      hasFragment: url.hash.length > 0,
+      hasCredential: credentialFromText(raw) === "present",
+    };
+  } catch {
+    return { url: "[REDACTED: malformed URL]", hasCredential: credentialFromText(raw) === "present" };
+  }
+}
+
+function urlCredentialFlags(value: string | undefined): {
+  readonly credentialPresence: AggregateCompatibilityCredentialPresence;
+  readonly authorizationCodePresent: boolean;
+  readonly accessTokenPresent: boolean;
+  readonly refreshTokenPresent: boolean;
+  readonly idTokenPresent: boolean;
+} {
+  const absent = {
+    credentialPresence: "absent" as const,
+    authorizationCodePresent: false,
+    accessTokenPresent: false,
+    refreshTokenPresent: false,
+    idTokenPresent: false,
+  };
+  if (!value) return absent;
+  try {
+    const url = new URL(value);
+    const parameters = [
+      ...url.searchParams.entries(),
+      ...new URLSearchParams(url.hash.replace(/^#/, "")).entries(),
+    ];
+    const present = parameters.filter(([key, child]) => CREDENTIAL_QUERY_KEY.test(key) && child.length > 0);
+    return {
+      credentialPresence: present.length > 0 ? "present" : "absent",
+      authorizationCodePresent: present.some(([key]) => key.toLowerCase() === "code"),
+      accessTokenPresent: present.some(([key]) => key.toLowerCase() === "access_token"),
+      refreshTokenPresent: present.some(([key]) => key.toLowerCase() === "refresh_token"),
+      idTokenPresent: present.some(([key]) => key.toLowerCase() === "id_token"),
+    };
+  } catch {
+    return /(?:^|[?&#\s])(?:code|access_token|refresh_token|id_token|client_secret|token)=([^&#\s]+)/i.test(value)
+      ? { ...absent, credentialPresence: "present" }
+      : { ...absent, credentialPresence: "unknown" };
+  }
+}
+
+function hasUnnegatedEndorsementLanguage(text: string): boolean {
+  const terms = /\b(?:verified|endorsed|approved|trusted|recommended|sponsored|official(?:ly)?|partner)\b/gi;
+  for (const match of text.matchAll(terms)) {
+    const index = match.index ?? 0;
+    const statementStart = Math.max(
+      text.lastIndexOf(".", index - 1),
+      text.lastIndexOf("!", index - 1),
+      text.lastIndexOf("?", index - 1),
+      text.lastIndexOf(";", index - 1),
+      text.lastIndexOf("\n", index - 1),
+    ) + 1;
+    const localPrefix = text.slice(Math.max(statementStart, index - 48), index);
+    if (!/\b(?:not|never|cannot|can't|doesn't|does not|unverified|untrusted|without)\b[\s\S]{0,30}$/i.test(localPrefix)) return true;
+  }
+  return false;
+}
+
+function normalizePublicFamilyFact(value: AggregatePublicClientFact, sampledAtMillis: number): Promise<NormalizedFact> | NormalizedFact {
+  if (!isRecord(value)) throw new AggregateCompatibilityEvidenceBoundaryError();
+  const raw = value as unknown as Record<string, unknown>;
+  const kind = raw.kind as CatalogFactKind;
+  const role = typeof raw.role === "string" ? raw.role : "";
+  const family = raw.family;
+  if (family !== "ipv4" && family !== "ipv6") throw new AggregateCompatibilityEvidenceBoundaryError();
+  classifyIdentity("public-client", kind, role, family);
+
+  if (kind === "registration") {
+    if (role !== "primary" && role !== "negative") throw new AggregateCompatibilityEvidenceBoundaryError();
+    const caseId = raw.caseId;
+    if (role === "negative" && !PUBLIC_NEGATIVE_REGISTRATION_CASES.includes(caseId as AggregatePublicClientNegativeRegistrationCase)) throw new AggregateCompatibilityEvidenceBoundaryError();
+    if (role === "primary" && caseId !== undefined) throw new AggregateCompatibilityEvidenceBoundaryError();
+    const response = normalizeSurface(raw.response);
+    return {
+      source: "public-client",
+      identity: `public-client|registration|${role}|${family}|${caseId ?? "primary"}`,
+      kind,
+      role,
+      family,
+      ...(caseId !== undefined ? { caseId: caseId as string } : {}),
+      data: {
+        response,
+        ...(role === "primary" ? { clientId: bodyString(response.body, "client_id", "clientId") } : {}),
+      },
+      request: normalizeRequest(raw.request),
+    };
+  }
+
+  if (kind === "consent") {
+    if (role !== "metadata") throw new AggregateCompatibilityEvidenceBoundaryError();
+    const observation = raw.observation === undefined ? {} : raw.observation;
+    assertPrimitiveObservation(observation);
+    const rawObservation = observation as Record<string, unknown>;
+    const endorsementText = boundedString(rawObservation.endorsementText);
+    const endorsementLanguageVisible = endorsementText !== undefined
+      ? hasUnnegatedEndorsementLanguage(endorsementText)
+      : boundedBoolean(rawObservation.endorsementLanguageVisible);
+    return {
+      source: "public-client",
+      identity: `public-client|consent|metadata|${family}`,
+      kind,
+      role,
+      family,
+      data: {
+        clientNameVisible: boundedBoolean(rawObservation.clientNameVisible),
+        clientUriVisible: boundedBoolean(rawObservation.clientUriVisible),
+        logoVisible: boundedBoolean(rawObservation.logoVisible),
+        softwareIdVisible: boundedBoolean(rawObservation.softwareIdVisible),
+        softwareVersionVisible: boundedBoolean(rawObservation.softwareVersionVisible),
+        untrustedDisclaimerVisible: boundedBoolean(rawObservation.untrustedDisclaimerVisible),
+        endorsementLanguageVisible,
+      },
+    };
+  }
+
+  if (kind === "authorization") {
+    if (role !== "approval" && role !== "denial" && role !== "abandonment") throw new AggregateCompatibilityEvidenceBoundaryError();
+    const observation = raw.observation === undefined ? {} : raw.observation;
+    assertPrimitiveObservation(observation);
+    const rawObservation = observation as Record<string, unknown>;
+    if (role === "approval") {
+      return {
+        source: "public-client",
+        identity: `public-client|authorization|approval|${family}`,
+        kind,
+        role,
+        family,
+        data: {
+          affirmativeControlVisible: boundedBoolean(rawObservation.affirmativeControlVisible),
+          denialControlVisible: boundedBoolean(rawObservation.denialControlVisible),
+          callbackBeforeDecision: boundedBoolean(rawObservation.callbackBeforeDecision),
+          decision: rawObservation.decision === "affirmative" || rawObservation.decision === "denial" || rawObservation.decision === "abandonment" ? rawObservation.decision : undefined,
+        },
+        request: normalizeRequest(raw.request),
+      };
+    }
+    const callbackUrl = boundedString(rawObservation.callbackUrl);
+    const browserUrl = boundedString(rawObservation.browserUrl);
+    const callback = urlCredentialFlags(callbackUrl);
+    const browser = urlCredentialFlags(browserUrl);
+    const tokenResponse = normalizeSurface(rawObservation.tokenResponse);
+    const tokenResponsePresence = "tokenResponse" in rawObservation ? tokenResponse.credentialPresence : "absent";
+    const credentialPresence = combineCredentialPresence([
+      callback.credentialPresence,
+      browser.credentialPresence,
+      tokenResponsePresence,
+      rawObservation.callbackComplete === true ? "absent" : "unknown",
+    ]);
+    const authorizationCodePresent = callback.authorizationCodePresent || browser.authorizationCodePresent;
+    const accessTokenObserved = callback.accessTokenPresent || browser.accessTokenPresent || tokenResponse.credentialPresence === "present" && Object.keys(tokenResponse.body).some((key) => /^(?:access[_-]?token)$/i.test(key));
+    const refreshTokenObserved = callback.refreshTokenPresent || browser.refreshTokenPresent || tokenResponse.credentialPresence === "present" && Object.keys(tokenResponse.body).some((key) => /^(?:refresh[_-]?token)$/i.test(key));
+    const idTokenObserved = callback.idTokenPresent || browser.idTokenPresent || tokenResponse.credentialPresence === "present" && Object.keys(tokenResponse.body).some((key) => /^(?:id[_-]?token)$/i.test(key));
+    return {
+      source: "public-client",
+      identity: `public-client|authorization|${role}|${family}`,
+      kind,
+      role,
+      family,
+      data: {
+        callbackReceived: boundedBoolean(rawObservation.callbackReceived) ?? Boolean(rawObservation.callbackComplete && callbackUrl),
+        callbackComplete: rawObservation.callbackComplete === true,
+        authorizationError: boundedBoolean(rawObservation.authorizationError),
+        stateMatches: boundedString(rawObservation.expectedState) !== undefined && boundedString(rawObservation.callbackState) !== undefined
+          ? rawObservation.expectedState === rawObservation.callbackState
+          : undefined,
+        tokenRequestObserved: boundedBoolean(rawObservation.tokenRequestObserved),
+        credentialPresence,
+        authorizationCodePresent,
+        accessTokenObserved,
+        refreshTokenObserved,
+        idTokenObserved,
+        unexpectedCredentialObserved: credentialPresence === "present" && !authorizationCodePresent && !accessTokenObserved && !refreshTokenObserved && !idTokenObserved,
+        callbackUrl: callbackUrl ? sanitizeUrl(callbackUrl) : undefined,
+      },
+      request: normalizeRequest(raw.request),
+    };
+  }
+
+  if (kind === "loopback") {
+    if (role !== "callback" && role !== "request") throw new AggregateCompatibilityEvidenceBoundaryError();
+    const observation = raw.observation === undefined ? {} : raw.observation;
+    assertPrimitiveObservation(observation);
+    const rawObservation = observation as Record<string, unknown>;
+    const registeredRedirectUriRaw = boundedString(rawObservation.registeredRedirectUri);
+    return {
+      source: "public-client",
+      identity: `public-client|loopback|${role}|${family}`,
+      kind,
+      role,
+      family,
+      data: {
+        registeredRedirectUri: normalizePublicLoopbackUrl(rawObservation.registeredRedirectUri),
+        registeredRedirectSupported: registeredRedirectUriRaw
+          ? isSupportedLoopbackRegistrationRedirect(registeredRedirectUriRaw, publicLoopbackHost(family))
+          : undefined,
+        callbackUrl: normalizePublicLoopbackUrl(rawObservation.callbackUrl),
+        requestCallbackUrl: normalizePublicLoopbackUrl(rawObservation.requestCallbackUrl),
+        callbackReceived: boundedBoolean(rawObservation.callbackReceived),
+        requestResource: boundedString(rawObservation.requestResource),
+        portSelectedAtRequest: boundedBoolean(rawObservation.portSelectedAtRequest),
+      },
+      request: normalizeRequest(raw.request),
+    };
+  }
+
+  if (kind === "pkce") {
+    if (role !== "exchange") throw new AggregateCompatibilityEvidenceBoundaryError();
+    const observation = raw.observation === undefined ? {} : raw.observation;
+    assertPrimitiveObservation(observation);
+    const rawObservation = observation as Record<string, unknown>;
+    const verifier = boundedString(rawObservation.verifier);
+    const challenge = boundedString(rawObservation.challenge);
+    return {
+      source: "public-client",
+      identity: `public-client|pkce|exchange|${family}`,
+      kind,
+      role,
+      family,
+      data: {
+        verifierPresent: Boolean(verifier),
+        challengePresent: Boolean(challenge),
+        verifierMatchesChallenge: verifier && challenge
+          ? matchesS256CodeChallenge(verifier, challenge, boundedString(rawObservation.method))
+          : undefined,
+        method: boundedString(rawObservation.method),
+        requestResource: boundedString(rawObservation.requestResource),
+      },
+      request: normalizeRequest(raw.request),
+    };
+  }
+
+  if (kind === "delegated-token") {
+    if (role !== "validation") throw new AggregateCompatibilityEvidenceBoundaryError();
+    return normalizeDelegatedToken(raw, sampledAtMillis).then((data) => ({
+      source: "public-client" as const,
+      identity: `public-client|delegated-token|validation|${family}`,
+      kind,
+      role,
+      family,
+      data: { ...data },
+      request: normalizeRequest(raw.request),
+    }));
+  }
+
+  if (kind === "mcp-operation") {
+    if (role !== "authenticated") throw new AggregateCompatibilityEvidenceBoundaryError();
+    const observation = raw.observation === undefined ? {} : raw.observation;
+    const data = normalizeMcpObservation({ observation });
+    const rawObservation = observation as Record<string, unknown>;
+    return {
+      source: "public-client",
+      identity: `public-client|mcp-operation|authenticated|${family}`,
+      kind,
+      role,
+      family,
+      data,
+      request: normalizeRequest(raw.request ?? rawObservation.request),
+    };
+  }
+
+  if (kind === "grant") {
+    if (role !== "cleanup") throw new AggregateCompatibilityEvidenceBoundaryError();
+    const observation = raw.observation === undefined ? {} : raw.observation;
+    assertPrimitiveObservation(observation);
+    const rawObservation = observation as Record<string, unknown>;
+    const listResponse = normalizeSurface(rawObservation.listResponse);
+    const revokeResponse = normalizeSurface(rawObservation.revokeResponse);
+    const listResponseStatus = boundedNumber(rawObservation.listResponseStatus);
+    const revokeResponseStatus = boundedNumber(rawObservation.revokeResponseStatus);
+    return {
+      source: "public-client",
+      identity: `public-client|grant|cleanup|${family}`,
+      kind,
+      role,
+      family,
+      data: {
+        listRequestObserved: boundedBoolean(rawObservation.listRequestObserved ?? rawObservation.grantListObserved),
+        listResponse: listResponseStatus !== undefined ? { ...listResponse, complete: true, status: listResponseStatus } : listResponse,
+        listedClientIds: boundedStringList(rawObservation.listedClientIds),
+        listedGrantIds: boundedStringList(rawObservation.listedGrantIds),
+        grantId: boundedString(rawObservation.grantId),
+        grantClientId: boundedString(rawObservation.grantClientId ?? rawObservation.clientId),
+        grantPresent: boundedBoolean(rawObservation.grantPresent),
+        revokeRequestObserved: boundedBoolean(rawObservation.revokeRequestObserved ?? rawObservation.revokeObserved),
+        revokeResponse: revokeResponseStatus !== undefined ? { ...revokeResponse, complete: true, status: revokeResponseStatus } : revokeResponse,
+      },
+      request: normalizeRequest(raw.request ?? rawObservation.request),
+    };
+  }
+
+  if (kind === "cleanup") {
+    if (role !== "family") throw new AggregateCompatibilityEvidenceBoundaryError();
+    const observation = raw.observation === undefined ? {} : raw.observation;
+    assertPrimitiveObservation(observation);
+    const rawObservation = observation as Record<string, unknown>;
+    const response = normalizeSurface(rawObservation.response);
+    return {
+      source: "public-client",
+      identity: `public-client|cleanup|family|${family}`,
+      kind,
+      role,
+      family,
+      data: {
+        listRequestObserved: boundedBoolean(rawObservation.listRequestObserved),
+        remainingClientIds: boundedStringList(rawObservation.remainingClientIds),
+        remainingGrantIds: boundedStringList(rawObservation.remainingGrantIds),
+        grantPresent: boundedBoolean(rawObservation.grantPresent),
+        requestStatus: boundedNumber(rawObservation.requestStatus) ?? response.status,
+      },
+      request: normalizeRequest(raw.request ?? rawObservation.request),
+    };
+  }
+
   throw new AggregateCompatibilityEvidenceBoundaryError();
 }
 
@@ -1044,12 +2026,23 @@ function statusFromValues(values: readonly (GateStatus | undefined)[]): GateStat
   return "pass";
 }
 
+function omitUndefined(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(omitUndefined);
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([, child]) => child !== undefined)
+      .map(([key, child]) => [key, omitUndefined(child)]),
+  );
+}
+
 function normalizedGate(derived: DerivedGate): EvidenceObservation {
+  const evidence = derived.evidence === undefined ? undefined : omitUndefined(derived.evidence) as Record<string, unknown>;
   return {
     kind: "gate",
     gateId: derived.gateId,
     ...(derived.status !== undefined ? { status: derived.status, detail: catalogTemplateText(derived.gateId, derived.status) } : {}),
-    ...(derived.evidence !== undefined ? { evidence: derived.evidence } : {}),
+    ...(evidence !== undefined ? { evidence } : {}),
     ...(derived.error ? { error: derived.error } : {}),
   };
 }
@@ -1331,6 +2324,535 @@ function mcpOperationGate(fact: NormalizedFact, target: CompatibilityReportTarge
   });
 }
 
+function publicFamilyHistory(history: PublicSessionHistory, family: AggregatePublicClientFamily): PublicFamilyHistory {
+  const current = history.get(family);
+  if (current) return current;
+  const created: PublicFamilyHistory = {};
+  history.set(family, created);
+  return created;
+}
+
+function publicRegistrationGate(fact: NormalizedFact): DerivedGate {
+  const family = fact.family as AggregatePublicClientFamily;
+  const response = fact.data.response as NormalizedSurface;
+  const gateId = `${fact.role === "negative" ? "registration-negative-validation" : "public-client-registration"}-${family}`;
+  if (!response.complete || response.status === undefined || response.status < 200 || response.status >= 600) {
+    return gate(gateId, "not-proven", { registrationStatus: "not-proven" });
+  }
+  if (fact.role === "negative") {
+    const observedErrorCode = bodyString(response.body, "error_code", "error");
+    const errorCode = observedErrorCode && /^[A-Za-z0-9_.:-]{1,100}$/.test(observedErrorCode) ? observedErrorCode : undefined;
+    const status = classifyNegativeRegistration({ status: response.status, errorCode, credentialPresence: response.credentialPresence });
+    return gate(gateId, status, {
+      case: fact.caseId,
+      status: response.status,
+      errorCode: errorCode ?? "unavailable",
+      credentialPresence: response.credentialPresence,
+    });
+  }
+  if (response.status < 200 || response.status >= 300) return gate(gateId, "not-proven", { registrationStatus: "not-proven", status: response.status });
+  const redirectUris = bodyStringArray(response.body, "redirect_uris", "redirectUris");
+  const grantTypes = bodyStringArray(response.body, "grant_types", "grantTypes");
+  const responseTypes = bodyStringArray(response.body, "response_types", "responseTypes");
+  const clientId = bodyString(response.body, "client_id", "clientId");
+  const authMethod = bodyString(response.body, "token_endpoint_auth_method", "tokenEndpointAuthMethod");
+  const registeredRedirect = redirectUris.length === 1 && isSupportedLoopbackRegistrationRedirect(redirectUris[0] as string, publicLoopbackHost(family));
+  const accepted = Boolean(clientId) && registeredRedirect && grantTypes.length === 1 && grantTypes[0] === "authorization_code" && responseTypes.length === 1 && responseTypes[0] === "code" && authMethod === "none" && response.credentialPresence !== "present" && !Object.prototype.hasOwnProperty.call(response.body, "client_secret");
+  return gate(gateId, accepted ? "pass" : "fail", {
+    registrationStatus: accepted ? "accepted" : "rejected",
+    registrationRedirectUri: redirectUris[0] ? sanitizeUrl(redirectUris[0]) : "unavailable",
+    clientIdPresent: Boolean(clientId),
+    clientSecretReturned: response.credentialPresence === "present" || Object.prototype.hasOwnProperty.call(response.body, "client_secret"),
+    registeredGrantTypes: grantTypes,
+  });
+}
+
+function publicRegistrationClientId(fact: NormalizedFact): string | undefined {
+  if (fact.kind !== "registration" || fact.role !== "primary" || !fact.family) return undefined;
+  const derived = publicRegistrationGate(fact);
+  if (derived.status !== "pass") return undefined;
+  const clientId = fact.data.clientId;
+  return typeof clientId === "string" && clientId.length > 0 ? clientId : undefined;
+}
+
+function updatePublicHistory(history: PublicSessionHistory, fact: NormalizedFact): void {
+  if (!fact.family) return;
+  const current = publicFamilyHistory(history, fact.family);
+  const clientId = publicRegistrationClientId(fact);
+  if (clientId && current.acceptedClientId === undefined) current.acceptedClientId = clientId;
+  if (fact.kind !== "grant") return;
+  const listedClientIds = fact.data.listedClientIds as string[] | undefined;
+  const grantId = fact.data.grantId as string | undefined;
+  const grantClientId = fact.data.grantClientId as string | undefined;
+  const grantPresent = fact.data.grantPresent as boolean | undefined;
+  if (current.acceptedClientId && (listedClientIds?.includes(current.acceptedClientId) || grantClientId === current.acceptedClientId) && grantId && grantPresent !== false) current.acceptedGrantId = grantId;
+}
+
+function publicDelegatedTokenGate(fact: NormalizedFact, target: CompatibilityReportTarget, history: PublicSessionHistory): DerivedGate {
+  const family = fact.family as AggregatePublicClientFamily;
+  const data = fact.data as unknown as DelegatedTokenData;
+  if (!data.tokenObserved) return gate(`delegated-token-validation-${family}`, "not-proven");
+  if (data.tokenMalformed || data.jwksMalformed) {
+    return gate(`delegated-token-validation-${family}`, "fail", {
+      signatureValid: false,
+      algorithmAllowed: false,
+      issuerMatches: false,
+      audienceMatches: false,
+      clientContextMatches: false,
+      grantContextMatches: false,
+      timeBoundsValid: false,
+    }, { kind: "malformed-observation" });
+  }
+  if (!data.jwksObserved) return gate(`delegated-token-validation-${family}`, "not-proven", {
+    signatureValid: false,
+    algorithmAllowed: typeof data.header.alg === "string" && (ALLOWED_DELEGATED_JWT_ALGORITHMS as readonly string[]).includes(data.header.alg),
+    issuerMatches: data.claims.iss === target.expectedAuthorizationServer,
+    audienceMatches: data.claims.aud === target.canonicalResource,
+    clientContextMatches: false,
+    grantContextMatches: false,
+    timeBoundsValid: false,
+  });
+  const current = publicFamilyHistory(history, family);
+  const request = fact.request?.request;
+  const policy = evaluateDelegatedJwtPolicy(data.header, data.claims, {
+    canonicalResource: target.canonicalResource,
+    expectedClientId: current.acceptedClientId ?? "",
+    expectedIssuer: target.expectedAuthorizationServer,
+    nowSeconds: data.sampledAtSeconds,
+    tokenRequest: {
+      clientId: request?.requestClientId,
+      grantType: request?.requestGrantType,
+      resource: request?.requestResource,
+    },
+  });
+  const grantClaim = data.claims.grant_id;
+  const grantIdentityMatches = typeof grantClaim !== "string" || current.acceptedGrantId !== undefined && grantClaim === current.acceptedGrantId;
+  const checks = {
+    algorithmAllowed: policy.checks.algorithmAllowed,
+    issuerMatches: policy.checks.issuerMatches,
+    audienceMatches: policy.checks.audienceMatches,
+    clientContextMatches: policy.checks.clientContextMatches,
+    grantContextMatches: policy.checks.grantContextMatches && grantIdentityMatches,
+    timeBoundsValid: policy.checks.timeBoundsValid,
+  };
+  const missingHistory = current.acceptedClientId === undefined || request === undefined || typeof grantClaim === "string" && current.acceptedGrantId === undefined;
+  const valid = data.keySelected && data.signatureValid && Object.values(checks).every(Boolean);
+  const securityFailure = !data.keySelected || !data.signatureValid || !policy.checks.algorithmAllowed || !policy.checks.issuerMatches || !policy.checks.subjectPresent || !policy.checks.audienceMatches || !policy.checks.timeBoundsValid || current.acceptedClientId !== undefined && !policy.checks.clientContextMatches || request !== undefined && (!policy.checks.grantContextMatches || !policy.checks.resourceContextMatches) || typeof data.claims.resource === "string" && data.claims.resource !== target.canonicalResource || typeof grantClaim === "string" && current.acceptedGrantId !== undefined && !grantIdentityMatches;
+  return gate(`delegated-token-validation-${family}`, securityFailure ? "fail" : missingHistory ? "not-proven" : valid ? "pass" : "fail", {
+    signatureValid: data.signatureValid,
+    ...checks,
+  });
+}
+
+function publicMcpOperationGate(fact: NormalizedFact, target: CompatibilityReportTarget): DerivedGate {
+  const family = fact.family as AggregatePublicClientFamily;
+  const data = fact.data;
+  const request = fact.request;
+  const response = responseFor(fact) ?? data.response as NormalizedSurface;
+  const operationUrl = data.operationUrl as string | undefined ?? request?.request.url;
+  const operationResource = data.operationResource as string | undefined ?? request?.request.requestResource;
+  const resourceMatches = operationResource === undefined
+    ? operationUrl === target.canonicalResource
+    : operationUrl === target.canonicalResource && operationResource === target.canonicalResource;
+  const requestStatus = request?.request.status ?? response.status;
+  const sdkFields = [data.connected, data.listToolsCompleted, data.callToolCompleted, data.resultIsError];
+  const sdkComplete = sdkFields.every((value) => value !== undefined);
+  const requestComplete = request !== undefined && operationUrl !== undefined && requestStatus !== undefined;
+  const responseCredentialPresence = request?.responseCredentialPresence ?? response.credentialPresence;
+  const rejectedByBoundary = requestComplete && resourceMatches && (requestStatus === 401 || requestStatus === 403 || bodyString(response.body, "error", "error_code") === "invalid_token") && responseCredentialPresence === "absent";
+  const attemptedFailure = requestComplete && resourceMatches && (data.resultIsError === true || rejectedByBoundary);
+  const authorized = requestComplete && resourceMatches && request?.request.authorizationHeaderPresent === true && requestStatus >= 200 && requestStatus < 300 && sdkComplete && data.connected === true && data.listToolsCompleted === true && data.callToolCompleted === true && data.resultIsError === false;
+  const status = authorized ? "pass" : attemptedFailure || requestComplete && !resourceMatches ? "fail" : "not-proven";
+  return gate(`authenticated-mcp-operation-${family}`, status, {
+    operationUrl: operationUrl ?? "unavailable",
+    operationResourceMatches: resourceMatches,
+    resultIsError: data.resultIsError ?? "unavailable",
+    requestStatus: requestStatus ?? "unavailable",
+  });
+}
+
+function publicCleanupGate(family: AggregatePublicClientFamily, facts: readonly NormalizedFact[], history: PublicSessionHistory): DerivedGate | undefined {
+  const grantFacts = facts.filter((fact) => fact.family === family && fact.kind === "grant");
+  const cleanupFacts = facts.filter((fact) => fact.family === family && fact.kind === "cleanup");
+  if (grantFacts.length === 0 && cleanupFacts.length === 0) return undefined;
+  const current = publicFamilyHistory(history, family);
+  let identified = false;
+  let beforePresent: boolean | undefined;
+  let revokeSucceeded: boolean | undefined;
+  let requestStatus: number | undefined;
+  for (const fact of grantFacts) {
+    const listedClientIds = fact.data.listedClientIds as string[] | undefined;
+    const listedGrantIds = fact.data.listedGrantIds as string[] | undefined;
+    const grantClientId = fact.data.grantClientId as string | undefined;
+    const grantPresent = fact.data.grantPresent as boolean | undefined;
+    if (listedClientIds && current.acceptedClientId) {
+      identified = listedClientIds.includes(current.acceptedClientId);
+      beforePresent = identified;
+    }
+    if (listedGrantIds && current.acceptedGrantId) {
+      identified = listedGrantIds.includes(current.acceptedGrantId);
+      beforePresent = identified;
+    }
+    if (grantClientId !== undefined && current.acceptedClientId !== undefined) {
+      identified = grantClientId === current.acceptedClientId;
+      beforePresent = grantPresent ?? identified;
+    } else if (grantPresent !== undefined) {
+      beforePresent = grantPresent;
+    }
+    const listResponse = fact.data.listResponse as NormalizedSurface;
+    const revokeResponse = fact.data.revokeResponse as NormalizedSurface;
+    const revokeRequested = fact.data.revokeRequestObserved as boolean | undefined;
+    requestStatus = listResponse.status ?? revokeResponse.status ?? requestStatus;
+    if (revokeRequested !== undefined) revokeSucceeded = revokeRequested && revokeResponse.complete && revokeResponse.status !== undefined && revokeResponse.status >= 200 && revokeResponse.status < 300;
+  }
+  let afterPresent: boolean | undefined;
+  for (const fact of cleanupFacts) {
+    const remainingClientIds = fact.data.remainingClientIds as string[] | undefined;
+    const remainingGrantIds = fact.data.remainingGrantIds as string[] | undefined;
+    const grantPresent = fact.data.grantPresent as boolean | undefined;
+    requestStatus = (fact.data.requestStatus as number | undefined) ?? requestStatus;
+    if (grantPresent !== undefined) afterPresent = grantPresent;
+    else if (remainingClientIds && current.acceptedClientId) afterPresent = remainingClientIds.includes(current.acceptedClientId);
+    else if (remainingGrantIds && current.acceptedGrantId) afterPresent = remainingGrantIds.includes(current.acceptedGrantId);
+  }
+  const status = afterPresent === true
+    ? "fail"
+    : afterPresent === false && beforePresent === true
+      ? revokeSucceeded === true ? "pass" : revokeSucceeded === false ? "fail" : "not-proven"
+      : afterPresent === false
+        ? "pass"
+        : "not-proven";
+  return gate(`consent-cleanup-${family}`, status, {
+    grantStatus: afterPresent === undefined ? "unknown" : afterPresent ? "present" : "absent",
+    grantIdentified: identified,
+    grantRevoked: afterPresent === false && (revokeSucceeded === true || beforePresent === false),
+    requestStatus: requestStatus ?? "unavailable",
+  });
+}
+
+function derivePublicFamilyGate(fact: NormalizedFact, target: CompatibilityReportTarget, history: PublicSessionHistory): DerivedGate | undefined {
+  const family = fact.family as AggregatePublicClientFamily;
+  if (fact.kind === "registration") return publicRegistrationGate(fact);
+  if (fact.kind === "consent") {
+    const data = fact.data;
+    const noEndorsement = data.endorsementLanguageVisible === undefined ? undefined : !(data.endorsementLanguageVisible as boolean);
+    const fields = [data.clientNameVisible, data.clientUriVisible, data.logoVisible, data.softwareIdVisible, data.softwareVersionVisible, data.untrustedDisclaimerVisible, noEndorsement];
+    const status = fields.some((value) => value === undefined)
+      ? "not-proven"
+      : classifyConsentPresentation({
+        clientNameVisible: data.clientNameVisible as boolean,
+        clientUriVisible: data.clientUriVisible as boolean,
+        logoVisible: data.logoVisible as boolean,
+        softwareIdVisible: data.softwareIdVisible as boolean,
+        softwareVersionVisible: data.softwareVersionVisible as boolean,
+        untrustedDisclaimerVisible: data.untrustedDisclaimerVisible as boolean,
+        endorsementLanguageVisible: data.endorsementLanguageVisible as boolean,
+        affirmativeControlVisible: true,
+        denialControlVisible: true,
+        callbackBeforeDecision: false,
+      });
+    return gate(`untrusted-client-metadata-${family}`, status, {
+      clientNameVisible: data.clientNameVisible,
+      clientUriVisible: data.clientUriVisible,
+      logoVisible: data.logoVisible,
+      softwareIdVisible: data.softwareIdVisible,
+      softwareVersionVisible: data.softwareVersionVisible,
+      untrustedDisclaimerVisible: data.untrustedDisclaimerVisible,
+    });
+  }
+  if (fact.kind === "authorization") {
+    if (fact.role === "approval") {
+      const data = fact.data;
+      const approvalFields = [
+        data.affirmativeControlVisible as boolean | undefined,
+        data.denialControlVisible as boolean | undefined,
+        data.callbackBeforeDecision === undefined ? undefined : !(data.callbackBeforeDecision as boolean),
+        data.decision === undefined ? undefined : data.decision === "affirmative",
+      ];
+      const status = approvalFields.some((value) => value === undefined)
+        ? "not-proven"
+        : approvalFields.every(Boolean) ? "pass" : "fail";
+      return gate(`authorization-consent-${family}`, status, {
+        affirmativeControlVisible: data.affirmativeControlVisible,
+        denialControlVisible: data.denialControlVisible,
+        callbackBeforeDecision: data.callbackBeforeDecision,
+        decision: data.decision ?? "unavailable",
+      });
+    }
+    const data = fact.data;
+    const unknownCredential = data.credentialPresence === "unknown";
+    const status = data.callbackComplete === true
+      ? classifyAuthorizationOutcome({
+        kind: fact.role as "denial" | "abandonment",
+        callbackReceived: data.callbackReceived === true,
+        authorizationError: data.authorizationError === true,
+        stateMatches: data.stateMatches as boolean | undefined,
+        authorizationCodePresent: data.authorizationCodePresent === true || unknownCredential,
+        tokenRequestObserved: data.tokenRequestObserved === true || data.tokenRequestObserved === undefined,
+        accessTokenObserved: data.accessTokenObserved === true,
+        refreshTokenObserved: data.refreshTokenObserved === true,
+        idTokenObserved: data.idTokenObserved === true,
+        browserFragmentCredentialObserved: unknownCredential || data.unexpectedCredentialObserved === true,
+      })
+      : "not-proven";
+    return gate(`${fact.role === "denial" ? "consent-denial" : "consent-abandonment"}-${family}`, status, {
+      callbackReceived: data.callbackReceived,
+      stateMatches: data.stateMatches,
+      authorizationError: data.authorizationError,
+      authorizationCodePresent: data.authorizationCodePresent,
+      accessTokenObserved: data.accessTokenObserved,
+      refreshTokenObserved: data.refreshTokenObserved,
+    });
+  }
+  if (fact.kind === "loopback") {
+    const data = fact.data;
+    const registered = data.registeredRedirectUri as PublicLoopbackUrl | undefined;
+    const callback = data.callbackUrl as PublicLoopbackUrl | undefined;
+    const expectedHost = publicLoopbackHost(family);
+    if (fact.role === "callback") {
+      const status = data.callbackReceived === undefined
+        ? "not-proven"
+        : data.callbackReceived === true && data.registeredRedirectSupported === true && Boolean(registered && callback && callback.protocol === "http:" && !callback.hasFragment && registered.host === expectedHost && registered.path === "/oauth/callback" && callback.host === expectedHost && callback.path === "/oauth/callback" && Boolean(callback.port))
+          ? "pass"
+          : "fail";
+      return gate(`loopback-${family}`, status, { family, callbackHost: callback?.host ?? "unavailable", callbackPath: callback?.path ?? "unavailable", callbackReceived: data.callbackReceived });
+    }
+    const request = data.requestCallbackUrl as PublicLoopbackUrl | undefined;
+    const requestResource = data.requestResource as string | undefined;
+    const registeredMatches = data.registeredRedirectSupported === true && registered?.host === expectedHost && registered.path === "/oauth/callback";
+    const status = registeredMatches && request && request.protocol === "http:" && !request.hasQuery && !request.hasFragment && request.host === expectedHost && request.path === "/oauth/callback" && Boolean(request.port) && requestResource === target.canonicalResource && data.portSelectedAtRequest === true
+      ? "pass"
+      : data.requestCallbackUrl ? "fail" : "not-proven";
+    return gate(`loopback-request-${family}`, status, { family, registrationRedirectUri: registered?.url ?? "unavailable", requestTimeCallbackUrl: request?.url ?? "unavailable", portSelectedAtRequest: data.portSelectedAtRequest, resource: requestResource ?? "unavailable" });
+  }
+  if (fact.kind === "pkce") {
+    const data = fact.data;
+    if (data.verifierMatchesChallenge === undefined) return gate(`loopback-pkce-${family}`, "not-proven", { method: data.method ?? "unavailable", codeChallengePresent: data.challengePresent, codeVerifierMatchesChallenge: "unknown", resourceMatchesCanonical: data.requestResource === target.canonicalResource });
+    const status = data.verifierMatchesChallenge === true && data.method === "S256" && data.requestResource === target.canonicalResource ? "pass" : "fail";
+    return gate(`loopback-pkce-${family}`, status, { method: data.method ?? "unavailable", codeChallengePresent: data.challengePresent, codeVerifierMatchesChallenge: data.verifierMatchesChallenge, resourceMatchesCanonical: data.requestResource === target.canonicalResource });
+  }
+  if (fact.kind === "delegated-token") return publicDelegatedTokenGate(fact, target, history);
+  if (fact.kind === "mcp-operation") return publicMcpOperationGate(fact, target);
+  return undefined;
+}
+
+function publicFamilyAggregate(base: typeof PUBLIC_FAMILY_GATE_BASES[number], statuses: ReadonlyMap<AggregatePublicClientFamily, GateStatus | undefined>): DerivedGate {
+  const children = MCP_ACCESS_GRANT_FAMILIES.map((family) => statuses.get(family));
+  const status = statusFromValues(children);
+  return gate(`${base}-both`, status, {
+    families: MCP_ACCESS_GRANT_FAMILIES.map((family, index) => ({ family, status: children[index] ?? "not-proven" })),
+  }, children.every((child) => child === undefined) ? { kind: "missing-observation" } : undefined);
+}
+
+function replacementComplete(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return value.providerReturnedAccessToken === true &&
+    value.providerReturnedRefreshToken === true &&
+    value.accessTokenChanged === true &&
+    value.refreshTokenChanged === true;
+}
+
+function compatibilityRefreshRotationGate(facts: readonly NormalizedFact[]): DerivedGate {
+  const refreshFacts = facts.filter((fact) => fact.kind === "refresh");
+  const roles = refreshFacts.map((fact) => fact.role);
+  const expectedRoles = ["root", "replacement", "replay"] as const;
+  const orderedPrefix = roles.length <= expectedRoles.length && roles.every((role, index) => role === expectedRoles[index]);
+  const root = refreshFacts.find((fact) => fact.role === "root");
+  const replacement = refreshFacts.find((fact) => fact.role === "replacement");
+  if (!orderedPrefix) return gate("refresh-rotation", "fail", undefined, { kind: "conflicting-observation" });
+  if (!root || !replacement) return gate("refresh-rotation", "not-proven", undefined, { kind: "missing-observation" });
+  const initialComplete = root.data.initialAccessTokenPresent === true && root.data.initialRefreshTokenPresent === true;
+  const first = replacement.data.firstReplacement;
+  const second = replacement.data.secondReplacement;
+  const firstComplete = replacementComplete(first);
+  const secondComplete = replacementComplete(second);
+  const evidence = {
+    initial: root.data.initial,
+    firstReplacement: first ?? { status: "unavailable" },
+    secondReplacement: second ?? { status: "unavailable" },
+    replacementOperation: replacement.data.replacementOperation ?? "unavailable",
+  };
+  if (!initialComplete || first === undefined || second === undefined) return gate("refresh-rotation", "not-proven", evidence, { kind: "missing-observation" });
+  const attempted = [first, second].some((value) => isRecord(value) && (value.tokenEndpointStatus !== "not-observed" || value.providerReturnedAccessToken === true || value.providerReturnedRefreshToken === true));
+  return gate("refresh-rotation", firstComplete && secondComplete ? "pass" : attempted ? "fail" : "not-proven", evidence, firstComplete && secondComplete ? undefined : attempted ? { kind: "unsupported-observation" } : { kind: "missing-observation" });
+}
+
+function compatibilityRefreshReplayGate(facts: readonly NormalizedFact[]): DerivedGate {
+  const refreshFacts = facts.filter((fact) => fact.kind === "refresh");
+  const expectedRoles = ["root", "replacement", "replay"] as const;
+  const roles = refreshFacts.map((fact) => fact.role);
+  const orderedPrefix = roles.length <= expectedRoles.length && roles.every((role, index) => role === expectedRoles[index]);
+  if (!orderedPrefix) return gate("refresh-replay-containment", "fail", undefined, { kind: "conflicting-observation" });
+  const replay = facts.find((fact) => fact.kind === "refresh" && fact.role === "replay");
+  if (!replay) return gate("refresh-replay-containment", "not-proven", undefined, { kind: "missing-observation" });
+  const attempts = Array.isArray(replay.data.attempts) ? replay.data.attempts as Record<string, unknown>[] : [];
+  if (attempts.length === 0) return gate("refresh-replay-containment", "not-proven", { familyResults: [], familyMemberCountExercised: 0 }, { kind: "missing-observation" });
+  const expectedLabels = ["consumed-root", "consumed-descendant-1", "active-descendant-2"];
+  const labels = attempts.map((attempt) => attempt.label);
+  const ordered = attempts.length === expectedLabels.length && labels.every((label, index) => label === expectedLabels[index]);
+  const statuses = attempts.map((attempt) => attempt.status);
+  const everyRejected = statuses.every((status) => status === "rejected");
+  const anySucceeded = statuses.some((status) => status === "succeeded");
+  const status = !ordered || anySucceeded ? "fail" : everyRejected ? "pass" : "not-proven";
+  return gate("refresh-replay-containment", status, {
+    rootReplayDetected: attempts[0]?.status === "rejected",
+    everyIssuedDescendantRejected: everyRejected,
+    familyMemberCountExercised: attempts.length,
+    familyResults: Object.fromEntries(attempts.map((attempt, index) => [expectedLabels[index] ?? `attempt-${index + 1}`, {
+      status: attempt.status,
+      responseStatus: attempt.responseStatus,
+      responseCredentialPresence: attempt.responseCredentialPresence,
+    }])),
+  }, status === "not-proven" ? { kind: "missing-observation" } : status === "fail" ? { kind: "conflicting-observation" } : undefined);
+}
+
+interface CompatibilityGrantState {
+  readonly identified: boolean;
+  readonly revoked: boolean;
+  readonly grantId?: string;
+  readonly clientId?: string;
+  readonly requestStatus?: number;
+}
+
+function compatibilityGrantState(facts: readonly NormalizedFact[], history: AggregateHistory): CompatibilityGrantState {
+  const grantFacts = facts.filter((fact) => fact.kind === "grant");
+  const identify = grantFacts.find((fact) => fact.role === "identify");
+  const revoke = grantFacts.find((fact) => fact.role === "revoke");
+  const identityData = identify?.data;
+  const listResponse = identityData?.listResponse as NormalizedSurface | undefined;
+  const listedClientIds = identityData?.listedClientIds as string[] | undefined;
+  const listedGrantIds = identityData?.listedGrantIds as string[] | undefined;
+  const grantClientId = identityData?.grantClientId as string | undefined;
+  const grantId = identityData?.grantId as string | undefined ?? history.grantId;
+  const clientMatches = history.clientId !== undefined && (
+    grantClientId === history.clientId || grantClientId === undefined && listedClientIds?.includes(history.clientId) === true
+  );
+  const identified = Boolean(
+    identify &&
+    identityData?.listRequestObserved === true &&
+    listResponse?.complete &&
+    listResponse.status !== undefined &&
+    listResponse.status >= 200 &&
+    listResponse.status < 300 &&
+    history.clientId &&
+    clientMatches &&
+    grantId &&
+    identityData?.grantPresent !== false &&
+    (listedClientIds?.includes(history.clientId) || listedGrantIds?.includes(grantId) || grantClientId === history.clientId),
+  );
+  if (identified && grantId) history.grantId = grantId;
+  const revokeData = revoke?.data;
+  const revokeResponse = revokeData?.revokeResponse as NormalizedSurface | undefined;
+  const revoked = Boolean(
+    identified &&
+    revokeData?.revokeRequestObserved === true &&
+    revokeResponse?.complete &&
+    revokeResponse.status !== undefined &&
+    revokeResponse.status >= 200 &&
+    revokeResponse.status < 300 &&
+    (revokeData.grantId === undefined || revokeData.grantId === grantId) &&
+    (revokeData.grantClientId === undefined || revokeData.grantClientId === history.clientId),
+  );
+  return { identified, revoked, grantId, clientId: history.clientId, requestStatus: revokeResponse?.status ?? listResponse?.status };
+}
+
+function compatibilityGrantGate(facts: readonly NormalizedFact[], history: AggregateHistory): { readonly gate: DerivedGate; readonly state: CompatibilityGrantState } {
+  const grantFacts = facts.filter((fact) => fact.kind === "grant");
+  const roles = grantFacts.map((fact) => fact.role);
+  const expectedRoles = ["identify", "revoke"] as const;
+  const orderedPrefix = roles.length <= expectedRoles.length && roles.every((role, index) => role === expectedRoles[index]);
+  const complete = orderedPrefix && roles.length === expectedRoles.length;
+  const state = compatibilityGrantState(facts, history);
+  if (grantFacts.length === 0) return { state, gate: gate("grant-identification-revocation", "not-proven", undefined, { kind: "missing-observation" }) };
+  const identityData = grantFacts.find((fact) => fact.role === "identify")?.data;
+  const revokeData = grantFacts.find((fact) => fact.role === "revoke")?.data;
+  const observed = identityData?.listRequestObserved === true ||
+    revokeData?.revokeRequestObserved === true ||
+    (identityData?.listResponse as NormalizedSurface | undefined)?.status !== undefined ||
+    (revokeData?.revokeResponse as NormalizedSurface | undefined)?.status !== undefined;
+  const status = !orderedPrefix ? "fail" : state.revoked ? "pass" : complete && observed ? "fail" : "not-proven";
+  return {
+    state,
+    gate: gate("grant-identification-revocation", status, {
+      grant: { present: state.grantId !== undefined, clientId: state.clientId ?? "missing" },
+      grantIdentified: state.identified,
+      grantRevoked: state.revoked,
+      grantCount: state.grantId ? 1 : 0,
+      requestStatus: state.requestStatus ?? "not-observed",
+      revokeEndpointObserved: revokeData?.revokeRequestObserved === true,
+    }, status === "not-proven" ? { kind: "missing-observation" } : status === "fail" ? { kind: "unsupported-observation" } : undefined),
+  };
+}
+
+function compatibilityPostRevocationRefreshGate(facts: readonly NormalizedFact[], grantState: CompatibilityGrantState): DerivedGate {
+  const fact = facts.find((candidate) => candidate.kind === "post-revocation" && candidate.role === "refresh");
+  if (!fact || !grantState.revoked) return gate("post-revocation-refresh", "not-proven", undefined, { kind: "missing-observation" });
+  const response = fact.data.response as NormalizedSurface;
+  const request = fact.request?.request;
+  const status = response.status ?? request?.status;
+  const credentials = response.credentialPresence;
+  const replacementIssued = credentials === "present";
+  const rejected = response.complete && status !== undefined && credentials === "absent" && ((status >= 400 && status < 500) || bodyString(response.body, "error", "error_code") !== undefined);
+  const gateStatus = replacementIssued ? "fail" : rejected ? "pass" : "not-proven";
+  return gate("post-revocation-refresh", gateStatus, {
+    requestStatus: status ?? "not-observed",
+    replacementCredentialsStored: replacementIssued,
+    succeeded: replacementIssued,
+    errorCode: bodyString(response.body, "error_code", "error") ?? "none",
+  }, gateStatus === "not-proven" ? { kind: "missing-observation" } : gateStatus === "fail" ? { kind: "unsupported-observation" } : undefined);
+}
+
+function compatibilityPostRevocationAccessGate(facts: readonly NormalizedFact[], grantState: CompatibilityGrantState): DerivedGate {
+  const fact = facts.find((candidate) => candidate.kind === "post-revocation" && candidate.role === "access");
+  if (!fact || !grantState.revoked) return gate("post-revocation-access", "not-proven", undefined, { kind: "missing-observation" });
+  const response = fact.data.response as NormalizedSurface;
+  const request = fact.request?.request;
+  const status = response.status ?? request?.status;
+  const responseCredentials = response.credentialPresence;
+  const rejected = response.complete && status !== undefined && responseCredentials === "absent" && (status === 401 || status === 403 || bodyString(response.body, "error", "error_code") === "invalid_token");
+  const authorized = response.complete && status !== undefined && status >= 200 && status < 300 && responseCredentials !== "present";
+  const withinLifetime = fact.data.accessTokenHasExpiry === true && fact.data.withinDocumentedLifetime === true;
+  const expired = fact.data.accessTokenHasExpiry === true && fact.data.withinDocumentedLifetime === false;
+  const gateStatus = rejected ? "pass" : authorized && withinLifetime ? "pass" : authorized && expired ? "fail" : "not-proven";
+  return gate("post-revocation-access", gateStatus, {
+    operationStatus: rejected ? "rejected" : authorized ? "authorized" : "not-proven",
+    accessTokenHasExpiry: fact.data.accessTokenHasExpiry ?? false,
+    withinDocumentedLifetime: fact.data.withinDocumentedLifetime ?? false,
+    secondsRemaining: fact.data.secondsRemaining ?? "unavailable",
+  }, gateStatus === "not-proven" ? { kind: "missing-observation" } : gateStatus === "fail" ? { kind: "unsupported-observation" } : undefined);
+}
+
+function compatibilityCleanupGate(facts: readonly NormalizedFact[], grantState: CompatibilityGrantState): DerivedGate {
+  const fact = facts.find((candidate) => candidate.kind === "cleanup" && candidate.role === "final");
+  if (!fact) return gate("cleanup", "not-proven", undefined, { kind: "missing-observation" });
+  const grantPresent = fact.data.grantPresent as boolean | undefined;
+  const status = fact.data.requestStatus as number | undefined;
+  const observed = fact.data.listRequestObserved === true && (grantPresent !== undefined || fact.data.remainingClientIds !== undefined || fact.data.remainingGrantIds !== undefined);
+  const remainingClientIds = fact.data.remainingClientIds as string[] | undefined;
+  const remainingGrantIds = fact.data.remainingGrantIds as string[] | undefined;
+  const remaining = remainingClientIds !== undefined
+    ? remainingClientIds.length > 0
+    : remainingGrantIds !== undefined ? remainingGrantIds.length > 0 : undefined;
+  const stillPresent = grantPresent ?? remaining;
+  const requestSucceeded = status !== undefined && status >= 200 && status < 300;
+  const gateStatus = !observed || !requestSucceeded ? "not-proven" : stillPresent === true ? "fail" : stillPresent === false && grantState.revoked ? "pass" : "not-proven";
+  return gate("cleanup", gateStatus, {
+    grantStatus: stillPresent === undefined ? "unknown" : stillPresent ? "present" : "absent",
+    grantIdentified: grantState.identified,
+    grantRevoked: grantState.revoked,
+    requestStatus: status ?? "not-observed",
+  }, gateStatus === "not-proven" ? { kind: "missing-observation" } : gateStatus === "fail" ? { kind: "unsupported-observation" } : undefined);
+}
+
+function applyDependency(
+  derived: DerivedGate,
+  dependency: DerivedGate | undefined,
+): DerivedGate {
+  return derived.status === "pass" && dependency?.status !== "pass"
+    ? gate(derived.gateId, "not-proven", undefined, { kind: "missing-observation", code: "dependency-not-proven" })
+    : derived;
+}
+
 function gateForFact(fact: NormalizedFact): string | undefined {
   if (fact.kind === "resource-discovery") return "resource-discovery";
   if (fact.kind === "provider-discovery") return "provider-discovery";
@@ -1344,6 +2866,25 @@ function gateForFact(fact: NormalizedFact): string | undefined {
   if (fact.kind === "delegated-token" && fact.role === "validation") return "delegated-token-validation";
   if (fact.kind === "delegated-token") return "delegated-token-negative-boundary";
   if (fact.kind === "mcp-operation") return "authenticated-mcp-operation";
+  if (fact.kind === "refresh") return fact.role === "replay" ? "refresh-replay-containment" : "refresh-rotation";
+  if (fact.kind === "grant") return "grant-identification-revocation";
+  if (fact.kind === "post-revocation") return fact.role === "refresh" ? "post-revocation-refresh" : "post-revocation-access";
+  if (fact.kind === "cleanup") return fact.role === "final" ? "cleanup" : undefined;
+  return undefined;
+}
+
+function publicFamilyGateId(fact: NormalizedFact): string | undefined {
+  if (fact.source !== "public-client" || fact.family === undefined) return undefined;
+  if (fact.kind === "registration") return `${fact.role === "negative" ? "registration-negative-validation" : "public-client-registration"}-${fact.family}`;
+  if (fact.kind === "consent") return `untrusted-client-metadata-${fact.family}`;
+  if (fact.kind === "authorization") {
+    return `${fact.role === "approval" ? "authorization-consent" : fact.role === "denial" ? "consent-denial" : "consent-abandonment"}-${fact.family}`;
+  }
+  if (fact.kind === "loopback") return `${fact.role === "callback" ? "loopback" : "loopback-request"}-${fact.family}`;
+  if (fact.kind === "pkce") return `loopback-pkce-${fact.family}`;
+  if (fact.kind === "delegated-token") return `delegated-token-validation-${fact.family}`;
+  if (fact.kind === "mcp-operation") return `authenticated-mcp-operation-${fact.family}`;
+  if (fact.kind === "grant" || fact.kind === "cleanup") return `consent-cleanup-${fact.family}`;
   return undefined;
 }
 
@@ -1352,6 +2893,7 @@ function internalObservations(
   target: CompatibilityReportTarget,
 ): EvidenceObservation[] {
   const compatibilityFacts = facts.filter((fact) => fact.source === "compatibility");
+  const publicFamilyFacts = facts.filter((fact) => fact.source === "public-client" && fact.family !== undefined);
   const observations = new Map<string, DerivedGate>();
   const conflicts = new Set<string>();
   const seen = new Map<string, string>();
@@ -1359,12 +2901,13 @@ function internalObservations(
     const payload = JSON.stringify({ data: fact.data, request: fact.request });
     const prior = seen.get(fact.identity);
     if (prior !== undefined && prior !== payload) {
-      const gateId = gateForFact(fact);
+      const gateId = publicFamilyGateId(fact) ?? gateForFact(fact);
       if (gateId) conflicts.add(gateId);
     } else if (prior === undefined) {
       seen.set(fact.identity, payload);
     }
   }
+
   const history: AggregateHistory = {};
   const resourceFact = compatibilityFacts.find((fact) => fact.kind === "resource-discovery");
   const resource = resourceFact ? resourceDiscoveryGate(resourceFact, target) : undefined;
@@ -1421,6 +2964,99 @@ function internalObservations(
     ? mcpOperationGate(operationFact, target)
     : operationFact ? gate("authenticated-mcp-operation", "not-proven", undefined, { kind: "missing-observation", code: "dependency-not-proven" }) : undefined;
   if (operation) observations.set(operation.gateId, operation);
+
+  const refreshFacts = compatibilityFacts.filter((fact) => fact.kind === "refresh");
+  if (refreshFacts.length > 0) {
+    const rotation = applyDependency(compatibilityRefreshRotationGate(refreshFacts), operation);
+    observations.set("refresh-rotation", rotation);
+    observations.set("refresh-replay-containment", applyDependency(compatibilityRefreshReplayGate(refreshFacts), rotation));
+  }
+
+  const grantFacts = compatibilityFacts.filter((fact) => fact.kind === "grant");
+  const grantState = compatibilityGrantState(compatibilityFacts, history);
+  if (grantFacts.length > 0) {
+    const rotation = observations.get("refresh-rotation");
+    observations.set("grant-identification-revocation", applyDependency(compatibilityGrantGate(compatibilityFacts, history).gate, rotation));
+  }
+  const grant = observations.get("grant-identification-revocation");
+  if (compatibilityFacts.some((fact) => fact.kind === "post-revocation" && fact.role === "refresh")) {
+    observations.set("post-revocation-refresh", applyDependency(compatibilityPostRevocationRefreshGate(compatibilityFacts, grantState), grant));
+  }
+  if (compatibilityFacts.some((fact) => fact.kind === "post-revocation" && fact.role === "access")) {
+    observations.set("post-revocation-access", applyDependency(compatibilityPostRevocationAccessGate(compatibilityFacts, grantState), grant));
+  }
+  if (compatibilityFacts.some((fact) => fact.kind === "cleanup" && fact.role === "final")) {
+    observations.set("cleanup", applyDependency(compatibilityCleanupGate(compatibilityFacts, grantState), grant));
+  }
+
+  if (publicFamilyFacts.length > 0) {
+    const publicHistory: PublicSessionHistory = new Map();
+    const publicLeaves = new Map<string, DerivedGate>();
+    const negativeCases = new Map<AggregatePublicClientFamily, Map<AggregatePublicClientNegativeRegistrationCase, DerivedGate>>();
+
+    for (const fact of publicFamilyFacts) {
+      const derived = derivePublicFamilyGate(fact, target, publicHistory);
+      if (derived && fact.kind === "registration" && fact.role === "negative" && fact.family && fact.caseId) {
+        const byCase = negativeCases.get(fact.family) ?? new Map<AggregatePublicClientNegativeRegistrationCase, DerivedGate>();
+        byCase.set(fact.caseId as AggregatePublicClientNegativeRegistrationCase, derived);
+        negativeCases.set(fact.family, byCase);
+      } else if (derived) {
+        publicLeaves.set(derived.gateId, derived);
+      }
+      updatePublicHistory(publicHistory, fact);
+    }
+
+    for (const family of MCP_ACCESS_GRANT_FAMILIES) {
+      const cases = negativeCases.get(family);
+      const negativeGateId = `registration-negative-validation-${family}`;
+      if (cases && cases.size > 0) {
+        const statuses = PUBLIC_NEGATIVE_REGISTRATION_CASES.map((caseId) => cases.get(caseId)?.status);
+        const status = statusFromValues(statuses);
+        publicLeaves.set(negativeGateId, gate(negativeGateId, status, {
+          cases: PUBLIC_NEGATIVE_REGISTRATION_CASES.map((caseId) => ({ case: caseId, status: cases.get(caseId)?.status ?? "not-proven" })),
+        }));
+      } else {
+        publicLeaves.set(negativeGateId, gate(negativeGateId, undefined, undefined, { kind: "missing-observation" }));
+      }
+      const cleanup = publicCleanupGate(family, publicFamilyFacts, publicHistory);
+      if (cleanup) publicLeaves.set(cleanup.gateId, cleanup);
+      for (const base of PUBLIC_FAMILY_GATE_BASES) {
+        if (base === "registration-negative-validation" || base === "consent-cleanup") continue;
+        const gateId = `${base}-${family}`;
+        if (!publicLeaves.has(gateId)) publicLeaves.set(gateId, gate(gateId, undefined, undefined, { kind: "missing-observation" }));
+      }
+    }
+
+    for (const [base, prerequisites] of Object.entries(PUBLIC_FAMILY_PREREQUISITES)) {
+      for (const family of MCP_ACCESS_GRANT_FAMILIES) {
+        const gateId = `${base}-${family}`;
+        const derived = publicLeaves.get(gateId);
+        if (!derived) continue;
+        const resolved = (prerequisites ?? []).reduce((current, prerequisite) => {
+          const dependency = prerequisite === "provider-discovery"
+            ? observations.get(prerequisite)
+            : publicLeaves.get(`${prerequisite}-${family}`);
+          return applyDependency(current, dependency);
+        }, derived);
+        publicLeaves.set(gateId, resolved);
+      }
+    }
+
+    for (const base of PUBLIC_FAMILY_GATE_BASES) {
+      const statuses = new Map<AggregatePublicClientFamily, GateStatus | undefined>();
+      for (const family of MCP_ACCESS_GRANT_FAMILIES) {
+        const gateId = `${base}-${family}`;
+        const derived = publicLeaves.get(gateId) as DerivedGate;
+        const resolved = conflicts.has(gateId)
+          ? gate(gateId, "fail", { observedBoundary: "conflict" }, { kind: "conflicting-observation" })
+          : derived;
+        publicLeaves.set(gateId, resolved);
+        statuses.set(family, resolved.status);
+        observations.set(gateId, resolved);
+      }
+      observations.set(`${base}-both`, publicFamilyAggregate(base, statuses));
+    }
+  }
 
   for (const [gateId, derived] of [...observations]) {
     if (conflicts.has(gateId)) observations.set(gateId, gate(gateId, "fail", { observedBoundary: "conflict" }, { kind: "conflicting-observation" }));
