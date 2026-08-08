@@ -1,5 +1,5 @@
 import type { CalendarEvent } from "@/lib/db/types";
-import { getOccurrencesInRange } from "@/lib/recurring-tasks/recurrence";
+import { getOccurrencesInRange } from "@/lib/recurring-tasks/scheduling";
 
 /**
  * An expanded calendar event with a virtual flag indicating
