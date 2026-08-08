@@ -53,6 +53,16 @@ describe("MCP access-grant evidence architecture", () => {
     }
   });
 
+  it("keeps the disposable E2E target explicit at the canonical boundary", () => {
+    const workflow = source(".github/workflows/e2e.yml");
+
+    expect(workflow).toContain('export MCP_ACCESS_GRANT_BETTERRME_ORIGIN="http://localhost:3000"');
+    expect(workflow).toContain('export MCP_ACCESS_GRANT_CANONICAL_RESOURCE="${MCP_ACCESS_GRANT_BETTERRME_ORIGIN}/mcp"');
+    expect(workflow).toContain('printf \'MCP_ACCESS_GRANT_CANONICAL_RESOURCE=%s\\n\' "$MCP_ACCESS_GRANT_CANONICAL_RESOURCE" >> "$GITHUB_ENV"');
+    expect(workflow).toContain('export MCP_SUPABASE_URL="$NEXT_PUBLIC_SUPABASE_URL"');
+    expect(workflow).toContain('printf \'MCP_SUPABASE_URL=%s\\n\' "$MCP_SUPABASE_URL" >> "$GITHUB_ENV"');
+  });
+
   it("keeps deterministic unit tests independent of either live runner", () => {
     const tests = [
       source("tests/e2e/mcp-access-grant-evidence.test.ts"),
