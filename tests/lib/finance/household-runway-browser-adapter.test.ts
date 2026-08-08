@@ -6,6 +6,10 @@ import {
 import { createHouseholdRunwayInterview } from "@/lib/finance/internal/household-runway-interview";
 import { rememberHouseholdRunwayDraft } from "@/lib/finance/internal/runway-draft-client";
 import type { HouseholdRunwayInterviewRuntime } from "@/lib/finance/household-runway-interview-runtime";
+import type {
+  HouseholdRunwayAnswers,
+  RunwaySnapshotSummary,
+} from "@/lib/finance/cushion";
 
 function createAdapterEnvironment(
   href = "https://betterr.me/finance/cushion?start=1",
@@ -100,6 +104,39 @@ function driveToCompletedAssessment(runtime: HouseholdRunwayInterviewRuntime) {
   });
   runtime.send({ type: "continue" });
   runtime.send({ type: "continue" });
+}
+
+function snapshot(
+  overrides: Partial<RunwaySnapshotSummary> = {},
+): RunwaySnapshotSummary {
+  return {
+    id: "snapshot-1",
+    trigger: "completed",
+    scenario: "current",
+    months_covered: 4,
+    sustainable: false,
+    model_version: "4.0.0",
+    created_at: "2026-08-03T15:00:00.000Z",
+    ...overrides,
+  };
+}
+
+async function completedPlanInputs() {
+  const browser = createAdapterEnvironment(
+    "https://betterr.me/finance/cushion?start=1",
+  );
+  const adapter = createHouseholdRunwayBrowserAdapter({
+    environment: browser.environment,
+    authenticated: false,
+    createId: () => "source-interview",
+  });
+  adapter.start();
+  await settleAdapter();
+  driveToCompletedAssessment(adapter);
+  const inputs = adapter.getSnapshot().derived.planInputs;
+  adapter.dispose();
+  if (!inputs) throw new Error("expected completed Plan inputs");
+  return JSON.parse(JSON.stringify(inputs)) as HouseholdRunwayAnswers;
 }
 
 describe("Household Runway browser adapter", () => {
@@ -274,6 +311,73 @@ describe("Household Runway browser adapter", () => {
       "https://betterr.me/finance/cushion?start=1",
     );
     expect(browser.environment.history.pushState).toHaveBeenCalledTimes(1);
+    adapter.dispose();
+  });
+
+  it("restores valid newest-first history unchanged through the browser boundary", async () => {
+    const inputs = await completedPlanInputs();
+    const history = [
+      snapshot({ id: "snapshot-newest" }),
+      snapshot({
+        id: "snapshot-older",
+        months_covered: null,
+        sustainable: true,
+        created_at: "2026-07-03T15:00:00.000Z",
+      }),
+    ];
+    const browser = createAdapterEnvironment();
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      authenticated: true,
+      initialPlan: { revision: 7, inputs },
+      initialSnapshots: history,
+      createId: () => "interview-1",
+    });
+
+    adapter.start();
+    await settleAdapter();
+
+    expect(adapter.getSnapshot()).toMatchObject({
+      lifecycle: "ready",
+      interviewStatus: "completed",
+      screen: { kind: "stage", stage: "result", assessment: expect.any(Object) },
+      assessmentHistory: history,
+    });
+    expect(adapter.getSnapshot().issues).not.toContainEqual({
+      code: "assessment_history_invalid",
+    });
+    adapter.dispose();
+  });
+
+  it("rejects the whole malformed initial history while keeping the current result", async () => {
+    const inputs = await completedPlanInputs();
+    const history = [
+      snapshot({ id: "snapshot-valid" }),
+      snapshot({
+        id: "snapshot-malformed",
+        sustainable: true,
+        months_covered: 4,
+      }),
+    ];
+    const browser = createAdapterEnvironment();
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      authenticated: true,
+      initialPlan: { revision: 7, inputs },
+      initialSnapshots: history,
+      createId: () => "interview-1",
+    });
+
+    adapter.start();
+    await settleAdapter();
+
+    expect(adapter.getSnapshot()).toMatchObject({
+      lifecycle: "ready",
+      interviewStatus: "completed",
+      screen: { kind: "stage", stage: "result", assessment: expect.any(Object) },
+      assessmentHistory: [],
+      issues: [{ code: "assessment_history_invalid" }],
+    });
     adapter.dispose();
   });
 

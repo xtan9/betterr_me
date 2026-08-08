@@ -78,6 +78,7 @@ export type HouseholdRunwayInterviewRuntimeIssueCode =
   | "plan_adjustment_pending"
   | "draft_recovery"
   | "plan_recovery"
+  | "assessment_history_invalid"
   | "confirmation_unavailable";
 
 export interface HouseholdRunwayInterviewRuntimeIssue {
@@ -806,6 +807,67 @@ function publicIssueFor(
   return issue ? { code: issue.code } : null;
 }
 
+const RUNWAY_SCENARIOS = new Set([
+  "current",
+  "mine_stops",
+  "partner_stops",
+  "both_stop",
+]);
+
+const RUNWAY_SNAPSHOT_TRIGGERS = new Set([
+  "completed",
+  "updated",
+  "imported",
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isValidRunwaySnapshotSummary(
+  value: unknown,
+): value is RunwaySnapshotSummary {
+  if (!isRecord(value)) return false;
+  if (!isNonEmptyString(value.id)) return false;
+  if (typeof value.trigger !== "string" || !RUNWAY_SNAPSHOT_TRIGGERS.has(value.trigger)) {
+    return false;
+  }
+  if (
+    typeof value.scenario !== "string" ||
+    !RUNWAY_SCENARIOS.has(value.scenario) ||
+    !isNonEmptyString(value.model_version) ||
+    !isNonEmptyString(value.created_at) ||
+    Number.isNaN(Date.parse(value.created_at)) ||
+    typeof value.sustainable !== "boolean"
+  ) {
+    return false;
+  }
+
+  return value.sustainable
+    ? value.months_covered === null
+    : typeof value.months_covered === "number" &&
+        Number.isFinite(value.months_covered) &&
+        value.months_covered >= 0;
+}
+
+function validatedRunwaySnapshotHistory(
+  value: unknown,
+): RunwaySnapshotSummary[] | null {
+  if (!Array.isArray(value)) return null;
+  const ids = new Set<string>();
+  const history: RunwaySnapshotSummary[] = [];
+  for (const entry of value) {
+    if (!isValidRunwaySnapshotSummary(entry) || ids.has(entry.id)) return null;
+    ids.add(entry.id);
+    history.push(entry);
+  }
+  return history;
+}
+
 function isDraftState(value: unknown): value is HouseholdRunwayDraftState {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<HouseholdRunwayDraftState>;
@@ -836,6 +898,21 @@ function storedDraftFrom(
 function restorePayloadFrom(value: unknown): RuntimeRestorePayload {
   if (!value || typeof value !== "object") return {};
   return value as RuntimeRestorePayload;
+}
+
+function restoredHistoryFrom(
+  restored: RuntimeRestorePayload,
+): { present: boolean; value: unknown } {
+  if (restored.plan?.status === "restored" && "snapshots" in restored.plan) {
+    return { present: true, value: restored.plan.snapshots };
+  }
+  if (Object.prototype.hasOwnProperty.call(restored, "assessmentHistory")) {
+    return { present: true, value: restored.assessmentHistory };
+  }
+  if (Object.prototype.hasOwnProperty.call(restored, "snapshots")) {
+    return { present: true, value: restored.snapshots };
+  }
+  return { present: false, value: undefined };
 }
 
 function directPlanFrom(value: unknown): HouseholdRunwayPlan | null | undefined {
@@ -1134,9 +1211,16 @@ export function createHouseholdRunwayInterviewRuntimeComposition(
   let started = false;
   let disposed = false;
   let storageFacts: RuntimeStorageFacts = { ...EMPTY_STORAGE_FACTS };
-  let runtimeIssues: HouseholdRunwayInterviewRuntimeIssue[] = [];
+  const initialHistory =
+    options.initialSnapshots === undefined
+      ? []
+      : validatedRunwaySnapshotHistory(options.initialSnapshots);
+  let runtimeIssues: HouseholdRunwayInterviewRuntimeIssue[] =
+    initialHistory === null ? [{ code: "assessment_history_invalid" }] : [];
   let committedPlan = options.initialPlan ?? null;
-  let assessmentHistory = clonePublicValue(options.initialSnapshots ?? []);
+  let assessmentHistory: RunwaySnapshotSummary[] = clonePublicValue(
+    initialHistory ?? [],
+  );
   let confirmation: HouseholdRunwayInterviewRuntimeConfirmation = { status: "idle" };
   let pendingConfirmationIntent: HouseholdRunwayInterviewIntent | null = null;
   let pendingConfirmationId: string | null = null;
@@ -1200,6 +1284,21 @@ export function createHouseholdRunwayInterviewRuntimeComposition(
     if (!disposed) enqueue({ type: "outcome", command: createCommand() });
   };
 
+  const applyAssessmentHistory = (value: unknown) => {
+    const validated = validatedRunwaySnapshotHistory(value);
+    if (validated === null) {
+      assessmentHistory = [];
+      if (!runtimeIssues.some((issue) => issue.code === "assessment_history_invalid")) {
+        runtimeIssues = [
+          ...runtimeIssues,
+          { code: "assessment_history_invalid" },
+        ];
+      }
+      return;
+    }
+    assessmentHistory = clonePublicValue(validated);
+  };
+
   const applyRestoration = (payload: unknown, failed: boolean) => {
     const restored = restorePayloadFrom(payload);
     const session = storedDraftFrom(restored.session, "session");
@@ -1243,11 +1342,8 @@ export function createHouseholdRunwayInterviewRuntimeComposition(
     } else if (restoredPlan !== undefined) {
       committedPlan = restoredPlan;
     }
-    const restoredHistory =
-      restored.plan?.status === "restored"
-        ? restored.plan.snapshots
-        : restored.assessmentHistory ?? restored.snapshots;
-    if (restoredHistory) assessmentHistory = clonePublicValue(restoredHistory);
+    const restoredHistory = restoredHistoryFrom(restored);
+    if (restoredHistory.present) applyAssessmentHistory(restoredHistory.value);
 
     const selected =
       session && eligibleDevice
@@ -1275,23 +1371,16 @@ export function createHouseholdRunwayInterviewRuntimeComposition(
       committedPlan = null;
     } else if (planValue?.status === "restored") {
       committedPlan = planValue.plan;
-      if (planValue.snapshots) {
-        assessmentHistory = clonePublicValue(planValue.snapshots);
-      }
+      const restoredHistory = restoredHistoryFrom(restored);
+      if (restoredHistory.present) applyAssessmentHistory(restoredHistory.value);
     } else if (directPlan !== undefined) {
       committedPlan = directPlan;
-      if (restored.assessmentHistory ?? restored.snapshots) {
-        assessmentHistory = clonePublicValue(
-          restored.assessmentHistory ?? restored.snapshots ?? [],
-        );
-      }
+      const restoredHistory = restoredHistoryFrom(restored);
+      if (restoredHistory.present) applyAssessmentHistory(restoredHistory.value);
     } else if (restored.committedPlan !== undefined) {
       committedPlan = restored.committedPlan;
-      if (restored.assessmentHistory ?? restored.snapshots) {
-        assessmentHistory = clonePublicValue(
-          restored.assessmentHistory ?? restored.snapshots ?? [],
-        );
-      }
+      const restoredHistory = restoredHistoryFrom(restored);
+      if (restoredHistory.present) applyAssessmentHistory(restoredHistory.value);
     }
   };
 
@@ -2116,12 +2205,12 @@ export function createHouseholdRunwayInterviewRuntimeComposition(
         result.state.operations.planPersistence.correlationId === command.correlationId
       ) {
         if (command.snapshots !== undefined) {
-          assessmentHistory = clonePublicValue(command.snapshots);
+          applyAssessmentHistory(command.snapshots);
         } else if (command.snapshot) {
-          assessmentHistory = [
-            clonePublicValue(command.snapshot),
+          applyAssessmentHistory([
+            command.snapshot,
             ...assessmentHistory.filter((item) => item.id !== command.snapshot?.id),
-          ];
+          ]);
         }
       }
       if (publishSnapshot && !introducedStaleResult(previousState, result.state)) {
