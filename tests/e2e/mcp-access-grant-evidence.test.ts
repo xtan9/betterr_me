@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   EVIDENCE_ARTIFACT_FILENAME,
   GateAccumulator,
-  createEvidenceKernel,
   createEvidenceRunContext,
   finalizeEvidence,
   finalizeReport,
@@ -194,8 +193,7 @@ describe("deterministic MCP evidence kernel", () => {
     const second = finalizeReport(input, createEvidenceRunContext(context));
     const first = firstFinalized.report;
     expect(first).toEqual(second);
-    const kernel = createEvidenceKernel(context);
-    const verified = kernel.verifyEvidence(first);
+    const verified = firstFinalized.verification;
     expect(verified.sanitized).toBe(true);
     expect(verified.serialized).toContain(EVIDENCE_ARTIFACT_FILENAME);
     expect(JSON.parse(firstFinalized.verification.serialized).outcome).toBe(first.outcome);

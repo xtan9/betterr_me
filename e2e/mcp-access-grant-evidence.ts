@@ -751,18 +751,6 @@ export function finalizeReport(input: FinalizeEvidenceInput, context: EvidenceRu
   return finalizeEvidence(input, context).report;
 }
 
-export function createEvidenceKernel(contextInput: EvidenceRunContext) {
-  const context = createEvidenceRunContext(contextInput);
-  return {
-    context,
-    accumulateGate,
-    sanitizeEvidence: (value: unknown) => sanitizeEvidence(value, context),
-    verifyEvidence: (report: CompatibilityReport) => verifyEvidence(report, context),
-    finalizeEvidence: (input: FinalizeEvidenceInput) => finalizeEvidence(input, context),
-    finalizeReport: (input: FinalizeEvidenceInput) => finalizeReport(input, context),
-  } as const;
-}
-
 function baseTarget(target: CompatibilityReportTarget): CompatibilityReportTarget {
   return {
     name: target.name,
