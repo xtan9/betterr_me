@@ -26,6 +26,7 @@ import type {
   SeriesDefaults,
   SeriesRevision,
   TaskOccurrence,
+  UserCoverageOutcome,
 } from "./lifecycle";
 import type { RecurrenceRule } from "@/lib/db/types";
 import { compareLocalDates, isValidLocalDate } from "./recurrence";
@@ -591,57 +592,50 @@ export function createRecurringTaskCapabilitiesForLifecycle(
         );
       }
 
+      // Coverage Read owns unexpected-failure observation and normalization;
+      // keep known validation exceptions typed and let other causes cross this
+      // internal capability boundary unchanged.
+      let outcome: UserCoverageOutcome;
       try {
-        const outcome = await lifecycle.ensureUserCoverage({
+        outcome = await lifecycle.ensureUserCoverage({
           userId,
           range,
           idempotencyKey: operationId,
           source: "interactive",
         } as EnsureUserCoverageRequest);
-        if (outcome.status === "complete" || outcome.status === "already-applied") {
-          return makeCoverageResult(
+      } catch (error) {
+        if (error instanceof RangeError) {
+          return validationFailure(
+            RECURRING_TASK_OPERATION_IDS.ensureCoverage,
             operationId,
-            range,
-            "complete",
-            outcome.series,
-            outcome.occurrences,
-            outcome.intentionalAbsences,
+            undefined,
+            STABLE_VALIDATION_REASONS.command,
           );
         }
-        if (outcome.status === "partial") {
-          return makeCoverageResult(
-            operationId,
-            range,
-            "partial",
-            outcome.series,
-            outcome.occurrences,
-            outcome.intentionalAbsences,
-            outcome.failedSeriesIds,
-          );
-        }
-        if (outcome.status === "coverage-unavailable") {
-          return makeCoverageResult(
-            operationId,
-            range,
-            "unavailable",
-            [],
-            [],
-            [],
-            [],
-            outcome.reason,
-          );
-        }
-        return mapLifecycleFailure(
-          outcome as unknown as
-            | NotFoundOutcome
-            | InvalidTransitionOutcome
-            | ConflictOutcome
-            | CoverageUnavailableOutcome
-            | PrewarmSkippedOutcome,
-          RECURRING_TASK_OPERATION_IDS.ensureCoverage,
+        throw error;
+      }
+      if (outcome.status === "complete" || outcome.status === "already-applied") {
+        return makeCoverageResult(
           operationId,
+          range,
+          "complete",
+          outcome.series,
+          outcome.occurrences,
+          outcome.intentionalAbsences,
         );
-      } catch {
+      }
+      if (outcome.status === "partial") {
+        return makeCoverageResult(
+          operationId,
+          range,
+          "partial",
+          outcome.series,
+          outcome.occurrences,
+          outcome.intentionalAbsences,
+          outcome.failedSeriesIds,
+        );
+      }
+      if (outcome.status === "coverage-unavailable") {
         return makeCoverageResult(
           operationId,
           range,
@@ -650,9 +644,19 @@ export function createRecurringTaskCapabilitiesForLifecycle(
           [],
           [],
           [],
-          "Coverage could not be ensured",
+          outcome.reason,
         );
       }
+      return mapLifecycleFailure(
+        outcome as unknown as
+          | NotFoundOutcome
+          | InvalidTransitionOutcome
+          | ConflictOutcome
+          | CoverageUnavailableOutcome
+          | PrewarmSkippedOutcome,
+        RECURRING_TASK_OPERATION_IDS.ensureCoverage,
+        operationId,
+      );
     },
   };
 
