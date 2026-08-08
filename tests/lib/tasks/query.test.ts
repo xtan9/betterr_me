@@ -63,6 +63,41 @@ describe("authenticated task query", () => {
     });
   });
 
+  it("derives the default upcoming horizon as an inclusive local-date range", async () => {
+    const events: string[] = [];
+    const query = createTaskQuery(principal, createDependencies(events));
+
+    await query.read({
+      type: "upcoming",
+      date: "2026-08-07",
+    });
+
+    expect(events).toEqual([
+      "coverage:2026-08-07:2026-08-14",
+      "read:user-1:upcoming",
+    ]);
+  });
+
+  it("ensures date-shaped due-date lists but skips Coverage for other unbounded filters", async () => {
+    const events: string[] = [];
+    const query = createTaskQuery(principal, createDependencies(events));
+
+    await query.read({
+      type: "list",
+      filters: { due_date: "2026-08-07" },
+    });
+    await query.read({
+      type: "list",
+      filters: { is_completed: false, priority: 2 },
+    });
+
+    expect(events).toEqual([
+      "coverage:2026-08-07:2026-08-07",
+      "read:user-1:list",
+      "read:user-1:list",
+    ]);
+  });
+
   it("returns materialized Tasks with the shared partial Coverage fact", async () => {
     const events: string[] = [];
     const completeness = {

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockCreateCapabilities, mockTasksDB } = vi.hoisted(() => ({
-  mockCreateCapabilities: vi.fn(),
+const { mockCreateCoverageRead, mockTasksDB } = vi.hoisted(() => ({
+  mockCreateCoverageRead: vi.fn(),
   mockTasksDB: {
     getTodayTasks: vi.fn(),
     getUpcomingTasks: vi.fn(),
@@ -18,8 +18,8 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-vi.mock("@/lib/recurring-tasks", () => ({
-  createAuthenticatedRecurringTaskCapabilities: mockCreateCapabilities,
+vi.mock("@/lib/recurring-tasks/coverage-read", () => ({
+  createCoverageRead: mockCreateCoverageRead,
 }));
 
 import { createSupabaseTaskQuery } from "@/lib/tasks/supabase-query";
@@ -38,16 +38,12 @@ describe("Supabase task query", () => {
 
   it("binds Coverage to the authenticated principal and reads materialized Tasks", async () => {
     const ensure = vi.fn().mockResolvedValue({
-      type: "coverage",
       status: "complete",
-      completeness: {
-        status: "complete",
-        type: "complete",
-        requestedRange: { from: "2026-08-07", to: "2026-08-09" },
-        failedSeriesIds: [],
-      },
+      type: "complete",
+      requestedRange: { from: "2026-08-07", to: "2026-08-09" },
+      failedSeriesIds: [],
     });
-    mockCreateCapabilities.mockReturnValue({ coverage: { ensure } });
+    mockCreateCoverageRead.mockReturnValue({ ensure });
     mockTasksDB.getUpcomingTasks.mockResolvedValue([{ id: "task-1" }]);
 
     const query = createSupabaseTaskQuery(supabase, principal);
@@ -57,10 +53,14 @@ describe("Supabase task query", () => {
       days: 2,
     });
 
-    expect(mockCreateCapabilities).toHaveBeenCalledWith(supabase, principal);
+    expect(mockCreateCoverageRead).toHaveBeenCalledWith({
+      supabase,
+      principal,
+      source: "task",
+    });
     expect(ensure).toHaveBeenCalledWith({
-      operationId: "task-read-coverage:user-1:2026-08-07:2026-08-09",
-      range: { from: "2026-08-07", to: "2026-08-09" },
+      from: "2026-08-07",
+      to: "2026-08-09",
     });
     expect(mockTasksDB.getUpcomingTasks).toHaveBeenCalledWith(
       "user-1",
@@ -80,16 +80,12 @@ describe("Supabase task query", () => {
 
   it("preserves partial Coverage facts while returning available materialized Tasks", async () => {
     const ensure = vi.fn().mockResolvedValue({
-      type: "coverage",
       status: "partial",
-      completeness: {
-        status: "partial",
-        type: "partial",
-        requestedRange: { from: "2026-08-07", to: "2026-08-07" },
-        failedSeriesIds: ["series-2", "series-1", "series-2"],
-      },
+      type: "partial",
+      requestedRange: { from: "2026-08-07", to: "2026-08-07" },
+      failedSeriesIds: ["series-2", "series-1", "series-2"],
     });
-    mockCreateCapabilities.mockReturnValue({ coverage: { ensure } });
+    mockCreateCoverageRead.mockReturnValue({ ensure });
     mockTasksDB.getTodayTasks.mockResolvedValue([{ id: "task-1" }]);
 
     const query = createSupabaseTaskQuery(supabase, principal);
@@ -107,16 +103,15 @@ describe("Supabase task query", () => {
     expect(result.tasks).toEqual([{ id: "task-1" }]);
   });
 
-  it("maps a capability failure to unavailable Coverage before an AI read", async () => {
+  it("fails before reading materialized Tasks when Coverage is incomplete", async () => {
     const ensure = vi.fn().mockResolvedValue({
-      type: "coverage-unavailable",
-      status: "coverage-unavailable",
-      operation: "recurring-task.coverage.ensure",
-      operationId: "task-read-coverage:user-1:2026-08-07:2026-08-07",
+      status: "unavailable",
+      type: "unavailable",
       requestedRange: { from: "2026-08-07", to: "2026-08-07" },
+      failedSeriesIds: [],
       reason: "Coverage service unavailable",
     });
-    mockCreateCapabilities.mockReturnValue({ coverage: { ensure } });
+    mockCreateCoverageRead.mockReturnValue({ ensure });
 
     const query = createSupabaseTaskQuery(supabase, principal);
     const result = await query.read(
