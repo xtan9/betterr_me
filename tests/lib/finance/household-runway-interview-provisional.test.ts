@@ -366,18 +366,16 @@ describe("provisional Plan Adjustment and completed-Plan lifecycle", () => {
       "all-fields-apply",
     );
 
-    expect(applied.state.draft.answers.expense_items).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: "large-expense",
-          interruption_amount_cents: 0,
-        }),
-        expect.objectContaining({
-          id: "small-expense",
-          interruption_amount_cents: 150_000,
-        }),
-      ]),
-    );
+    expect(applied.state.draft.answers.expense_items).toEqual([
+      expect.objectContaining({
+        id: "large-expense",
+        interruption_amount_cents: 0,
+      }),
+      expect.objectContaining({
+        id: "small-expense",
+        interruption_amount_cents: 150_000,
+      }),
+    ]);
     expect(applied.state.draft.answers.available_cash).toEqual({
       cents: 3_200_000,
       confidence: "confirmed",
