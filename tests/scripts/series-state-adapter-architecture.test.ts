@@ -34,11 +34,6 @@ describe("Series capability architecture boundaries", () => {
       "export async function DELETE",
       "type SeriesCommandResult",
     );
-    const taskDelete = section(
-      taskRoute,
-      "export async function DELETE",
-      "function toOccurrenceInput",
-    );
 
     expect(recurringPatch).toContain("createAuthenticatedRecurringTaskCapabilities");
     expect(recurringPatch).toContain("seriesCommands");
@@ -52,15 +47,12 @@ describe("Series capability architecture boundaries", () => {
     expect(recurringDelete).toContain("toSeriesStateCommand");
     expect(recurringDelete).not.toContain("createTaskWrites(supabase,");
     expect(recurringDelete).not.toContain("createSupabaseSeriesStateAdapter(supabase)");
-    expect(taskRoute).toContain("createSupabaseSeriesStateAdapter(supabase)");
-    expect(taskRoute).toContain(".editScope");
-    expect(taskDelete).toContain("createTaskWrites(supabase,");
-    expect(taskDelete).toContain(".delete({");
-    expect(taskDelete).toContain("createActivatedRecurringTaskLifecycle(supabase)");
-    expect(taskDelete).not.toContain("createSupabaseSeriesStateAdapter(supabase)");
+    expect(taskRoute).toContain("createAuthenticatedTaskCommands(");
+    expect(taskRoute).not.toContain("createSupabaseSeriesStateAdapter(supabase)");
+    expect(taskRoute).not.toContain("createTaskWrites(supabase,");
   });
 
-  it("keeps task-scoped compatibility private while routing AI Series mutations through capabilities", () => {
+  it("routes Task commands and AI Series mutations through their supported boundaries", () => {
     const tools = source("lib/ai/tools/tasks.ts");
     const update = section(tools, 'name: "updateTask"', 'name: "deleteTask"');
     const deleteTask = section(tools, 'name: "deleteTask"', 'name: "getRecurringTasks"');
@@ -81,44 +73,28 @@ describe("Series capability architecture boundaries", () => {
     );
     const end = tools.slice(tools.indexOf('name: "deleteRecurringTask"'));
 
-    expect(update).toContain("createSupabaseSeriesStateAdapter(");
-    expect(update).toContain("ctx.supabase");
-    expect(update).not.toContain("createSupabaseRecurringTaskLifecycle(ctx.supabase)");
+    expect(update).toContain("createTaskCommandsForUser(");
+    expect(update).toContain("taskCommandErrorMessage(commandOutcome)");
+    expect(update).not.toContain("createSupabaseSeriesStateAdapter(");
+    expect(deleteTask).toContain("createTaskCommandsForUser(");
+    expect(deleteTask).toContain("taskCommandErrorMessage(commandOutcome)");
+    expect(deleteTask).not.toContain("createTaskWrites(ctx.supabase,");
+    expect(deleteTask).not.toContain(".delete({");
+    expect(deleteTask).toContain("Always confirm with the user first");
+
     for (const operation of [recurringUpdate, pause, resume]) {
       expect(operation).toContain("recurringTaskCapabilities(ctx).seriesCommands");
       expect(operation).not.toContain("createSupabaseSeriesStateAdapter(");
       expect(operation).not.toContain("createTaskWrites(");
+      expect(operation).not.toContain("createSupabaseRecurringTaskLifecycle(ctx.supabase)");
     }
     expect(recurringUpdate).toContain("toReviseSeriesCommand");
     expect(pause).toContain("toSeriesStateCommand");
     expect(resume).toContain("toSeriesStateCommand");
     expect(end).toContain("recurringTaskCapabilities(ctx).seriesCommands.endSeries");
     expect(end).toContain("toSeriesStateCommand");
-    expect(end).not.toContain("createTaskWrites(");
     expect(end).not.toContain("createSupabaseSeriesStateAdapter(");
     expect(end).toContain("Always confirm with the user first");
-    expect(deleteTask).toContain("Always confirm with the user first");
-    for (const operation of [recurringUpdate, pause, resume, end]) {
-      expect(operation).not.toContain("createSupabaseRecurringTaskLifecycle(ctx.supabase)");
-    }
-    /*
-     * The generic task commands intentionally retain their compatibility
-     * boundary until the task-scoped command contract is delivered.
-     */
-    for (const operation of [update]) {
-      expect(operation).toContain("createSupabaseSeriesStateAdapter(");
-      expect(operation).toContain("ctx.supabase");
-      expect(operation).not.toContain("createSupabaseRecurringTaskLifecycle(ctx.supabase)");
-    }
-    for (const operation of [pause, resume]) {
-      expect(operation).toContain("recurringTaskCapabilities(ctx)");
-      expect(operation).toContain("seriesCommands");
-      expect(operation).not.toContain("createSupabaseSeriesStateAdapter(");
-    }
-    expect(deleteTask).toContain("createTaskWrites(ctx.supabase,");
-    expect(deleteTask).toContain(".delete({");
-    expect(deleteTask).toMatch(/taskDeletionErrorMessage\(\s*outcome/);
-    expect(deleteTask).not.toContain("createSupabaseSeriesStateAdapter(");
   });
 
   it("activates lifecycle mode without constructing legacy writers", () => {

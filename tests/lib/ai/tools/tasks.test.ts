@@ -443,7 +443,14 @@ describe("taskTools", () => {
   it("updateTask transforms dueDate and projectId, strips undefined", async () => {
     const ctx = makeCtx();
     const updateTask = taskTools().find((t) => t.name === "updateTask")!;
-    mockUpdateTask.mockResolvedValue({ id: "t1" });
+    mockRpc.mockResolvedValueOnce({
+      data: {
+        status: "complete",
+        type: "complete",
+        task: { id: "t1" },
+      },
+      error: null,
+    });
     await updateTask.execute(
       {
         taskId: "t1",
@@ -453,10 +460,18 @@ describe("taskTools", () => {
       },
       ctx,
     );
-    expect(mockUpdateTask).toHaveBeenCalledWith("t1", "user-123", {
-      title: "New",
-      due_date: "2026-05-01",
-      project_id: "p2",
+    expect(mockRpc).toHaveBeenCalledWith("task_command_atomic", {
+      p_operation: "edit",
+      p_request: {
+        userId: "user-123",
+        taskId: "t1",
+        idempotencyKey: expect.any(String),
+        updates: {
+          title: "New",
+          due_date: "2026-05-01",
+          project_id: "p2",
+        },
+      },
     });
   });
 

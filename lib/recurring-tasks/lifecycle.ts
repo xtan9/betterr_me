@@ -288,6 +288,9 @@ export interface EnsureUserCoverageRequest extends LifecycleContext {
 
 export interface ReviseSeriesRequest extends LifecycleContext {
   seriesId: string;
+  /** Visible Task identity for scoped command routing; revalidated in-transaction. */
+  taskId?: string;
+  occurrenceId?: string;
   effectiveDate?: string;
   recurrenceRule?: RecurrenceRule;
   defaults?: Partial<SeriesDefaults>;
@@ -301,6 +304,11 @@ export interface ReviseSeriesRequest extends LifecycleContext {
 export interface OccurrenceUpdateRequest extends LifecycleContext {
   seriesId: string;
   occurrenceId: string;
+  /** Visible Task identity and requested scope are authoritative only after revalidation. */
+  taskId?: string;
+  scope?: LifecycleScope;
+  scheduledDate?: string;
+  expectedRevisionId?: string;
   updates: OccurrenceOverrides;
   completed?: boolean;
 }
@@ -320,6 +328,12 @@ export interface OccurrenceCommandRequest extends LifecycleContext {
 
 export interface SeriesCommandRequest extends LifecycleContext {
   seriesId: string;
+  /** Visible Task identity and deletion scope for scoped Series commands. */
+  taskId?: string;
+  occurrenceId?: string;
+  scope?: LifecycleScope;
+  scheduledDate?: string;
+  expectedRevisionId?: string;
   coverage?: LocalDateRange;
 }
 
@@ -704,6 +718,12 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
     return this.mutateExisting(request, "revise-series", (series) => {
       const invalid = checkExpectedRevision(series, request);
       if (invalid) return invalid;
+      const identity = validateScopedSeriesTarget(
+        series,
+        request,
+        ["following", "all"],
+      );
+      if (identity) return identity;
       if (series.status === "ended") {
         return invalidTransition("Ended Series cannot be revised");
       }
@@ -794,6 +814,8 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
       if (invalid) return invalid;
       const occurrence = ownedOccurrence(series, request.occurrenceId);
       if (!occurrence) return notFound();
+      const identity = validateOccurrenceCommand(series, occurrence, request);
+      if (identity) return identity;
       if (occurrence.state === "completed") {
         if (request.completed === false && Object.keys(request.updates).length === 0) {
           occurrence.state = isDateProducedBySeries(series, occurrence.scheduledDate)
@@ -1025,6 +1047,12 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
     return this.mutateExisting(request, "end-series", (series) => {
       const invalid = checkExpectedRevision(series, request);
       if (invalid) return invalid;
+      const identity = validateScopedSeriesTarget(
+        series,
+        request,
+        ["following", "all"],
+      );
+      if (identity) return identity;
       if (series.status === "ended") return summarize(series);
       const effectiveDate = this.resolveEffectiveDate(request, series.timeZone);
       if (typeof effectiveDate !== "string") return effectiveDate;
@@ -1058,7 +1086,11 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
       series.status = "ended";
       series.revisionToken += 1;
       series.updatedAt = this.clock().toISOString();
-      reconcileEligibleOccurrences(series, effectiveDate);
+      if (request.scope === "all") {
+        withdrawAllEligibleOccurrences(series);
+      } else {
+        reconcileEligibleOccurrences(series, effectiveDate);
+      }
       const coverage = request.coverage
         ?? coverageFrom(series.coverageHorizon, effectiveDate);
       return coverage
@@ -1617,7 +1649,12 @@ function ownedOccurrence(
 function validateOccurrenceCommand(
   series: RecurringTaskSeries,
   occurrence: TaskOccurrence,
-  request: OccurrenceCommandRequest,
+  request: {
+    scope?: LifecycleScope;
+    taskId?: string;
+    scheduledDate?: string;
+    expectedRevisionId?: string;
+  },
 ): NotFoundOutcome | InvalidTransitionOutcome | ConflictOutcome | undefined {
   if (request.scope !== undefined && request.scope !== "this") {
     return invalidTransition(
@@ -1647,6 +1684,55 @@ function validateOccurrenceCommand(
     };
   }
   if (occurrence.seriesId !== series.id) return notFound();
+  return undefined;
+}
+
+/**
+ * Scoped Series commands receive a visible Task as a routing hint. The
+ * transaction must prove that the Task still belongs to the requested
+ * occurrence and Series before changing a revision or Series state.
+ */
+function validateScopedSeriesTarget(
+  series: RecurringTaskSeries,
+  request: {
+    scope?: LifecycleScope;
+    taskId?: string;
+    occurrenceId?: string;
+    scheduledDate?: string;
+    expectedRevisionId?: string;
+  },
+  allowedScopes: readonly LifecycleScope[],
+): NotFoundOutcome | InvalidTransitionOutcome | ConflictOutcome | undefined {
+  const hasVisibleIdentity = request.taskId !== undefined
+    || request.occurrenceId !== undefined
+    || request.scheduledDate !== undefined
+    || request.expectedRevisionId !== undefined;
+  if (!hasVisibleIdentity) return undefined;
+  if (!request.taskId || !request.occurrenceId) return notFound();
+  if (!request.scope || !allowedScopes.includes(request.scope)) {
+    return invalidTransition(
+      `Task Command scope must be ${allowedScopes.join(" or ")}`,
+    );
+  }
+  const occurrence = ownedOccurrence(series, request.occurrenceId);
+  if (!occurrence || occurrence.seriesId !== series.id) return notFound();
+  if (occurrence.taskId !== request.taskId) return notFound();
+  if (
+    request.scheduledDate !== undefined
+    && occurrence.scheduledDate !== request.scheduledDate
+  ) {
+    return notFound();
+  }
+  if (
+    request.expectedRevisionId !== undefined
+    && occurrence.revisionId !== request.expectedRevisionId
+  ) {
+    return {
+      status: "conflict",
+      type: "conflict",
+      reason: "Task occurrence revision changed concurrently",
+    };
+  }
   return undefined;
 }
 

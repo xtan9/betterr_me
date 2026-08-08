@@ -4,16 +4,29 @@ import type { AuthenticatedPrincipal } from "@/lib/auth/request-context";
 import { TasksDB } from "@/lib/db";
 import type { Task } from "@/lib/db/types";
 import { createActivatedRecurringTaskLifecycle } from "@/lib/recurring-tasks/activation";
+import {
+  decodeSeriesVersion,
+  encodeSeriesVersion,
+} from "@/lib/recurring-tasks/capabilities";
 import type {
+  OccurrenceOverrides,
   LifecycleOutcome,
   OccurrenceCommandRequest,
+  OccurrenceUpdateRequest,
   RecurringTaskLifecyclePort,
+  ReviseSeriesRequest,
+  SeriesCommandRequest,
 } from "@/lib/recurring-tasks/lifecycle";
+import type { TaskUpdateValues } from "@/lib/validations/task";
 
-/** The only state mutations in the shared Task Commands contract. */
-export type TaskCommandType = "complete" | "reopen" | "skip";
+export { decodeSeriesVersion, encodeSeriesVersion };
 
-export type TaskCommandScope = "this";
+/** Mutations accepted by every interactive Task delivery channel. */
+export type TaskCommandType = "complete" | "reopen" | "skip" | "edit";
+
+export type TaskCommandScope = "this" | "following" | "all";
+
+export type TaskCommandUpdates = TaskUpdateValues;
 
 export interface TaskCommandIntent {
   type: TaskCommandType;
@@ -21,6 +34,11 @@ export interface TaskCommandIntent {
   taskId: string;
   operationId: string;
   scope?: TaskCommandScope;
+  updates?: TaskCommandUpdates;
+  effectiveDate?: string;
+  /** Opaque public Series version required for future/all Series effects. */
+  expectedVersion?: string;
+  /** Compatibility for already-bound occurrence state callers. */
   expectedRevisionToken?: number;
 }
 
@@ -49,6 +67,10 @@ export interface TaskCommandOrdinaryRequest {
   userId: string;
   taskId: string;
   operationId: string;
+  scope?: TaskCommandScope;
+  updates?: TaskCommandUpdates;
+  effectiveDate?: string;
+  expectedVersion?: string;
 }
 
 export type TaskCommandPersistenceOutcome =
@@ -60,7 +82,10 @@ export type TaskCommandPersistenceOutcome =
       reason?: string;
       expectedRevisionToken?: number;
       actualRevisionToken?: number;
-    };
+      expectedVersion?: string;
+      actualVersion?: string;
+    }
+  | { status: "coverage-unavailable"; reason: string };
 
 export interface TaskCommandPersistence {
   /** The visible Task projection is a routing preflight, never an authority. */
@@ -77,10 +102,18 @@ export interface TaskCommandPersistence {
     skip(
       request: TaskCommandOrdinaryRequest,
     ): Promise<TaskCommandPersistenceOutcome>;
+    edit(
+      request: TaskCommandOrdinaryRequest,
+    ): Promise<TaskCommandPersistenceOutcome>;
   };
   lifecycle: Pick<
     RecurringTaskLifecyclePort,
-    "completeOccurrence" | "reopenOccurrence" | "skipOccurrence"
+    | "completeOccurrence"
+    | "reopenOccurrence"
+    | "skipOccurrence"
+    | "editOccurrence"
+    | "reviseSeries"
+    | "endSeries"
   >;
 }
 
@@ -114,6 +147,15 @@ export type TaskCommandFailure =
       reason?: string;
       expectedRevisionToken?: number;
       actualRevisionToken?: number;
+      expectedVersion?: string;
+      actualVersion?: string;
+    }
+  | {
+      status: "coverage-unavailable";
+      type: "coverage-unavailable";
+      operation: TaskCommandType;
+      operationId: string;
+      reason: string;
     };
 
 export type TaskCommandOutcome = TaskCommandSuccess | TaskCommandFailure;
@@ -130,23 +172,40 @@ export class TaskCommands {
     if (!normalized.ok) return normalized.outcome;
 
     const { operationId, operation, userId, taskId, scope } = normalized.value;
-    if (scope !== undefined && scope !== "this") {
+    if (
+      (operation === "complete" || operation === "reopen")
+      && scope !== undefined
+      && scope !== "this"
+    ) {
       return invalidTransition(
         operation,
         operationId,
         "Task Commands only support the this scope for occurrence state",
       );
     }
+    if (operation === "edit" && !normalized.value.updates) {
+      return invalidTransition(
+        operation,
+        operationId,
+        "Task Command edits require at least one update",
+      );
+    }
+    if (
+      operation === "edit"
+      && normalized.value.updates
+      && Object.keys(normalized.value.updates).length === 0
+    ) {
+      return invalidTransition(
+        operation,
+        operationId,
+        "Task Command edits require at least one update",
+      );
+    }
 
     const task = await this.persistence.getTask(taskId, userId);
     if (!task) {
       const replay = this.persistence.replay
-        ? await this.persistence.replay({
-            type: operation,
-            userId,
-            taskId,
-            operationId,
-          })
+        ? await this.persistence.replay(toCommandRequest(normalized.value))
         : { status: "not-found" as const };
       return mapPersistenceOutcome(replay, operation, operationId);
     }
@@ -161,24 +220,40 @@ export class TaskCommands {
       );
     }
 
+    if (
+      operation === "edit"
+      && !hasSeries
+      && scope !== undefined
+      && scope !== "this"
+    ) {
+      return invalidTransition(
+        operation,
+        operationId,
+        "Task Commands only support the this scope for ordinary Tasks",
+      );
+    }
+
     if (hasSeries && hasOccurrence) {
       return this.executeRecurring(normalized.value, task);
     }
 
-    if (operation === "skip" && scope !== undefined) {
+    if (
+      operation === "skip"
+      && scope !== undefined
+      && scope !== "this"
+      && (!hasSeries || !hasOccurrence)
+    ) {
       return invalidTransition(
         operation,
         operationId,
-        "Recurring deletion scope requires a Task Occurrence",
+        "Task Commands only support the this scope for occurrence state",
       );
     }
 
-    const persistenceOutcome = await this.persistence.ordinary[operation]({
-      type: operation,
-      userId,
-      taskId,
-      operationId,
-    });
+    const ordinaryRequest = toCommandRequest(normalized.value);
+    const persistenceOutcome = operation === "edit"
+      ? await this.persistence.ordinary.edit(ordinaryRequest)
+      : await this.persistence.ordinary[operation](ordinaryRequest);
     return mapPersistenceOutcome(persistenceOutcome, operation, operationId);
   }
 
@@ -197,6 +272,19 @@ export class TaskCommands {
       );
     }
 
+    if (operation === "edit") {
+      return this.executeRecurringEdit(intent, task, seriesId, occurrenceId);
+    }
+    if (operation === "skip" && intent.scope !== undefined && intent.scope !== "this") {
+      return this.executeRecurringEnd(intent, task, seriesId, occurrenceId);
+    }
+
+    const expected = decodeExpectedRevision(
+      intent,
+      seriesId,
+      false,
+    );
+    if (!expected.ok) return expected.outcome;
     const request: OccurrenceCommandRequest = {
       userId: intent.userId,
       taskId: task.id,
@@ -206,9 +294,9 @@ export class TaskCommands {
       ...(task.scheduled_date === undefined || task.scheduled_date === null
         ? {}
         : { scheduledDate: task.scheduled_date }),
-      ...(intent.expectedRevisionToken === undefined
+      ...(expected.revisionToken === undefined
         ? {}
-        : { expectedRevisionToken: intent.expectedRevisionToken }),
+        : { expectedRevisionToken: expected.revisionToken }),
       idempotencyKey: intent.operationId,
     };
 
@@ -216,7 +304,13 @@ export class TaskCommands {
       lifecycleMethod(operation)
     ](request);
     if (!isLifecycleSuccess(lifecycleOutcome)) {
-      return mapLifecycleFailure(lifecycleOutcome, operation, intent.operationId);
+      return mapLifecycleFailure(
+        lifecycleOutcome,
+        operation,
+        intent.operationId,
+        seriesId,
+        intent.expectedVersion !== undefined,
+      );
     }
 
     const current = operation === "skip"
@@ -227,6 +321,161 @@ export class TaskCommands {
       type: lifecycleOutcome.status,
       operation,
       operationId: intent.operationId,
+      ...(current ? { task: current } : {}),
+    };
+  }
+
+  private async executeRecurringEdit(
+    intent: TaskCommandIntent,
+    task: Task,
+    seriesId: string,
+    occurrenceId: string,
+  ): Promise<TaskCommandOutcome> {
+    const expected = decodeExpectedRevision(
+      intent,
+      seriesId,
+      intent.scope !== undefined && intent.scope !== "this",
+    );
+    if (!expected.ok) return expected.outcome;
+    const updates = intent.updates ?? {};
+    if (intent.scope !== undefined && intent.scope !== "this") {
+      const defaults = taskUpdatesToSeriesDefaults(updates);
+      if (defaults === undefined) {
+        return invalidTransition(
+          "edit",
+          intent.operationId,
+          "Scoped Series edits cannot change completion state or due date",
+        );
+      }
+      const request: ReviseSeriesRequest = {
+        userId: intent.userId,
+        taskId: task.id,
+        occurrenceId,
+        seriesId,
+        scope: intent.scope,
+        effectiveDate: intent.effectiveDate ?? task.scheduled_date ?? undefined,
+        defaults,
+        ...(expected.revisionToken === undefined
+          ? {}
+          : { expectedRevisionToken: expected.revisionToken }),
+        idempotencyKey: intent.operationId,
+      };
+      const outcome = await this.persistence.lifecycle.reviseSeries(request);
+      if (!isLifecycleSuccess(outcome)) {
+        return mapLifecycleFailure(
+          outcome,
+          "edit",
+          intent.operationId,
+          seriesId,
+          true,
+        );
+      }
+      return await this.successAfterLifecycle(
+        outcome,
+        "edit",
+        intent.operationId,
+        intent.userId,
+        task.id,
+      );
+    }
+
+    const occurrence = taskUpdatesToOccurrenceRequest(updates);
+    if (occurrence === undefined) {
+      return invalidTransition(
+        "edit",
+        intent.operationId,
+        "Task Command edits require at least one supported update",
+      );
+    }
+    const request: OccurrenceUpdateRequest = {
+      userId: intent.userId,
+      taskId: task.id,
+      seriesId,
+      occurrenceId,
+      scope: "this",
+      ...(task.scheduled_date === undefined || task.scheduled_date === null
+        ? {}
+        : { scheduledDate: task.scheduled_date }),
+      updates: occurrence.updates,
+      ...(occurrence.completed === undefined
+        ? {}
+        : { completed: occurrence.completed }),
+      ...(expected.revisionToken === undefined
+        ? {}
+        : { expectedRevisionToken: expected.revisionToken }),
+      idempotencyKey: intent.operationId,
+    };
+    const outcome = await this.persistence.lifecycle.editOccurrence(request);
+    if (!isLifecycleSuccess(outcome)) {
+      return mapLifecycleFailure(
+        outcome,
+        "edit",
+        intent.operationId,
+        seriesId,
+        intent.expectedVersion !== undefined,
+      );
+    }
+    return await this.successAfterLifecycle(
+      outcome,
+      "edit",
+      intent.operationId,
+      intent.userId,
+      task.id,
+    );
+  }
+
+  private async executeRecurringEnd(
+    intent: TaskCommandIntent,
+    task: Task,
+    seriesId: string,
+    occurrenceId: string,
+  ): Promise<TaskCommandOutcome> {
+    const expected = decodeExpectedRevision(intent, seriesId, true);
+    if (!expected.ok) return expected.outcome;
+    const request: SeriesCommandRequest = {
+      userId: intent.userId,
+      taskId: task.id,
+      occurrenceId,
+      seriesId,
+      scope: intent.scope,
+      effectiveDate: intent.effectiveDate ?? task.scheduled_date ?? undefined,
+      ...(expected.revisionToken === undefined
+        ? {}
+        : { expectedRevisionToken: expected.revisionToken }),
+      idempotencyKey: intent.operationId,
+    };
+    const outcome = await this.persistence.lifecycle.endSeries(request);
+    if (!isLifecycleSuccess(outcome)) {
+      return mapLifecycleFailure(
+        outcome,
+        "skip",
+        intent.operationId,
+        seriesId,
+        true,
+      );
+    }
+    return await this.successAfterLifecycle(
+      outcome,
+      "skip",
+      intent.operationId,
+      intent.userId,
+      task.id,
+    );
+  }
+
+  private async successAfterLifecycle(
+    outcome: Extract<LifecycleOutcome<unknown>, { status: "complete" | "already-applied" }>,
+    operation: TaskCommandType,
+    operationId: string,
+    userId: string,
+    taskId: string,
+  ): Promise<TaskCommandSuccess> {
+    const current = await this.persistence.getTask(taskId, userId);
+    return {
+      status: outcome.status,
+      type: outcome.status,
+      operation,
+      operationId,
       ...(current ? { task: current } : {}),
     };
   }
@@ -327,6 +576,10 @@ class SupabaseTaskCommandOrdinaryPersistence {
     return this.call(request);
   }
 
+  edit(request: TaskCommandOrdinaryRequest) {
+    return this.call(request);
+  }
+
   replay(request: TaskCommandOrdinaryRequest) {
     return this.callReplay(request);
   }
@@ -340,6 +593,14 @@ class SupabaseTaskCommandOrdinaryPersistence {
         userId: request.userId,
         taskId: request.taskId,
         idempotencyKey: request.operationId,
+        ...(request.scope === undefined ? {} : { scope: request.scope }),
+        ...(request.updates === undefined ? {} : { updates: request.updates }),
+        ...(request.effectiveDate === undefined
+          ? {}
+          : { effectiveDate: request.effectiveDate }),
+        ...(request.expectedVersion === undefined
+          ? {}
+          : { expectedVersion: request.expectedVersion }),
       },
     });
     if (error) throw error;
@@ -355,6 +616,14 @@ class SupabaseTaskCommandOrdinaryPersistence {
         userId: request.userId,
         taskId: request.taskId,
         idempotencyKey: request.operationId,
+        ...(request.scope === undefined ? {} : { scope: request.scope }),
+        ...(request.updates === undefined ? {} : { updates: request.updates }),
+        ...(request.effectiveDate === undefined
+          ? {}
+          : { effectiveDate: request.effectiveDate }),
+        ...(request.expectedVersion === undefined
+          ? {}
+          : { expectedVersion: request.expectedVersion }),
       },
     });
     if (error) throw error;
@@ -410,6 +679,140 @@ function normalizeIntent(
   };
 }
 
+function toCommandRequest(
+  intent: TaskCommandIntent & { operation: TaskCommandType },
+): TaskCommandOrdinaryRequest {
+  return {
+    type: intent.operation,
+    userId: intent.userId,
+    taskId: intent.taskId,
+    operationId: intent.operationId,
+    ...(intent.scope === undefined ? {} : { scope: intent.scope }),
+    ...(intent.updates === undefined ? {} : { updates: intent.updates }),
+    ...(intent.effectiveDate === undefined
+      ? {}
+      : { effectiveDate: intent.effectiveDate }),
+    ...(intent.expectedVersion === undefined
+      ? {}
+      : { expectedVersion: intent.expectedVersion }),
+  };
+}
+
+function decodeExpectedRevision(
+  intent: TaskCommandIntent,
+  seriesId: string,
+  required: boolean,
+):
+  | { ok: true; revisionToken?: number }
+  | { ok: false; outcome: TaskCommandFailure } {
+  if (intent.expectedVersion !== undefined) {
+    const decoded = decodeSeriesVersion(intent.expectedVersion, seriesId);
+    if (!decoded) {
+      return {
+        ok: false,
+        outcome: invalidTransition(
+          intent.type,
+          intent.operationId,
+          "Series version is invalid",
+        ),
+      };
+    }
+    return { ok: true, revisionToken: decoded.revisionToken };
+  }
+  if (required) {
+    return {
+      ok: false,
+      outcome: invalidTransition(
+        intent.type,
+        intent.operationId,
+        "An expected opaque Series version is required",
+      ),
+    };
+  }
+  return {
+    ok: true,
+    ...(intent.expectedRevisionToken === undefined
+      ? {}
+      : { revisionToken: intent.expectedRevisionToken }),
+  };
+}
+
+function taskUpdatesToOccurrenceRequest(
+  updates: TaskCommandUpdates,
+): { updates: OccurrenceOverrides; completed?: boolean } | undefined {
+  const occurrenceUpdates: OccurrenceOverrides = {};
+  if (updates.title !== undefined) occurrenceUpdates.title = updates.title.trim();
+  if (updates.description !== undefined) {
+    occurrenceUpdates.description = updates.description?.trim() || null;
+  }
+  if (updates.priority !== undefined) occurrenceUpdates.priority = updates.priority;
+  if (updates.category_id !== undefined) {
+    occurrenceUpdates.categoryId = updates.category_id?.trim() || null;
+  }
+  if (updates.due_date !== undefined) {
+    occurrenceUpdates.dueDate = updates.due_date?.trim() || null;
+  }
+  if (updates.due_time !== undefined) {
+    occurrenceUpdates.dueTime = updates.due_time?.trim() || null;
+  }
+  if (updates.section !== undefined) occurrenceUpdates.section = updates.section;
+  if (updates.sort_order !== undefined) occurrenceUpdates.sortOrder = updates.sort_order;
+  if (updates.project_id !== undefined) {
+    occurrenceUpdates.projectId = updates.project_id?.trim() || null;
+  }
+  if (updates.completion_difficulty !== undefined) {
+    return undefined;
+  }
+
+  let completed = updates.is_completed;
+  if (updates.status !== undefined) {
+    if (updates.status === "done" || updates.status === "todo") {
+      completed = updates.status === "done";
+    } else {
+      occurrenceUpdates.status = updates.status;
+    }
+  }
+  if (Object.keys(occurrenceUpdates).length === 0 && completed === undefined) {
+    return undefined;
+  }
+  return {
+    updates: occurrenceUpdates,
+    ...(completed === undefined ? {} : { completed }),
+  };
+}
+
+function taskUpdatesToSeriesDefaults(
+  updates: TaskCommandUpdates,
+): ReviseSeriesRequest["defaults"] | undefined {
+  if (
+    updates.due_date !== undefined
+    || updates.is_completed !== undefined
+    || updates.completion_difficulty !== undefined
+  ) {
+    return undefined;
+  }
+  const defaults = {
+    ...(updates.title === undefined ? {} : { title: updates.title.trim() }),
+    ...(updates.description === undefined
+      ? {}
+      : { description: updates.description?.trim() || null }),
+    ...(updates.priority === undefined ? {} : { priority: updates.priority }),
+    ...(updates.category_id === undefined
+      ? {}
+      : { categoryId: updates.category_id?.trim() || null }),
+    ...(updates.due_time === undefined
+      ? {}
+      : { dueTime: updates.due_time?.trim() || null }),
+    ...(updates.status === undefined ? {} : { status: updates.status }),
+    ...(updates.section === undefined ? {} : { section: updates.section }),
+    ...(updates.sort_order === undefined ? {} : { sortOrder: updates.sort_order }),
+    ...(updates.project_id === undefined
+      ? {}
+      : { projectId: updates.project_id?.trim() || null }),
+  };
+  return Object.keys(defaults).length === 0 ? undefined : defaults;
+}
+
 function lifecycleMethod(
   operation: TaskCommandType,
 ): "completeOccurrence" | "reopenOccurrence" | "skipOccurrence" {
@@ -420,6 +823,8 @@ function lifecycleMethod(
       return "reopenOccurrence";
     case "skip":
       return "skipOccurrence";
+    case "edit":
+      throw new Error("Field edits use the edit command path");
   }
 }
 
@@ -440,6 +845,15 @@ function mapPersistenceOutcome(
   if (outcome.status === "not-found") return notFound(operation, operationId);
   if (outcome.status === "invalid-transition") {
     return invalidTransition(operation, operationId, outcome.reason);
+  }
+  if (outcome.status === "coverage-unavailable") {
+    return {
+      status: "coverage-unavailable",
+      type: "coverage-unavailable",
+      operation,
+      operationId,
+      reason: outcome.reason,
+    };
   }
   if (outcome.status !== "conflict") {
     return invalidTransition(
@@ -467,12 +881,29 @@ function mapLifecycleFailure(
   outcome: Exclude<LifecycleOutcome<unknown>, { status: "complete" | "already-applied" }>,
   operation: TaskCommandType,
   operationId: string,
+  seriesId?: string,
+  opaqueVersion = false,
 ): TaskCommandFailure {
   if (outcome.status === "not-found") return notFound(operation, operationId);
   if (outcome.status === "invalid-transition") {
     return invalidTransition(operation, operationId, outcome.reason);
   }
   if (outcome.status === "conflict") {
+    if (opaqueVersion && seriesId) {
+      return {
+        status: "conflict",
+        type: "conflict",
+        operation,
+        operationId,
+        ...(outcome.reason === undefined ? {} : { reason: outcome.reason }),
+        ...(outcome.expectedRevisionToken === undefined
+          ? {}
+          : { expectedVersion: encodeSeriesVersion(seriesId, outcome.expectedRevisionToken) }),
+        ...(outcome.actualRevisionToken === undefined
+          ? {}
+          : { actualVersion: encodeSeriesVersion(seriesId, outcome.actualRevisionToken) }),
+      };
+    }
     return {
       status: "conflict",
       type: "conflict",
@@ -485,6 +916,15 @@ function mapLifecycleFailure(
       ...(outcome.actualRevisionToken === undefined
         ? {}
         : { actualRevisionToken: outcome.actualRevisionToken }),
+    };
+  }
+  if (outcome.status === "coverage-unavailable") {
+    return {
+      status: "coverage-unavailable",
+      type: "coverage-unavailable",
+      operation,
+      operationId,
+      reason: outcome.reason,
     };
   }
   return invalidTransition(
@@ -530,7 +970,10 @@ function parsePersistenceOutcome(value: unknown): TaskCommandPersistenceOutcome 
 }
 
 function isTaskCommandType(value: unknown): value is TaskCommandType {
-  return value === "complete" || value === "reopen" || value === "skip";
+  return value === "complete"
+    || value === "reopen"
+    || value === "skip"
+    || value === "edit";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -579,12 +1022,14 @@ export function taskCommandErrorMessage(
       return "Task occurrence conflict";
     case "invalid-transition":
       return outcome.reason;
+    case "coverage-unavailable":
+      return outcome.reason;
   }
 }
 
 export function taskCommandHttpFailure(
   outcome: Exclude<TaskCommandOutcome, TaskCommandSuccess>,
-): { error: string; status: 400 | 404 | 409 } {
+): { error: string; status: 400 | 404 | 409 | 503 } {
   switch (outcome.status) {
     case "not-found":
       return { error: taskCommandErrorMessage(outcome), status: 404 };
@@ -592,6 +1037,8 @@ export function taskCommandHttpFailure(
       return { error: taskCommandErrorMessage(outcome), status: 409 };
     case "invalid-transition":
       return { error: taskCommandErrorMessage(outcome), status: 400 };
+    case "coverage-unavailable":
+      return { error: taskCommandErrorMessage(outcome), status: 503 };
   }
 }
 

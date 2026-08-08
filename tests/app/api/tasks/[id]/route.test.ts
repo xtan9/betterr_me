@@ -167,7 +167,13 @@ describe("PATCH /api/tasks/[id]", () => {
       title: "Updated",
       priority: 3,
     };
-    vi.mocked(mockTasksDB.updateTask).mockResolvedValue(updatedTask as any);
+    mockTaskCommandExecute.mockResolvedValue({
+      status: "complete",
+      type: "complete",
+      operation: "edit",
+      operationId: "test-operation",
+      task: updatedTask,
+    });
 
     const request = new NextRequest("http://localhost:3000/api/tasks/task-1", {
       method: "PATCH",
@@ -181,6 +187,11 @@ describe("PATCH /api/tasks/[id]", () => {
 
     expect(response.status).toBe(200);
     expect(data.task).toEqual(updatedTask);
+    expect(mockTaskCommandExecute).toHaveBeenCalledWith(expect.objectContaining({
+      type: "edit",
+      taskId: "task-1",
+      updates: { title: "Updated", priority: 3 },
+    }));
   });
 
   it("should return 400 if no valid updates", async () => {
@@ -211,10 +222,16 @@ describe("PATCH /api/tasks/[id]", () => {
   });
 
   it("should update completion_difficulty with valid value", async () => {
-    vi.mocked(mockTasksDB.updateTask).mockResolvedValue({
+    mockTaskCommandExecute.mockResolvedValue({
+      status: "complete",
+      type: "complete",
+      operation: "edit",
+      operationId: "test-operation",
+      task: {
       id: "task-1",
       completion_difficulty: 2,
-    } as any);
+      },
+    });
 
     const request = new NextRequest("http://localhost:3000/api/tasks/task-1", {
       method: "PATCH",
@@ -226,16 +243,23 @@ describe("PATCH /api/tasks/[id]", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mockTasksDB.updateTask).toHaveBeenCalledWith("task-1", "user-123", {
-      completion_difficulty: 2,
-    });
+    expect(mockTaskCommandExecute).toHaveBeenCalledWith(expect.objectContaining({
+      type: "edit",
+      updates: { completion_difficulty: 2 },
+    }));
   });
 
   it("should accept null to clear completion_difficulty", async () => {
-    vi.mocked(mockTasksDB.updateTask).mockResolvedValue({
+    mockTaskCommandExecute.mockResolvedValue({
+      status: "complete",
+      type: "complete",
+      operation: "edit",
+      operationId: "test-operation",
+      task: {
       id: "task-1",
       completion_difficulty: null,
-    } as any);
+      },
+    });
 
     const request = new NextRequest("http://localhost:3000/api/tasks/task-1", {
       method: "PATCH",
@@ -247,9 +271,10 @@ describe("PATCH /api/tasks/[id]", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mockTasksDB.updateTask).toHaveBeenCalledWith("task-1", "user-123", {
-      completion_difficulty: null,
-    });
+    expect(mockTaskCommandExecute).toHaveBeenCalledWith(expect.objectContaining({
+      type: "edit",
+      updates: { completion_difficulty: null },
+    }));
   });
 
   it("should return 400 if completion_difficulty is out of range", async () => {
@@ -355,10 +380,16 @@ describe("PATCH /api/tasks/[id]", () => {
   });
 
   it('should update project_id when provided', async () => {
-    vi.mocked(mockTasksDB.updateTask).mockResolvedValue({
+    mockTaskCommandExecute.mockResolvedValue({
+      status: "complete",
+      type: "complete",
+      operation: "edit",
+      operationId: "test-operation",
+      task: {
       id: 'task-1',
       project_id: '550e8400-e29b-41d4-a716-446655440000',
-    } as any);
+      },
+    });
 
     const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
       method: 'PATCH',
@@ -370,16 +401,23 @@ describe("PATCH /api/tasks/[id]", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mockTasksDB.updateTask).toHaveBeenCalledWith('task-1', 'user-123',
-      expect.objectContaining({ project_id: '550e8400-e29b-41d4-a716-446655440000' })
-    );
+    expect(mockTaskCommandExecute).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'edit',
+      updates: { project_id: '550e8400-e29b-41d4-a716-446655440000' },
+    }));
   });
 
   it('should clear project_id when set to null', async () => {
-    vi.mocked(mockTasksDB.updateTask).mockResolvedValue({
+    mockTaskCommandExecute.mockResolvedValue({
+      status: "complete",
+      type: "complete",
+      operation: "edit",
+      operationId: "test-operation",
+      task: {
       id: 'task-1',
       project_id: null,
-    } as any);
+      },
+    });
 
     const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
       method: 'PATCH',
@@ -391,17 +429,24 @@ describe("PATCH /api/tasks/[id]", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mockTasksDB.updateTask).toHaveBeenCalledWith('task-1', 'user-123',
-      expect.objectContaining({ project_id: null })
-    );
+    expect(mockTaskCommandExecute).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'edit',
+      updates: { project_id: null },
+    }));
   });
 
   it('should accept section and sort_order updates', async () => {
-    vi.mocked(mockTasksDB.updateTask).mockResolvedValue({
+    mockTaskCommandExecute.mockResolvedValue({
+      status: "complete",
+      type: "complete",
+      operation: "edit",
+      operationId: "test-operation",
+      task: {
       id: 'task-1',
       section: 'work',
       sort_order: 32768.0,
-    } as any);
+      },
+    });
 
     const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
       method: 'PATCH',
@@ -413,12 +458,10 @@ describe("PATCH /api/tasks/[id]", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mockTasksDB.updateTask).toHaveBeenCalledWith('task-1', 'user-123',
-      expect.objectContaining({
-        section: 'work',
-        sort_order: 32768.0,
-      })
-    );
+    expect(mockTaskCommandExecute).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'edit',
+      updates: { section: 'work', sort_order: 32768.0 },
+    }));
   });
 });
 
@@ -458,13 +501,7 @@ describe("PATCH /api/tasks/[id] with scope (recurring)", () => {
     });
   });
 
-  it("keeps a standalone task on ordinary Task Writes for scope=this", async () => {
-    vi.mocked(mockTasksDB.getTask).mockResolvedValue({
-      id: "task-1",
-      user_id: "user-123",
-    } as any);
-    vi.mocked(mockTasksDB.updateTask).mockResolvedValue({ id: "task-1" } as any);
-
+  it("routes scope=this field edits through shared Task Commands", async () => {
     const request = new NextRequest(
       "http://localhost:3000/api/tasks/task-1?scope=this",
       {
@@ -480,19 +517,21 @@ describe("PATCH /api/tasks/[id] with scope (recurring)", () => {
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(mockTasksDB.updateTask).toHaveBeenCalledWith(
-      "task-1",
-      "user-123",
-      expect.objectContaining({ title: "Modified" }),
-    );
+    expect(mockTaskCommandExecute).toHaveBeenCalledWith(expect.objectContaining({
+      type: "edit",
+      taskId: "task-1",
+      scope: "this",
+      updates: { title: "Modified" },
+    }));
   });
 
-  it("delegates scope=following to the lifecycle Series State adapter", async () => {
+  it("routes scope=following to a versioned shared Task Command", async () => {
 
     const request = new NextRequest(
       "http://localhost:3000/api/tasks/task-1?scope=following",
       {
         method: "PATCH",
+        headers: { "If-Match": "rt-series-v1.following" },
         body: JSON.stringify({ title: "Following update" }),
       },
     );
@@ -502,22 +541,22 @@ describe("PATCH /api/tasks/[id] with scope (recurring)", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mockState.editScope).toHaveBeenCalledWith(
-      expect.objectContaining({
-        taskId: "task-1",
-        userId: "user-123",
-        scope: "following",
-        title: "Following update",
-      }),
-    );
+    expect(mockTaskCommandExecute).toHaveBeenCalledWith(expect.objectContaining({
+      type: "edit",
+      taskId: "task-1",
+      scope: "following",
+      expectedVersion: "rt-series-v1.following",
+      updates: { title: "Following update" },
+    }));
   });
 
-  it("delegates scope=all to the lifecycle Series State adapter", async () => {
+  it("routes scope=all to a versioned shared Task Command", async () => {
 
     const request = new NextRequest(
       "http://localhost:3000/api/tasks/task-1?scope=all",
       {
         method: "PATCH",
+        headers: { "X-Series-Version": "rt-series-v1.all" },
         body: JSON.stringify({ title: "All update" }),
       },
     );
@@ -527,14 +566,13 @@ describe("PATCH /api/tasks/[id] with scope (recurring)", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mockState.editScope).toHaveBeenCalledWith(
-      expect.objectContaining({
-        taskId: "task-1",
-        userId: "user-123",
-        scope: "all",
-        title: "All update",
-      }),
-    );
+    expect(mockTaskCommandExecute).toHaveBeenCalledWith(expect.objectContaining({
+      type: "edit",
+      taskId: "task-1",
+      scope: "all",
+      expectedVersion: "rt-series-v1.all",
+      updates: { title: "All update" },
+    }));
   });
 
   it("should return 400 for invalid scope", async () => {
@@ -584,10 +622,13 @@ describe("DELETE /api/tasks/[id] with scope (recurring)", () => {
     });
   });
 
-  it("should delegate scope=all and its effective date to Task Writes", async () => {
+  it("routes scope=all deletion and its effective date through Task Commands", async () => {
     const request = new NextRequest(
       "http://localhost:3000/api/tasks/task-1?scope=all&date=2026-08-06",
-      { method: "DELETE" },
+      {
+        method: "DELETE",
+        headers: { "If-Match": "rt-series-v1.all" },
+      },
     );
 
     const response = await DELETE(request, {
@@ -595,11 +636,12 @@ describe("DELETE /api/tasks/[id] with scope (recurring)", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mockTaskDelete).toHaveBeenCalledWith({
+    expect(mockTaskCommandExecute).toHaveBeenCalledWith({
+      type: "skip",
       taskId: "task-1",
-      userId: "user-123",
       scope: "all",
       effectiveDate: "2026-08-06",
+      expectedVersion: "rt-series-v1.all",
       operationId: expect.any(String),
     });
   });

@@ -2,10 +2,7 @@ import { z } from "zod";
 import { TasksDB } from "@/lib/db";
 import type { RecurrenceRule } from "@/lib/db";
 import type { Task } from "@/lib/db/types";
-import {
-  createTaskWrites,
-  taskDeletionErrorMessage,
-} from "@/lib/tasks/writes";
+import { createTaskWrites } from "@/lib/tasks/writes";
 import {
   createSupabaseLegacyTaskToggle,
   createTaskCommandsForUser,
@@ -24,19 +21,8 @@ import {
   createAuthenticatedRecurringTaskCapabilities,
   type SeriesVersion,
 } from "@/lib/recurring-tasks";
-import {
-  isOccurrenceSuccess,
-  occurrenceErrorMessage,
-  toOccurrenceEditIntent,
-} from "@/lib/recurring-tasks/occurrence-adapter";
-import { createSupabaseOccurrenceAdapter } from "@/lib/recurring-tasks/supabase-occurrence-adapter";
 import { addLocalDays } from "@/lib/recurring-tasks/recurrence";
-import {
-  createSupabaseSeriesStateAdapter,
-  isSeriesStateSuccess,
-  resolveSeriesEffectiveDate,
-  seriesStateErrorMessage,
-} from "@/lib/recurring-tasks";
+import { resolveSeriesEffectiveDate } from "@/lib/recurring-tasks";
 import {
   initialSeriesCoverage,
   recurringTaskFailureMessage,
@@ -91,6 +77,9 @@ const updateTaskParameters = z
       .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
       .optional()
       .describe("Effective local date for a scoped recurring change"),
+    expectedVersion: z.string().optional().describe(
+      "Opaque Series version required for a following/all recurring change",
+    ),
   })
   .refine(
     ({
@@ -98,6 +87,7 @@ const updateTaskParameters = z
       operationId: _operationId,
       scope: _scope,
       effectiveDate: _effectiveDate,
+      expectedVersion: _expectedVersion,
       ...updates
     }) =>
       hasTaskUpdateValues(updates),
@@ -288,57 +278,38 @@ export function taskTools(): ToolDefinition[] {
           scope,
           effectiveDate,
           operationId,
+          expectedVersion,
           ...rest
         } = params;
-        const taskCommandType = taskCommandTypeFromUpdate(rest);
-        if ((!scope || scope === "this") && taskCommandType) {
-          const outcome = await createTaskCommandsForUser(
-            ctx.supabase,
-            ctx.userId,
-          ).execute({
-            type: taskCommandType,
-            taskId,
-            ...(scope === undefined ? {} : { scope }),
-            operationId: operationId ?? newTaskCommandOperationId(),
-          });
-          if (isTaskCommandSuccess(outcome)) return outcome.task;
-          return { error: taskCommandErrorMessage(outcome) };
+        const updates = {
+          ...(rest.title === undefined ? {} : { title: rest.title }),
+          ...(rest.description === undefined ? {} : { description: rest.description }),
+          ...(rest.status === undefined ? {} : { status: rest.status }),
+          ...(rest.priority === undefined ? {} : { priority: rest.priority }),
+          ...(dueDate === undefined ? {} : { due_date: dueDate }),
+          ...(projectId === undefined ? {} : { project_id: projectId }),
+        };
+        const taskCommandType = scope === undefined || scope === "this"
+          ? taskCommandTypeFromUpdate(updates) ?? "edit"
+          : "edit";
+        const commandOutcome = await createTaskCommandsForUser(
+          ctx.supabase,
+          ctx.userId,
+        ).execute({
+          type: taskCommandType,
+          taskId,
+          ...(scope === undefined ? {} : { scope }),
+          ...(taskCommandType === "edit" ? { updates } : {}),
+          ...(effectiveDate === undefined ? {} : { effectiveDate }),
+          ...(expectedVersion === undefined ? {} : { expectedVersion }),
+          operationId: operationId ?? newTaskCommandOperationId(),
+        });
+        if (isTaskCommandSuccess(commandOutcome)) {
+          return scope === undefined || scope === "this"
+            ? commandOutcome.task
+            : { success: true, ...(commandOutcome.task ? { task: commandOutcome.task } : {}) };
         }
-        if (scope && scope !== "this") {
-          const outcome = await createSupabaseSeriesStateAdapter(
-            ctx.supabase,
-          ).editScope({
-            userId: ctx.userId,
-            taskId,
-            scope,
-            effectiveDate,
-            operationKey: operationId ?? newTaskCommandOperationId(),
-            ...toSeriesScopeInput({
-              title: rest.title,
-              description: rest.description,
-              priority: rest.priority,
-              status: rest.status,
-              dueDate,
-              projectId,
-            }),
-          });
-          if (isSeriesStateSuccess(outcome)) return { success: true };
-          return { error: seriesStateErrorMessage(outcome) };
-        }
-        const outcome = await createSupabaseOccurrenceAdapter(ctx.supabase).edit(
-          toOccurrenceEditIntent({
-            userId: ctx.userId,
-            taskId,
-            title: rest.title,
-            description: rest.description,
-            priority: rest.priority,
-            status: rest.status,
-            dueDate,
-            projectId,
-          }),
-        );
-        if (isOccurrenceSuccess(outcome)) return outcome.task;
-        return { error: occurrenceErrorMessage(outcome) };
+        return { error: taskCommandErrorMessage(commandOutcome) };
       },
     },
     {
@@ -358,42 +329,29 @@ export function taskTools(): ToolDefinition[] {
           .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
           .optional()
           .describe("Effective local date for a recurring Series end"),
+        expectedVersion: z.string().optional().describe(
+          "Opaque Series version required for a following/all Series end",
+        ),
       }),
       execute: async (params, ctx: ToolContext) => {
         const operationId = params.operationId ?? newTaskCommandOperationId();
-        if (params.scope === undefined || params.scope === "this") {
-          const commandOutcome = await createTaskCommandsForUser(
-            ctx.supabase,
-            ctx.userId,
-          ).execute({
-            type: "skip",
-            taskId: params.taskId,
-            ...(params.scope === undefined ? {} : { scope: params.scope }),
-            operationId,
-          });
-          if (isTaskCommandSuccess(commandOutcome)) return { success: true };
-          return { error: taskCommandErrorMessage(commandOutcome) };
-        }
-        const outcome = await createTaskWrites(ctx.supabase, {
-          lifecycle: createActivatedRecurringTaskLifecycle(ctx.supabase),
-        }).delete({
+        const commandOutcome = await createTaskCommandsForUser(
+          ctx.supabase,
+          ctx.userId,
+        ).execute({
+          type: "skip",
           taskId: params.taskId,
-          userId: ctx.userId,
           ...(params.scope === undefined ? {} : { scope: params.scope }),
           ...(params.effectiveDate === undefined
             ? {}
             : { effectiveDate: params.effectiveDate }),
+          ...(params.expectedVersion === undefined
+            ? {}
+            : { expectedVersion: params.expectedVersion }),
           operationId,
         });
-        if (outcome.type === "deleted") return { success: true };
-        return {
-          error: taskDeletionErrorMessage(
-            outcome,
-            params.scope === "following" || params.scope === "all"
-              ? "series"
-              : "occurrence",
-          ),
-        };
+        if (isTaskCommandSuccess(commandOutcome)) return { success: true };
+        return { error: taskCommandErrorMessage(commandOutcome) };
       },
     },
     {
@@ -676,26 +634,4 @@ async function readAiTasks(
     throw new TaskCoverageUnavailableError(result.completeness);
   }
   return result.tasks;
-}
-
-function toSeriesScopeInput(input: {
-  title?: string;
-  description?: string | null;
-  priority?: 0 | 1 | 2 | 3;
-  categoryId?: string | null;
-  dueDate?: string | null;
-  dueTime?: string | null;
-  status?: "backlog" | "todo" | "in_progress" | "done";
-  projectId?: string | null;
-}) {
-  return {
-    title: input.title,
-    description: input.description,
-    priority: input.priority,
-    categoryId: input.categoryId,
-    dueDate: input.dueDate,
-    dueTime: input.dueTime,
-    status: input.status,
-    projectId: input.projectId,
-  };
 }

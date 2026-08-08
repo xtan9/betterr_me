@@ -166,6 +166,107 @@ describe("RecurringTaskLifecycle revision behavior", () => {
     expect(mutationTransactions).toBe(0);
   });
 
+  it("revalidates visible identity for occurrence edits and Series effects inside the transaction", async () => {
+    const persistence = new InMemoryRecurringTaskLifecyclePersistence();
+    const lifecycle = new RecurringTaskLifecycle(
+      persistence,
+      { clock: () => new Date("2026-08-01T12:00:00.000Z") },
+    );
+    const created = await lifecycle.createSeries({
+      userId: "scoped-owner",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("Original", 1),
+      coverage: { from: "2026-08-01", to: "2026-08-04" },
+    });
+    expect(created.status).toBe("complete");
+    if (created.status !== "complete") return;
+    await persistence.transaction(`series:${created.series.id}`, async (state) => {
+      const series = state.series.get(created.series.id);
+      if (!series) throw new Error("Fixture Series was not persisted");
+      const occurrence = series.occurrences[0];
+      if (!occurrence) throw new Error("Fixture occurrence was not persisted");
+      occurrence.taskId = "visible-task";
+      return undefined;
+    });
+    const target = persistence
+      .snapshot()
+      .series.get(created.series.id)
+      ?.occurrences.find((occurrence) => occurrence.taskId);
+    if (!target?.taskId) throw new Error("Fixture occurrence has no visible Task");
+
+    await expect(lifecycle.editOccurrence({
+      userId: "scoped-owner",
+      seriesId: created.series.id,
+      occurrenceId: target.id,
+      taskId: "foreign-task",
+      scope: "this",
+      scheduledDate: target.scheduledDate,
+      updates: { title: "Must not apply" },
+    })).resolves.toEqual({ status: "not-found", type: "not-found" });
+
+    await expect(lifecycle.reviseSeries({
+      userId: "scoped-owner",
+      seriesId: created.series.id,
+      occurrenceId: target.id,
+      taskId: "foreign-task",
+      scope: "following",
+      effectiveDate: target.scheduledDate,
+      defaults: { title: "Must not revise" },
+      expectedRevisionToken: 1,
+    })).resolves.toEqual({ status: "not-found", type: "not-found" });
+
+    await expect(lifecycle.endSeries({
+      userId: "scoped-owner",
+      seriesId: created.series.id,
+      occurrenceId: target.id,
+      taskId: "foreign-task",
+      scope: "all",
+      effectiveDate: target.scheduledDate,
+      expectedRevisionToken: 1,
+    })).resolves.toEqual({ status: "not-found", type: "not-found" });
+
+    const edited = await lifecycle.editOccurrence({
+      userId: "scoped-owner",
+      seriesId: created.series.id,
+      occurrenceId: target.id,
+      taskId: target.taskId,
+      scope: "this",
+      scheduledDate: target.scheduledDate,
+      updates: { title: "Personal title" },
+    });
+    expect(edited.status).toBe("complete");
+    if (edited.status !== "complete") return;
+    expect(edited.occurrences.find((occurrence) => occurrence.id === target.id))
+      .toMatchObject({
+        taskId: target.taskId,
+        scheduledDate: target.scheduledDate,
+        overrides: { title: "Personal title" },
+      });
+
+    const ended = await lifecycle.endSeries({
+      userId: "scoped-owner",
+      seriesId: created.series.id,
+      occurrenceId: target.id,
+      taskId: target.taskId,
+      scope: "all",
+      effectiveDate: target.scheduledDate,
+      expectedRevisionToken: 1,
+    });
+    expect(ended.status).toBe("complete");
+    if (ended.status !== "complete") return;
+    expect(ended.occurrences.filter((occurrence) => (
+      occurrence.state === "open" || occurrence.state === "extra"
+    ))).toHaveLength(0);
+    expect(persistence.snapshot().series.get(created.series.id)?.occurrences
+      .find((occurrence) => occurrence.id === target.id))
+      .toMatchObject({
+        state: "withdrawn",
+        overrides: { title: "Personal title" },
+      });
+  });
+
   it("ensures coverage for every owned series and reports intentional absences", async () => {
     const lifecycle = new RecurringTaskLifecycle(
       new InMemoryRecurringTaskLifecyclePersistence(),

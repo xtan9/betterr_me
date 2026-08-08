@@ -936,7 +936,7 @@ function isOpaqueSeriesVersion(value: string): value is SeriesVersion {
   return value.startsWith("rt-series-v1.") && parseEncodedVersion(value) !== undefined;
 }
 
-interface DecodedSeriesVersion {
+export interface DecodedSeriesVersion {
   seriesId: string;
   revisionToken: number;
 }
@@ -957,11 +957,20 @@ function parseSeriesVersion(
   value: unknown,
   seriesId: unknown,
 ): DecodedSeriesVersion | undefined {
-  if (typeof value !== "string" || typeof seriesId !== "string") {
-    return undefined;
-  }
+  return decodeSeriesVersion(value, seriesId);
+}
+
+/** Decode an opaque Series version only at the command/lifecycle boundary. */
+export function decodeSeriesVersion(
+  value: unknown,
+  seriesId?: unknown,
+): DecodedSeriesVersion | undefined {
+  if (typeof value !== "string") return undefined;
   const decoded = parseEncodedVersion(value);
-  return decoded?.seriesId === seriesId ? decoded : undefined;
+  if (!decoded) return undefined;
+  return typeof seriesId !== "string" || decoded.seriesId === seriesId
+    ? decoded
+    : undefined;
 }
 
 function parseEncodedVersion(value: unknown): DecodedSeriesVersion | undefined {
