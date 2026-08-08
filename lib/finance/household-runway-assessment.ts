@@ -1,7 +1,6 @@
 import { z } from "zod";
 import {
   availableScenarios,
-  expenseTotals,
   highestLeverageActions,
   simulateHouseholdRunway,
   withCurrentLifestyleExpenses,
@@ -9,6 +8,7 @@ import {
   type RunwayAdjustments,
   type RunwaySimulation,
 } from "@/lib/finance/cushion";
+import { validateHouseholdRunwayPlanAdjustment } from "@/lib/finance/internal/household-runway-plan-adjustment";
 import {
   householdRunwayAssessmentInputSchema,
   householdRunwayAnswersSchema,
@@ -78,39 +78,16 @@ export function assessHouseholdRunway(
     };
   }
   const { answers, adjustments } = parsedInput.data;
-  const totals = expenseTotals(answers);
-  const adjustmentLimits = [
-    [
-      "expense_reduction_cents",
-      adjustments.expense_reduction_cents,
-      totals.interruption,
-      "Expense reduction cannot exceed interruption expenses",
-    ],
-    [
-      "usable_illiquid_investments_cents",
-      adjustments.usable_illiquid_investments_cents,
-      answers.assets.illiquid_investments.cents,
-      "Usable amount cannot exceed the entered balance",
-    ],
-    [
-      "usable_retirement_tax_deferred_cents",
-      adjustments.usable_retirement_tax_deferred_cents,
-      answers.assets.retirement_tax_deferred.cents,
-      "Usable amount cannot exceed the entered balance",
-    ],
-    [
-      "usable_retirement_tax_free_cents",
-      adjustments.usable_retirement_tax_free_cents,
-      answers.assets.retirement_tax_free.cents,
-      "Usable amount cannot exceed the entered balance",
-    ],
-  ] as const;
-  const relationalIssues = adjustmentLimits
-    .filter(([, value, limit]) => value > limit)
-    .map(([field, , , message]) => ({
-      path: ["adjustments", field],
-      message,
-    }));
+  const relationalIssues = validateHouseholdRunwayPlanAdjustment({
+    adjustment: adjustments,
+    planInputs: answers,
+  }).map(({ field }) => ({
+    path: ["adjustments", field],
+    message:
+      field === "expense_reduction_cents"
+        ? "Expense reduction cannot exceed interruption expenses"
+        : "Usable amount cannot exceed the entered balance",
+  }));
   if (relationalIssues.length > 0) {
     return { success: false, validationIssues: relationalIssues };
   }
