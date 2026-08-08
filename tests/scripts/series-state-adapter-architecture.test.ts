@@ -43,6 +43,7 @@ describe("Series capability architecture boundaries", () => {
     expect(recurringPatch).toContain("createAuthenticatedRecurringTaskCapabilities");
     expect(recurringPatch).toContain("seriesCommands");
     expect(recurringPatch).toContain("toReviseSeriesCommand");
+    expect(recurringStateActions).toContain("seriesCommands");
     expect(recurringPatch).not.toContain("createSupabaseSeriesStateAdapter");
     expect(recurringPatch).not.toContain("createSupabaseRecurringTaskLifecycle");
     expect(recurringPatch).not.toContain("new RecurringTasksDB");

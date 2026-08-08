@@ -13,11 +13,6 @@ import {
   type AuthenticatedRecurringTaskCapabilities,
   type SeriesVersion,
 } from '@/lib/recurring-tasks';
-import type {
-  SeriesCommands,
-  SeriesStateCommand,
-  SeriesVersion,
-} from '@/lib/recurring-tasks';
 import {
   recurringTaskFailureHttpStatus,
   recurringTaskFailureMessage,
@@ -100,10 +95,6 @@ export async function PATCH(
       );
     }
     const { principal: { userId }, client: supabase } = auth;
-    const seriesCommands = createAuthenticatedRecurringTaskCapabilities({
-      supabase,
-      principal: auth.principal,
-    }).seriesCommands;
 
     const searchParams = request.nextUrl.searchParams;
     const action = searchParams.get('action');
@@ -162,6 +153,17 @@ export async function PATCH(
         recurring_task: toRecurringTaskResponse(outcome.series, userId),
       });
     }
+    if (action === 'end') {
+      const outcome = await capabilities.seriesCommands.endSeries(
+        toSeriesStateCommand({
+          operationId: metadata.operationId,
+          seriesId: id,
+          version: metadata.version,
+          effectiveDate: dateParam,
+        }),
+      );
+      return respondToSeriesCommand(outcome, userId);
+    }
     if (action) {
       return NextResponse.json(
         { error: 'Invalid action. Must be: pause, resume, or end' },
@@ -169,7 +171,7 @@ export async function PATCH(
       );
     }
 
-    // Handle general effective-dated Series definition updates.
+    // Handle general updates (effective-dated Series definition updates).
     const body = await request.json();
     metadata = readMutationMetadata(request, body);
     const validation = validateRequestBody(body, recurringTaskUpdateSchema);
@@ -373,18 +375,29 @@ function readMutationMetadata(request: NextRequest, body?: unknown): {
   operationId: string;
   version: SeriesVersion;
 } {
-  const operationId = request.headers.get('Idempotency-Key')?.trim()
-    || readString(body, 'operation_id', 'operationId')
-    || '';
+  const searchParams = request.nextUrl.searchParams;
+  const operationId = firstNonEmpty(
+    request.headers.get('Idempotency-Key'),
+    request.headers.get('X-Operation-Id'),
+    readString(body, 'operation_id', 'operationId'),
+    searchParams.get('operation_id'),
+    searchParams.get('operationId'),
+  ) ?? '';
   const version = stripEntityTag(
-    request.headers.get('If-Match')?.trim()
-      || readString(body, 'version', 'expected_version', 'expectedVersion')
-      || '',
+    firstNonEmpty(
+      request.headers.get('If-Match'),
+      readString(body, 'version', 'expected_version', 'expectedVersion'),
+      searchParams.get('version'),
+    ) ?? '',
   );
   return {
     operationId,
     version: version as SeriesVersion,
   };
+}
+
+function firstNonEmpty(...values: Array<string | null | undefined>): string | undefined {
+  return values.find((value) => value?.trim())?.trim();
 }
 
 function readString(
