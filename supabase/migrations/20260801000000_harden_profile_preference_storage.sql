@@ -141,8 +141,11 @@ begin
 end
 $$;
 
+-- This migration can be encountered after the following Current Profile
+-- migration in a production database whose migration history was applied
+-- out of timestamp order. Keep the schema additions replay-safe in that case.
 alter table public.profiles
-  add column preference_revision bigint not null default 0;
+  add column if not exists preference_revision bigint not null default 0;
 
 -- Backfill only supported keys. JSONB concatenation preserves unknown keys and
 -- dormant date_format exactly as stored. A valid one-sided window is repaired
@@ -258,51 +261,83 @@ alter table public.profiles
   }'::jsonb,
   alter column preferences set not null;
 
-alter table public.profiles
-  add constraint profiles_preference_revision_nonnegative_check
-    check (preference_revision >= 0),
-  add constraint profiles_preferences_object_check
-    check (jsonb_typeof(preferences) = 'object');
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'profiles_preference_revision_nonnegative_check'
+      and conrelid = 'public.profiles'::regclass
+  ) then
+    alter table public.profiles
+      add constraint profiles_preference_revision_nonnegative_check
+      check (preference_revision >= 0);
+  end if;
 
-alter table public.profiles
-  add constraint profiles_supported_preferences_check
-    check (
-      preferences ? 'theme'
-      and jsonb_typeof(preferences->'theme') = 'string'
-      and preferences->>'theme' in ('system', 'light', 'dark')
-      and preferences ? 'week_start_day'
-      and case
-        when jsonb_typeof(preferences->'week_start_day') = 'number' then
-          (preferences->>'week_start_day')::numeric
-            = trunc((preferences->>'week_start_day')::numeric)
-            and (preferences->>'week_start_day')::numeric in (0, 1)
-        else false
-      end
-      and preferences ? 'weight_unit'
-      and jsonb_typeof(preferences->'weight_unit') = 'string'
-      and preferences->>'weight_unit' in ('kg', 'lbs')
-      and preferences ? 'email_notifications_enabled'
-      and jsonb_typeof(preferences->'email_notifications_enabled') = 'boolean'
-    ),
-  add constraint profiles_push_quiet_window_pair_check
-    check (
-      preferences ? 'quiet_hours_start'
-      and preferences ? 'quiet_hours_end'
-      and (
-        (
-          jsonb_typeof(preferences->'quiet_hours_start') = 'null'
-          and jsonb_typeof(preferences->'quiet_hours_end') = 'null'
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'profiles_preferences_object_check'
+      and conrelid = 'public.profiles'::regclass
+  ) then
+    alter table public.profiles
+      add constraint profiles_preferences_object_check
+      check (jsonb_typeof(preferences) = 'object');
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'profiles_supported_preferences_check'
+      and conrelid = 'public.profiles'::regclass
+  ) then
+    alter table public.profiles
+      add constraint profiles_supported_preferences_check
+      check (
+        preferences ? 'theme'
+        and jsonb_typeof(preferences->'theme') = 'string'
+        and preferences->>'theme' in ('system', 'light', 'dark')
+        and preferences ? 'week_start_day'
+        and case
+          when jsonb_typeof(preferences->'week_start_day') = 'number' then
+            (preferences->>'week_start_day')::numeric
+              = trunc((preferences->>'week_start_day')::numeric)
+              and (preferences->>'week_start_day')::numeric in (0, 1)
+          else false
+        end
+        and preferences ? 'weight_unit'
+        and jsonb_typeof(preferences->'weight_unit') = 'string'
+        and preferences->>'weight_unit' in ('kg', 'lbs')
+        and preferences ? 'email_notifications_enabled'
+        and jsonb_typeof(preferences->'email_notifications_enabled') = 'boolean'
+      );
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'profiles_push_quiet_window_pair_check'
+      and conrelid = 'public.profiles'::regclass
+  ) then
+    alter table public.profiles
+      add constraint profiles_push_quiet_window_pair_check
+      check (
+        preferences ? 'quiet_hours_start'
+        and preferences ? 'quiet_hours_end'
+        and (
+          (
+            jsonb_typeof(preferences->'quiet_hours_start') = 'null'
+            and jsonb_typeof(preferences->'quiet_hours_end') = 'null'
+          )
+          or (
+            jsonb_typeof(preferences->'quiet_hours_start') = 'string'
+            and jsonb_typeof(preferences->'quiet_hours_end') = 'string'
+            and preferences->>'quiet_hours_start' ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+            and preferences->>'quiet_hours_end' ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+            and preferences->>'quiet_hours_start'
+              <> preferences->>'quiet_hours_end'
+          )
         )
-        or (
-          jsonb_typeof(preferences->'quiet_hours_start') = 'string'
-          and jsonb_typeof(preferences->'quiet_hours_end') = 'string'
-          and preferences->>'quiet_hours_start' ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
-          and preferences->>'quiet_hours_end' ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
-          and preferences->>'quiet_hours_start'
-            <> preferences->>'quiet_hours_end'
-        )
-      )
-    );
+      );
+  end if;
+end
+$$;
 
 -- Preference Revision is assigned by the database whenever the JSON document
 -- changes. Caller-supplied revision values are ignored rather than accepted.
@@ -325,10 +360,22 @@ begin
 end;
 $$;
 
-create trigger profiles_preference_revision
-  before insert or update on public.profiles
-  for each row
-  execute function public.assign_profile_preference_revision();
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_trigger
+    where tgname = 'profiles_preference_revision'
+      and tgrelid = 'public.profiles'::regclass
+      and not tgisinternal
+  ) then
+    create trigger profiles_preference_revision
+      before insert or update on public.profiles
+      for each row
+      execute function public.assign_profile_preference_revision();
+  end if;
+end
+$$;
 
 revoke execute on function public.assign_profile_preference_revision()
   from public, anon, authenticated, service_role;

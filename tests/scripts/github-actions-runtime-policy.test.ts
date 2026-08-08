@@ -220,6 +220,29 @@ updates:
     );
   });
 
+  it("keeps the out-of-order preference migration replay-safe", () => {
+    const preferenceMigration = readFileSync(
+      resolve(
+        process.cwd(),
+        "supabase/migrations/20260801000000_harden_profile_preference_storage.sql",
+      ),
+      "utf8",
+    ).replaceAll("\r\n", "\n");
+
+    expect(preferenceMigration).toContain(
+      "add column if not exists preference_revision",
+    );
+    expect(preferenceMigration).toContain(
+      "where conname = 'profiles_preference_revision_nonnegative_check'",
+    );
+    expect(preferenceMigration).toContain(
+      "where conname = 'profiles_preferences_object_check'",
+    );
+    expect(preferenceMigration).toContain(
+      "where tgname = 'profiles_preference_revision'",
+    );
+  });
+
   it("creates Vercel previews only through explicit manual dispatch", () => {
     const workflow = readFileSync(
       resolve(workflowDirectory, "vercel-production-deploy.yml"),
