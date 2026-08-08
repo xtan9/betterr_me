@@ -36,6 +36,23 @@ describe("MCP access-grant evidence architecture", () => {
     expect(adapters[1]).toMatch(/REQUIRED_GATE_IDS/);
   });
 
+  it("centralizes target loading before either journey receives live capabilities", () => {
+    const targetBoundary = source("e2e/mcp-access-grant-target.ts");
+    const adapters = [
+      source("e2e/mcp-access-grant-public-client.ts"),
+      source("e2e/mcp-access-grant-compatibility.ts"),
+    ];
+
+    expect(targetBoundary).toMatch(/export function loadMcpAccessGrantConfiguration/);
+    expect(targetBoundary).toMatch(/McpAccessGrantTargetConfigurationError/);
+    expect(targetBoundary).toMatch(/Object\.freeze/);
+    for (const adapter of adapters) {
+      expect(adapter).toMatch(/mcp-access-grant-target/);
+      expect(adapter).not.toMatch(/function (?:parseTarget|loadMcpAccessGrantTargets)\s*\(/);
+      expect(adapter).not.toMatch(/process\.env\.MCP_(?:ACCESS_GRANT_TARGETS|ACCESS_GRANT_TARGET_NAME|ACCESS_GRANT_CANONICAL_RESOURCE|ACCESS_GRANT_LOOPBACK_HOSTS|SUPABASE_URL|SUPABASE_AUTH_ISSUER|SUPABASE_ANON_KEY|TEST_EMAIL|TEST_PASSWORD)/);
+    }
+  });
+
   it("keeps deterministic unit tests independent of either live runner", () => {
     const tests = [
       source("tests/e2e/mcp-access-grant-evidence.test.ts"),

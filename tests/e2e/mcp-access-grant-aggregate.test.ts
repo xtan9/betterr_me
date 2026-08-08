@@ -15,12 +15,16 @@ import {
   type MinimizedRequestObservation,
 } from "../../e2e/mcp-access-grant-evidence";
 import {
-  loadMcpAccessGrantTargets,
   MCP_ACCESS_GRANT_AGGREGATE_ISSUE,
   mcpAccessGrantCharacterization,
   REQUIRED_GATE_IDS,
-  type McpAccessGrantTarget,
 } from "../../e2e/mcp-access-grant-compatibility";
+import {
+  loadMcpAccessGrantConfiguration,
+  loadMcpAccessGrantTargets,
+  McpAccessGrantTargetConfigurationError,
+  type McpAccessGrantTarget,
+} from "../../e2e/mcp-access-grant-target";
 
 const ENVIRONMENT_KEYS = [
   "MCP_ACCESS_GRANT_TARGETS",
@@ -34,6 +38,11 @@ const ENVIRONMENT_KEYS = [
   "MCP_SUPABASE_ANON_KEY",
   "MCP_CUSTOM_ANON_KEY",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+  "MCP_TEST_EMAIL",
+  "MCP_TEST_PASSWORD",
+  "SUPABASE_ANON_KEY",
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "API_KEY_HMAC_SECRET",
 ] as const;
 
 const environmentBeforeEachTest = new Map<string, string | undefined>();
@@ -52,6 +61,13 @@ const localTarget: McpAccessGrantTarget = {
   supabaseUrl: "http://127.0.0.1:54321",
   expectedAuthorizationServer: "http://127.0.0.1:54321/auth/v1",
   loopbackHosts: ["127.0.0.1", "::1"],
+  locality: {
+    canonicalResourceIsLoopback: true,
+    supabaseUrlIsLoopback: true,
+    expectedAuthorizationServerIsLoopback: true,
+    allEndpointsLoopback: true,
+    nonProductionAcknowledged: true,
+  },
 };
 
 const hostedTarget: McpAccessGrantTarget = {
@@ -60,6 +76,13 @@ const hostedTarget: McpAccessGrantTarget = {
   supabaseUrl: "https://supabase.example.test",
   expectedAuthorizationServer: "https://supabase.example.test/auth/v1",
   loopbackHosts: ["127.0.0.1", "::1"],
+  locality: {
+    canonicalResourceIsLoopback: false,
+    supabaseUrlIsLoopback: false,
+    expectedAuthorizationServerIsLoopback: false,
+    allEndpointsLoopback: false,
+    nonProductionAcknowledged: false,
+  },
 };
 
 const context: EvidenceRunContext = {
@@ -121,13 +144,15 @@ describe("MCP access-grant aggregate target characterization", () => {
         name: "configured-local",
         canonicalResource: "http://127.0.0.1:3000/mcp",
         supabaseUrl: "http://127.0.0.1:54321",
-        loopbackHosts: ["::1", "127.0.0.1", "not-loopback", "::1"],
+        loopbackHosts: ["::1", "127.0.0.1", "::1"],
         anonKeyEnv: "MCP_CUSTOM_ANON_KEY",
       }]),
       MCP_CUSTOM_ANON_KEY: "configured-anon-key",
     });
 
-    expect(loadMcpAccessGrantTargets()).toEqual([{
+    const configuration = loadMcpAccessGrantConfiguration();
+
+    expect(configuration.targets).toEqual([{
       name: "configured-local",
       canonicalResource: "http://127.0.0.1:3000/mcp",
       supabaseUrl: "http://127.0.0.1:54321",
@@ -136,10 +161,19 @@ describe("MCP access-grant aggregate target characterization", () => {
       anonKey: "configured-anon-key",
       email: undefined,
       password: undefined,
+      locality: {
+        canonicalResourceIsLoopback: true,
+        supabaseUrlIsLoopback: true,
+        expectedAuthorizationServerIsLoopback: true,
+        allEndpointsLoopback: true,
+        nonProductionAcknowledged: true,
+      },
     }]);
+    expect(configuration.configuredValues).toEqual(["configured-anon-key"]);
+    expect(loadMcpAccessGrantTargets()).toEqual(configuration.targets);
   });
 
-  it("preserves the malformed JSON fallback as a single empty target", () => {
+  it("fails fast on malformed target JSON instead of creating compatibility evidence", () => {
     setEnvironment({
       MCP_ACCESS_GRANT_TARGETS: "[{",
       MCP_ACCESS_GRANT_TARGET_NAME: "environment-target",
@@ -149,48 +183,30 @@ describe("MCP access-grant aggregate target characterization", () => {
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "fallback-anon-key",
     });
 
-    expect(loadMcpAccessGrantTargets()).toEqual([{
-      name: "target-1",
-      canonicalResource: "",
-      supabaseUrl: "",
-      expectedAuthorizationServer: "",
-      loopbackHosts: ["127.0.0.1", "::1"],
-      anonKey: "fallback-anon-key",
-      email: undefined,
-      password: undefined,
-    }]);
+    expect(() => loadMcpAccessGrantConfiguration()).toThrowError(McpAccessGrantTargetConfigurationError);
   });
 
-  it("normalizes structurally invalid array entries instead of treating them as live targets", () => {
+  it("fails fast on structurally invalid target entries", () => {
     setEnvironment({
       MCP_ACCESS_GRANT_TARGETS: JSON.stringify([
         "not-an-object",
-        { name: 42, canonicalResource: 42, supabaseUrl: null, loopbackHosts: ["localhost", 7] },
       ]),
     });
 
-    expect(loadMcpAccessGrantTargets()).toEqual([
-      {
-        name: "target-1",
-        canonicalResource: "",
-        supabaseUrl: "",
-        expectedAuthorizationServer: "",
-        loopbackHosts: ["127.0.0.1", "::1"],
-        anonKey: undefined,
-        email: undefined,
-        password: undefined,
-      },
-      {
-        name: "target-2",
-        canonicalResource: "",
-        supabaseUrl: "",
-        expectedAuthorizationServer: "",
-        loopbackHosts: [],
-        anonKey: undefined,
-        email: undefined,
-        password: undefined,
-      },
-    ]);
+    expect(() => loadMcpAccessGrantConfiguration()).toThrowError(McpAccessGrantTargetConfigurationError);
+  });
+
+  it("rejects invalid endpoint and loopback configuration", () => {
+    setEnvironment({
+      MCP_ACCESS_GRANT_TARGETS: JSON.stringify([{
+        name: 42,
+        canonicalResource: "not-a-url",
+        supabaseUrl: "https://supabase.example.test",
+        loopbackHosts: ["localhost"],
+      }]),
+    });
+
+    expect(() => loadMcpAccessGrantConfiguration()).toThrowError(McpAccessGrantTargetConfigurationError);
   });
 
   it("falls back from a target-specific anon-key environment name to the public anon key", () => {
@@ -204,7 +220,59 @@ describe("MCP access-grant aggregate target characterization", () => {
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "fallback-anon-key",
     });
 
-    expect(loadMcpAccessGrantTargets()[0]).toMatchObject({ anonKey: "fallback-anon-key" });
+    const configuration = loadMcpAccessGrantConfiguration();
+    expect(configuration.targets[0]).toMatchObject({ anonKey: "fallback-anon-key" });
+    expect(configuration.configuredValues).toEqual(["fallback-anon-key"]);
+  });
+
+  it("builds one conservative redaction set across target credentials and sensitive environment values", () => {
+    setEnvironment({
+      MCP_ACCESS_GRANT_TARGETS: JSON.stringify([{
+        name: "redaction-target",
+        canonicalResource: "http://127.0.0.1:3000/mcp",
+        supabaseUrl: "http://127.0.0.1:54321",
+        anonKeyEnv: "MCP_CUSTOM_ANON_KEY",
+      }]),
+      MCP_CUSTOM_ANON_KEY: "target-anon-key",
+      MCP_TEST_EMAIL: "test@example.com",
+      MCP_TEST_PASSWORD: "target-password",
+      SUPABASE_ANON_KEY: "legacy-anon-key",
+      SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "public-anon-key",
+      API_KEY_HMAC_SECRET: "hmac-secret",
+    });
+
+    expect(loadMcpAccessGrantConfiguration().configuredValues).toEqual([
+      "target-anon-key",
+      "test@example.com",
+      "target-password",
+      "legacy-anon-key",
+      "service-role-key",
+      "public-anon-key",
+      "hmac-secret",
+    ]);
+  });
+
+  it("keeps missing optional credentials valid while freezing shared target state", () => {
+    setEnvironment({
+      MCP_ACCESS_GRANT_TARGETS: JSON.stringify([{
+        name: "credential-limited-target",
+        canonicalResource: "https://mcp.example.test/mcp",
+        supabaseUrl: "https://supabase.example.test",
+      }]),
+    });
+
+    const configuration = loadMcpAccessGrantConfiguration();
+    const target = configuration.targets[0];
+
+    expect(target).toMatchObject({ email: undefined, password: undefined, anonKey: undefined });
+    expect(configuration.configuredValues).toEqual([]);
+    expect(Object.isFrozen(configuration)).toBe(true);
+    expect(Object.isFrozen(configuration.targets)).toBe(true);
+    expect(Object.isFrozen(target)).toBe(true);
+    expect(Object.isFrozen(target.loopbackHosts)).toBe(true);
+    expect(Object.isFrozen(target.locality)).toBe(true);
+    expect(Object.isFrozen(configuration.configuredValues)).toBe(true);
   });
 
   it("preserves the aggregate's existing non-loopback acknowledgement policy", () => {
@@ -218,8 +286,18 @@ describe("MCP access-grant aggregate target characterization", () => {
       nonProduction: false,
     });
 
-    setEnvironment({ MCP_ACCESS_GRANT_NON_PRODUCTION_ACK: "true" });
-    expect(mcpAccessGrantCharacterization.evaluateTargetConfiguration(hostedTarget)).toEqual({
+    setEnvironment({
+      MCP_ACCESS_GRANT_NON_PRODUCTION_ACK: "true",
+      MCP_ACCESS_GRANT_TARGETS: JSON.stringify([{
+        name: hostedTarget.name,
+        canonicalResource: hostedTarget.canonicalResource,
+        supabaseUrl: hostedTarget.supabaseUrl,
+        expectedAuthorizationServer: hostedTarget.expectedAuthorizationServer,
+        loopbackHosts: hostedTarget.loopbackHosts,
+      }]),
+    });
+    const acknowledgedHostedTarget = loadMcpAccessGrantTargets()[0];
+    expect(mcpAccessGrantCharacterization.evaluateTargetConfiguration(acknowledgedHostedTarget)).toEqual({
       configured: true,
       nonProduction: true,
     });
