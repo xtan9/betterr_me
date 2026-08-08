@@ -9,14 +9,11 @@ import {
 } from "@/lib/db";
 import { WorkoutsDB } from "@/lib/db/workouts";
 import {
-  createAuthenticatedRecurringTaskCapabilities,
+  createCoverageRead,
   type AuthenticatedRecurringTaskPrincipal,
-  type CoverageCapabilityResult,
-  type CoverageCompleteness,
-  type LocalDateRange,
-} from "@/lib/recurring-tasks";
+} from "@/lib/recurring-tasks/coverage-read";
 
-import { createDashboardQuery, unavailableDashboardCoverage, type DashboardQuery } from "./query";
+import { createDashboardQuery, type DashboardQuery } from "./query";
 import { createDashboardSnapshot } from "./dashboard-snapshot";
 
 /** Compose the authenticated dashboard query over materialized Task Occurrences. */
@@ -24,10 +21,11 @@ export function createSupabaseDashboardQuery(
   supabase: SupabaseClient,
   principal: AuthenticatedRecurringTaskPrincipal,
 ): DashboardQuery {
-  const recurringCapabilities = createAuthenticatedRecurringTaskCapabilities(
+  const coverageRead = createCoverageRead({
     supabase,
     principal,
-  );
+    source: "dashboard",
+  });
 
   const dashboardSnapshot = createDashboardSnapshot({
     habits: new HabitsDB(supabase),
@@ -39,38 +37,7 @@ export function createSupabaseDashboardQuery(
   });
 
   return createDashboardQuery(principal, {
-    coverage: {
-      async ensure({ principal: owner, range }) {
-        const outcome = await recurringCapabilities.coverage.ensure({
-          operationId: dashboardCoverageOperationId(owner.userId, range),
-          range,
-        });
-        return coverageCompleteness(outcome, range);
-      },
-    },
+    coverage: coverageRead,
     snapshot: dashboardSnapshot,
   });
-}
-
-function coverageCompleteness(
-  outcome: CoverageCapabilityResult,
-  range: LocalDateRange,
-): CoverageCompleteness {
-  if (outcome.type === "coverage") return outcome.completeness;
-  if (outcome.type === "coverage-unavailable") {
-    return unavailableDashboardCoverage(range, outcome.reason);
-  }
-  return unavailableDashboardCoverage(
-    range,
-    "reason" in outcome && typeof outcome.reason === "string"
-      ? outcome.reason
-      : undefined,
-  );
-}
-
-function dashboardCoverageOperationId(
-  userId: string,
-  range: LocalDateRange,
-): string {
-  return `dashboard-read-coverage:${userId}:${range.from}:${range.to}`;
 }
