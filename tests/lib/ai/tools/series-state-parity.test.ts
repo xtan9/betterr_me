@@ -9,8 +9,11 @@ const {
   httpSupabase,
   mockStateFactory,
   mockState,
-  mockTaskWritesFactory,
-  mockDeleteSeries,
+  mockCreateCapabilities,
+  mockPauseSeries,
+  mockResumeSeries,
+  mockEndSeries,
+  mockToRecurringTaskResponse,
 } = vi.hoisted(() => {
   const mockState = {
     update: vi.fn(),
@@ -19,13 +22,20 @@ const {
     editScope: vi.fn(),
     getRecurringTask: vi.fn(),
   };
-  const mockDeleteSeries = vi.fn();
+  const mockCreateCapabilities = vi.fn();
+  const mockPauseSeries = vi.fn();
+  const mockResumeSeries = vi.fn();
+  const mockEndSeries = vi.fn();
+  const mockToRecurringTaskResponse = vi.fn();
   return {
     httpSupabase: {},
     mockStateFactory: vi.fn(() => mockState),
     mockState,
-    mockTaskWritesFactory: vi.fn(() => ({ deleteSeries: mockDeleteSeries })),
-    mockDeleteSeries,
+    mockCreateCapabilities,
+    mockPauseSeries,
+    mockResumeSeries,
+    mockEndSeries,
+    mockToRecurringTaskResponse,
   };
 });
 
@@ -45,14 +55,15 @@ vi.mock("@/lib/recurring-tasks", async () => {
   return {
     ...actual,
     createSupabaseSeriesStateAdapter: mockStateFactory,
+    createAuthenticatedRecurringTaskCapabilities: mockCreateCapabilities,
   };
 });
 
-vi.mock("@/lib/tasks/writes", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/tasks/writes")>(
-    "@/lib/tasks/writes",
+vi.mock("@/lib/recurring-tasks/compatibility", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/recurring-tasks/compatibility")>(
+    "@/lib/recurring-tasks/compatibility",
   );
-  return { ...actual, createTaskWrites: mockTaskWritesFactory };
+  return { ...actual, toRecurringTaskResponse: mockToRecurringTaskResponse };
 });
 
 const recurringTask = {
@@ -72,6 +83,20 @@ function success() {
   return { status: "complete", type: "complete", recurringTask } as const;
 }
 
+function commandSuccess(
+  type: "paused" | "resumed" | "ended",
+  operation: string,
+  operationId: string,
+) {
+  return {
+    type,
+    status: "complete",
+    operation,
+    operationId,
+    series: recurringTask,
+  } as const;
+}
+
 function findTool(name: string) {
   return taskTools().find((tool) => tool.name === name)!;
 }
@@ -79,11 +104,29 @@ function findTool(name: string) {
 describe("HTTP and AI Series State adapter parity", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCreateCapabilities.mockReturnValue({
+      seriesCommands: {
+        pauseSeries: mockPauseSeries,
+        resumeSeries: mockResumeSeries,
+        endSeries: mockEndSeries,
+      },
+      seriesQueries: { getSeries: vi.fn() },
+      coverage: { ensure: vi.fn() },
+    });
     mockState.update.mockResolvedValue(success());
     mockState.pause.mockResolvedValue(success());
     mockState.resume.mockResolvedValue(success());
     mockState.editScope.mockResolvedValue({ status: "complete", type: "complete" });
-    mockDeleteSeries.mockResolvedValue({ type: "deleted" });
+    mockPauseSeries.mockResolvedValue(
+      commandSuccess("paused", "recurring-task.series.pause", "pause-1"),
+    );
+    mockResumeSeries.mockResolvedValue(
+      commandSuccess("resumed", "recurring-task.series.resume", "resume-1"),
+    );
+    mockEndSeries.mockResolvedValue(
+      commandSuccess("ended", "recurring-task.series.end", "end-1"),
+    );
+    mockToRecurringTaskResponse.mockReturnValue(recurringTask);
   });
 
   it("maps product and AI Series Default edits to the same lifecycle meaning", async () => {
@@ -129,78 +172,106 @@ describe("HTTP and AI Series State adapter parity", () => {
     await PATCH(
       new NextRequest(
         "http://localhost:3000/api/recurring-tasks/series-1?action=pause&date=2026-08-06",
-        { method: "PATCH" },
+        {
+          method: "PATCH",
+          headers: {
+            "Idempotency-Key": "pause-1",
+            "If-Match": "rt-series-v1.pause-version",
+          },
+        },
       ),
       { params: Promise.resolve({ id: "series-1" }) },
     );
     await findTool("pauseRecurringTask").execute(
-      { recurringTaskId: "series-1", effectiveDate: "2026-08-06" },
+      {
+        recurringTaskId: "series-1",
+        operationId: "pause-1",
+        version: "rt-series-v1.pause-version",
+        effectiveDate: "2026-08-06",
+      },
       aiContext,
     );
     await PATCH(
       new NextRequest(
         "http://localhost:3000/api/recurring-tasks/series-1?action=resume&date=2026-08-07",
-        { method: "PATCH" },
+        {
+          method: "PATCH",
+          headers: {
+            "Idempotency-Key": "resume-1",
+            "If-Match": "rt-series-v1.resume-version",
+          },
+        },
       ),
       { params: Promise.resolve({ id: "series-1" }) },
     );
     await findTool("resumeRecurringTask").execute(
-      { recurringTaskId: "series-1", effectiveDate: "2026-08-07" },
+      {
+        recurringTaskId: "series-1",
+        operationId: "resume-1",
+        version: "rt-series-v1.resume-version",
+        effectiveDate: "2026-08-07",
+      },
       aiContext,
     );
 
-    expect(mockState.pause).toHaveBeenNthCalledWith(1, {
+    expect(mockPauseSeries).toHaveBeenNthCalledWith(1, {
+      operationId: "pause-1",
       seriesId: "series-1",
-      userId: "user-123",
+      version: "rt-series-v1.pause-version",
       effectiveDate: "2026-08-06",
     });
-    expect(mockState.pause).toHaveBeenNthCalledWith(2, expect.objectContaining({
+    expect(mockPauseSeries).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      operationId: "pause-1",
       seriesId: "series-1",
-      userId: "user-123",
+      version: "rt-series-v1.pause-version",
       effectiveDate: "2026-08-06",
-      inferredDate: "2026-08-01",
-      timezone: "America/Los_Angeles",
     }));
-    expect(mockState.resume).toHaveBeenNthCalledWith(1, {
+    expect(mockResumeSeries).toHaveBeenCalledWith({
+      operationId: "resume-1",
       seriesId: "series-1",
-      userId: "user-123",
+      version: "rt-series-v1.resume-version",
       effectiveDate: "2026-08-07",
-      coverageThrough: "2026-08-14",
+      coverage: { from: "2026-08-07", to: "2026-08-14" },
     });
-    expect(mockState.resume).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      seriesId: "series-1",
-      userId: "user-123",
-      effectiveDate: "2026-08-07",
-      inferredDate: "2026-08-01",
-      timezone: "America/Los_Angeles",
-      coverageThrough: "2026-08-14",
-    }));
   });
 
   it("maps the product end path and AI confirmed end to one terminal command", async () => {
     const httpResponse = await DELETE(
       new NextRequest(
         "http://localhost:3000/api/recurring-tasks/series-1?date=2026-08-09",
-        { method: "DELETE" },
+        {
+          method: "DELETE",
+          headers: {
+            "Idempotency-Key": "end-1",
+            "If-Match": "rt-series-v1.end-version",
+          },
+        },
       ),
       { params: Promise.resolve({ id: "series-1" }) },
     );
     const aiResult = await findTool("deleteRecurringTask").execute(
-      { recurringTaskId: "series-1", effectiveDate: "2026-08-09" },
+      {
+        recurringTaskId: "series-1",
+        operationId: "end-1",
+        version: "rt-series-v1.end-version",
+        effectiveDate: "2026-08-09",
+      },
       aiContext,
     );
 
     expect(httpResponse.status).toBe(200);
     expect(await httpResponse.json()).toEqual({ success: true });
     expect(aiResult).toEqual({ success: true });
-    expect(mockDeleteSeries).toHaveBeenNthCalledWith(1, {
+    expect(mockEndSeries).toHaveBeenNthCalledWith(1, {
+      operationId: "end-1",
       seriesId: "series-1",
-      userId: "user-123",
+      version: "rt-series-v1.end-version",
       effectiveDate: "2026-08-09",
     });
-    expect(mockDeleteSeries).toHaveBeenNthCalledWith(2, {
+    expect(mockEndSeries).toHaveBeenNthCalledWith(2, {
+      operationId: "end-1",
       seriesId: "series-1",
-      userId: "user-123",
+      version: "rt-series-v1.end-version",
       effectiveDate: "2026-08-09",
     });
   });

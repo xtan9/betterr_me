@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, cookieRouteErrorMessage } from '@/lib/auth/authenticated-request';
 import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
-import {
-  createTaskWrites,
-  taskDeletionHttpFailure,
-} from '@/lib/tasks/writes';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { recurringTaskUpdateSchema } from '@/lib/validations/recurring-task';
@@ -15,9 +11,13 @@ import {
 import {
   createSupabaseSeriesStateAdapter,
   createAuthenticatedRecurringTaskCapabilities,
-  createActivatedRecurringTaskLifecycle,
   isSeriesStateSuccess,
   seriesStateHttpFailure,
+} from '@/lib/recurring-tasks';
+import type {
+  SeriesCommands,
+  SeriesStateCommand,
+  SeriesVersion,
 } from '@/lib/recurring-tasks';
 import {
   recurringTaskFailureHttpStatus,
@@ -84,7 +84,7 @@ export async function GET(
  * Update a recurring task template
  *
  * Query params:
- * - action: 'pause' | 'resume' (quick actions)
+ * - action: 'pause' | 'resume' | 'end' (quick actions)
  */
 export async function PATCH(
   request: NextRequest,
@@ -100,6 +100,10 @@ export async function PATCH(
       );
     }
     const { principal: { userId }, client: supabase } = auth;
+    const seriesCommands = createAuthenticatedRecurringTaskCapabilities({
+      supabase,
+      principal: auth.principal,
+    }).seriesCommands;
 
     const searchParams = request.nextUrl.searchParams;
     const action = searchParams.get('action');
@@ -110,44 +114,20 @@ export async function PATCH(
         { status: 400 },
       );
     }
-    const state = createSupabaseSeriesStateAdapter(supabase);
-
     // Handle quick actions
-    if (action === 'pause') {
-      const outcome = await state.pause({
-        seriesId: id,
-        userId,
-        effectiveDate: dateParam,
-      });
-      if (!isSeriesStateSuccess(outcome)) {
-        const failure = seriesStateHttpFailure(outcome);
-        return NextResponse.json(
-          { error: failure.error },
-          { status: failure.status },
-        );
-      }
-      return NextResponse.json({ recurring_task: outcome.recurringTask });
-    }
-    if (action === 'resume') {
-      const throughDate = dateParam ? addLocalDays(dateParam, 7) : undefined;
-      const outcome = await state.resume({
-        seriesId: id,
-        userId,
-        effectiveDate: dateParam,
-        coverageThrough: throughDate,
-      });
-      if (!isSeriesStateSuccess(outcome)) {
-        const failure = seriesStateHttpFailure(outcome);
-        return NextResponse.json(
-          { error: failure.error },
-          { status: failure.status },
-        );
-      }
-      return NextResponse.json({ recurring_task: outcome.recurringTask });
+    if (action === 'pause' || action === 'resume' || action === 'end') {
+      const outcome = await runSeriesStateCommand(
+        seriesCommands,
+        action,
+        id,
+        readSeriesCommandMetadata(request),
+        dateParam,
+      );
+      return seriesCommandResponse(outcome, userId);
     }
     if (action) {
       return NextResponse.json(
-        { error: 'Invalid action. Must be: pause or resume' },
+        { error: 'Invalid action. Must be: pause, resume, or end' },
         { status: 400 }
       );
     }
@@ -156,6 +136,32 @@ export async function PATCH(
     const body = await request.json();
     const validation = validateRequestBody(body, recurringTaskUpdateSchema);
     if (!validation.success) return validation.response;
+
+    if (validation.data.status) {
+      const nonStateFields = Object.keys(body).filter(
+        (key) => !['status', 'operationId', 'operation_id', 'version'].includes(key),
+      );
+      if (nonStateFields.length > 0) {
+        return NextResponse.json(
+          { error: 'Series state changes must be sent separately from Series revisions' },
+          { status: 400 },
+        );
+      }
+      const outcome = await runSeriesStateCommand(
+        seriesCommands,
+        validation.data.status === 'active'
+          ? 'resume'
+          : validation.data.status === 'paused'
+            ? 'pause'
+            : 'end',
+        id,
+        readSeriesCommandMetadata(request, body),
+        dateParam,
+      );
+      return seriesCommandResponse(outcome, userId);
+    }
+
+    const state = createSupabaseSeriesStateAdapter(supabase);
 
     const outcome = await state.update(
       toSeriesRevisionInput(
@@ -206,6 +212,10 @@ export async function DELETE(
       );
     }
     const { principal: { userId }, client: supabase } = auth;
+    const seriesCommands = createAuthenticatedRecurringTaskCapabilities({
+      supabase,
+      principal: auth.principal,
+    }).seriesCommands;
 
     const dateParam = request.nextUrl.searchParams.get('date')?.trim() || undefined;
     if (dateParam && !isValidLocalDate(dateParam)) {
@@ -214,21 +224,15 @@ export async function DELETE(
         { status: 400 },
       );
     }
-    const outcome = await createTaskWrites(supabase, {
-      lifecycle: createActivatedRecurringTaskLifecycle(supabase),
-    }).deleteSeries({
-      seriesId: id,
-      userId,
-      ...(dateParam === undefined ? {} : { effectiveDate: dateParam }),
-    });
-    if (outcome.type !== 'deleted') {
-      const failure = taskDeletionHttpFailure(outcome, 'series');
-      return NextResponse.json(
-        { error: failure.error },
-        { status: failure.status },
-      );
-    }
-    return NextResponse.json({ success: true });
+    const outcome = await runSeriesStateCommand(
+      seriesCommands,
+      'end',
+      id,
+      readSeriesCommandMetadata(request),
+      dateParam,
+    );
+    if (outcome.type === 'ended') return NextResponse.json({ success: true });
+    return seriesCommandResponse(outcome, userId);
   } catch (error) {
     log.error('DELETE /api/recurring-tasks/[id] error', error);
     return NextResponse.json(
@@ -236,6 +240,115 @@ export async function DELETE(
       { status: 500 }
     );
   }
+}
+
+type SeriesStateAction = 'pause' | 'resume' | 'end';
+
+interface SeriesCommandMetadata {
+  operationId: string;
+  version: SeriesVersion;
+}
+
+function readSeriesCommandMetadata(
+  request: NextRequest,
+  body?: unknown,
+): SeriesCommandMetadata {
+  const searchParams = request.nextUrl.searchParams;
+  const operationId = firstNonEmpty(
+    request.headers.get('Idempotency-Key'),
+    request.headers.get('X-Operation-Id'),
+    readString(body, 'operationId'),
+    readString(body, 'operation_id'),
+    searchParams.get('operationId'),
+    searchParams.get('operation_id'),
+  ) ?? '';
+  const version = firstNonEmpty(
+    normalizeOpaqueHeader(request.headers.get('If-Match')),
+    readString(body, 'version'),
+    searchParams.get('version'),
+  ) ?? '';
+
+  return {
+    operationId,
+    version: version as SeriesVersion,
+  };
+}
+
+function firstNonEmpty(...values: Array<string | null | undefined>): string | undefined {
+  return values.find((value) => value?.trim())?.trim();
+}
+
+function normalizeOpaqueHeader(value: string | null): string | undefined {
+  const normalized = value?.trim();
+  if (!normalized) return undefined;
+  const withoutWeakPrefix = normalized.startsWith('W/')
+    ? normalized.slice(2).trim()
+    : normalized;
+  return withoutWeakPrefix.replace(/^"(.*)"$/, '$1');
+}
+
+function readString(value: unknown, key: string): string | undefined {
+  if (!value || typeof value !== 'object' || !(key in value)) return undefined;
+  const candidate = (value as Record<string, unknown>)[key];
+  return typeof candidate === 'string' ? candidate : undefined;
+}
+
+async function runSeriesStateCommand(
+  commands: SeriesCommands,
+  action: SeriesStateAction,
+  seriesId: string,
+  metadata: SeriesCommandMetadata,
+  effectiveDate?: string,
+) {
+  const input: SeriesStateCommand = {
+    operationId: metadata.operationId,
+    seriesId,
+    version: metadata.version,
+    ...(effectiveDate === undefined ? {} : { effectiveDate }),
+  };
+
+  if (action === 'pause') return commands.pauseSeries(input);
+  if (action === 'resume') {
+    return commands.resumeSeries({
+      ...input,
+      ...(effectiveDate === undefined
+        ? {}
+        : { coverage: { from: effectiveDate, to: addLocalDays(effectiveDate, 7) } }),
+    });
+  }
+  return commands.endSeries(input);
+}
+
+function seriesCommandResponse(
+  outcome: Awaited<ReturnType<SeriesCommands['pauseSeries']>>
+    | Awaited<ReturnType<SeriesCommands['resumeSeries']>>
+    | Awaited<ReturnType<SeriesCommands['endSeries']>>,
+  userId: string,
+) {
+  if (outcome.type === 'paused' || outcome.type === 'resumed' || outcome.type === 'ended') {
+    return NextResponse.json({
+      recurring_task: toRecurringTaskResponse(outcome.series, userId),
+    });
+  }
+  const failure = recurringTaskFailureHttpStatusAndMessage(outcome);
+  return NextResponse.json(
+    { error: failure.error },
+    { status: failure.status },
+  );
+}
+
+function recurringTaskFailureHttpStatusAndMessage(
+  outcome: Exclude<
+    Awaited<ReturnType<SeriesCommands['pauseSeries']>>
+      | Awaited<ReturnType<SeriesCommands['resumeSeries']>>
+      | Awaited<ReturnType<SeriesCommands['endSeries']>>,
+    { type: 'paused' | 'resumed' | 'ended' }
+  >,
+) {
+  return {
+    error: recurringTaskFailureMessage(outcome),
+    status: recurringTaskFailureHttpStatus(outcome),
+  };
 }
 
 function toSeriesRevisionInput(

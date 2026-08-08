@@ -595,6 +595,14 @@ async function runStateCommand(
   const operationValidation = validateOperationId(operation, input?.operationId);
   if (operationValidation) return operationValidation;
   const operationId = input.operationId;
+  if (typeof input?.seriesId !== "string" || !input.seriesId.trim()) {
+    return validationFailure(
+      operation,
+      operationId,
+      "seriesId",
+      "Series ID is required",
+    );
+  }
   const version = parseSeriesVersion(input.version, input.seriesId);
   if (!version) {
     return validationFailure(
@@ -890,14 +898,16 @@ export function encodeSeriesVersion(
 }
 
 function parseSeriesVersion(
-  value: SeriesVersion,
+  value: unknown,
   seriesId: string,
 ): DecodedSeriesVersion | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
   const decoded = parseEncodedVersion(value);
   return decoded?.seriesId === seriesId ? decoded : undefined;
 }
 
-function parseEncodedVersion(value: string): DecodedSeriesVersion | undefined {
+function parseEncodedVersion(value: unknown): DecodedSeriesVersion | undefined {
+  if (typeof value !== "string") return undefined;
   if (!value.startsWith("rt-series-v1.")) return undefined;
   try {
     const json = decodeBase64Url(value.slice("rt-series-v1.".length));

@@ -1,6 +1,6 @@
 # Recurring Task Lifecycle contract evidence
 
-Status: accepted for issue #692; capability-boundary refinement confirmed 6 August 2026 and pending implementation
+Status: accepted for issue #692; authenticated Series state-command slice implemented for issue #887, with the remaining capability-boundary refinement pending
 
 This document records the post-cutover contract for the Recurring Task Lifecycle. Dependency #691 is the activated lifecycle implementation at `a6209c30`; the release marker is `20260803000001_activate_recurring_task_lifecycle`, and the contract migration is `20260803000002_contract_recurring_task_lifecycle`.
 
@@ -55,18 +55,18 @@ The change ships as one reviewable production cutover: establish the capabilitie
 
 ## Current evidence map
 
-The following evidence describes the activated post-#692 lifecycle before the confirmed capability-boundary refinement is implemented.
+The following evidence describes the activated post-#692 lifecycle and the implemented #887 Series state-command slice; other capability-boundary slices remain incremental work.
 
 | Surface | Authority and proof |
 | --- | --- |
-| HTTP creation/list/read | `app/api/recurring-tasks/route.ts` and `[id]/route.ts` call the activated lifecycle; response translation is explicit and tested in the route suites. |
-| AI creation/list/read | `lib/ai/tools/tasks.ts` uses the lifecycle and the same response adapter; `tests/lib/ai/tools/recurring-tasks.test.ts` and `series-creation-parity.test.ts` prove parity. |
+| HTTP creation/query/Series state | `app/api/recurring-tasks/route.ts` and `[id]/route.ts` use the authenticated capabilities; legacy fields and HTTP DELETE are translated at the compatibility edge, and route tests cover operation IDs, opaque versions, effective dates, and typed failures. |
+| AI creation/query/Series state | `lib/ai/tools/tasks.ts` uses the same public Series command/query capabilities and response adapter; recurring-task tests and `series-state-parity.test.ts` prove canonical HTTP/AI inputs and the delete-shaped end translation. |
 | Dashboard/read | `lib/dashboard/dashboard-snapshot.ts` requires `ensureRecurringCoverage` before ordinary task queries; failed coverage is surfaced as a typed warning. No fallback generator or virtual expansion is available. |
-| Task writes | `lib/tasks/writes.ts`, `occurrence-adapter.ts`, and `series-state-adapter.ts` use narrow Task/Occurrence and Series State seams; ordinary Task Writes reject scoped recurrence mutations unless the lifecycle adapter owns them. |
+| Task writes | `lib/tasks/writes.ts`, `occurrence-adapter.ts`, and the private `series-state-adapter.ts` remain compatibility seams for task-scoped commands; supported Series-state routes do not construct them. |
 | Storage contract | `20260803000002_contract_recurring_task_lifecycle.sql` checks the completed immutable cutover, rewrites installed delivery functions to target storage, removes the legacy table/columns/functions/indexes, and retains only migration facts needed for audit. |
-| SQL fixture | `supabase/tests/recurring_task_legacy_contract.sql` is registered as a constrained transactional fixture and checks retired storage, active function bodies, RLS, execute/direct-write privileges, and rollback. |
+| SQL fixture | `supabase/tests/recurring_task_series_commands.sql` is registered as a constrained transactional fixture and checks authenticated pause/resume/end transitions, local-date suppression without backfill, replay, typed missing/stale/invalid outcomes, lineage preservation, and rollback; the broader recurring-task fixtures provide the remaining storage/RLS evidence. |
 | Import boundary | `tests/lib/recurring-tasks/import-boundary.test.ts` proves the generator and legacy DB module are absent and compatibility translation is declared. |
-| Architecture boundary | `tests/scripts/recurring-cutover-architecture.test.ts`, `series-state-adapter-architecture.test.ts`, and `occurrence-adapter-architecture.test.ts` prove activation ordering, adapter routing, and no legacy writers. |
+| Architecture boundary | `tests/scripts/recurring-cutover-architecture.test.ts`, `series-state-adapter-architecture.test.ts`, and `occurrence-adapter-architecture.test.ts` prove activation ordering, authenticated Series-state routing, private task-scoped compatibility, and no legacy writers. |
 | Database acceptance | The registered `recurring-tasks` fixtures cover lifecycle creation, coverage horizons, overrides, completion/reopen, skip, revisions, Extra/Withdrawn dispositions, pause/resume, ending/stopping policy, retries, deletion, observability, concurrency, RLS, and rollback. |
 
 ## Current cross-channel acceptance
@@ -82,6 +82,8 @@ The existing delivery, adapter, lifecycle, and SQL suites collectively cover:
 - idempotent retry and revision/concurrency conflicts;
 - owner isolation, direct-write denial, and transaction rollback.
 
-The refinement is not complete until the capability conformance suite runs against both implementations, HTTP and AI parity tests exercise the supported capabilities, retry and stale-version scenarios are covered, the production import boundary permits only the declared surface, and the registered SQL fixtures still pass.
+The #887 state-command slice additionally proves stable operation identity, opaque optimistic versions, local effective-date pause/resume behavior without backfill, canonical endSeries lineage preservation, HTTP/AI parity, dual implementation conformance, and registered transactional SQL evidence.
+
+The remaining capability-boundary refinement is not complete until the outstanding Series-definition, Task Command, Coverage query, and maintenance slices are delivered; each must retain the conformance, parity, retry, optimistic-concurrency, import-boundary, and registered-SQL guarantees recorded here.
 
 The delivery-write inventory records the lifecycle authority as migrated under #692 and keeps ordinary task queries excluded only when they are query-only. This contract and the inventory JSON are coupled release evidence and must move together when the authority or its evidence changes. The former SHA-256 lock was intentionally retired when the inventory became a permanent empty, fail-closed guard under #658.

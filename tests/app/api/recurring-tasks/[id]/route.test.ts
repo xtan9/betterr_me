@@ -3,17 +3,17 @@ import { GET, PATCH, DELETE } from "@/app/api/recurring-tasks/[id]/route";
 import { NextRequest } from "next/server";
 
 const {
-  mockCreateTaskWrites,
-  mockDeleteSeries,
   mockStateFactory,
   mockState,
+  mockPauseSeries,
+  mockResumeSeries,
+  mockEndSeries,
   mockGetSeriesQuery,
   mockCreateCapabilities,
   mockCapabilities,
   mockLifecycle,
   mockToRecurringTaskResponse,
 } = vi.hoisted(() => {
-  const mockDeleteSeries = vi.fn();
   const mockGetSeries = vi.fn();
   const mockGetSeriesQuery = vi.fn();
   const mockState = {
@@ -21,17 +21,25 @@ const {
     pause: vi.fn(),
     resume: vi.fn(),
   };
+  const mockPauseSeries = vi.fn();
+  const mockResumeSeries = vi.fn();
+  const mockEndSeries = vi.fn();
   const mockCreateCapabilities = vi.fn();
   const mockCapabilities = {
-    seriesCommands: {},
+    seriesCommands: {
+      pauseSeries: mockPauseSeries,
+      resumeSeries: mockResumeSeries,
+      endSeries: mockEndSeries,
+    },
     seriesQueries: { getSeries: mockGetSeriesQuery },
     coverage: { ensure: vi.fn() },
   };
   return {
-    mockCreateTaskWrites: vi.fn(() => ({ deleteSeries: mockDeleteSeries })),
-    mockDeleteSeries,
     mockStateFactory: vi.fn(() => mockState),
     mockState,
+    mockPauseSeries,
+    mockResumeSeries,
+    mockEndSeries,
     mockGetSeries,
     mockGetSeriesQuery,
     mockCreateCapabilities,
@@ -39,13 +47,6 @@ const {
     mockLifecycle: { getSeries: mockGetSeries },
     mockToRecurringTaskResponse: vi.fn(),
   };
-});
-
-vi.mock("@/lib/tasks/writes", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/tasks/writes")>(
-    "@/lib/tasks/writes",
-  );
-  return { ...actual, createTaskWrites: mockCreateTaskWrites };
 });
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -88,6 +89,27 @@ describe("GET /api/recurring-tasks/[id]", () => {
     } as any);
     mockCreateCapabilities.mockReturnValue(mockCapabilities);
     mockToRecurringTaskResponse.mockImplementation((series) => series);
+    mockPauseSeries.mockResolvedValue({
+      type: "paused",
+      status: "complete",
+      operation: "recurring-task.series.pause",
+      operationId: "pause-op",
+      series: { id: "rt-1", status: "paused" },
+    });
+    mockResumeSeries.mockResolvedValue({
+      type: "resumed",
+      status: "complete",
+      operation: "recurring-task.series.resume",
+      operationId: "resume-op",
+      series: { id: "rt-1", status: "active" },
+    });
+    mockEndSeries.mockResolvedValue({
+      type: "ended",
+      status: "complete",
+      operation: "recurring-task.series.end",
+      operationId: "end-op",
+      series: { id: "rt-1", status: "ended" },
+    });
   });
 
   it("should return template by ID", async () => {
@@ -168,6 +190,7 @@ describe("GET /api/recurring-tasks/[id]", () => {
 describe("PATCH /api/recurring-tasks/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCreateCapabilities.mockReturnValue(mockCapabilities);
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: { id: "user-123" } } })) },
     } as any);
@@ -211,7 +234,13 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
 
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks/rt-1?action=pause",
-      { method: "PATCH" },
+      {
+        method: "PATCH",
+        headers: {
+          "Idempotency-Key": "pause-op-1",
+          "If-Match": "rt-series-v1.pause-version",
+        },
+      },
     );
 
     const response = await PATCH(request, {
@@ -221,9 +250,10 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
 
     expect(response.status).toBe(200);
     expect(data.recurring_task).toEqual(paused);
-    expect(mockState.pause).toHaveBeenCalledWith({
+    expect(mockPauseSeries).toHaveBeenCalledWith({
+      operationId: "pause-op-1",
       seriesId: "rt-1",
-      userId: "user-123",
+      version: "rt-series-v1.pause-version",
     });
   });
 
@@ -237,7 +267,13 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
 
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks/rt-1?action=resume",
-      { method: "PATCH" },
+      {
+        method: "PATCH",
+        headers: {
+          "Idempotency-Key": "resume-op-1",
+          "If-Match": "rt-series-v1.resume-version",
+        },
+      },
     );
 
     const response = await PATCH(request, {
@@ -247,11 +283,10 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
 
     expect(response.status).toBe(200);
     expect(data.recurring_task).toEqual(resumed);
-    expect(mockState.resume).toHaveBeenCalledWith({
+    expect(mockResumeSeries).toHaveBeenCalledWith({
+      operationId: "resume-op-1",
       seriesId: "rt-1",
-      userId: "user-123",
-      effectiveDate: undefined,
-      coverageThrough: undefined,
+      version: "rt-series-v1.resume-version",
     });
   });
 
@@ -264,17 +299,46 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
 
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks/rt-1?action=resume&date=2026-02-17",
-      { method: "PATCH" },
+      {
+        method: "PATCH",
+        headers: {
+          "Idempotency-Key": "resume-op-2",
+          "If-Match": "rt-series-v1.resume-version",
+        },
+      },
     );
 
     await PATCH(request, { params: Promise.resolve({ id: "rt-1" }) });
 
-    expect(mockState.resume).toHaveBeenCalledWith({
+    expect(mockResumeSeries).toHaveBeenCalledWith({
+      operationId: "resume-op-2",
       seriesId: "rt-1",
-      userId: "user-123",
+      version: "rt-series-v1.resume-version",
       effectiveDate: "2026-02-17",
-      coverageThrough: "2026-02-24",
+      coverage: { from: "2026-02-17", to: "2026-02-24" },
     });
+  });
+
+  it("maps missing command metadata to a typed validation response", async () => {
+    mockPauseSeries.mockResolvedValue({
+      type: "validation",
+      status: "validation",
+      operation: "recurring-task.series.pause",
+      field: "operationId",
+      reason: "Operation ID is required",
+    });
+
+    const response = await PATCH(
+      new NextRequest(
+        "http://localhost:3000/api/recurring-tasks/rt-1?action=pause",
+        { method: "PATCH" },
+      ),
+      { params: Promise.resolve({ id: "rt-1" }) },
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Operation ID is required" });
+    expect(mockState.pause).not.toHaveBeenCalled();
   });
 
   it("should return 400 for invalid action", async () => {
@@ -329,13 +393,19 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
   });
 
   it("should return 404 if resume fails with not found", async () => {
-    vi.mocked(mockState.resume).mockRejectedValue(
+    vi.mocked(mockResumeSeries).mockRejectedValue(
       new Error("Recurring task not found"),
     );
 
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks/rt-1?action=resume",
-      { method: "PATCH" },
+      {
+        method: "PATCH",
+        headers: {
+          "Idempotency-Key": "resume-op-3",
+          "If-Match": "rt-series-v1.resume-version",
+        },
+      },
     );
 
     const response = await PATCH(request, {
@@ -349,7 +419,14 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
 describe("DELETE /api/recurring-tasks/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockDeleteSeries.mockResolvedValue({ type: "deleted" });
+    mockCreateCapabilities.mockReturnValue(mockCapabilities);
+    mockEndSeries.mockResolvedValue({
+      type: "ended",
+      status: "complete",
+      operation: "recurring-task.series.end",
+      operationId: "end-op",
+      series: { id: "rt-1", status: "ended" },
+    });
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: { id: "user-123" } } })) },
     } as any);
@@ -360,6 +437,10 @@ describe("DELETE /api/recurring-tasks/[id]", () => {
       "http://localhost:3000/api/recurring-tasks/rt-1",
       {
         method: "DELETE",
+        headers: {
+          "Idempotency-Key": "end-op-1",
+          "If-Match": "rt-series-v1.end-version",
+        },
       },
     );
 
@@ -370,16 +451,23 @@ describe("DELETE /api/recurring-tasks/[id]", () => {
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(mockDeleteSeries).toHaveBeenCalledWith({
+    expect(mockEndSeries).toHaveBeenCalledWith({
+      operationId: "end-op-1",
       seriesId: "rt-1",
-      userId: "user-123",
+      version: "rt-series-v1.end-version",
     });
   });
 
   it("passes the validated effective date to Task Writes", async () => {
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks/rt-1?date=2026-08-09",
-      { method: "DELETE" },
+      {
+        method: "DELETE",
+        headers: {
+          "Idempotency-Key": "end-op-2",
+          "If-Match": "rt-series-v1.end-version",
+        },
+      },
     );
 
     const response = await DELETE(request, {
@@ -387,19 +475,31 @@ describe("DELETE /api/recurring-tasks/[id]", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mockDeleteSeries).toHaveBeenCalledWith({
+    expect(mockEndSeries).toHaveBeenCalledWith({
+      operationId: "end-op-2",
       seriesId: "rt-1",
-      userId: "user-123",
+      version: "rt-series-v1.end-version",
       effectiveDate: "2026-08-09",
     });
   });
 
   it("maps a typed not-found deletion outcome to 404", async () => {
-    mockDeleteSeries.mockResolvedValue({ type: "not-found" });
+    mockEndSeries.mockResolvedValue({
+      type: "not-found",
+      status: "not-found",
+      operation: "recurring-task.series.end",
+      operationId: "end-op-3",
+    });
 
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks/rt-1",
-      { method: "DELETE" },
+      {
+        method: "DELETE",
+        headers: {
+          "Idempotency-Key": "end-op-3",
+          "If-Match": "rt-series-v1.end-version",
+        },
+      },
     );
     const response = await DELETE(request, {
       params: Promise.resolve({ id: "rt-1" }),
@@ -429,12 +529,16 @@ describe("DELETE /api/recurring-tasks/[id]", () => {
   });
 
   it("should return 500 on internal error", async () => {
-    mockDeleteSeries.mockRejectedValue(new Error("fail"));
+    mockEndSeries.mockRejectedValue(new Error("fail"));
 
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks/rt-1",
       {
         method: "DELETE",
+        headers: {
+          "Idempotency-Key": "end-op-4",
+          "If-Match": "rt-series-v1.end-version",
+        },
       },
     );
 

@@ -27,6 +27,7 @@ import {
   resolveSeriesEffectiveDate,
   seriesStateErrorMessage,
 } from "@/lib/recurring-tasks";
+import type { SeriesVersion } from "@/lib/recurring-tasks";
 import {
   initialSeriesCoverage,
   recurringTaskFailureMessage,
@@ -487,83 +488,96 @@ export function taskTools(): ToolDefinition[] {
     {
       name: "pauseRecurringTask",
       description:
-        "Pause a recurring task to stop generating new instances",
-      parameters: z.object({
-        recurringTaskId: z.string().describe("The recurring task ID"),
-        effectiveDate: z
-          .string()
-          .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
-          .optional()
-          .describe("Effective local date; defaults to today"),
-      }),
-      execute: async (params, ctx: ToolContext) => {
-        const outcome = await createSupabaseSeriesStateAdapter(ctx.supabase).pause({
-          seriesId: params.recurringTaskId,
-          userId: ctx.userId,
-          effectiveDate: params.effectiveDate,
-          inferredDate: ctx.date,
-          timezone: ctx.timezone,
-        });
-        if (isSeriesStateSuccess(outcome)) return outcome.recurringTask;
-        return { error: seriesStateErrorMessage(outcome) };
-      },
-    },
-    {
-      name: "resumeRecurringTask",
-      description:
-        "Resume a paused recurring task and continue generating instances",
-      parameters: z.object({
-        recurringTaskId: z.string().describe("The recurring task ID"),
-        effectiveDate: z
-          .string()
-          .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
-          .optional()
-          .describe("Effective local date; defaults to today"),
-      }),
+        "Pause a recurring task to stop generating new instances. The operation ID is reused for safe retries and version is the opaque Series version from the latest read.",
+      parameters: recurringTaskStateCommandParameters,
       execute: async (params, ctx: ToolContext) => {
         const effectiveDate = resolveSeriesEffectiveDate(
           params.effectiveDate,
           ctx.date,
         );
-        const outcome = await createSupabaseSeriesStateAdapter(ctx.supabase).resume({
+        const outcome = await recurringTaskCapabilities(ctx).seriesCommands.pauseSeries({
+          operationId: params.operationId,
           seriesId: params.recurringTaskId,
-          userId: ctx.userId,
-          effectiveDate: params.effectiveDate,
-          inferredDate: ctx.date,
-          timezone: ctx.timezone,
-          coverageThrough: effectiveDate
-            ? addLocalDays(effectiveDate, 7)
+          version: params.version as SeriesVersion,
+          effectiveDate,
+        });
+        if (isSeriesCommandSuccess(outcome)) {
+          return toRecurringTaskResponse(outcome.series, ctx.userId);
+        }
+        return { error: recurringTaskFailureMessage(outcome) };
+      },
+    },
+    {
+      name: "resumeRecurringTask",
+      description:
+        "Resume a paused recurring task and continue generating instances. The operation ID is reused for safe retries and version is the opaque Series version from the latest read.",
+      parameters: recurringTaskStateCommandParameters,
+      execute: async (params, ctx: ToolContext) => {
+        const effectiveDate = resolveSeriesEffectiveDate(
+          params.effectiveDate,
+          ctx.date,
+        );
+        const outcome = await recurringTaskCapabilities(ctx).seriesCommands.resumeSeries({
+          operationId: params.operationId,
+          seriesId: params.recurringTaskId,
+          version: params.version as SeriesVersion,
+          effectiveDate,
+          coverage: effectiveDate
+            ? { from: effectiveDate, to: addLocalDays(effectiveDate, 7) }
             : undefined,
         });
-        if (isSeriesStateSuccess(outcome)) return outcome.recurringTask;
-        return { error: seriesStateErrorMessage(outcome) };
+        if (isSeriesCommandSuccess(outcome)) {
+          return toRecurringTaskResponse(outcome.series, ctx.userId);
+        }
+        return { error: recurringTaskFailureMessage(outcome) };
       },
     },
     {
       name: "deleteRecurringTask",
       description:
-        "End a recurring task while preserving its lineage and completed history. Always confirm with the user first.",
-      parameters: z.object({
-        recurringTaskId: z.string().describe("The recurring task ID"),
-        effectiveDate: z
-          .string()
-          .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
-          .optional()
-          .describe("Effective local date; defaults to today"),
-      }),
+        "End a recurring task while preserving its lineage and completed history. This legacy delete-shaped tool translates to the canonical endSeries command. Always confirm with the user first.",
+      parameters: recurringTaskStateCommandParameters,
       execute: async (params, ctx: ToolContext) => {
-        const outcome = await createTaskWrites(ctx.supabase, {
-          lifecycle: createActivatedRecurringTaskLifecycle(ctx.supabase),
-        }).deleteSeries({
+        const outcome = await recurringTaskCapabilities(ctx).seriesCommands.endSeries({
+          operationId: params.operationId,
           seriesId: params.recurringTaskId,
-          userId: ctx.userId,
+          version: params.version as SeriesVersion,
           effectiveDate: params.effectiveDate ?? ctx.date,
         });
-        if (outcome.type === "deleted") return { success: true };
-        return { error: taskDeletionErrorMessage(outcome, "series") };
+        if (isSeriesCommandSuccess(outcome)) {
+          // Preserve the legacy delete-shaped response while translating the
+          // identifier to the canonical authenticated Series command.
+          return { success: true };
+        }
+        return { error: recurringTaskFailureMessage(outcome) };
       },
     },
   ];
+}
+
+const recurringTaskStateCommandParameters = z.object({
+  recurringTaskId: z.string().describe("The recurring Series ID"),
+  operationId: z
+    .string()
+    .min(1)
+    .describe("Stable caller-owned operation ID reused across retries"),
+  version: z
+    .string()
+    .min(1)
+    .describe("Opaque Series version returned by the latest Series read"),
+  effectiveDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
+    .optional()
+    .describe("Effective local date; defaults to the tool context date"),
+});
+
+function isSeriesCommandSuccess(
+  outcome: Awaited<ReturnType<ReturnType<typeof recurringTaskCapabilities>['seriesCommands']['pauseSeries']>>
+    | Awaited<ReturnType<ReturnType<typeof recurringTaskCapabilities>['seriesCommands']['resumeSeries']>>
+    | Awaited<ReturnType<ReturnType<typeof recurringTaskCapabilities>['seriesCommands']['endSeries']>>,
+): outcome is Extract<typeof outcome, { type: 'paused' | 'resumed' | 'ended' }> {
+  return outcome.type === 'paused' || outcome.type === 'resumed' || outcome.type === 'ended';
 }
 
 function recurringTaskCapabilities(ctx: ToolContext) {

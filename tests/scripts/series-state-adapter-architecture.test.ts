@@ -15,7 +15,7 @@ function section(contents: string, start: string, end: string): string {
 }
 
 describe("Series State adapter architecture boundaries", () => {
-  it("routes product Series State commands through the shared adapter", () => {
+  it("routes product Series State commands through authenticated Series commands", () => {
     const recurringRoute = source("app/api/recurring-tasks/[id]/route.ts");
     const taskRoute = source("app/api/tasks/[id]/route.ts");
 
@@ -23,6 +23,11 @@ describe("Series State adapter architecture boundaries", () => {
       recurringRoute,
       "export async function PATCH",
       "export async function DELETE",
+    );
+    const recurringStateActions = section(
+      recurringPatch,
+      "// Handle quick actions",
+      "// Handle general updates",
     );
     const recurringDelete = section(
       recurringRoute,
@@ -35,12 +40,18 @@ describe("Series State adapter architecture boundaries", () => {
       "function toOccurrenceInput",
     );
 
+    expect(recurringPatch).toContain("createAuthenticatedRecurringTaskCapabilities");
+    expect(recurringPatch).toContain(".seriesCommands");
+    expect(recurringStateActions).toContain("seriesCommands");
+    expect(recurringStateActions).toContain("runSeriesStateCommand");
     expect(recurringPatch).toContain("createSupabaseSeriesStateAdapter(supabase)");
-    expect(recurringPatch).toContain("seriesStateHttpFailure(outcome)");
     expect(recurringPatch).not.toContain("createSupabaseRecurringTaskLifecycle");
     expect(recurringPatch).not.toContain("new RecurringTasksDB");
-    expect(recurringDelete).toContain("createTaskWrites(supabase,");
-    expect(recurringDelete).toContain(".deleteSeries({");
+    expect(recurringDelete).toContain("createAuthenticatedRecurringTaskCapabilities");
+    expect(recurringDelete).toContain(".seriesCommands");
+    expect(recurringDelete).toContain("'end'");
+    expect(recurringDelete).not.toContain("createTaskWrites(supabase,");
+    expect(recurringDelete).not.toContain(".deleteSeries({");
     expect(recurringDelete).not.toContain("createSupabaseSeriesStateAdapter(supabase)");
     expect(taskRoute).toContain("createSupabaseSeriesStateAdapter(supabase)");
     expect(taskRoute).toContain(".editScope");
@@ -50,7 +61,7 @@ describe("Series State adapter architecture boundaries", () => {
     expect(taskDelete).not.toContain("createSupabaseSeriesStateAdapter(supabase)");
   });
 
-  it("routes AI recurring updates through the adapter and deletion through Task Writes", () => {
+  it("routes AI recurring revisions through the adapter and state changes through Series commands", () => {
     const tools = source("lib/ai/tools/tasks.ts");
     const update = section(tools, 'name: "updateTask"', 'name: "deleteTask"');
     const deleteTask = section(tools, 'name: "deleteTask"', 'name: "getRecurringTasks"');
@@ -71,19 +82,24 @@ describe("Series State adapter architecture boundaries", () => {
     );
     const end = tools.slice(tools.indexOf('name: "deleteRecurringTask"'));
 
-    for (const operation of [update, recurringUpdate, pause, resume]) {
+    for (const operation of [update, recurringUpdate]) {
       expect(operation).toContain("createSupabaseSeriesStateAdapter(");
       expect(operation).toContain("ctx.supabase");
       expect(operation).not.toContain("createSupabaseRecurringTaskLifecycle(ctx.supabase)");
+    }
+    for (const operation of [pause, resume]) {
+      expect(operation).toContain("recurringTaskCapabilities(ctx)");
+      expect(operation).toContain("seriesCommands");
+      expect(operation).not.toContain("createSupabaseSeriesStateAdapter(");
     }
     expect(deleteTask).toContain("createTaskWrites(ctx.supabase,");
     expect(deleteTask).toContain(".delete({");
     expect(deleteTask).toMatch(/taskDeletionErrorMessage\(\s*outcome/);
     expect(deleteTask).not.toContain("createSupabaseSeriesStateAdapter(");
-    expect(end).toContain("createTaskWrites(ctx.supabase,");
-    expect(end).toContain(".deleteSeries({");
-    expect(end).toContain("taskDeletionErrorMessage(outcome");
-    expect(end).not.toContain("createSupabaseSeriesStateAdapter(");
+    expect(end).toContain("recurringTaskCapabilities(ctx)");
+    expect(end).toContain("seriesCommands.endSeries");
+    expect(end).not.toContain("createTaskWrites(ctx.supabase,");
+    expect(end).not.toContain(".deleteSeries({");
     expect(deleteTask).toContain("Always confirm with the user first");
     expect(end).toContain("Always confirm with the user first");
   });

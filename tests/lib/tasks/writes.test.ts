@@ -597,13 +597,13 @@ describe('TaskWrites', () => {
           }),
         ).resolves.toEqual({ type: 'deleted' });
         expect(getSeries).toHaveBeenCalledWith('trusted-user', 'series-1');
-        const command = scope === 'all' ? deleteSeries : endSeries;
+        const command = endSeries;
         expect(command).toHaveBeenCalledWith({
           userId: 'trusted-user',
           seriesId: 'series-1',
           effectiveDate: '2026-08-04',
         });
-        expect(scope === 'all' ? endSeries : deleteSeries).not.toHaveBeenCalled();
+        expect(deleteSeries).not.toHaveBeenCalled();
         expect(persistence.deleteTask).not.toHaveBeenCalled();
       },
     );

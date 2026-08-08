@@ -75,6 +75,12 @@
     "cleanup": "transactional"
   },
   {
+    "path": "recurring_task_series_commands.sql",
+    "domain": "recurring-tasks",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
     "path": "recurring_task_deletion_lifecycle.sql",
     "domain": "recurring-tasks",
     "role": "constrained",
