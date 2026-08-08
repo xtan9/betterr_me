@@ -167,6 +167,37 @@ describe("Household Runway Runtime import boundary", () => {
       /as HouseholdRunwayBrowser(?:DraftCapability|InternalPlan)Request/,
     );
   });
+
+  it("keeps Plan Adjustment field and relative-limit policy in one private module", () => {
+    const runtime = readFileSync(
+      resolve(root, "lib/finance/internal/household-runway-interview-runtime.ts"),
+      "utf8",
+    );
+    const interview = readFileSync(
+      resolve(root, "lib/finance/internal/household-runway-interview.ts"),
+      "utf8",
+    );
+    const assessment = readFileSync(
+      resolve(root, "lib/finance/household-runway-assessment.ts"),
+      "utf8",
+    );
+    const calculator = readFileSync(
+      resolve(root, "lib/finance/cushion.ts"),
+      "utf8",
+    );
+
+    expect(runtime).toMatch(/household-runway-plan-adjustment/);
+    expect(interview).toMatch(/household-runway-plan-adjustment/);
+    expect(assessment).toMatch(/household-runway-plan-adjustment/);
+    expect(calculator).not.toMatch(/household-runway-plan-adjustment/);
+    expect(runtime).not.toMatch(/PLAN_ADJUSTMENT_FIELDS|adjustmentLimits|MAX_CUSHION_AMOUNT_CENTS/);
+    expect(interview).not.toMatch(
+      /PLAN_ADJUSTMENT_FIELDS|adjustmentLimits|adjustmentProjectionFor|MAX_CUSHION_AMOUNT_CENTS/,
+    );
+    expect(assessment).not.toMatch(
+      /adjustmentLimits|MAX_CUSHION_AMOUNT_CENTS|expenseTotals/,
+    );
+  });
 });
 
 function walk(directory: string): string[] {
