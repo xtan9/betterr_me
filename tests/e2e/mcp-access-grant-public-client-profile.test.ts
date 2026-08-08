@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { createHash } from "node:crypto";
 
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -222,7 +223,234 @@ function options(
   };
 }
 
+async function completedDelegatedTokenFacts(
+  family: "ipv4" | "ipv6",
+  lifetimeSeconds = 3600,
+): Promise<PublicClientFact[]> {
+  const { privateKey, publicKey } = await generateKeyPair("RS256");
+  const key = await exportJWK(publicKey);
+  key.kid = `key-${family}`;
+  key.alg = "RS256";
+  key.use = "sig";
+  key.key_ops = ["verify"];
+  const issuedAt = Math.floor(Date.parse(startedAt) / 1000);
+  const token = await new SignJWT({
+    iss: target.expectedAuthorizationServer,
+    sub: `user-${family}`,
+    aud: target.canonicalResource,
+    client_id: `client-${family}`,
+    resource: target.canonicalResource,
+  })
+    .setProtectedHeader({ alg: "RS256", kid: `key-${family}`, typ: "JWT" })
+    .setIssuedAt(issuedAt)
+    .setExpirationTime(issuedAt + lifetimeSeconds)
+    .sign(privateKey);
+
+  return [
+    {
+      kind: "delegated-token",
+      role: "validation",
+      family,
+      token,
+      jwks: JSON.stringify({ keys: [key] }),
+      request: {
+        method: "POST",
+        url: target.expectedAuthorizationServer + "/token",
+        bodyFields: ["client_id", "grant_type", "resource"],
+        requestClientId: `client-${family}`,
+        requestGrantType: "authorization_code",
+        requestResource: target.canonicalResource,
+        status: 200,
+      },
+    },
+    {
+      kind: "mcp-operation",
+      role: "authenticated",
+      family,
+      observation: {
+        operationUrl: target.canonicalResource,
+        sdk: {
+          connected: true,
+          listToolsCompleted: true,
+          callToolCompleted: true,
+          resultIsError: false,
+        },
+      },
+      request: {
+        method: "POST",
+        url: target.canonicalResource,
+        authorizationHeaderPresent: true,
+        status: 200,
+      },
+    },
+    {
+      kind: "grant",
+      role: "cleanup",
+      family,
+      observation: {
+        listRequestObserved: true,
+        listedClientIds: [`client-${family}`],
+        grantId: `grant-${family}`,
+        revokeRequestObserved: true,
+        revokeResponse: surface({}, 204),
+      },
+    },
+    {
+      kind: "cleanup",
+      role: "family",
+      family,
+      observation: {
+        listRequestObserved: true,
+        remainingClientIds: [],
+        requestStatus: 200,
+      },
+    },
+  ] as never as PublicClientFact[];
+}
+
 describe("public-client Candidate 2 evidence profile", () => {
+  it("records delegated-token, MCP-operation, grant, and cleanup facts for both families", async () => {
+    const writes: PublicClientArtifact[] = [];
+    const facts = [...sharedFacts(), ...MCP_ACCESS_GRANT_FAMILIES.flatMap(familyFacts)];
+    for (const family of MCP_ACCESS_GRANT_FAMILIES) {
+      facts.push(...await completedDelegatedTokenFacts(family));
+    }
+
+    const result = await runPublicClientEvidence(options(writes), async (recorder) => {
+      for (const fact of facts) await recorder.record(fact);
+    });
+
+    expect(result.report.gates.find(({ id }) => id === "delegated-token-validation-both")).toMatchObject({ status: "pass" });
+    expect(result.report.gates.find(({ id }) => id === "authenticated-mcp-operation-both")).toMatchObject({ status: "pass" });
+    expect(result.report.gates.find(({ id }) => id === "consent-cleanup-both")).toMatchObject({ status: "pass" });
+    expect(result.report.gates).toHaveLength(PUBLIC_CLIENT_PROFILE.expandedGateIds.length);
+    expect(new Set(result.report.gates.map(({ id }) => id)).size).toBe(result.report.gates.length);
+    expect(result.artifact.contents).not.toContain("grant-ipv4");
+    expect(result.artifact.contents).not.toContain("eyJ");
+    expect(createHash("sha256").update(result.artifact.contents).digest("hex")).toBe(
+      "e818d1e11f4b3b597e765f50322890a935279245f47d03fb2d775226167009c5",
+    );
+  });
+
+  it("fails closed for malformed cryptographic material and stays not-proven when JWKS is unavailable", async () => {
+    const malformedWrites: PublicClientArtifact[] = [];
+    const malformed = await runPublicClientEvidence(options(malformedWrites), async (recorder) => {
+      await recorder.record(familyFacts("ipv4")[0]);
+      await recorder.record({
+        kind: "delegated-token",
+        role: "validation",
+        family: "ipv4",
+        token: "not-a-compact-jwt",
+        jwks: JSON.stringify({ keys: [] }),
+      } as never);
+    });
+    expect(malformed.report.gates.find(({ id }) => id === "delegated-token-validation-ipv4")).toMatchObject({ status: "fail" });
+    expect(malformed.artifact.contents).not.toContain("not-a-compact-jwt");
+    expect(createHash("sha256").update(malformed.artifact.contents).digest("hex")).toBe(
+      "797b14b30d1d05055f8355105550e3d203bc9c07aedc34a94e49c0e2b748be0d",
+    );
+
+    const unavailableWrites: PublicClientArtifact[] = [];
+    const unavailable = await runPublicClientEvidence(options(unavailableWrites), async (recorder) => {
+      await recorder.record(familyFacts("ipv6")[0]);
+      await recorder.record({
+        kind: "delegated-token",
+        role: "validation",
+        family: "ipv6",
+        token: "eyJhbGciOiJSUzI1NiIsImtpZCI6ImsxIn0.eyJpc3MiOiJpc3N1ZXIifQ.signature",
+      } as never);
+    });
+    expect(unavailable.report.gates.find(({ id }) => id === "delegated-token-validation-ipv6")).toMatchObject({ status: "not-proven" });
+    expect(createHash("sha256").update(unavailable.artifact.contents).digest("hex")).toBe(
+      "209749e422a1a1bbed8a8cd4b1461334c1e21478301b2a70a9145d4580ac1fd7",
+    );
+  });
+
+  it("fails closed when a valid-shaped delegated token has an invalid signature", async () => {
+    const writes: PublicClientArtifact[] = [];
+    const tokenFact = (await completedDelegatedTokenFacts("ipv4"))[0] as Extract<PublicClientFact, { kind: "delegated-token" }>;
+    const token = tokenFact.token;
+    const tokenParts = token?.split(".");
+    const tamperedToken = tokenParts?.length === 3
+      ? `${tokenParts[0]}.${tokenParts[1]}.${tokenParts[2].startsWith("A") ? "B" : "A"}${tokenParts[2].slice(1)}`
+      : "";
+    const result = await runPublicClientEvidence(options(writes), async (recorder) => {
+      await recorder.record(familyFacts("ipv4")[0]);
+      await recorder.record({ ...tokenFact, token: tamperedToken });
+    });
+
+    expect(result.report.gates.find(({ id }) => id === "delegated-token-validation-ipv4")).toMatchObject({ status: "fail" });
+    expect(result.artifact.contents).not.toContain(tamperedToken);
+    expect(createHash("sha256").update(result.artifact.contents).digest("hex")).toBe(
+      "5902482d2e929f71eb099380bf45c7354e678f6fb656e06be38a42644a00fdcc",
+    );
+  });
+
+  it("derives MCP rejection from primitive boundary observations and rejects adapter status words", async () => {
+    const writes: PublicClientArtifact[] = [];
+    const result = await runPublicClientEvidence(options(writes), async (recorder) => {
+      await recorder.record({
+        kind: "mcp-operation",
+        role: "authenticated",
+        family: "ipv4",
+        observation: {
+          operationUrl: target.canonicalResource,
+          sdk: { connected: false, listToolsCompleted: false, callToolCompleted: false, resultIsError: false },
+        },
+        request: {
+          method: "POST",
+          url: target.canonicalResource,
+          authorizationHeaderPresent: true,
+          status: 401,
+          response: surface({ error: "invalid_token" }, 401),
+        },
+      });
+    });
+    expect(result.report.gates.find(({ id }) => id === "authenticated-mcp-operation-ipv4")).toMatchObject({ status: "fail" });
+
+    const boundaryOnly = await runPublicClientEvidence(options([]), async (recorder) => {
+      await recorder.record({
+        kind: "mcp-operation",
+        role: "authenticated",
+        family: "ipv4",
+        observation: { operationUrl: target.canonicalResource },
+        request: {
+          method: "POST",
+          url: target.canonicalResource,
+          authorizationHeaderPresent: true,
+          status: 403,
+          response: surface({ error: "invalid_token" }, 403),
+        },
+      });
+    });
+    expect(boundaryOnly.report.gates.find(({ id }) => id === "authenticated-mcp-operation-ipv4")).toMatchObject({ status: "fail" });
+
+    await expect(runPublicClientEvidence(options([]), async (recorder) => {
+      await recorder.record({
+        kind: "mcp-operation",
+        role: "authenticated",
+        family: "ipv4",
+        observation: { status: "authorized" },
+      } as never);
+    })).rejects.toThrow("Public-client evidence journey failed.");
+  });
+
+  it("uses the injected sampled time for delegated-token expiry", async () => {
+    const writes: PublicClientArtifact[] = [];
+    let clockCall = 0;
+    const sampledClock = () => {
+      clockCall += 1;
+      return new Date(Date.parse(startedAt) + Math.min(clockCall - 1, 2) * 1000).toISOString();
+    };
+    const tokenFacts = await completedDelegatedTokenFacts("ipv4", 10);
+    const result = await runPublicClientEvidence(options(writes, sampledClock), async (recorder) => {
+      await recorder.record(familyFacts("ipv4")[0]);
+      await recorder.record(tokenFacts[0]);
+    });
+
+    expect(result.report.gates.find(({ id }) => id === "delegated-token-validation-ipv4")).toMatchObject({ status: "pass" });
+  });
+
   it("runs both exact loopback families through one recorder and one artifact", async () => {
     const writes: PublicClientArtifact[] = [];
     const result = await runPublicClientEvidence(options(writes), async (recorder) => {
@@ -383,6 +611,38 @@ describe("public-client Candidate 2 evidence profile", () => {
     });
     expect(result.report.outcome).toBe("blocked");
     expect(writes).toHaveLength(1);
+    expect(createHash("sha256").update(result.artifact.contents).digest("hex")).toBe(
+      "37ea143ddbf2b93727f6bd861759f2449ed1b5c203df44c6c8e18fefa5d745d4",
+    );
+  });
+
+  it("does not claim grant cleanup until the public revoke observation succeeds", async () => {
+    const writes: PublicClientArtifact[] = [];
+    const result = await runPublicClientEvidence(options(writes), async (recorder) => {
+      await recorder.record(familyFacts("ipv4")[0]);
+      await recorder.record({
+        kind: "grant",
+        role: "cleanup",
+        family: "ipv4",
+        observation: {
+          listRequestObserved: true,
+          listedClientIds: ["client-ipv4"],
+          grantId: "grant-ipv4",
+          grantClientId: "client-ipv4",
+        },
+      });
+      await recorder.record({
+        kind: "cleanup",
+        role: "family",
+        family: "ipv4",
+        observation: { remainingClientIds: [], requestStatus: 200 },
+      });
+    });
+
+    expect(result.report.gates.find(({ id }) => id === "consent-cleanup-ipv4")).toMatchObject({
+      status: "not-proven",
+      evidence: { grantStatus: "absent", grantIdentified: true, grantRevoked: false },
+    });
   });
 
   it("records an artifact-write failure as a deterministic blocked result", async () => {

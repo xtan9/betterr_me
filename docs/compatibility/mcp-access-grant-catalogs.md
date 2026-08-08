@@ -72,3 +72,18 @@ out of scope. The local deterministic contract is therefore the exact
 integration limitation for #910: it proves the recorder/report/artifact
 boundary and all earlier facts without claiming live provider or browser
 execution.
+
+## Issue #911 public-client security producers
+
+The standalone profile now also accepts closed, family-specific delegated-token,
+MCP-operation, grant-management, and cleanup facts. The recorder parses and
+minimizes bounded token/JWKS input immediately; raw cryptographic material never
+enters the retained fact history or artifact. Token policy uses the injected
+sampled clock, target issuer/resource, the registered client accepted by the
+family's registration history, and any grant identity accepted by the public
+grant history. MCP outcomes are derived from the protected-resource request and
+primitive SDK observations. Grant and cleanup facts share one family cleanup
+gate, with the fixed public leaf and aggregate order preserved.
+
+No live adapter invokes these new producers yet. The operation remains a
+deterministic integration-branch capability until the planned atomic cutover.
