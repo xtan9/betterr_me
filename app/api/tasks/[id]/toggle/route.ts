@@ -3,10 +3,11 @@ import { authenticateRequest } from '@/lib/auth/authenticated-request';
 import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { log } from '@/lib/logger';
 import {
-  createSupabaseOccurrenceAdapter,
-  isOccurrenceSuccess,
-  occurrenceHttpFailure,
-} from '@/lib/recurring-tasks';
+  createSupabaseLegacyTaskToggle,
+  isTaskCommandSuccess,
+  operationIdFromRequest,
+  taskCommandHttpFailure,
+} from '@/lib/tasks/commands';
 
 const WRITE_REQUEST_POLICY = {
   allowedCredentials: ['apiKey', 'cookie'],
@@ -29,12 +30,13 @@ export async function POST(
     }
     const { principal: { userId }, client: supabase } = auth;
 
-    const outcome = await createSupabaseOccurrenceAdapter(supabase).toggle({
+    const outcome = await createSupabaseLegacyTaskToggle(supabase).execute({
       taskId: id,
       userId,
+      operationId: operationIdFromRequest(request),
     });
-    if (!isOccurrenceSuccess(outcome)) {
-      const failure = occurrenceHttpFailure(outcome);
+    if (!isTaskCommandSuccess(outcome)) {
+      const failure = taskCommandHttpFailure(outcome);
       return NextResponse.json(
         { error: failure.error },
         { status: failure.status },

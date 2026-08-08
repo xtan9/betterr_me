@@ -33,6 +33,14 @@ vi.mock('@/lib/db', () => ({
 describe('POST /api/tasks/[id]/toggle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRpc.mockResolvedValue({
+      data: {
+        status: 'complete',
+        type: 'complete',
+        task: { id: 'task-1', is_completed: true, status: 'done' },
+      },
+      error: null,
+    });
   });
 
   it('should toggle task completion', async () => {
@@ -42,6 +50,10 @@ describe('POST /api/tasks/[id]/toggle', () => {
       is_completed: false,
     } as any);
     vi.mocked(mockTasksDB.updateTask).mockResolvedValue(toggledTask as any);
+    mockRpc.mockResolvedValueOnce({
+      data: { status: 'complete', type: 'complete', task: toggledTask },
+      error: null,
+    });
 
     const request = new NextRequest('http://localhost:3000/api/tasks/task-1/toggle', {
       method: 'POST',
@@ -54,14 +66,20 @@ describe('POST /api/tasks/[id]/toggle', () => {
 
     expect(response.status).toBe(200);
     expect(data.task).toEqual(toggledTask);
-    expect(mockTasksDB.updateTask).toHaveBeenCalledWith(
-      'task-1',
-      'user-123',
-      expect.objectContaining({ is_completed: true, status: 'done' }),
+    expect(mockRpc).toHaveBeenCalledWith(
+      'task_command_atomic',
+      expect.objectContaining({
+        p_operation: 'complete',
+        p_request: expect.objectContaining({
+          userId: 'user-123',
+          taskId: 'task-1',
+          idempotencyKey: expect.any(String),
+        }),
+      }),
     );
   });
 
-  it('requires explicit completion policy for recurring occurrences', async () => {
+  it('routes recurring completion through the lifecycle command', async () => {
     const currentTask = {
       id: 'task-1',
       is_completed: false,
@@ -72,6 +90,7 @@ describe('POST /api/tasks/[id]/toggle', () => {
 
     const request = new NextRequest('http://localhost:3000/api/tasks/task-1/toggle', {
       method: 'POST',
+      headers: { 'Idempotency-Key': 'toggle-recurring-1' },
     });
 
     const response = await togglePost(request, {
@@ -79,11 +98,19 @@ describe('POST /api/tasks/[id]/toggle', () => {
     });
     const data = await response.json();
 
-    expect(response.status).toBe(400);
-    expect(data).toEqual({
-      error: 'Lifecycle occurrences require an explicit completion or reopening command',
+    expect(response.status).toBe(200);
+    expect(data.task).toEqual(currentTask);
+    expect(mockRpc).toHaveBeenCalledWith('recurring_task_lifecycle', {
+      p_operation: 'complete-occurrence',
+      p_request: {
+        userId: 'user-123',
+        taskId: 'task-1',
+        seriesId: 'series-1',
+        occurrenceId: 'occurrence-1',
+        scope: 'this',
+        idempotencyKey: 'toggle-recurring-1',
+      },
     });
-    expect(mockRpc).not.toHaveBeenCalled();
     expect(mockTasksDB.updateTask).not.toHaveBeenCalled();
   });
 

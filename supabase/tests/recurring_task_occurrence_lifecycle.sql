@@ -172,6 +172,63 @@ begin
 end
 $create_series$;
 
+do $command_revalidation$
+declare
+  fixture_state recurring_occurrence_lifecycle_fixture_state%rowtype;
+  wrong_scope_outcome jsonb;
+  wrong_task_outcome jsonb;
+  wrong_date_outcome jsonb;
+begin
+  select * into fixture_state
+  from recurring_occurrence_lifecycle_fixture_state;
+
+  wrong_scope_outcome := public.recurring_task_lifecycle(
+    'complete-occurrence',
+    jsonb_build_object(
+      'userId', '68100000-0000-0000-0000-000000000001',
+      'seriesId', fixture_state.series_id,
+      'occurrenceId', fixture_state.complete_occurrence_id,
+      'taskId', fixture_state.complete_task_id,
+      'scope', 'following',
+      'scheduledDate', fixture_state.complete_scheduled_date,
+      'idempotencyKey', 'wrong-scope-681'
+    )
+  );
+  wrong_task_outcome := public.recurring_task_lifecycle(
+    'complete-occurrence',
+    jsonb_build_object(
+      'userId', '68100000-0000-0000-0000-000000000001',
+      'seriesId', fixture_state.series_id,
+      'occurrenceId', fixture_state.complete_occurrence_id,
+      'taskId', gen_random_uuid(),
+      'scope', 'this',
+      'scheduledDate', fixture_state.complete_scheduled_date,
+      'idempotencyKey', 'wrong-task-681'
+    )
+  );
+  wrong_date_outcome := public.recurring_task_lifecycle(
+    'complete-occurrence',
+    jsonb_build_object(
+      'userId', '68100000-0000-0000-0000-000000000001',
+      'seriesId', fixture_state.series_id,
+      'occurrenceId', fixture_state.complete_occurrence_id,
+      'taskId', fixture_state.complete_task_id,
+      'scope', 'this',
+      'scheduledDate', '2026-08-31',
+      'idempotencyKey', 'wrong-date-681'
+    )
+  );
+  if wrong_scope_outcome->>'status' <> 'invalid-transition'
+     or wrong_task_outcome->>'status' <> 'not-found'
+     or wrong_date_outcome->>'status' <> 'not-found'
+     or (select state from public.recurring_task_occurrences
+         where id = fixture_state.complete_occurrence_id) <> 'open' then
+    raise exception 'Shared Task Command facts were not revalidated atomically: %, %, %',
+      wrong_scope_outcome, wrong_task_outcome, wrong_date_outcome;
+  end if;
+end
+$command_revalidation$;
+
 do $complete$
 declare
   fixture_state recurring_occurrence_lifecycle_fixture_state%rowtype;
@@ -188,6 +245,9 @@ begin
       'userId', '68100000-0000-0000-0000-000000000001',
       'seriesId', fixture_state.series_id,
       'occurrenceId', fixture_state.complete_occurrence_id,
+      'taskId', fixture_state.complete_task_id,
+      'scope', 'this',
+      'scheduledDate', fixture_state.complete_scheduled_date,
       'idempotencyKey', 'complete-681'
     )
   );
@@ -227,6 +287,9 @@ begin
       'userId', '68100000-0000-0000-0000-000000000001',
       'seriesId', fixture_state.series_id,
       'occurrenceId', fixture_state.complete_occurrence_id,
+      'taskId', fixture_state.complete_task_id,
+      'scope', 'this',
+      'scheduledDate', fixture_state.complete_scheduled_date,
       'idempotencyKey', 'complete-681'
     )
   );
@@ -270,6 +333,9 @@ begin
       'userId', '68100000-0000-0000-0000-000000000001',
       'seriesId', fixture_state.series_id,
       'occurrenceId', fixture_state.complete_occurrence_id,
+      'taskId', fixture_state.complete_task_id,
+      'scope', 'this',
+      'scheduledDate', fixture_state.complete_scheduled_date,
       'idempotencyKey', 'reopen-681'
     )
   );
@@ -300,6 +366,9 @@ begin
       'userId', '68100000-0000-0000-0000-000000000001',
       'seriesId', fixture_state.series_id,
       'occurrenceId', fixture_state.complete_occurrence_id,
+      'taskId', fixture_state.complete_task_id,
+      'scope', 'this',
+      'scheduledDate', fixture_state.complete_scheduled_date,
       'idempotencyKey', 'reopen-681'
     )
   );
@@ -315,6 +384,7 @@ declare
   fixture_state recurring_occurrence_lifecycle_fixture_state%rowtype;
   outcome jsonb;
   retry_outcome jsonb;
+  router_replay jsonb;
   skipped_task_id uuid;
 begin
   select * into fixture_state
@@ -328,6 +398,9 @@ begin
       'userId', '68100000-0000-0000-0000-000000000001',
       'seriesId', fixture_state.series_id,
       'occurrenceId', fixture_state.skip_occurrence_id,
+      'taskId', fixture_state.skip_task_id,
+      'scope', 'this',
+      'scheduledDate', '2026-08-03',
       'idempotencyKey', 'skip-681'
     )
   );
@@ -382,12 +455,26 @@ begin
     jsonb_build_object(
       'userId', '68100000-0000-0000-0000-000000000001',
       'seriesId', fixture_state.series_id,
-      'occurrenceId', fixture_state.skip_occurrence_id
+      'occurrenceId', fixture_state.skip_occurrence_id,
+      'taskId', fixture_state.skip_task_id,
+      'scope', 'this',
+      'scheduledDate', '2026-08-03',
+      'idempotencyKey', 'skip-681'
+    )
+  );
+  router_replay := public.task_command_replay(
+    'skip',
+    jsonb_build_object(
+      'userId', '68100000-0000-0000-0000-000000000001',
+      'taskId', fixture_state.skip_task_id,
+      'idempotencyKey', 'skip-681'
     )
   );
   if retry_outcome->>'status' <> 'already-applied'
-     or retry_outcome->>'type' <> 'already-applied' then
-    raise exception 'Skip retry was not typed and idempotent: %', retry_outcome;
+     or retry_outcome->>'type' <> 'already-applied'
+     or router_replay->>'status' <> 'already-applied' then
+    raise exception 'Skip retry was not typed and idempotent: %, %',
+      retry_outcome, router_replay;
   end if;
 end
 $skip$;
@@ -465,6 +552,11 @@ begin
         'userId', '68100000-0000-0000-0000-000000000001',
         'seriesId', fixture_state.series_id,
         'occurrenceId', fixture_state.rollback_complete_occurrence_id,
+        'taskId', (select task_id from public.recurring_task_occurrences
+                   where id = fixture_state.rollback_complete_occurrence_id),
+        'scope', 'this',
+        'scheduledDate', (select scheduled_date from public.recurring_task_occurrences
+                          where id = fixture_state.rollback_complete_occurrence_id),
         'idempotencyKey', 'rollback-complete-681'
       )
     );
@@ -502,6 +594,11 @@ begin
       'userId', '68100000-0000-0000-0000-000000000001',
       'seriesId', fixture_state.series_id,
       'occurrenceId', fixture_state.rollback_complete_occurrence_id,
+      'taskId', (select task_id from public.recurring_task_occurrences
+                 where id = fixture_state.rollback_complete_occurrence_id),
+      'scope', 'this',
+      'scheduledDate', (select scheduled_date from public.recurring_task_occurrences
+                        where id = fixture_state.rollback_complete_occurrence_id),
       'idempotencyKey', 'rollback-complete-681'
     )
   );
@@ -542,6 +639,10 @@ begin
         'userId', '68100000-0000-0000-0000-000000000001',
         'seriesId', fixture_state.series_id,
         'occurrenceId', fixture_state.rollback_skip_occurrence_id,
+        'taskId', fixture_state.rollback_skip_task_id,
+        'scope', 'this',
+        'scheduledDate', (select scheduled_date from public.recurring_task_occurrences
+                          where id = fixture_state.rollback_skip_occurrence_id),
         'idempotencyKey', 'rollback-skip-681'
       )
     );
@@ -579,6 +680,10 @@ begin
       'userId', '68100000-0000-0000-0000-000000000001',
       'seriesId', fixture_state.series_id,
       'occurrenceId', fixture_state.rollback_skip_occurrence_id,
+      'taskId', fixture_state.rollback_skip_task_id,
+      'scope', 'this',
+      'scheduledDate', (select scheduled_date from public.recurring_task_occurrences
+                        where id = fixture_state.rollback_skip_occurrence_id),
       'idempotencyKey', 'rollback-skip-681'
     )
   );

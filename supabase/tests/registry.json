@@ -124,6 +124,12 @@
     "cleanup": "transactional"
   },
   {
+    "path": "task_command_atomic.sql",
+    "domain": "tasks",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
     "path": "planning_work_management_rls.sql",
     "domain": "planning-work-management",
     "role": "constrained",
