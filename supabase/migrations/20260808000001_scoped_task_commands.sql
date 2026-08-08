@@ -491,7 +491,7 @@ begin
   if p_operation = 'edit-occurrence' then
     v_outcome := public.recurring_task_edit_occurrence_atomic(p_request);
   else
-    v_outcome := public.recurring_task_lifecycle_atomic_coverage(
+    v_outcome := public.recurring_task_lifecycle_with_observability(
       p_operation,
       p_request
     );
@@ -559,7 +559,7 @@ begin
   if p_operation = 'edit-occurrence' then
     return public.recurring_task_edit_occurrence_atomic(p_request);
   end if;
-  return public.recurring_task_lifecycle_atomic_coverage(p_operation, p_request);
+  return public.recurring_task_lifecycle_with_observability(p_operation, p_request);
 end;
 $function$;
 
