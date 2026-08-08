@@ -206,7 +206,8 @@ test("normalizes a shared draft into a reviewable assessment and switches scenar
 
   await expect(page.locator('[data-runway-progress="reviewing"]')).toBeVisible();
   await expect(page.locator('[data-interview-stage="review"][data-interview-render="review"]')).toBeVisible();
-  await expect(page.locator('[data-runway-plan-operation="dirty"]')).toBeVisible();
+  await expect(page.locator('[data-runway-plan-operation="idle"]')).toBeVisible();
+  await expect(page.locator('[data-runway-plan-current="false"]')).toBeVisible();
   await page.getByRole("button", { name: "Show my runway" }).click();
 
   await expect(page.locator('[data-runway-progress="completed"]')).toBeVisible();
