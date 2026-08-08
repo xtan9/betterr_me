@@ -123,9 +123,9 @@ const en = {
     credit_card_minimum: "Credit card minimums", student_loan: "Student loans", personal_loan: "Personal loans", other_debt: "Other minimum debt payments", parent_support: "Parent support", child_support: "Child support", other_support: "Other support", other_commitment: "Other required commitment",
   },
   result: { model: "Monthly cash-flow model v{version}" },
-  history: { title: "Runway history", description: "See how your saved runway has changed over time." },
+  history: { title: "Runway history", description: "See how your saved runway has changed over time.", becameSustainable: "Became sustainable", leftSustainable: "No longer sustainable", unchanged: "No change", incomparable: "Not comparable" },
   chart: { monthTick: "Month {month}", checkpointTableTitle: "Accessible projection checkpoints", checkpointHelp: "Very long runways are shown as selected month checkpoints; the final row is the estimated depletion month." },
-  whatIf: { useIlliquid: "Usable hard-to-withdraw investments", useDeferred: "Usable tax-deferred retirement", useTaxFree: "Usable tax-free-qualified retirement", appliedIncome: "Additional dependable income", expectedFundsHelp: "Preview only. It cannot be applied to the baseline until the amount and arrival are confirmed.", retirementHelp: "Extreme mode uses only the amount you say would actually be available. Consider taxes, penalties, account rules, and timing before entering it." },
+  whatIf: { useIlliquid: "Usable hard-to-withdraw investments", useDeferred: "Usable tax-deferred retirement", useTaxFree: "Usable tax-free-qualified retirement", appliedIncome: "Additional dependable income", expectedFundsHelp: "Preview only. It cannot be applied to the baseline until the amount and arrival are confirmed.", retirementHelp: "Extreme mode uses only the amount you say would actually be available. Consider taxes, penalties, account rules, and timing before entering it.", noChange: "This adjustment does not change the projected outcome." },
   regional: { title: "Local first steps" },
   precision: { complete: "Your core inputs are confirmed. Revisit them whenever income, cash, or commitments change." },
   save: { downloadError: "The assessment could not be downloaded. Your result was not changed.", authenticationRequired: "Sign in to save this Plan.", adjustmentPending: "Apply or reset the provisional adjustment before saving the Plan.", stale: "This result changed before saving completed. Review it and try again.", draftSyncError: "This Draft could not be saved for this session. Your interview remains usable here.", draftRecovery: "A saved Draft was invalid or expired, so it was cleared. You can continue the Interview here.", error: "We could not complete that operation. Your interview remains usable here." },
@@ -155,6 +155,8 @@ const zh = {
   method: { excluded: "难取用投资、退休账户和房屋净值默认不计入；只有在假设分析或极端模式中明确填写可用金额时才会纳入。" },
 };
 
+Object.assign(zh.history, { becameSustainable: "已实现可持续", leftSustainable: "不再可持续", unchanged: "没有变化", incomparable: "无法比较" });
+Object.assign(zh.whatIf, { noChange: "此调整不会改变预计结果。" });
 zh.actions = { ...en.actions, ...zh.actions };
 zh.save = { ...en.save, ...zh.save };
 
@@ -180,6 +182,8 @@ const zhTW = {
   method: { excluded: "難提領投資、退休帳戶和房屋淨值預設不計入；只有在假設分析或極端模式中明確填寫可用金額時才會納入。" },
 };
 
+Object.assign(zhTW.history, { becameSustainable: "已达到可持续", leftSustainable: "不再可持续", unchanged: "没有变化", incomparable: "无法比较" });
+Object.assign(zhTW.whatIf, { noChange: "此调整不会改变预计结果。" });
 zhTW.actions = { ...zh.actions, ...zhTW.actions };
 zhTW.save = { ...zh.save, ...zhTW.save };
 

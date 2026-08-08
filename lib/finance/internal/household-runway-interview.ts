@@ -37,13 +37,17 @@ import {
 } from "@/lib/finance/runway-expenses";
 import {
   assessHouseholdRunway,
+  type HouseholdRunwayScenarioAssessment,
   type SuccessfulHouseholdRunwayAssessment,
 } from "@/lib/finance/household-runway-assessment";
 import type {
   HouseholdRunwayAnalyticsEventKind,
   HouseholdRunwayAnalyticsStage,
 } from "@/lib/finance/household-runway-analytics";
-import { householdRunwayAnswersSchema } from "@/lib/validations/finance-cushion";
+import {
+  householdRunwayAnswersSchema,
+  MAX_CUSHION_AMOUNT_CENTS,
+} from "@/lib/validations/finance-cushion";
 import {
   createHouseholdRunwayPlan,
   type HouseholdRunwayPlan,
@@ -2013,6 +2017,45 @@ interface HouseholdRunwayFocusedResultSimulation {
   series: HouseholdRunwayResultSeries;
 }
 
+interface HouseholdRunwayAdjustmentFieldProjection {
+  valueCents: number;
+  minimumCents: 0;
+  maximumCents: number;
+}
+
+type HouseholdRunwayAdjustmentEffectProjection =
+  | { kind: "none" }
+  | { kind: "monthsChanged"; deltaMonths: number }
+  | { kind: "becameSustainable" };
+
+interface HouseholdRunwayAdjustmentProjection {
+  active: boolean;
+  fields: {
+    expenseReduction: HouseholdRunwayAdjustmentFieldProjection;
+    addedCash: HouseholdRunwayAdjustmentFieldProjection;
+    addedMonthlyIncome: HouseholdRunwayAdjustmentFieldProjection;
+    expectedUnconfirmedFunds: HouseholdRunwayAdjustmentFieldProjection;
+    usableIlliquidInvestments: HouseholdRunwayAdjustmentFieldProjection;
+    usableRetirementTaxDeferred: HouseholdRunwayAdjustmentFieldProjection;
+    usableRetirementTaxFree: HouseholdRunwayAdjustmentFieldProjection;
+  };
+  effect: HouseholdRunwayAdjustmentEffectProjection;
+}
+
+type HouseholdRunwayAdviceFact =
+  | { kind: "cashTarget"; targetMonths: 3 | 6; gapCents: number }
+  | {
+      kind: "largestReducibleCategory";
+      category: ExpenseCategory;
+      reducibleCents: number;
+    };
+
+type HouseholdRunwayPrecisionNotice =
+  | { kind: "cashNotConfirmed" }
+  | { kind: "takeHomeEstimated" }
+  | { kind: "quickExpenses" }
+  | { kind: "coreInputsComplete" };
+
 interface HouseholdRunwayResultComparison {
   outcome:
     | { kind: "sustainable" }
@@ -2039,6 +2082,11 @@ export type HouseholdRunwayResultProjection =
       explanation: {
         availableCashCents: number;
         liquidInvestmentsCents: number;
+      };
+      adjustment: HouseholdRunwayAdjustmentProjection;
+      advice: readonly HouseholdRunwayAdviceFact[];
+      precision: {
+        notices: readonly HouseholdRunwayPrecisionNotice[];
       };
     };
 
@@ -2117,24 +2165,37 @@ function focusedReviewProjectionForDraft(
 
 function resultOutcomeFor(
   simulation: RunwaySimulation,
-): HouseholdRunwayResultOutcome {
-  if (simulation.sustainable) return { kind: "sustainable" };
+): HouseholdRunwayResultOutcome | null {
+  if (simulation.sustainable) {
+    return simulation.months_covered === null ? { kind: "sustainable" } : null;
+  }
 
-  const monthsCovered =
-    typeof simulation.months_covered === "number" &&
-    Number.isFinite(simulation.months_covered)
-      ? Math.max(0, simulation.months_covered)
-      : 0;
+  if (
+    typeof simulation.months_covered !== "number" ||
+    !Number.isFinite(simulation.months_covered) ||
+    simulation.months_covered < 0
+  ) {
+    return null;
+  }
+
+  const monthsCovered = simulation.months_covered;
+  const depletionDateValue = simulation.depletion_date;
   const depletionDate =
-    simulation.depletion_date &&
-    /^\d{4}-\d{2}-\d{2}$/.test(simulation.depletion_date)
-      ? { kind: "dated" as const, date: simulation.depletion_date }
+    typeof depletionDateValue === "string" &&
+    isValidDepletionDate(depletionDateValue)
+      ? { kind: "dated" as const, date: depletionDateValue }
       : { kind: "outsideDateRange" as const };
   return {
     kind: "depletes",
     monthsCovered,
     depletion: depletionDate,
   };
+}
+
+function isValidDepletionDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
 function resultGuidanceFor(
@@ -2161,8 +2222,9 @@ function resultPointFor(
 
 function focusedResultSimulationFor(
   simulation: RunwaySimulation,
-): HouseholdRunwayFocusedResultSimulation {
+): HouseholdRunwayFocusedResultSimulation | null {
   const outcome = resultOutcomeFor(simulation);
+  if (!outcome) return null;
   const throughMonth =
     simulation.months[simulation.months.length - 1]?.month ?? 0;
   const points = simulation.months.map(resultPointFor);
@@ -2190,11 +2252,143 @@ function focusedResultSimulationFor(
 
 function resultComparisonFor(
   simulation: RunwaySimulation,
-): HouseholdRunwayResultComparison {
+): HouseholdRunwayResultComparison | null {
   const outcome = resultOutcomeFor(simulation);
+  if (!outcome) return null;
   return outcome.kind === "sustainable"
     ? { outcome }
     : { outcome: { kind: "depletes", monthsCovered: outcome.monthsCovered } };
+}
+
+function adjustmentFieldFor(
+  valueCents: number,
+  maximumCents: number,
+): HouseholdRunwayAdjustmentFieldProjection {
+  return {
+    valueCents,
+    minimumCents: 0,
+    maximumCents,
+  };
+}
+
+function adjustmentEffectFor(
+  active: boolean,
+  baseline: RunwaySimulation,
+  preview: RunwaySimulation,
+): HouseholdRunwayAdjustmentEffectProjection {
+  if (!active) return { kind: "none" };
+
+  const baselineOutcome = resultOutcomeFor(baseline);
+  const previewOutcome = resultOutcomeFor(preview);
+  if (!baselineOutcome || !previewOutcome) return { kind: "none" };
+
+  if (baselineOutcome.kind === "sustainable" && previewOutcome.kind === "sustainable") {
+    return { kind: "none" };
+  }
+  if (baselineOutcome.kind === "depletes" && previewOutcome.kind === "sustainable") {
+    return { kind: "becameSustainable" };
+  }
+  if (baselineOutcome.kind === "depletes" && previewOutcome.kind === "depletes") {
+    return {
+      kind: "monthsChanged",
+      deltaMonths: previewOutcome.monthsCovered - baselineOutcome.monthsCovered,
+    };
+  }
+
+  // Plan Adjustments are normalized to non-negative values, so they cannot
+  // make a sustainable baseline depleting. Keep the public union truthful if
+  // an internal calculation ever violates that invariant.
+  return { kind: "none" };
+}
+
+function adjustmentProjectionFor(
+  adjustment: RunwayAdjustments,
+  answers: HouseholdRunwayAnswers,
+  baseline: RunwaySimulation,
+  preview: RunwaySimulation,
+): HouseholdRunwayAdjustmentProjection {
+  const active = hasPlanAdjustment(adjustment);
+  return {
+    active,
+    fields: {
+      expenseReduction: adjustmentFieldFor(
+        adjustment.expense_reduction_cents,
+        baseline.interruption_expenses_cents,
+      ),
+      addedCash: adjustmentFieldFor(
+        adjustment.added_cash_cents,
+        MAX_CUSHION_AMOUNT_CENTS,
+      ),
+      addedMonthlyIncome: adjustmentFieldFor(
+        adjustment.added_monthly_income_cents,
+        MAX_CUSHION_AMOUNT_CENTS,
+      ),
+      expectedUnconfirmedFunds: adjustmentFieldFor(
+        adjustment.expected_unconfirmed_funds_cents,
+        MAX_CUSHION_AMOUNT_CENTS,
+      ),
+      usableIlliquidInvestments: adjustmentFieldFor(
+        adjustment.usable_illiquid_investments_cents,
+        answers.assets.illiquid_investments.cents,
+      ),
+      usableRetirementTaxDeferred: adjustmentFieldFor(
+        adjustment.usable_retirement_tax_deferred_cents,
+        answers.assets.retirement_tax_deferred.cents,
+      ),
+      usableRetirementTaxFree: adjustmentFieldFor(
+        adjustment.usable_retirement_tax_free_cents,
+        answers.assets.retirement_tax_free.cents,
+      ),
+    },
+    effect: adjustmentEffectFor(active, baseline, preview),
+  };
+}
+
+function adviceFor(
+  assessment: HouseholdRunwayScenarioAssessment,
+): readonly HouseholdRunwayAdviceFact[] {
+  const advice: HouseholdRunwayAdviceFact[] = [];
+  if (assessment.advice.cashGapCents > 0) {
+    advice.push({
+      kind: "cashTarget",
+      targetMonths: assessment.advice.targetMonths === 3 ? 3 : 6,
+      gapCents: assessment.advice.cashGapCents,
+    });
+  }
+  if (
+    assessment.advice.largestReducibleCategory &&
+    assessment.advice.largestReducibleCategory.reducible > 0
+  ) {
+    advice.push({
+      kind: "largestReducibleCategory",
+      category: assessment.advice.largestReducibleCategory.category,
+      reducibleCents: assessment.advice.largestReducibleCategory.reducible,
+    });
+  }
+  return advice;
+}
+
+function precisionNoticesFor(
+  answers: HouseholdRunwayAnswers,
+  preview: RunwaySimulation,
+): readonly HouseholdRunwayPrecisionNotice[] {
+  const notices: HouseholdRunwayPrecisionNotice[] = [];
+  if (answers.available_cash.confidence !== "confirmed") {
+    notices.push({ kind: "cashNotConfirmed" });
+  }
+  if (
+    answers.mine.take_home_source === "estimated" ||
+    answers.partner?.take_home_source === "estimated"
+  ) {
+    notices.push({ kind: "takeHomeEstimated" });
+  }
+  if (answers.expense_mode === "quick") {
+    notices.push({ kind: "quickExpenses" });
+  }
+  if (preview.confidence === "complete") {
+    notices.push({ kind: "coreInputsComplete" });
+  }
+  return notices;
 }
 
 function focusedResultProjectionForDraft(
@@ -2219,6 +2413,19 @@ function focusedResultProjectionForDraft(
   }
 
   const answers = assessment.answers;
+  const baseline = selectedAssessment.baseline;
+  const preview = selectedAssessment.adjusted;
+  const primary = focusedResultSimulationFor(preview);
+  const currentLifestyle = resultComparisonFor(
+    selectedAssessment.comparisons.currentLifestyle,
+  );
+  const interruption = resultComparisonFor(selectedAssessment.baseline);
+  const extremeMode = resultComparisonFor(
+    selectedAssessment.comparisons.extremeMode,
+  );
+  if (!primary || !currentLifestyle || !interruption || !extremeMode) {
+    return { readiness: "unavailable" };
+  }
   return {
     readiness: "ready",
     modelVersion: assessment.modelVersion,
@@ -2228,20 +2435,24 @@ function focusedResultProjectionForDraft(
       selected: selectedScenario,
       available: draft.availableScenarios.map(({ id }) => ({ id })),
     },
-    primary: focusedResultSimulationFor(selectedAssessment.adjusted),
+    primary,
     comparisons: {
-      currentLifestyle: resultComparisonFor(
-        selectedAssessment.comparisons.currentLifestyle,
-      ),
-      interruption: resultComparisonFor(selectedAssessment.baseline),
-      extremeMode: resultComparisonFor(
-        selectedAssessment.comparisons.extremeMode,
-      ),
+      currentLifestyle,
+      interruption,
+      extremeMode,
     },
     explanation: {
       availableCashCents: answers.available_cash.cents,
       liquidInvestmentsCents: answers.assets.liquid_investments.cents,
     },
+    adjustment: adjustmentProjectionFor(
+      draft.planAdjustment,
+      answers,
+      baseline,
+      preview,
+    ),
+    advice: adviceFor(selectedAssessment),
+    precision: { notices: precisionNoticesFor(answers, preview) },
   };
 }
 

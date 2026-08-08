@@ -472,8 +472,8 @@ function driveRuntimeToResult(
   runtime.send({ type: "continue" });
 }
 
-describe("focused Household Runway Runtime projection", () => {
-  it("keeps the focused result private while projecting history and durable states", () => {
+describe("supported Household Runway Runtime projection", () => {
+  it("publishes the focused result through getSnapshot without a secondary projection seam", () => {
     const history = snapshot({ id: "older", months_covered: 4 });
     const composition = createHouseholdRunwayInterviewRuntimeComposition({
       createId: () => "interview-1",
@@ -482,8 +482,8 @@ describe("focused Household Runway Runtime projection", () => {
 
     driveRuntimeToResult(composition.runtime);
 
-    const focused = composition.getFocusedSnapshot();
-    expect(focused.screen).toMatchObject({
+    const supported = composition.runtime.getSnapshot();
+    expect(supported.screen).toMatchObject({
       kind: "result",
       readiness: "ready",
       history: [
@@ -494,9 +494,9 @@ describe("focused Household Runway Runtime projection", () => {
         },
       ],
     });
-    expect(focused.screen).not.toHaveProperty("planInputs");
-    expect(focused.screen).not.toHaveProperty("assessment");
-    expect(focused.actions).toMatchObject({
+    expect(supported.screen).not.toHaveProperty("planInputs");
+    expect(supported.screen).not.toHaveProperty("assessment");
+    expect(supported.actions).toMatchObject({
       startNew: { applicable: true },
       selectScenario: { applicable: true },
       setPlanAdjustment: { applicable: true },
@@ -505,15 +505,14 @@ describe("focused Household Runway Runtime projection", () => {
       savePlan: { applicable: true },
       downloadReport: { applicable: true },
     });
-    expect(focused.operations.draftSynchronization).toEqual({ status: "idle" });
-    expect(focused.draft.synchronized).toBe(false);
-    expect(focused.plan).toEqual({ exists: false, current: false });
-
-    const supported = composition.runtime.getSnapshot();
-    expect(supported).toHaveProperty("assessmentHistory");
-    expect(supported).toHaveProperty("affordances");
-    expect(supported).not.toHaveProperty("actions");
+    expect(supported.operations.draftSynchronization).toEqual({ status: "idle" });
+    expect(supported.draft.synchronized).toBe(false);
+    expect(supported.plan).toEqual({ exists: false, current: false });
+    expect(supported).not.toHaveProperty("assessmentHistory");
+    expect(supported).not.toHaveProperty("affordances");
+    expect(supported).toHaveProperty("actions");
     expect(supported).not.toHaveProperty("focused");
+    expect(composition).not.toHaveProperty("getFocusedSnapshot");
   });
 
   it("keeps result actions applicable through pending and failed operations", async () => {
@@ -523,7 +522,7 @@ describe("focused Household Runway Runtime projection", () => {
     driveRuntimeToResult(composition.runtime);
 
     composition.runtime.send({ type: "save_plan" });
-    expect(composition.getFocusedSnapshot()).toMatchObject({
+    expect(composition.runtime.getSnapshot()).toMatchObject({
       operations: { planPersistence: { status: "pending" } },
       actions: { savePlan: { applicable: true } },
     });
@@ -531,7 +530,7 @@ describe("focused Household Runway Runtime projection", () => {
     composition.runtime.send({ type: "request_report_download" });
     await Promise.resolve();
     await Promise.resolve();
-    expect(composition.getFocusedSnapshot()).toMatchObject({
+    expect(composition.runtime.getSnapshot()).toMatchObject({
       operations: {
         reportDownload: { status: "failed", error: "capability_unavailable" },
       },
