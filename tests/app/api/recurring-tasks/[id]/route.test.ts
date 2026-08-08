@@ -1,51 +1,43 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { GET, PATCH, DELETE } from "@/app/api/recurring-tasks/[id]/route";
 import { NextRequest } from "next/server";
+import { GET, PATCH, DELETE } from "@/app/api/recurring-tasks/[id]/route";
 
 const {
-  mockCreateTaskWrites,
-  mockDeleteSeries,
-  mockStateFactory,
-  mockState,
+  mockReviseSeries,
+  mockPauseSeries,
+  mockResumeSeries,
+  mockEndSeries,
   mockGetSeriesQuery,
   mockCreateCapabilities,
   mockCapabilities,
-  mockLifecycle,
   mockToRecurringTaskResponse,
 } = vi.hoisted(() => {
-  const mockDeleteSeries = vi.fn();
-  const mockGetSeries = vi.fn();
+  const mockReviseSeries = vi.fn();
+  const mockPauseSeries = vi.fn();
+  const mockResumeSeries = vi.fn();
+  const mockEndSeries = vi.fn();
   const mockGetSeriesQuery = vi.fn();
-  const mockState = {
-    update: vi.fn(),
-    pause: vi.fn(),
-    resume: vi.fn(),
-  };
   const mockCreateCapabilities = vi.fn();
   const mockCapabilities = {
-    seriesCommands: {},
+    seriesCommands: {
+      reviseSeries: mockReviseSeries,
+      pauseSeries: mockPauseSeries,
+      resumeSeries: mockResumeSeries,
+      endSeries: mockEndSeries,
+    },
     seriesQueries: { getSeries: mockGetSeriesQuery },
     coverage: { ensure: vi.fn() },
   };
   return {
-    mockCreateTaskWrites: vi.fn(() => ({ deleteSeries: mockDeleteSeries })),
-    mockDeleteSeries,
-    mockStateFactory: vi.fn(() => mockState),
-    mockState,
-    mockGetSeries,
+    mockReviseSeries,
+    mockPauseSeries,
+    mockResumeSeries,
+    mockEndSeries,
     mockGetSeriesQuery,
     mockCreateCapabilities,
     mockCapabilities,
-    mockLifecycle: { getSeries: mockGetSeries },
     mockToRecurringTaskResponse: vi.fn(),
   };
-});
-
-vi.mock("@/lib/tasks/writes", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/tasks/writes")>(
-    "@/lib/tasks/writes",
-  );
-  return { ...actual, createTaskWrites: mockCreateTaskWrites };
 });
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -62,8 +54,6 @@ vi.mock("@/lib/recurring-tasks", async () => {
   );
   return {
     ...actual,
-    createSupabaseSeriesStateAdapter: mockStateFactory,
-    createActivatedRecurringTaskLifecycle: vi.fn(() => mockLifecycle),
     createAuthenticatedRecurringTaskCapabilities: mockCreateCapabilities,
   };
 });
@@ -80,17 +70,22 @@ vi.mock("@/lib/recurring-tasks/compatibility", async () => {
 
 import { createClient } from "@/lib/supabase/server";
 
+const mutationHeaders = (operationId: string) => ({
+  "Idempotency-Key": operationId,
+  "If-Match": "rt-series-v1.test-version",
+});
+
 describe("GET /api/recurring-tasks/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCreateCapabilities.mockReturnValue(mockCapabilities);
+    mockToRecurringTaskResponse.mockImplementation((series) => series);
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: { id: "user-123" } } })) },
     } as any);
-    mockCreateCapabilities.mockReturnValue(mockCapabilities);
-    mockToRecurringTaskResponse.mockImplementation((series) => series);
   });
 
-  it("should return template by ID", async () => {
+  it("returns a template by ID through the query capability", async () => {
     const template = { id: "rt-1", title: "Daily standup" };
     mockGetSeriesQuery.mockResolvedValue({
       type: "found",
@@ -98,37 +93,17 @@ describe("GET /api/recurring-tasks/[id]", () => {
       series: template,
     });
 
-    const request = new NextRequest(
-      "http://localhost:3000/api/recurring-tasks/rt-1",
+    const response = await GET(
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1"),
+      { params: Promise.resolve({ id: "rt-1" }) },
     );
-    const response = await GET(request, {
-      params: Promise.resolve({ id: "rt-1" }),
-    });
-    const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(data.recurring_task).toEqual(template);
+    expect(await response.json()).toEqual({ recurring_task: template });
     expect(mockGetSeriesQuery).toHaveBeenCalledWith({ seriesId: "rt-1" });
   });
 
-  it("should return 404 if not found", async () => {
-    mockGetSeriesQuery.mockResolvedValue({
-      status: "not-found",
-      type: "not-found",
-      operation: "recurring-task.series.get",
-    });
-
-    const request = new NextRequest(
-      "http://localhost:3000/api/recurring-tasks/nonexistent",
-    );
-    const response = await GET(request, {
-      params: Promise.resolve({ id: "nonexistent" }),
-    });
-
-    expect(response.status).toBe(404);
-  });
-
-  it("maps typed detail query failures without inspecting error text", async () => {
+  it("maps typed detail failures without inspecting error text", async () => {
     mockGetSeriesQuery.mockResolvedValue({
       status: "conflict",
       type: "conflict",
@@ -136,12 +111,10 @@ describe("GET /api/recurring-tasks/[id]", () => {
       reason: "private database detail",
     });
 
-    const request = new NextRequest(
-      "http://localhost:3000/api/recurring-tasks/rt-1",
+    const response = await GET(
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1"),
+      { params: Promise.resolve({ id: "rt-1" }) },
     );
-    const response = await GET(request, {
-      params: Promise.resolve({ id: "rt-1" }),
-    });
 
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({
@@ -149,17 +122,15 @@ describe("GET /api/recurring-tasks/[id]", () => {
     });
   });
 
-  it("should return 401 if unauthenticated", async () => {
+  it("returns 401 if unauthenticated", async () => {
     vi.mocked(createClient).mockReturnValue({
-      auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
+      auth: { getUser: vi.fn(() => ({ data: { user: null } } )) },
     } as any);
 
-    const request = new NextRequest(
-      "http://localhost:3000/api/recurring-tasks/rt-1",
+    const response = await GET(
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1"),
+      { params: Promise.resolve({ id: "rt-1" }) },
     );
-    const response = await GET(request, {
-      params: Promise.resolve({ id: "rt-1" }),
-    });
 
     expect(response.status).toBe(401);
   });
@@ -168,280 +139,240 @@ describe("GET /api/recurring-tasks/[id]", () => {
 describe("PATCH /api/recurring-tasks/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCreateCapabilities.mockReturnValue(mockCapabilities);
+    mockToRecurringTaskResponse.mockImplementation((series) => series);
+    mockReviseSeries.mockResolvedValue({
+      status: "complete",
+      type: "revised",
+      series: { id: "rt-1", title: "Updated" },
+    });
+    mockPauseSeries.mockResolvedValue({
+      status: "complete",
+      type: "paused",
+      series: { id: "rt-1", status: "paused" },
+    });
+    mockResumeSeries.mockResolvedValue({
+      status: "complete",
+      type: "resumed",
+      series: { id: "rt-1", status: "active" },
+    });
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: { id: "user-123" } } })) },
     } as any);
   });
 
-  it("should update template with valid body", async () => {
+  it("routes effective-dated definition edits through the revise capability", async () => {
     const updated = { id: "rt-1", title: "Updated" };
-    mockState.update.mockResolvedValue({
+    mockReviseSeries.mockResolvedValue({
       status: "complete",
-      type: "complete",
-      recurringTask: updated,
+      type: "revised",
+      series: updated,
     });
 
-    const request = new NextRequest(
-      "http://localhost:3000/api/recurring-tasks/rt-1",
-      {
+    const response = await PATCH(
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?date=2026-08-07", {
         method: "PATCH",
+        headers: mutationHeaders("http-operation-1"),
         body: JSON.stringify({ title: "Updated" }),
-      },
+      }),
+      { params: Promise.resolve({ id: "rt-1" }) },
     );
-
-    const response = await PATCH(request, {
-      params: Promise.resolve({ id: "rt-1" }),
-    });
-    const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(data.recurring_task).toEqual(updated);
-    expect(mockState.update).toHaveBeenCalledWith(
-      expect.objectContaining({ seriesId: "rt-1", userId: "user-123" }),
-    );
-  });
-
-  it("should handle pause action", async () => {
-    const paused = { id: "rt-1", status: "paused" };
-    mockState.pause.mockResolvedValue({
-      status: "complete",
-      type: "complete",
-      recurringTask: paused,
-    });
-
-    const request = new NextRequest(
-      "http://localhost:3000/api/recurring-tasks/rt-1?action=pause",
-      { method: "PATCH" },
-    );
-
-    const response = await PATCH(request, {
-      params: Promise.resolve({ id: "rt-1" }),
-    });
-    const data = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(data.recurring_task).toEqual(paused);
-    expect(mockState.pause).toHaveBeenCalledWith({
+    expect(await response.json()).toEqual({ recurring_task: updated });
+    expect(mockReviseSeries).toHaveBeenCalledWith({
+      operationId: "http-operation-1",
       seriesId: "rt-1",
-      userId: "user-123",
+      version: "rt-series-v1.test-version",
+      effectiveDate: "2026-08-07",
+      defaults: { title: "Updated" },
     });
   });
 
-  it("should handle resume action", async () => {
-    const resumed = { id: "rt-1", status: "active" };
-    mockState.resume.mockResolvedValue({
-      status: "complete",
-      type: "complete",
-      recurringTask: resumed,
-    });
-
-    const request = new NextRequest(
-      "http://localhost:3000/api/recurring-tasks/rt-1?action=resume",
-      { method: "PATCH" },
-    );
-
-    const response = await PATCH(request, {
-      params: Promise.resolve({ id: "rt-1" }),
-    });
-    const data = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(data.recurring_task).toEqual(resumed);
-    expect(mockState.resume).toHaveBeenCalledWith({
-      seriesId: "rt-1",
-      userId: "user-123",
-      effectiveDate: undefined,
-      coverageThrough: undefined,
-    });
-  });
-
-  it("passes an explicit resume date through as user intent", async () => {
-    mockState.resume.mockResolvedValue({
-      status: "complete",
-      type: "complete",
-      recurringTask: { id: "rt-1", status: "active" },
-    });
-
-    const request = new NextRequest(
-      "http://localhost:3000/api/recurring-tasks/rt-1?action=resume&date=2026-02-17",
-      { method: "PATCH" },
-    );
-
-    await PATCH(request, { params: Promise.resolve({ id: "rt-1" }) });
-
-    expect(mockState.resume).toHaveBeenCalledWith({
-      seriesId: "rt-1",
-      userId: "user-123",
-      effectiveDate: "2026-02-17",
-      coverageThrough: "2026-02-24",
-    });
-  });
-
-  it("should return 400 for invalid action", async () => {
-    const request = new NextRequest(
-      "http://localhost:3000/api/recurring-tasks/rt-1?action=invalid",
-      { method: "PATCH" },
-    );
-
-    const response = await PATCH(request, {
-      params: Promise.resolve({ id: "rt-1" }),
-    });
-
-    expect(response.status).toBe(400);
-    const data = await response.json();
-    expect(data.error).toMatch(/invalid action/i);
-  });
-
-  it("should return 400 on validation failure", async () => {
-    const request = new NextRequest(
-      "http://localhost:3000/api/recurring-tasks/rt-1",
-      {
+  it("routes pause and resume actions through typed capabilities", async () => {
+    await PATCH(
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?action=pause", {
         method: "PATCH",
-        body: JSON.stringify({ priority: 99 }),
-      },
+        headers: mutationHeaders("http-pause-1"),
+      }),
+      { params: Promise.resolve({ id: "rt-1" }) },
+    );
+    await PATCH(
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?action=resume&date=2026-08-08", {
+        method: "PATCH",
+        headers: mutationHeaders("http-resume-1"),
+      }),
+      { params: Promise.resolve({ id: "rt-1" }) },
     );
 
-    const response = await PATCH(request, {
-      params: Promise.resolve({ id: "rt-1" }),
+    expect(mockPauseSeries).toHaveBeenCalledWith({
+      operationId: "http-pause-1",
+      seriesId: "rt-1",
+      version: "rt-series-v1.test-version",
     });
-
-    expect(response.status).toBe(400);
+    expect(mockResumeSeries).toHaveBeenCalledWith({
+      operationId: "http-resume-1",
+      seriesId: "rt-1",
+      version: "rt-series-v1.test-version",
+      effectiveDate: "2026-08-08",
+      coverage: { from: "2026-08-08", to: "2026-08-15" },
+    });
   });
 
-  it("should return 401 if unauthenticated", async () => {
+  it("maps typed command conflicts and not-found results", async () => {
+    mockPauseSeries.mockResolvedValue({
+      status: "conflict",
+      type: "conflict",
+      operation: "recurring-task.series.pause",
+      operationId: "http-conflict-1",
+    });
+
+    const conflictResponse = await PATCH(
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?action=pause", {
+        method: "PATCH",
+        headers: mutationHeaders("http-conflict-1"),
+      }),
+      { params: Promise.resolve({ id: "rt-1" }) },
+    );
+    expect(conflictResponse.status).toBe(409);
+
+    mockPauseSeries.mockResolvedValue({
+      status: "not-found",
+      type: "not-found",
+      operation: "recurring-task.series.pause",
+      operationId: "http-not-found-1",
+    });
+    const notFoundResponse = await PATCH(
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?action=pause", {
+        method: "PATCH",
+        headers: mutationHeaders("http-not-found-1"),
+      }),
+      { params: Promise.resolve({ id: "rt-1" }) },
+    );
+    expect(notFoundResponse.status).toBe(404);
+  });
+
+  it("rejects invalid actions, dates, and bodies", async () => {
+    const invalidAction = await PATCH(
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?action=invalid", {
+        method: "PATCH",
+      }),
+      { params: Promise.resolve({ id: "rt-1" }) },
+    );
+    expect(invalidAction.status).toBe(400);
+
+    const invalidDate = await PATCH(
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?date=nope", {
+        method: "PATCH",
+        headers: mutationHeaders("http-invalid-date-1"),
+        body: JSON.stringify({ title: "X" }),
+      }),
+      { params: Promise.resolve({ id: "rt-1" }) },
+    );
+    expect(invalidDate.status).toBe(400);
+
+    const invalidBody = await PATCH(
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?date=2026-08-07", {
+        method: "PATCH",
+        headers: mutationHeaders("http-invalid-body-1"),
+        body: JSON.stringify({ priority: 99 }),
+      }),
+      { params: Promise.resolve({ id: "rt-1" }) },
+    );
+    expect(invalidBody.status).toBe(400);
+  });
+
+  it("returns 401 if unauthenticated", async () => {
     vi.mocked(createClient).mockReturnValue({
-      auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
+      auth: { getUser: vi.fn(() => ({ data: { user: null } } )) },
     } as any);
 
-    const request = new NextRequest(
-      "http://localhost:3000/api/recurring-tasks/rt-1",
-      {
+    const response = await PATCH(
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1", {
         method: "PATCH",
+        headers: mutationHeaders("http-unauthenticated-1"),
         body: JSON.stringify({ title: "X" }),
-      },
+      }),
+      { params: Promise.resolve({ id: "rt-1" }) },
     );
-
-    const response = await PATCH(request, {
-      params: Promise.resolve({ id: "rt-1" }),
-    });
 
     expect(response.status).toBe(401);
-  });
-
-  it("should return 404 if resume fails with not found", async () => {
-    vi.mocked(mockState.resume).mockRejectedValue(
-      new Error("Recurring task not found"),
-    );
-
-    const request = new NextRequest(
-      "http://localhost:3000/api/recurring-tasks/rt-1?action=resume",
-      { method: "PATCH" },
-    );
-
-    const response = await PATCH(request, {
-      params: Promise.resolve({ id: "rt-1" }),
-    });
-
-    expect(response.status).toBe(404);
   });
 });
 
 describe("DELETE /api/recurring-tasks/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockDeleteSeries.mockResolvedValue({ type: "deleted" });
+    mockCreateCapabilities.mockReturnValue(mockCapabilities);
+    mockEndSeries.mockResolvedValue({
+      status: "complete",
+      type: "ended",
+      series: { id: "rt-1", status: "ended" },
+    });
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: { id: "user-123" } } })) },
     } as any);
   });
 
-  it("should delete template", async () => {
-    const request = new NextRequest(
-      "http://localhost:3000/api/recurring-tasks/rt-1",
-      {
+  it("ends a series through the capability with operation identity and version", async () => {
+    const response = await DELETE(
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?date=2026-08-09", {
         method: "DELETE",
-      },
+        headers: mutationHeaders("http-end-1"),
+      }),
+      { params: Promise.resolve({ id: "rt-1" }) },
     );
 
-    const response = await DELETE(request, {
-      params: Promise.resolve({ id: "rt-1" }),
-    });
-    const data = await response.json();
-
     expect(response.status).toBe(200);
-    expect(data.success).toBe(true);
-    expect(mockDeleteSeries).toHaveBeenCalledWith({
+    expect(await response.json()).toEqual({ success: true });
+    expect(mockEndSeries).toHaveBeenCalledWith({
+      operationId: "http-end-1",
       seriesId: "rt-1",
-      userId: "user-123",
-    });
-  });
-
-  it("passes the validated effective date to Task Writes", async () => {
-    const request = new NextRequest(
-      "http://localhost:3000/api/recurring-tasks/rt-1?date=2026-08-09",
-      { method: "DELETE" },
-    );
-
-    const response = await DELETE(request, {
-      params: Promise.resolve({ id: "rt-1" }),
-    });
-
-    expect(response.status).toBe(200);
-    expect(mockDeleteSeries).toHaveBeenCalledWith({
-      seriesId: "rt-1",
-      userId: "user-123",
+      version: "rt-series-v1.test-version",
       effectiveDate: "2026-08-09",
     });
   });
 
-  it("maps a typed not-found deletion outcome to 404", async () => {
-    mockDeleteSeries.mockResolvedValue({ type: "not-found" });
-
-    const request = new NextRequest(
-      "http://localhost:3000/api/recurring-tasks/rt-1",
-      { method: "DELETE" },
-    );
-    const response = await DELETE(request, {
-      params: Promise.resolve({ id: "rt-1" }),
+  it("maps typed not-found outcomes and internal errors", async () => {
+    mockEndSeries.mockResolvedValue({
+      status: "not-found",
+      type: "not-found",
+      operation: "recurring-task.series.end",
+      operationId: "http-delete-not-found-1",
     });
+    const notFound = await DELETE(
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1", {
+        method: "DELETE",
+        headers: mutationHeaders("http-delete-not-found-1"),
+      }),
+      { params: Promise.resolve({ id: "rt-1" }) },
+    );
+    expect(notFound.status).toBe(404);
 
-    expect(response.status).toBe(404);
-    expect(await response.json()).toEqual({ error: "Recurring task not found" });
+    mockEndSeries.mockRejectedValue(new Error("fail"));
+    const internalError = await DELETE(
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1", {
+        method: "DELETE",
+        headers: mutationHeaders("http-delete-error-1"),
+      }),
+      { params: Promise.resolve({ id: "rt-1" }) },
+    );
+    expect(internalError.status).toBe(500);
   });
 
-  it("should return 401 if unauthenticated", async () => {
+  it("returns 401 if unauthenticated", async () => {
     vi.mocked(createClient).mockReturnValue({
-      auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
+      auth: { getUser: vi.fn(() => ({ data: { user: null } } )) },
     } as any);
 
-    const request = new NextRequest(
-      "http://localhost:3000/api/recurring-tasks/rt-1",
-      {
+    const response = await DELETE(
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1", {
         method: "DELETE",
-      },
+        headers: mutationHeaders("http-delete-unauthenticated-1"),
+      }),
+      { params: Promise.resolve({ id: "rt-1" }) },
     );
-
-    const response = await DELETE(request, {
-      params: Promise.resolve({ id: "rt-1" }),
-    });
 
     expect(response.status).toBe(401);
-  });
-
-  it("should return 500 on internal error", async () => {
-    mockDeleteSeries.mockRejectedValue(new Error("fail"));
-
-    const request = new NextRequest(
-      "http://localhost:3000/api/recurring-tasks/rt-1",
-      {
-        method: "DELETE",
-      },
-    );
-
-    const response = await DELETE(request, {
-      params: Promise.resolve({ id: "rt-1" }),
-    });
-
-    expect(response.status).toBe(500);
   });
 });

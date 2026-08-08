@@ -204,32 +204,44 @@ export function TasksPageContent() {
   };
 
   // Recurring tasks handlers
-  const handleResume = async (templateId: string) => {
+  const handleResume = async (template: RecurringTaskResponse) => {
+    const operationId = crypto.randomUUID();
     try {
       const res = await fetch(
-        `/api/recurring-tasks/${templateId}?action=resume`,
-        { method: "PATCH" }
+        `/api/recurring-tasks/${template.id}?action=resume`,
+        {
+          method: "PATCH",
+          headers: {
+            "Idempotency-Key": operationId,
+            "If-Match": template.version,
+          },
+        },
       );
       if (!res.ok) throw new Error("Failed");
       mutatePaused();
       mutate();
       toast.success(t("paused.resumeSuccess"));
     } catch (err) {
-      console.error("Failed to resume recurring task:", templateId, err);
+      console.error("Failed to resume recurring task:", template.id, err);
       toast.error(t("paused.actionError"));
     }
   };
 
-  const handleDeleteTemplate = async (templateId: string) => {
+  const handleDeleteTemplate = async (template: RecurringTaskResponse) => {
+    const operationId = crypto.randomUUID();
     try {
-      const res = await fetch(`/api/recurring-tasks/${templateId}`, {
+      const res = await fetch(`/api/recurring-tasks/${template.id}`, {
         method: "DELETE",
+        headers: {
+          "Idempotency-Key": operationId,
+          "If-Match": template.version,
+        },
       });
       if (!res.ok) throw new Error("Failed");
       mutatePaused();
       toast.success(t("paused.deleteSuccess"));
     } catch (err) {
-      console.error("Failed to delete recurring task:", templateId, err);
+      console.error("Failed to delete recurring task:", template.id, err);
       toast.error(t("paused.actionError"));
     }
   };
@@ -376,7 +388,7 @@ export function TasksPageContent() {
                         variant="ghost"
                         size="icon"
                         className="size-7"
-                        onClick={() => handleResume(template.id)}
+                        onClick={() => handleResume(template)}
                         title={t("paused.resume")}
                       >
                         <Play className="size-3.5" />
@@ -385,7 +397,7 @@ export function TasksPageContent() {
                         variant="ghost"
                         size="icon"
                         className="size-7 text-destructive hover:text-destructive"
-                        onClick={() => handleDeleteTemplate(template.id)}
+                        onClick={() => handleDeleteTemplate(template)}
                         title={t("paused.delete")}
                       >
                         <Trash2 className="size-3.5" />

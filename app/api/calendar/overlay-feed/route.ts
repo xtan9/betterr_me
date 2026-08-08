@@ -11,7 +11,7 @@ import {
   type CalendarOverlayLayer,
   type CalendarOverlayQueryOutcome,
 } from "@/lib/calendar/overlay-feed";
-import { querySupabaseCalendarOverlayFeed } from "@/lib/calendar/supabase-overlay-feed";
+import { createSupabaseCalendarQuery } from "@/lib/calendar/supabase-query";
 import { calendarOverlayRangeSchema } from "@/lib/validations/calendar-overlay-feed";
 
 const READ_REQUEST_POLICY = {
@@ -105,14 +105,15 @@ export async function GET(request: NextRequest) {
     }
     const requestedLayers = CALENDAR_OVERLAY_LAYERS.filter((layer) => parsedLayers.includes(layer));
 
-    const outcome = await querySupabaseCalendarOverlayFeed(
+    const outcome = await createSupabaseCalendarQuery(
+      auth.client,
+      auth.principal,
+    ).read(
       {
-        userId: auth.principal.userId,
         range: { from: startDate, to: endDate },
         layers: requestedLayers as CalendarOverlayLayer[],
         ...(timezone !== null ? { timezone } : {}),
       },
-      auth.client,
       {
         reportFailure: ({ layer, request: safeRequest, cause }) => {
           log.error("Calendar overlay layer acquisition failed", cause, {
