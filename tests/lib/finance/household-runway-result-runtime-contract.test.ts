@@ -54,6 +54,7 @@ function completedAnswers({
   cashConfidence = "confirmed" as const,
   takeHomeSource = "estimated" as const,
   incomeConfidence = "estimated" as const,
+  assets,
 }: {
   cash?: number;
   current?: number;
@@ -61,6 +62,7 @@ function completedAnswers({
   cashConfidence?: HouseholdRunwayAnswers["available_cash"]["confidence"];
   takeHomeSource?: HouseholdRunwayAnswers["mine"]["take_home_source"];
   incomeConfidence?: HouseholdRunwayAnswers["mine"]["confidence"];
+  assets?: Partial<HouseholdRunwayAnswers["assets"]>;
 } = {}): HouseholdRunwayAnswers {
   const defaults = createDefaultRunwayAnswers(new Date(now));
   return {
@@ -73,6 +75,7 @@ function completedAnswers({
       confidence: incomeConfidence,
     },
     available_cash: { cents: cash, confidence: cashConfidence },
+    assets: { ...defaults.assets, ...assets },
     expense_mode: "quick",
     quick_expenses: {
       current_monthly_cents: current,
@@ -218,6 +221,139 @@ describe("Household Runway public result Runtime contract", () => {
     result = readyResult(runtime);
     expect(result.primary.outcome).toEqual({ kind: "sustainable" });
     expect(result.adjustment.effect).toEqual({ kind: "becameSustainable" });
+  });
+
+  it("projects every adjustment field and current limit through the Runtime", () => {
+    const runtime = completedRuntime(
+      completedAnswers({
+        assets: {
+          illiquid_investments: { cents: 600_000, confidence: "confirmed" },
+          retirement_tax_deferred: { cents: 800_000, confidence: "confirmed" },
+          retirement_tax_free: { cents: 900_000, confidence: "confirmed" },
+        },
+      }),
+    );
+
+    expect(readyResult(runtime).adjustment).toEqual({
+      active: false,
+      fields: {
+        expenseReduction: {
+          valueCents: 0,
+          minimumCents: 0,
+          maximumCents: 400_000,
+        },
+        addedCash: {
+          valueCents: 0,
+          minimumCents: 0,
+          maximumCents: 100_000_000_000,
+        },
+        addedMonthlyIncome: {
+          valueCents: 0,
+          minimumCents: 0,
+          maximumCents: 100_000_000_000,
+        },
+        expectedUnconfirmedFunds: {
+          valueCents: 0,
+          minimumCents: 0,
+          maximumCents: 100_000_000_000,
+        },
+        usableIlliquidInvestments: {
+          valueCents: 0,
+          minimumCents: 0,
+          maximumCents: 600_000,
+        },
+        usableRetirementTaxDeferred: {
+          valueCents: 0,
+          minimumCents: 0,
+          maximumCents: 800_000,
+        },
+        usableRetirementTaxFree: {
+          valueCents: 0,
+          minimumCents: 0,
+          maximumCents: 900_000,
+        },
+      },
+      effect: { kind: "none" },
+    });
+
+    runtime.send({
+      type: "set_plan_adjustment",
+      patch: {
+        expense_reduction_cents: 100_000,
+        added_cash_cents: 200_000,
+        added_monthly_income_cents: 30_000,
+        expected_unconfirmed_funds_cents: 40_000,
+        usable_illiquid_investments_cents: 100_000,
+        usable_retirement_tax_deferred_cents: 200_000,
+        usable_retirement_tax_free_cents: 300_000,
+      },
+    });
+
+    const projected = readyResult(runtime).adjustment;
+    expect(projected.active).toBe(true);
+    expect(projected.fields).toEqual({
+      expenseReduction: {
+        valueCents: 100_000,
+        minimumCents: 0,
+        maximumCents: 400_000,
+      },
+      addedCash: {
+        valueCents: 200_000,
+        minimumCents: 0,
+        maximumCents: 100_000_000_000,
+      },
+      addedMonthlyIncome: {
+        valueCents: 30_000,
+        minimumCents: 0,
+        maximumCents: 100_000_000_000,
+      },
+      expectedUnconfirmedFunds: {
+        valueCents: 40_000,
+        minimumCents: 0,
+        maximumCents: 100_000_000_000,
+      },
+      usableIlliquidInvestments: {
+        valueCents: 100_000,
+        minimumCents: 0,
+        maximumCents: 600_000,
+      },
+      usableRetirementTaxDeferred: {
+        valueCents: 200_000,
+        minimumCents: 0,
+        maximumCents: 800_000,
+      },
+      usableRetirementTaxFree: {
+        valueCents: 300_000,
+        minimumCents: 0,
+        maximumCents: 900_000,
+      },
+    });
+    expect(projected.effect.kind).toBe("monthsChanged");
+  });
+
+  it("does not invent a numeric effect when both Runtime outcomes are sustainable", () => {
+    const answers = completedAnswers();
+    answers.other_income_sources = [
+      {
+        id: "stable-other-income",
+        type: "other",
+        label: "Stable other income",
+        monthly_cents: 500_000,
+        confidence: "confirmed",
+      },
+    ];
+    const runtime = completedRuntime(answers);
+    expect(readyResult(runtime).primary.outcome).toEqual({ kind: "sustainable" });
+
+    runtime.send({
+      type: "set_plan_adjustment",
+      patch: { added_cash_cents: 1 },
+    });
+
+    expect(readyResult(runtime).adjustment).toMatchObject({
+      active: true,
+      effect: { kind: "none" },
+    });
   });
 
   it("keeps Plan freshness semantic across a no-op review and a changed review", () => {
