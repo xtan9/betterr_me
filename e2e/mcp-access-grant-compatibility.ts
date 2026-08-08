@@ -62,6 +62,8 @@ import {
 export type { CompatibilityGate, CompatibilityReport } from "./mcp-access-grant-evidence";
 export type GateStatus = EvidenceGateStatus;
 
+export const MCP_ACCESS_GRANT_AGGREGATE_ISSUE = "#768" as const;
+
 export interface McpAccessGrantTarget {
   name: string;
   canonicalResource: string;
@@ -307,6 +309,30 @@ function isLocalHostname(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+interface TargetConfigurationEvaluation {
+  configured: boolean;
+  nonProduction: boolean;
+}
+
+function evaluateMcpAccessGrantTargetConfiguration(
+  target: Pick<McpAccessGrantTarget, "canonicalResource" | "supabaseUrl" | "expectedAuthorizationServer">,
+): TargetConfigurationEvaluation {
+  const configured = (() => {
+    try {
+      new URL(target.canonicalResource);
+      new URL(target.supabaseUrl);
+      new URL(target.expectedAuthorizationServer);
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  const nonProduction = isLocalHostname(target.canonicalResource) && isLocalHostname(target.supabaseUrl) ||
+    process.env.MCP_ACCESS_GRANT_NON_PRODUCTION_ACK === "true";
+
+  return { configured, nonProduction };
 }
 
 function deriveAuthorizationServer(supabaseUrl: string): string {
@@ -942,6 +968,19 @@ async function writeReport(serialized: string, testInfo: TestInfo): Promise<bool
   }
 }
 
+/**
+ * Characterization-only seams for issue #880. These expose the current aggregate
+ * mechanics to executable tests until the later live-evidence migration moves
+ * them behind its canonical capability boundary.
+ */
+export const mcpAccessGrantCharacterization = {
+  createEvidenceFetch,
+  collectVersions,
+  evaluateTargetConfiguration: evaluateMcpAccessGrantTargetConfiguration,
+  issue: MCP_ACCESS_GRANT_AGGREGATE_ISSUE,
+  writeReport,
+} as const;
+
 interface LiveEvidenceRun {
   readonly issue: string;
   readonly target: CompatibilityReport["target"];
@@ -1559,7 +1598,7 @@ export async function runMcpAccessGrantCompatibility(
   const fetchRequests: RequestEvidence[] = [];
   const versions = await collectVersions(target);
   const run: LiveEvidenceRun = {
-    issue: "#768",
+    issue: MCP_ACCESS_GRANT_AGGREGATE_ISSUE,
     startedAt,
     target: {
       name: target.name,
@@ -1588,18 +1627,7 @@ export async function runMcpAccessGrantCompatibility(
   fetchRequests.push(...publicClientLayer.requests);
   for (const gate of publicClientLayer.gates) gates.add(gate);
 
-  const configured = (() => {
-    try {
-      new URL(target.canonicalResource);
-      new URL(target.supabaseUrl);
-      new URL(target.expectedAuthorizationServer);
-      return true;
-    } catch {
-      return false;
-    }
-  })();
-  const nonProduction = isLocalHostname(target.canonicalResource) && isLocalHostname(target.supabaseUrl) ||
-    process.env.MCP_ACCESS_GRANT_NON_PRODUCTION_ACK === "true";
+  const { configured, nonProduction } = evaluateMcpAccessGrantTargetConfiguration(target);
 
   addGate(
     gates,
