@@ -4,7 +4,6 @@ import {
   type HouseholdRunwayAnswers,
 } from "@/lib/finance/cushion";
 import {
-  EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT,
   createHouseholdRunwayInterview,
   dispatchHouseholdRunwayInterview,
   householdRunwayDraftDiffersFromPlan,
@@ -14,6 +13,7 @@ import {
   type HouseholdRunwayInterviewCommandInput,
   type HouseholdRunwayInterviewState,
 } from "@/lib/finance/internal/household-runway-interview";
+import { emptyHouseholdRunwayPlanAdjustment } from "@/lib/finance/internal/household-runway-plan-adjustment";
 
 const occurredAt = "2026-08-02T15:00:00.000Z";
 
@@ -161,7 +161,7 @@ describe("provisional Plan Adjustment and completed-Plan lifecycle", () => {
     expect(result.state.committedPlan?.inputs.available_cash.cents).toBe(3_000_000);
     expect(result.state.planInputs?.available_cash.cents).toBe(3_000_000);
     expect(result.state.draft.planAdjustment).toMatchObject({
-      ...EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT,
+      ...emptyHouseholdRunwayPlanAdjustment(),
       added_cash_cents: 1_000_000,
     });
     expect(result.state.draft.selectedScenario).toBe(
@@ -185,7 +185,7 @@ describe("provisional Plan Adjustment and completed-Plan lifecycle", () => {
     const reset = dispatch(adjusted, { type: "reset_plan_adjustment" }, "reset");
 
     expect(reset.state.draft.planAdjustment).toEqual(
-      EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT,
+      emptyHouseholdRunwayPlanAdjustment(),
     );
     expect(reset.state.committedPlan).toEqual(original.committedPlan);
     expect(reset.state.assessment).toEqual(original.assessment);
@@ -206,7 +206,7 @@ describe("provisional Plan Adjustment and completed-Plan lifecycle", () => {
 
     expect(applied.state.committedPlan).toEqual(original.committedPlan);
     expect(applied.state.draft.planAdjustment).toEqual(
-      EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT,
+      emptyHouseholdRunwayPlanAdjustment(),
     );
     expect(applied.state.planInputs?.available_cash.cents).toBe(4_000_000);
     expect(applied.state.planInputs?.other_income_sources).toHaveLength(1);
@@ -279,7 +279,7 @@ describe("provisional Plan Adjustment and completed-Plan lifecycle", () => {
 
     expect(applied.state.committedPlan).toEqual(original.committedPlan);
     expect(applied.state.draft.planAdjustment).toEqual(
-      EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT,
+      emptyHouseholdRunwayPlanAdjustment(),
     );
     expect(applied.state.planInputs?.available_cash).toEqual({
       cents: 3_200_000,
@@ -472,7 +472,7 @@ describe("typed operation-local effects", () => {
       correlationId: "save",
       idempotencyKey: "save-key",
       expectedPlanRevision: 7,
-      adjustments: EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT,
+      adjustments: emptyHouseholdRunwayPlanAdjustment(),
       snapshotTrigger: "updated",
     });
 
@@ -536,7 +536,7 @@ describe("typed operation-local effects", () => {
     expect(saved.state.status).toBe("completed");
     expect(saved.state.committedPlan?.revision).toBe(8);
     expect(saved.state.draft.planAdjustment).toEqual(
-      EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT,
+      emptyHouseholdRunwayPlanAdjustment(),
     );
     expect(saved.state.operations.draftSynchronization).toEqual({
       status: "idle",
