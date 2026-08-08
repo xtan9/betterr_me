@@ -1,26 +1,30 @@
-import type {
-  HouseholdRunwayAnswers,
-  RunwayAdjustments,
-  RunwaySnapshotSummary,
-  ExpenseCategory,
-  ExpenseCategoryMode,
-  ExpenseCategorySubtotal,
-  ExpenseLineItem,
-  ExpenseMode,
-  EmploymentStatus,
-  ExtremeAccessAmounts,
-  HousingTenure,
-  IncomeAnswer,
-  MoneyAnswer,
-  QuickExpenses,
-  RecurringIncomeSource,
-  RunwayAssets,
-  RunwayCountry,
-  RunwayCurrency,
-  RunwayScenario,
-  RunwaySimulation,
-  ScenarioOption,
+import {
+  expenseTotals,
+  type HouseholdRunwayAnswers,
+  type RunwayAdjustments,
+  type RunwaySnapshotSummary,
+  type ExpenseCategory,
+  type ExpenseCategoryMode,
+  type ExpenseCategorySubtotal,
+  type ExpenseLineItem,
+  type ExpenseMode,
+  type EmploymentStatus,
+  type ExtremeAccessAmounts,
+  type HousingTenure,
+  type IncomeAnswer,
+  type MoneyAnswer,
+  type QuickExpenses,
+  type RecurringIncomeSource,
+  type RunwayAssets,
+  type RunwayCountry,
+  type RunwayCurrency,
+  type RunwayScenario,
+  type RunwaySimulation,
+  type ScenarioOption,
 } from "@/lib/finance/cushion";
+import {
+  MAX_CUSHION_AMOUNT_CENTS,
+} from "@/lib/validations/finance-cushion";
 import type { RunwayLocale } from "@/lib/finance/runway-regions";
 import type {
   HouseholdRunwayAnalyticsEventKind,
@@ -644,6 +648,70 @@ const EMPTY_STORAGE_FACTS: RuntimeStorageFacts = {
 };
 
 const runtimeIntentTypeSet = new Set<string>(RUNTIME_INTENT_TYPES);
+
+const PLAN_ADJUSTMENT_FIELDS = [
+  "expense_reduction_cents",
+  "added_cash_cents",
+  "added_monthly_income_cents",
+  "expected_unconfirmed_funds_cents",
+  "usable_illiquid_investments_cents",
+  "usable_retirement_tax_deferred_cents",
+  "usable_retirement_tax_free_cents",
+] as const satisfies readonly (keyof RunwayAdjustments)[];
+
+function normalizedPlanAdjustmentCents(value: unknown, maximumCents: number) {
+  let numeric: number;
+  try {
+    numeric = Number(value);
+  } catch {
+    return 0;
+  }
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.min(maximumCents, Math.max(0, Math.round(numeric)));
+}
+
+function normalizePlanAdjustmentIntent(
+  state: HouseholdRunwayInterviewState,
+  intent: Extract<HouseholdRunwayInterviewIntent, { type: "set_plan_adjustment" }>,
+): Extract<HouseholdRunwayInterviewIntent, { type: "set_plan_adjustment" }> {
+  const planInputs = state.planInputs;
+  const domainMaximums = planInputs
+    ? {
+        expense_reduction_cents: expenseTotals(planInputs).interruption,
+        usable_illiquid_investments_cents:
+          planInputs.assets.illiquid_investments.cents,
+        usable_retirement_tax_deferred_cents:
+          planInputs.assets.retirement_tax_deferred.cents,
+        usable_retirement_tax_free_cents:
+          planInputs.assets.retirement_tax_free.cents,
+      }
+    : {
+        expense_reduction_cents: 0,
+        usable_illiquid_investments_cents: 0,
+        usable_retirement_tax_deferred_cents: 0,
+        usable_retirement_tax_free_cents: 0,
+      };
+  const maximums: Record<keyof RunwayAdjustments, number> = {
+    ...domainMaximums,
+    added_cash_cents: MAX_CUSHION_AMOUNT_CENTS,
+    added_monthly_income_cents: MAX_CUSHION_AMOUNT_CENTS,
+    expected_unconfirmed_funds_cents: MAX_CUSHION_AMOUNT_CENTS,
+  };
+  const inputPatch =
+    intent.patch && typeof intent.patch === "object" && !Array.isArray(intent.patch)
+      ? intent.patch
+      : {};
+  const patch: Partial<RunwayAdjustments> = {};
+  for (const field of PLAN_ADJUSTMENT_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(inputPatch, field)) {
+      patch[field] = normalizedPlanAdjustmentCents(
+        inputPatch[field],
+        maximums[field],
+      );
+    }
+  }
+  return { ...intent, patch };
+}
 
 function isRuntimeIntent(value: unknown): value is HouseholdRunwayInterviewIntent {
   return (
@@ -1958,6 +2026,10 @@ export function createHouseholdRunwayInterviewRuntimeComposition(
     ];
 
     if (intent.type === "registration_clicked") return [];
+
+    if (intent.type === "set_plan_adjustment") {
+      return [normalizePlanAdjustmentIntent(state, intent)];
+    }
 
     if (intent.type === "continue") {
       const location = state.draft.location;
