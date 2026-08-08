@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { authenticateRequest, cookieRouteErrorMessage } from '@/lib/auth/authenticated-request';
 import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { recurringTaskUpdateSchema } from '@/lib/validations/recurring-task';
 import {
-  addLocalDays,
+  getLocalDateInTimeZone,
   isValidLocalDate,
 } from '@/lib/recurring-tasks/scheduling';
 import {
@@ -14,12 +15,13 @@ import {
   type SeriesVersion,
 } from '@/lib/recurring-tasks';
 import {
+  executeSeriesCompatibilityIntent,
+  isSeriesCompatibilitySuccess,
   recurringTaskFailureHttpStatus,
   recurringTaskFailureMessage,
-  toReviseSeriesCommand,
-  toSeriesStateCommand,
   toRecurringTaskResponse,
 } from '@/lib/recurring-tasks/compatibility';
+import { decodeUserTimeZone } from '@/lib/preferences/owners';
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ['cookie'],
@@ -113,54 +115,53 @@ export async function PATCH(
 
     // Handle quick actions
     if (action === 'pause') {
-      const outcome = await capabilities.seriesCommands.pauseSeries(
-        toSeriesStateCommand({
-          operationId: metadata.operationId,
-          seriesId: id,
-          version: metadata.version,
-          effectiveDate: dateParam,
-        }),
+      const outcome = await executeSeriesCompatibilityIntent(
+        capabilities.seriesCommands,
+        {
+          type: "pause",
+          command: {
+            operationId: metadata.operationId,
+            seriesId: id,
+            version: metadata.version,
+            ...(dateParam === undefined ? {} : { effectiveDate: dateParam }),
+          },
+          referenceDate: dateParam
+            ?? await resolveHttpReferenceDate(supabase, userId),
+        },
       );
-      if (!isSeriesCommandSuccess(outcome)) {
-        return NextResponse.json(
-          { error: recurringTaskFailureMessage(outcome) },
-          { status: recurringTaskFailureHttpStatus(outcome) },
-        );
-      }
-      return NextResponse.json({
-        recurring_task: toRecurringTaskResponse(outcome.series, userId),
-      });
+      return respondToSeriesCommand(outcome, userId);
     }
     if (action === 'resume') {
-      const outcome = await capabilities.seriesCommands.resumeSeries(
-        toSeriesStateCommand({
-          operationId: metadata.operationId,
-          seriesId: id,
-          version: metadata.version,
-          effectiveDate: dateParam,
-          coverage: dateParam
-            ? { from: dateParam, to: addLocalDays(dateParam, 7) }
-            : undefined,
-        }),
+      const outcome = await executeSeriesCompatibilityIntent(
+        capabilities.seriesCommands,
+        {
+          type: "resume",
+          command: {
+            operationId: metadata.operationId,
+            seriesId: id,
+            version: metadata.version,
+            ...(dateParam === undefined ? {} : { effectiveDate: dateParam }),
+          },
+          referenceDate: dateParam
+            ?? await resolveHttpReferenceDate(supabase, userId),
+        },
       );
-      if (!isSeriesCommandSuccess(outcome)) {
-        return NextResponse.json(
-          { error: recurringTaskFailureMessage(outcome) },
-          { status: recurringTaskFailureHttpStatus(outcome) },
-        );
-      }
-      return NextResponse.json({
-        recurring_task: toRecurringTaskResponse(outcome.series, userId),
-      });
+      return respondToSeriesCommand(outcome, userId);
     }
     if (action === 'end') {
-      const outcome = await capabilities.seriesCommands.endSeries(
-        toSeriesStateCommand({
-          operationId: metadata.operationId,
-          seriesId: id,
-          version: metadata.version,
-          effectiveDate: dateParam,
-        }),
+      const outcome = await executeSeriesCompatibilityIntent(
+        capabilities.seriesCommands,
+        {
+          type: "end",
+          command: {
+            operationId: metadata.operationId,
+            seriesId: id,
+            version: metadata.version,
+            ...(dateParam === undefined ? {} : { effectiveDate: dateParam }),
+          },
+          referenceDate: dateParam
+            ?? await resolveHttpReferenceDate(supabase, userId),
+        },
       );
       return respondToSeriesCommand(outcome, userId);
     }
@@ -192,24 +193,36 @@ export async function PATCH(
     }
 
     if (validation.data.status === 'paused') {
-      const outcome = await capabilities.seriesCommands.pauseSeries(
-        toSeriesStateCommand({
-          operationId: metadata.operationId,
-          seriesId: id,
-          version: metadata.version,
-          effectiveDate,
-        }),
+      const outcome = await executeSeriesCompatibilityIntent(
+        capabilities.seriesCommands,
+        {
+          type: "pause",
+          command: {
+            operationId: metadata.operationId,
+            seriesId: id,
+            version: metadata.version,
+            ...(effectiveDate === undefined ? {} : { effectiveDate }),
+          },
+          referenceDate: effectiveDate
+            ?? await resolveHttpReferenceDate(supabase, userId),
+        },
       );
       return respondToSeriesCommand(outcome, userId);
     }
     if (validation.data.status === 'archived') {
-      const outcome = await capabilities.seriesCommands.endSeries(
-        toSeriesStateCommand({
-          operationId: metadata.operationId,
-          seriesId: id,
-          version: metadata.version,
-          effectiveDate,
-        }),
+      const outcome = await executeSeriesCompatibilityIntent(
+        capabilities.seriesCommands,
+        {
+          type: "end",
+          command: {
+            operationId: metadata.operationId,
+            seriesId: id,
+            version: metadata.version,
+            ...(effectiveDate === undefined ? {} : { effectiveDate }),
+          },
+          referenceDate: effectiveDate
+            ?? await resolveHttpReferenceDate(supabase, userId),
+        },
       );
       return respondToSeriesCommand(outcome, userId);
     }
@@ -222,16 +235,19 @@ export async function PATCH(
         );
       }
       if (current.series.status === 'paused') {
-        const outcome = await capabilities.seriesCommands.resumeSeries(
-          toSeriesStateCommand({
-            operationId: metadata.operationId,
-            seriesId: id,
-            version: metadata.version,
-            effectiveDate,
-            coverage: effectiveDate
-              ? { from: effectiveDate, to: addLocalDays(effectiveDate, 7) }
-              : undefined,
-          }),
+        const outcome = await executeSeriesCompatibilityIntent(
+          capabilities.seriesCommands,
+          {
+            type: "resume",
+            command: {
+              operationId: metadata.operationId,
+              seriesId: id,
+              version: metadata.version,
+              ...(effectiveDate === undefined ? {} : { effectiveDate }),
+            },
+            referenceDate: effectiveDate
+              ?? await resolveHttpReferenceDate(supabase, userId),
+          },
         );
         return respondToSeriesCommand(outcome, userId);
       }
@@ -243,23 +259,27 @@ export async function PATCH(
       }
     }
 
-    const outcome = await capabilities.seriesCommands.reviseSeries(
-      toReviseSeriesCommand({
-        operationId: metadata.operationId,
-        seriesId: id,
-        version: metadata.version,
-        effectiveDate: effectiveDate ?? '',
-        title: validation.data.title,
-        description: validation.data.description,
-        priority: validation.data.priority,
-        categoryId: validation.data.category_id,
-        dueTime: validation.data.due_time,
-        recurrenceRule: validation.data.recurrence_rule,
-        scope: validation.data.scope,
-        endType: validation.data.end_type,
-        endDate: validation.data.end_date,
-        endCount: validation.data.end_count,
-      }),
+    const outcome = await executeSeriesCompatibilityIntent(
+      capabilities.seriesCommands,
+      {
+        type: "revise",
+        command: {
+          operationId: metadata.operationId,
+          seriesId: id,
+          version: metadata.version,
+          effectiveDate: effectiveDate ?? '',
+          title: validation.data.title,
+          description: validation.data.description,
+          priority: validation.data.priority,
+          categoryId: validation.data.category_id,
+          dueTime: validation.data.due_time,
+          recurrenceRule: validation.data.recurrence_rule,
+          scope: validation.data.scope,
+          endType: validation.data.end_type,
+          endDate: validation.data.end_date,
+          endCount: validation.data.end_count,
+        },
+      },
     );
     return respondToSeriesCommand(outcome, userId);
   } catch (error: unknown) {
@@ -308,15 +328,21 @@ export async function DELETE(
       principal: auth.principal,
     });
     const metadata = readMutationMetadata(request);
-    const outcome = await capabilities.seriesCommands.endSeries(
-      toSeriesStateCommand({
-        operationId: metadata.operationId,
-        seriesId: id,
-        version: metadata.version,
-        effectiveDate: dateParam,
-      }),
+    const outcome = await executeSeriesCompatibilityIntent(
+      capabilities.seriesCommands,
+      {
+        type: "end",
+        command: {
+          operationId: metadata.operationId,
+          seriesId: id,
+          version: metadata.version,
+          ...(dateParam === undefined ? {} : { effectiveDate: dateParam }),
+        },
+        referenceDate: dateParam
+          ?? await resolveHttpReferenceDate(supabase, auth.principal.userId),
+      },
     );
-    if (!isSeriesCommandSuccess(outcome)) {
+    if (!isSeriesCompatibilitySuccess(outcome)) {
       return NextResponse.json(
         { error: recurringTaskFailureMessage(outcome) },
         { status: recurringTaskFailureHttpStatus(outcome) },
@@ -346,7 +372,7 @@ function respondToSeriesCommand(
   outcome: SeriesCommandResult,
   ownerId: string,
 ): NextResponse {
-  if (!isSeriesCommandSuccess(outcome)) {
+  if (!isSeriesCompatibilitySuccess(outcome)) {
     return NextResponse.json(
       { error: recurringTaskFailureMessage(outcome) },
       { status: recurringTaskFailureHttpStatus(outcome) },
@@ -357,11 +383,33 @@ function respondToSeriesCommand(
   });
 }
 
-function isSeriesCommandSuccess(
-  outcome: SeriesCommandResult,
-): outcome is Extract<SeriesCommandResult, { series: unknown }> {
-  return 'series' in outcome && (
-    outcome.status === 'complete' || outcome.status === 'already-applied'
+/**
+ * Resolve the person's current local date for a state command when HTTP did
+ * not receive an explicit effective Scheduled Date.
+ *
+ * The authenticated profile supplies the IANA timezone and the injected clock
+ * supplies the instant to convert. A missing profile timezone uses the
+ * product's explicit UTC default rather than the server's local timezone.
+ */
+export async function resolveHttpReferenceDate(
+  supabase: SupabaseClient,
+  userId: string,
+  clock: () => Date = () => new Date(),
+): Promise<string> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('timezone')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) throw error;
+
+  const decoded = decodeUserTimeZone(data?.timezone ?? 'UTC');
+  if (decoded.status !== 'resolved') {
+    throw new RangeError('Authenticated profile timezone is invalid');
+  }
+  return getLocalDateInTimeZone(
+    clock(),
+    decoded.value,
   );
 }
 
