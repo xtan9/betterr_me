@@ -52,44 +52,21 @@ const COVERAGE_READ_UNAVAILABLE_REASON =
   "Coverage could not be ensured." as const;
 
 export function createCoverageRead(
-  supabase: SupabaseClient,
-  principal: AuthenticatedRecurringTaskPrincipal,
-  source: CoverageReadSource,
-): CoverageRead;
-export function createCoverageRead(options: CoverageReadOptions): CoverageRead;
-export function createCoverageRead(
-  supabaseOrOptions: SupabaseClient | CoverageReadOptions,
-  principal?: AuthenticatedRecurringTaskPrincipal,
-  source?: CoverageReadSource,
+  options: CoverageReadOptions,
 ): CoverageRead {
-  let supabase: SupabaseClient;
-  let authenticatedPrincipal: AuthenticatedRecurringTaskPrincipal | undefined;
-  let boundSource: CoverageReadSource | undefined;
-  if (
-    isCoverageReadOptions(supabaseOrOptions)
-    && principal === undefined
-    && source === undefined
-  ) {
-    supabase = supabaseOrOptions.supabase;
-    authenticatedPrincipal = supabaseOrOptions.principal;
-    boundSource = supabaseOrOptions.source;
-  } else {
-    supabase = supabaseOrOptions as SupabaseClient;
-    authenticatedPrincipal = principal;
-    boundSource = source;
-  }
+  const { supabase, principal, source } = options;
 
-  requireCoverageReadSource(boundSource);
-  if (!authenticatedPrincipal) {
+  requireCoverageReadSource(source);
+  if (!principal) {
     throw new TypeError("An authenticated user principal is required");
   }
 
   const capabilities = createAuthenticatedRecurringTaskCapabilities(
     supabase,
-    authenticatedPrincipal,
+    principal,
   );
-  const userId = authenticatedPrincipal.userId;
-  const operationPrefix = COVERAGE_READ_OPERATION_PREFIXES[boundSource];
+  const userId = principal.userId;
+  const operationPrefix = COVERAGE_READ_OPERATION_PREFIXES[source];
 
   return {
     async ensure(range, onUnexpectedFailure) {
@@ -133,12 +110,6 @@ function unavailableCoverage(
     failedSeriesIds: [],
     reason,
   };
-}
-
-function isCoverageReadOptions(
-  value: SupabaseClient | CoverageReadOptions,
-): value is CoverageReadOptions {
-  return "supabase" in value && "principal" in value && "source" in value;
 }
 
 async function notifyUnexpectedFailure(

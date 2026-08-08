@@ -15,6 +15,13 @@ const privateCompositionFiles = new Set([
   "lib/tasks/commands.ts",
 ]);
 
+const focusedProductionCoverageAdapters = [
+  ["lib/tasks/supabase-query.ts", "task"],
+  ["lib/dashboard/supabase-query.ts", "dashboard"],
+  ["lib/sidebar/supabase-query.ts", "sidebar"],
+  ["lib/calendar/supabase-query.ts", "calendar"],
+] as const;
+
 describe("Recurring Task package surface", () => {
   it("has only the authenticated factory as a runtime root export", async () => {
     const packageSurface = await import("@/lib/recurring-tasks");
@@ -28,6 +35,51 @@ describe("Recurring Task package surface", () => {
     const coverageReadSurface = await import("@/lib/recurring-tasks/coverage-read");
 
     expect(Object.keys(coverageReadSurface)).toEqual(["createCoverageRead"]);
+  });
+
+  it("keeps Coverage Read construction on one supported options contract", () => {
+    const coverageRead = readFileSync(
+      resolve(root, "lib/recurring-tasks/coverage-read.ts"),
+      "utf8",
+    );
+
+    expect(coverageRead).toContain("export interface CoverageReadOptions");
+    expect(coverageRead).not.toContain("isCoverageReadOptions");
+    expect(coverageRead).not.toContain("supabaseOrOptions");
+    expect(coverageRead).not.toMatch(
+      /export function createCoverageRead\(\s*supabase:/,
+    );
+  });
+
+  it.each(focusedProductionCoverageAdapters)(
+    "composes %s with its distinct Coverage Read source",
+    (relative, expectedSource) => {
+      const composition = readFileSync(resolve(root, relative), "utf8");
+
+      expect(composition).toContain(
+        'from "@/lib/recurring-tasks/coverage-read"',
+      );
+      expect(composition).toContain("createCoverageRead");
+      expect(composition).toContain(`source: "${expectedSource}"`);
+      expect(composition).not.toContain(
+        "createAuthenticatedRecurringTaskCapabilities",
+      );
+      expect(composition).not.toContain("coverage: {");
+      expect(composition).not.toMatch(
+        /CoverageCapabilityResult|coverageCompleteness|operationId/,
+      );
+    },
+  );
+
+  it("lets focused queries rely on the total Coverage Read contract", () => {
+    const taskQuery = readFileSync(resolve(root, "lib/tasks/query.ts"), "utf8");
+    const sidebarQuery = readFileSync(
+      resolve(root, "lib/sidebar/query.ts"),
+      "utf8",
+    );
+
+    expect(taskQuery).not.toContain("unavailableTaskCoverage");
+    expect(sidebarQuery).not.toContain("unavailableSidebarCoverage");
   });
 
   it("exports only the authenticated factory and public contract types from the root", () => {
@@ -58,6 +110,11 @@ describe("Recurring Task package surface", () => {
     }
 
     expect(existsSync(resolve(root, "lib/recurring-tasks/internal"))).toBe(true);
+  });
+
+  it("removes the retired private Coverage adapter and its isolated test", () => {
+    expect(existsSync(resolve(root, "lib/recurring-tasks/internal/coverage.ts"))).toBe(false);
+    expect(existsSync(resolve(root, "tests/lib/recurring-tasks/coverage.test.ts"))).toBe(false);
   });
 
   it("allows production callers to use only the root or declared supported entry points", () => {

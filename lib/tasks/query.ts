@@ -3,8 +3,8 @@ import type {
   AuthenticatedRecurringTaskPrincipal,
   CoverageCompleteness,
   LocalDateRange,
-  CoverageUnavailable,
 } from "@/lib/recurring-tasks";
+import type { CoverageRead } from "@/lib/recurring-tasks/coverage-read";
 import { addLocalDays } from "@/lib/recurring-tasks/scheduling";
 
 export type { CoverageCompleteness } from "@/lib/recurring-tasks";
@@ -34,20 +34,13 @@ export interface TaskQueryReadOptions {
   onIncomplete?: TaskQueryCoveragePolicy;
 }
 
-export interface TaskQueryCoverageRequest {
-  principal: AuthenticatedRecurringTaskPrincipal;
-  range: LocalDateRange;
-}
-
 export interface TaskQueryReadRequest {
   principal: AuthenticatedRecurringTaskPrincipal;
   request: TaskReadQuery;
 }
 
 export interface TaskQueryDependencies {
-  coverage: {
-    ensure(request: TaskQueryCoverageRequest): Promise<CoverageCompleteness>;
-  };
+  coverage: CoverageRead;
   taskRead: {
     read(request: TaskQueryReadRequest): Promise<Task[]>;
   };
@@ -105,19 +98,6 @@ export function taskCoverageWarning(
   };
 }
 
-export function unavailableTaskCoverage(
-  range: LocalDateRange,
-  reason = "Coverage could not be ensured",
-): CoverageUnavailable {
-  return {
-    status: "unavailable",
-    type: "unavailable",
-    requestedRange: range,
-    failedSeriesIds: [],
-    reason,
-  };
-}
-
 export function createTaskQuery(
   principal: AuthenticatedRecurringTaskPrincipal,
   dependencies: TaskQueryDependencies,
@@ -130,14 +110,7 @@ export function createTaskQuery(
       let completeness: CoverageCompleteness | null = null;
 
       if (range) {
-        try {
-          completeness = await dependencies.coverage.ensure({
-            principal,
-            range,
-          });
-        } catch {
-          completeness = unavailableTaskCoverage(range);
-        }
+        completeness = await dependencies.coverage.ensure(range);
 
         if (
           completeness.status !== "complete"

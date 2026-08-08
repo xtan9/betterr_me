@@ -17,7 +17,7 @@ const task = { id: "task-1", title: "Review Coverage" } as never;
 function createDependencies(events: string[]): TaskQueryDependencies {
   return {
     coverage: {
-      ensure: async ({ range }) => {
+      ensure: async (range) => {
         events.push(`coverage:${range.from}:${range.to}`);
         return {
           status: "complete",
@@ -170,38 +170,12 @@ describe("authenticated task query", () => {
     expect(result).toEqual({ tasks: [], completeness });
   });
 
-  it("normalizes Coverage failures and leaves unbounded list reads materialized-only", async () => {
+  it("leaves unbounded list reads materialized-only", async () => {
     const events: string[] = [];
-    const dependencies: TaskQueryDependencies = {
-      coverage: {
-        ensure: async () => {
-          events.push("coverage");
-          throw new Error("coverage failed");
-        },
-      },
-      taskRead: {
-        read: async () => {
-          events.push("read");
-          return [task];
-        },
-      },
-    };
-    const query = createTaskQuery(principal, dependencies);
-
-    const unavailable = await query.read({
-      type: "overdue",
-      date: "2026-08-07",
-    });
+    const query = createTaskQuery(principal, createDependencies(events));
     const list = await query.read({ type: "list" });
 
-    expect(unavailable.completeness).toEqual({
-      status: "unavailable",
-      type: "unavailable",
-      requestedRange: { from: "2026-08-07", to: "2026-08-07" },
-      failedSeriesIds: [],
-      reason: "Coverage could not be ensured",
-    });
     expect(list).toEqual({ tasks: [task], completeness: null });
-    expect(events).toEqual(["coverage", "read", "read"]);
+    expect(events).toEqual(["read:user-1:list"]);
   });
 });

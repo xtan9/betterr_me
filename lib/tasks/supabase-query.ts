@@ -26,9 +26,7 @@ export function createSupabaseTaskQuery(
   const tasks = new TasksDB(supabase);
 
   const dependencies: TaskQueryDependencies = {
-    coverage: {
-      ensure: ({ range }) => coverageRead.ensure(range),
-    },
+    coverage: coverageRead,
     taskRead: {
       read: ({ principal: owner, request }) =>
         readMaterializedTasks(tasks, owner.userId, request),

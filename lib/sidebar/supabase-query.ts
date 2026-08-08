@@ -27,9 +27,7 @@ export function createSupabaseSidebarCountsQuery(
   const tasks = new TasksDB(supabase);
 
   const dependencies: SidebarCountsQueryDependencies = {
-    coverage: {
-      ensure: ({ range }) => coverageRead.ensure(range),
-    },
+    coverage: coverageRead,
     counts: {
       read: ({ principal: owner, date }) =>
         readSidebarCounts(habits, tasks, owner.userId, date),

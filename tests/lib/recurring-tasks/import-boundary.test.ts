@@ -23,7 +23,6 @@ const lifecycleBoundarySources = [
   "lib/sidebar/query.ts",
   "lib/sidebar/supabase-query.ts",
   "lib/db/tasks.ts",
-  "lib/recurring-tasks/internal/coverage.ts",
   "lib/tasks/commands.ts",
 ];
 
@@ -210,6 +209,7 @@ describe("recurring lifecycle import boundary", () => {
     expect(sidebarQuery).toContain("createSidebarCountsQuery");
     expect(sidebarQuery).toContain('status: "failed"');
     expect(sidebarComposition).toContain("createCoverageRead");
+    expect(sidebarComposition).toContain('source: "sidebar"');
     expect(sidebarComposition).not.toContain(
       "createAuthenticatedRecurringTaskCapabilities",
     );
