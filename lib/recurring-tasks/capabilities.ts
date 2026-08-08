@@ -3,6 +3,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AuthenticatedPrincipal } from "@/lib/auth/request-context";
 
 import { createActivatedRecurringTaskLifecycle } from "./activation";
+import {
+  emitRecurringLifecycleSignal,
+  type RecurringLifecycleObserver,
+  type RecurringLifecycleSignal,
+} from "./observability";
 import type {
   ConflictOutcome,
   CreateSeriesRequest,
@@ -290,6 +295,11 @@ export interface AuthenticatedRecurringTaskCapabilityOptions {
   principal: AuthenticatedRecurringTaskPrincipal;
 }
 
+/** Private composition port; telemetry is never part of a public capability result. */
+interface RecurringTaskTelemetryPort {
+  emit(signal: RecurringLifecycleSignal): void;
+}
+
 export function createAuthenticatedRecurringTaskCapabilities(
   supabase: SupabaseClient,
   principal: AuthenticatedRecurringTaskPrincipal,
@@ -309,9 +319,27 @@ export function createAuthenticatedRecurringTaskCapabilities(
     ? supabaseOrOptions.principal
     : principal;
 
-  return createRecurringTaskCapabilitiesForLifecycle(
+  return createAuthenticatedRecurringTaskCapabilitiesWithTelemetry(
+    supabase,
     authenticatedPrincipal as AuthenticatedRecurringTaskPrincipal,
-    createActivatedRecurringTaskLifecycle(supabase),
+    { emit: emitRecurringLifecycleSignal },
+  );
+}
+
+/**
+ * Private interactive composition seam. Hosts may inject telemetry at
+ * construction time, while the supported capability result stays focused on
+ * user-facing lifecycle facts.
+ */
+export function createAuthenticatedRecurringTaskCapabilitiesWithTelemetry(
+  supabase: SupabaseClient,
+  principal: AuthenticatedRecurringTaskPrincipal,
+  telemetry: RecurringTaskTelemetryPort,
+): AuthenticatedRecurringTaskCapabilities {
+  const observer: RecurringLifecycleObserver = (signal) => telemetry.emit(signal);
+  return createRecurringTaskCapabilitiesForLifecycle(
+    principal,
+    createActivatedRecurringTaskLifecycle(supabase, { observer }),
   );
 }
 

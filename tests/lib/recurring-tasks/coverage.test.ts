@@ -66,7 +66,7 @@ describe("recurring coverage read boundaries", () => {
     });
   });
 
-  it("forwards an extended exact horizon without substituting a rolling window", async () => {
+  it("ensures an exact read horizon synchronously without scheduled prewarming", async () => {
     const range = { from: "2026-02-17", to: "2026-03-03" };
     const supabase = supabaseFor({ status: "complete", type: "complete" }) as unknown as {
       rpc: ReturnType<typeof vi.fn>;
@@ -81,6 +81,7 @@ describe("recurring coverage read boundaries", () => {
       p_operation: "ensure-user-coverage",
       p_request: { userId: "user-1", range },
     });
+    expect(supabase.rpc).toHaveBeenCalledTimes(1);
     expect(result.requestedRange).toEqual(range);
   });
 
