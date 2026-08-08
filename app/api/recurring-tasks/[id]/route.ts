@@ -126,7 +126,7 @@ export async function PATCH(
             ...(dateParam === undefined ? {} : { effectiveDate: dateParam }),
           },
           referenceDate: dateParam
-            ?? await resolveHttpReferenceDate(request, supabase, userId),
+            ?? await resolveHttpReferenceDate(supabase, userId),
         },
       );
       return respondToSeriesCommand(outcome, userId);
@@ -143,7 +143,7 @@ export async function PATCH(
             ...(dateParam === undefined ? {} : { effectiveDate: dateParam }),
           },
           referenceDate: dateParam
-            ?? await resolveHttpReferenceDate(request, supabase, userId),
+            ?? await resolveHttpReferenceDate(supabase, userId),
         },
       );
       return respondToSeriesCommand(outcome, userId);
@@ -160,7 +160,7 @@ export async function PATCH(
             ...(dateParam === undefined ? {} : { effectiveDate: dateParam }),
           },
           referenceDate: dateParam
-            ?? await resolveHttpReferenceDate(request, supabase, userId),
+            ?? await resolveHttpReferenceDate(supabase, userId),
         },
       );
       return respondToSeriesCommand(outcome, userId);
@@ -204,7 +204,7 @@ export async function PATCH(
             ...(effectiveDate === undefined ? {} : { effectiveDate }),
           },
           referenceDate: effectiveDate
-            ?? await resolveHttpReferenceDate(request, supabase, userId),
+            ?? await resolveHttpReferenceDate(supabase, userId),
         },
       );
       return respondToSeriesCommand(outcome, userId);
@@ -221,7 +221,7 @@ export async function PATCH(
             ...(effectiveDate === undefined ? {} : { effectiveDate }),
           },
           referenceDate: effectiveDate
-            ?? await resolveHttpReferenceDate(request, supabase, userId),
+            ?? await resolveHttpReferenceDate(supabase, userId),
         },
       );
       return respondToSeriesCommand(outcome, userId);
@@ -246,7 +246,7 @@ export async function PATCH(
               ...(effectiveDate === undefined ? {} : { effectiveDate }),
             },
             referenceDate: effectiveDate
-              ?? await resolveHttpReferenceDate(request, supabase, userId),
+              ?? await resolveHttpReferenceDate(supabase, userId),
           },
         );
         return respondToSeriesCommand(outcome, userId);
@@ -339,7 +339,7 @@ export async function DELETE(
           ...(dateParam === undefined ? {} : { effectiveDate: dateParam }),
         },
         referenceDate: dateParam
-          ?? await resolveHttpReferenceDate(request, supabase, auth.principal.userId),
+          ?? await resolveHttpReferenceDate(supabase, auth.principal.userId),
       },
     );
     if (!isSeriesCompatibilitySuccess(outcome)) {
@@ -387,51 +387,29 @@ function respondToSeriesCommand(
  * Resolve the person's current local date for a state command when HTTP did
  * not receive an explicit effective Scheduled Date.
  *
- * A reference date or IANA timezone may be supplied by the delivery client.
- * Otherwise the authenticated profile supplies the timezone and the injected
- * clock supplies the instant to convert.
+ * The authenticated profile supplies the IANA timezone and the injected clock
+ * supplies the instant to convert. A missing profile timezone uses the
+ * product's explicit UTC default rather than the server's local timezone.
  */
 export async function resolveHttpReferenceDate(
-  request: NextRequest,
   supabase: SupabaseClient,
   userId: string,
   clock: () => Date = () => new Date(),
 ): Promise<string> {
-  const supplied = firstNonEmpty(
-    request.headers.get('X-Reference-Date'),
-    request.nextUrl.searchParams.get('reference_date'),
-    request.nextUrl.searchParams.get('referenceDate'),
-  );
-  if (supplied) {
-    if (!isValidLocalDate(supplied)) {
-      throw new RangeError('Reference date must be a valid local date');
-    }
-    return supplied;
-  }
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('timezone')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) throw error;
 
-  let timeZone = firstNonEmpty(
-    request.headers.get('X-Timezone'),
-    request.nextUrl.searchParams.get('timezone'),
-  );
-  if (!timeZone && typeof supabase.from === 'function') {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('timezone')
-        .eq('id', userId)
-        .maybeSingle();
-      if (!error && typeof data?.timezone === 'string') {
-        timeZone = data.timezone;
-      }
-    } catch {
-      // UTC remains the safe fallback when profile context is unavailable.
-    }
+  const decoded = decodeUserTimeZone(data?.timezone ?? 'UTC');
+  if (decoded.status !== 'resolved') {
+    throw new RangeError('Authenticated profile timezone is invalid');
   }
-
-  const decoded = decodeUserTimeZone(timeZone);
   return getLocalDateInTimeZone(
     clock(),
-    decoded.status === 'resolved' ? decoded.value : 'UTC',
+    decoded.value,
   );
 }
 

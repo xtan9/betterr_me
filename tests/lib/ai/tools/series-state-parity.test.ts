@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 import { PATCH, DELETE } from "@/app/api/recurring-tasks/[id]/route";
@@ -7,6 +7,7 @@ import type { ToolContext } from "@/lib/ai/tools/types";
 
 const {
   httpSupabase,
+  mockProfileMaybeSingle,
   mockReviseSeries,
   mockPauseSeries,
   mockResumeSeries,
@@ -36,8 +37,17 @@ const {
     seriesQueries: { getSeries: vi.fn() },
     coverage: { ensure: vi.fn() },
   };
+  const mockProfileMaybeSingle = vi.fn();
+  const httpSupabase = {
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({ maybeSingle: mockProfileMaybeSingle })),
+      })),
+    })),
+  };
   return {
-    httpSupabase: {},
+    httpSupabase,
+    mockProfileMaybeSingle,
     mockReviseSeries,
     mockPauseSeries,
     mockResumeSeries,
@@ -86,7 +96,7 @@ const headers = (operationId: string) => ({
 
 const aiContext: ToolContext = {
   userId: "user-123",
-  supabase: httpSupabase as ToolContext["supabase"],
+  supabase: httpSupabase as unknown as ToolContext["supabase"],
   date: "2026-08-01",
   timezone: "America/Los_Angeles",
 };
@@ -98,6 +108,11 @@ function findTool(name: string) {
 describe("HTTP and AI Series capability parity", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers({ now: new Date("2026-08-01T12:00:00.000Z") });
+    mockProfileMaybeSingle.mockResolvedValue({
+      data: { timezone: "America/Los_Angeles" },
+      error: null,
+    });
     mockCreateCapabilities.mockReturnValue(mockCapabilities);
     mockReviseSeries.mockResolvedValue({
       status: "complete",
@@ -119,6 +134,10 @@ describe("HTTP and AI Series capability parity", () => {
       type: "ended",
       series: recurringTask,
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("maps Series Default edits to one canonical revision command", async () => {
@@ -228,7 +247,7 @@ describe("HTTP and AI Series capability parity", () => {
   it("resolves omitted pause and resume dates to the same reference date", async () => {
     await PATCH(
       new NextRequest(
-        "http://localhost:3000/api/recurring-tasks/series-1?action=pause&reference_date=2026-08-01",
+        "http://localhost:3000/api/recurring-tasks/series-1?action=pause",
         { method: "PATCH", headers: headers("omitted-pause") },
       ),
       { params: Promise.resolve({ id: "series-1" }) },
@@ -244,7 +263,7 @@ describe("HTTP and AI Series capability parity", () => {
 
     await PATCH(
       new NextRequest(
-        "http://localhost:3000/api/recurring-tasks/series-1?action=resume&reference_date=2026-08-01",
+        "http://localhost:3000/api/recurring-tasks/series-1?action=resume",
         { method: "PATCH", headers: headers("omitted-resume") },
       ),
       { params: Promise.resolve({ id: "series-1" }) },
@@ -324,7 +343,7 @@ describe("HTTP and AI Series capability parity", () => {
   it("resolves an omitted end date identically across HTTP and AI", async () => {
     const httpResponse = await DELETE(
       new NextRequest(
-        "http://localhost:3000/api/recurring-tasks/series-1?reference_date=2026-08-01",
+        "http://localhost:3000/api/recurring-tasks/series-1",
         { method: "DELETE", headers: headers("omitted-end") },
       ),
       { params: Promise.resolve({ id: "series-1" }) },

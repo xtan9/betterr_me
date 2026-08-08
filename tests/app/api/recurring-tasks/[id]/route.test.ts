@@ -95,7 +95,6 @@ describe("HTTP Series reference dates", () => {
     };
 
     const referenceDate = await resolveHttpReferenceDate(
-      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1"),
       supabase as any,
       "user-123",
       () => new Date("2026-08-08T06:00:00.000Z"),
@@ -105,20 +104,24 @@ describe("HTTP Series reference dates", () => {
     expect(maybeSingle).toHaveBeenCalledTimes(1);
   });
 
-  it("honors an explicitly supplied reference date before profile lookup", async () => {
-    const from = vi.fn();
+  it("propagates profile lookup failures", async () => {
+    const cause = new Error("profile unavailable");
+    const maybeSingle = vi.fn().mockRejectedValue(cause);
+    const supabase = {
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({ maybeSingle })),
+        })),
+      })),
+    };
 
-    const referenceDate = await resolveHttpReferenceDate(
-      new NextRequest(
-        "http://localhost:3000/api/recurring-tasks/rt-1?reference_date=2026-08-09",
+    await expect(
+      resolveHttpReferenceDate(
+        supabase as any,
+        "user-123",
+        () => new Date("2026-08-08T06:00:00.000Z"),
       ),
-      { from } as any,
-      "user-123",
-      () => new Date("2026-08-08T06:00:00.000Z"),
-    );
-
-    expect(referenceDate).toBe("2026-08-09");
-    expect(from).not.toHaveBeenCalled();
+    ).rejects.toBe(cause);
   });
 });
 
@@ -243,7 +246,7 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
 
   it("routes pause and resume actions through typed capabilities", async () => {
     await PATCH(
-      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?action=pause&reference_date=2026-08-07", {
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?action=pause&date=2026-08-07", {
         method: "PATCH",
         headers: mutationHeaders("http-pause-1"),
       }),
@@ -274,7 +277,7 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
 
   it("routes the end action through the canonical endSeries capability", async () => {
     const response = await PATCH(
-      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?action=end&reference_date=2026-08-07", {
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?action=end&date=2026-08-07", {
         method: "PATCH",
         headers: mutationHeaders("http-end-action-1"),
       }),
@@ -302,7 +305,7 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
 
     const resumed = await PATCH(
       new NextRequest(
-        "http://localhost:3000/api/recurring-tasks/rt-1?reference_date=2026-08-07",
+        "http://localhost:3000/api/recurring-tasks/rt-1?date=2026-08-07",
         {
           method: "PATCH",
           headers: mutationHeaders("http-active-paused-1"),
@@ -331,7 +334,7 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
 
     const rejected = await PATCH(
       new NextRequest(
-        "http://localhost:3000/api/recurring-tasks/rt-1?reference_date=2026-08-07",
+        "http://localhost:3000/api/recurring-tasks/rt-1?date=2026-08-07",
         {
           method: "PATCH",
           headers: mutationHeaders("http-active-ended-1"),
@@ -357,7 +360,7 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
     });
 
     const conflictResponse = await PATCH(
-      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?action=pause", {
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?action=pause&date=2026-08-07", {
         method: "PATCH",
         headers: mutationHeaders("http-conflict-1"),
       }),
@@ -372,7 +375,7 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
       operationId: "http-not-found-1",
     });
     const notFoundResponse = await PATCH(
-      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?action=pause", {
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?action=pause&date=2026-08-07", {
         method: "PATCH",
         headers: mutationHeaders("http-not-found-1"),
       }),
@@ -470,7 +473,7 @@ describe("DELETE /api/recurring-tasks/[id]", () => {
       operationId: "http-delete-not-found-1",
     });
     const notFound = await DELETE(
-      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1", {
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?date=2026-08-09", {
         method: "DELETE",
         headers: mutationHeaders("http-delete-not-found-1"),
       }),
@@ -480,7 +483,7 @@ describe("DELETE /api/recurring-tasks/[id]", () => {
 
     mockEndSeries.mockRejectedValue(new Error("fail"));
     const internalError = await DELETE(
-      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1", {
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?date=2026-08-09", {
         method: "DELETE",
         headers: mutationHeaders("http-delete-error-1"),
       }),
