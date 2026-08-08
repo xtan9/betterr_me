@@ -8,6 +8,7 @@ export type {
   HouseholdRunwayBrowserAdapterOptions,
   HouseholdRunwayBrowserEnvironment,
   HouseholdRunwayBrowserReportPresentation,
+  HouseholdRunwayBrowserReportPresentationRequest,
 } from "@/lib/finance/internal/household-runway-browser-adapter";
 
 /** Composes the supported Runtime with the production browser capabilities. */

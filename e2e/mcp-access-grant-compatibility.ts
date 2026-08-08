@@ -46,13 +46,18 @@ import {
   evaluateDelegatedJwtPolicy,
   isExactCanonicalResource,
   publicBoundaryRejects,
-  s256CodeChallenge,
   selectDelegatedSigningJwk,
   type DelegatedJwk,
   type DelegatedJwtClaims,
   type DelegatedJwtHeader,
   type DelegatedJwtPolicy,
 } from "./mcp-access-grant-policy";
+import {
+  assertExactCanonicalResource,
+  buildLoopbackUrls,
+  grantClientId,
+  s256CodeChallenge,
+} from "./mcp-access-grant-journey";
 import {
   evaluateMcpAccessGrantTargetConfiguration,
   type McpAccessGrantTarget,
@@ -299,7 +304,7 @@ class LoopbackCallback {
   }
 
   get url(): string {
-    return `http://127.0.0.1:${this.port}/oauth/callback`;
+    return buildLoopbackUrls("127.0.0.1", this.port).callbackUrl;
   }
 
   async wait(timeoutMs = 60_000): Promise<CallbackResult> {
@@ -428,9 +433,7 @@ class CompatibilityOAuthProvider implements OAuthClientProvider {
     _serverUrl: string | URL,
     resource?: string,
   ): Promise<URL> {
-    if (!isExactCanonicalResource(this.canonicalResource, resource)) {
-      throw new Error("OAuth resource must equal the configured Canonical MCP Resource");
-    }
+    assertExactCanonicalResource(this.canonicalResource, resource);
     return new URL(this.canonicalResource);
   }
 
@@ -669,24 +672,6 @@ async function refreshWithOfficialClient(options: {
       request: lastRequestForEndpoint(options.requests, startIndex, options.metadata.token_endpoint),
     };
   }
-}
-
-function grantClientId(grant: unknown): string | undefined {
-  if (!grant || typeof grant !== "object") {
-    return undefined;
-  }
-
-  const record = grant as Record<string, unknown>;
-  if (typeof record.client_id === "string") {
-    return record.client_id;
-  }
-
-  if (record.client && typeof record.client === "object") {
-    const client = record.client as Record<string, unknown>;
-    return typeof client.client_id === "string" ? client.client_id : undefined;
-  }
-
-  return undefined;
 }
 
 function grantSummary(grant: unknown): Record<string, unknown> {
