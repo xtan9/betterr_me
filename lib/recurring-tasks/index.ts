@@ -41,6 +41,10 @@ export {
   createRecurringTaskCapabilities,
   RECURRING_TASK_OPERATION_IDS,
 } from './capabilities';
+export {
+  createRecurringTaskMaintenanceCapability,
+  RECURRING_TASK_MAINTENANCE_AUTHORITY,
+} from './maintenance';
 export type {
   AuthenticatedRecurringTaskCapabilityOptions,
   AuthenticatedRecurringTaskCapabilities,
@@ -83,3 +87,10 @@ export type {
   SeriesVersion,
   ValidationFailure,
 } from './capabilities';
+export type {
+  RecurringTaskMaintenanceAuthority,
+  RecurringTaskMaintenanceCapability,
+  RecurringTaskMaintenanceCapabilityOptions,
+  RecurringTaskMaintenanceFailures,
+  RecurringTaskMaintenanceResult,
+} from './maintenance';

@@ -5,6 +5,7 @@ import {
 } from "@/lib/finance/internal/household-runway-browser-adapter";
 import { createHouseholdRunwayInterview } from "@/lib/finance/internal/household-runway-interview";
 import { rememberHouseholdRunwayDraft } from "@/lib/finance/internal/runway-draft-client";
+import { assessHouseholdRunway } from "@/lib/finance/household-runway-assessment";
 import type { HouseholdRunwayInterviewRuntime } from "@/lib/finance/household-runway-interview-runtime";
 import type {
   HouseholdRunwayAnswers,
@@ -122,21 +123,31 @@ function snapshot(
 }
 
 async function completedPlanInputs() {
+  sessionStorage.clear();
+  localStorage.clear();
   const browser = createAdapterEnvironment(
     "https://betterr.me/finance/cushion?start=1",
   );
+  let capturedInputs: HouseholdRunwayAnswers | undefined;
   const adapter = createHouseholdRunwayBrowserAdapter({
     environment: browser.environment,
-    authenticated: false,
+    authenticated: true,
     createId: () => "source-interview",
+    persistPlan: (request) => {
+      capturedInputs = request.inputs;
+      return { success: false, error: "network" };
+    },
   });
   adapter.start();
   await settleAdapter();
   driveToCompletedAssessment(adapter);
-  const inputs = adapter.getSnapshot().derived.planInputs;
+  adapter.send({ type: "save_plan" });
+  await settleAdapter();
   adapter.dispose();
-  if (!inputs) throw new Error("expected completed Plan inputs");
-  return JSON.parse(JSON.stringify(inputs)) as HouseholdRunwayAnswers;
+  sessionStorage.clear();
+  localStorage.clear();
+  if (!capturedInputs) throw new Error("expected completed Plan inputs");
+  return JSON.parse(JSON.stringify(capturedInputs)) as HouseholdRunwayAnswers;
 }
 
 describe("Household Runway browser adapter", () => {
@@ -163,6 +174,53 @@ describe("Household Runway browser adapter", () => {
       "/finance/cushion",
     );
     adapter.dispose();
+  });
+
+  it("projects an unavailable result without exposing partial assessment facts", async () => {
+    const restored = createHouseholdRunwayInterview();
+    restored.draft.revision = 1;
+    restored.draft.interviewId = "incomplete-result";
+    restored.draft.startedAt = "2026-08-03T15:00:00.000Z";
+    restored.draft.stageStatus.result = "completed";
+    const browser = createAdapterEnvironment(
+      "https://betterr.me/finance/cushion?start=1",
+    );
+    sessionStorage.clear();
+    localStorage.clear();
+    const adapter = createHouseholdRunwayBrowserAdapter({
+      environment: browser.environment,
+      authenticated: false,
+      restore: () => ({
+        session: {
+          status: "restored" as const,
+          state: {
+            status: "completed" as const,
+            stage: "result" as const,
+            draft: restored.draft,
+          },
+        },
+        device: { status: "missing" as const },
+      }),
+      createId: () => "interview-1",
+    });
+
+    adapter.start();
+    await settleAdapter();
+
+    const result = adapter.getSnapshot().screen;
+    expect(result).toMatchObject({
+      kind: "result",
+      readiness: "unavailable",
+    });
+    expect(adapter.getSnapshot().actions.startNew).toEqual({ applicable: true });
+    expect(result).not.toHaveProperty("primary");
+    expect(result).not.toHaveProperty("adjustment");
+    expect(adapter.getSnapshot().issues).toContainEqual({
+      code: "country_required",
+    });
+    adapter.dispose();
+    sessionStorage.clear();
+    localStorage.clear();
   });
 
   it("keeps an anonymous landing screen until the public start intent is sent", async () => {
@@ -340,9 +398,16 @@ describe("Household Runway browser adapter", () => {
     expect(adapter.getSnapshot()).toMatchObject({
       lifecycle: "ready",
       interviewStatus: "completed",
-      screen: { kind: "stage", stage: "result", assessment: expect.any(Object) },
-      assessmentHistory: history,
+      screen: { kind: "result", stage: "result", readiness: "ready" },
     });
+    const result = adapter.getSnapshot().screen;
+    expect(result.kind).toBe("result");
+    if (result.kind === "result" && result.readiness === "ready") {
+      expect(result.history.map((item) => item.id)).toEqual([
+        "snapshot-newest",
+        "snapshot-older",
+      ]);
+    }
     expect(adapter.getSnapshot().issues).not.toContainEqual({
       code: "assessment_history_invalid",
     });
@@ -374,8 +439,7 @@ describe("Household Runway browser adapter", () => {
     expect(adapter.getSnapshot()).toMatchObject({
       lifecycle: "ready",
       interviewStatus: "completed",
-      screen: { kind: "stage", stage: "result", assessment: expect.any(Object) },
-      assessmentHistory: [],
+      screen: { kind: "result", stage: "result", readiness: "ready", history: [] },
       issues: [{ code: "assessment_history_invalid" }],
     });
     adapter.dispose();
@@ -628,7 +692,10 @@ describe("Household Runway browser adapter", () => {
     driveToCompletedAssessment(adapter);
     await settleAdapter();
 
-    const assessment = adapter.getSnapshot().derived.assessment!;
+    const inputs = await completedPlanInputs();
+    const assessed = assessHouseholdRunway({ answers: inputs });
+    if (!assessed.success) throw new Error("expected completed assessment");
+    const assessment = assessed;
     const fetchPlan = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as {
         answers: unknown;

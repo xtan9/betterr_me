@@ -4,7 +4,9 @@ import {
   type HouseholdRunwayAnswers,
   type RunwayAdjustments,
 } from "@/lib/finance/cushion";
-import { createHouseholdRunwayInterviewRuntime } from "@/lib/finance/household-runway-interview-runtime";
+import {
+  createHouseholdRunwayInterviewRuntimeWithCapabilities as createHouseholdRunwayInterviewRuntime,
+} from "@/lib/finance/internal/household-runway-interview-runtime";
 
 const now = "2026-08-03T15:00:00.000Z";
 const GLOBAL_MAX_CENTS = 100_000_000_000;
@@ -51,8 +53,18 @@ function adjustmentFrom(
   runtime: ReturnType<typeof createHouseholdRunwayInterviewRuntime>,
 ) {
   const screen = runtime.getSnapshot().screen;
-  if (screen.kind !== "stage") throw new Error("expected the completed result");
-  return screen.planAdjustment;
+  if (screen.kind !== "result" || screen.readiness !== "ready") {
+    throw new Error("expected the completed result");
+  }
+  return {
+    expense_reduction_cents: screen.adjustment.fields.expenseReduction.valueCents,
+    added_cash_cents: screen.adjustment.fields.addedCash.valueCents,
+    added_monthly_income_cents: screen.adjustment.fields.addedMonthlyIncome.valueCents,
+    expected_unconfirmed_funds_cents: screen.adjustment.fields.expectedUnconfirmedFunds.valueCents,
+    usable_illiquid_investments_cents: screen.adjustment.fields.usableIlliquidInvestments.valueCents,
+    usable_retirement_tax_deferred_cents: screen.adjustment.fields.usableRetirementTaxDeferred.valueCents,
+    usable_retirement_tax_free_cents: screen.adjustment.fields.usableRetirementTaxFree.valueCents,
+  } satisfies RunwayAdjustments;
 }
 
 const adjustmentCases = [
@@ -177,18 +189,17 @@ describe("Household Runway Runtime Plan Adjustment boundary", () => {
 
       const snapshot = runtime.getSnapshot();
       expect(adjustmentFrom(runtime)).toEqual(expected);
-      expect(snapshot.derived.assessment).toMatchObject({
-        adjustments: expected,
+      expect(snapshot.screen).toMatchObject({
+        kind: "result",
+        readiness: "ready",
+        adjustment: { active: Object.values(expected).some((value) => value > 0) },
       });
-      expect(snapshot.derived.assessment).not.toBeNull();
       expect(snapshot.issues).toEqual([]);
     },
   );
 
   it("keeps expected unconfirmed funds provisional and discards them on Apply", () => {
     const runtime = completedRuntime();
-    const baseline = runtime.getSnapshot().derived.assessment;
-
     runtime.send({
       type: "set_plan_adjustment",
       patch: { expected_unconfirmed_funds_cents: 456_789 },
@@ -199,7 +210,13 @@ describe("Household Runway Runtime Plan Adjustment boundary", () => {
 
     const afterApply = runtime.getSnapshot();
     expect(adjustmentFrom(runtime).expected_unconfirmed_funds_cents).toBe(0);
-    expect(afterApply.derived.assessment?.adjustments.expected_unconfirmed_funds_cents).toBe(0);
-    expect(afterApply.derived.planInputs).toEqual(baseline?.answers);
+    expect(afterApply.screen).toMatchObject({
+      kind: "result",
+      readiness: "ready",
+      adjustment: {
+        active: false,
+        fields: { expectedUnconfirmedFunds: { valueCents: 0 } },
+      },
+    });
   });
 });

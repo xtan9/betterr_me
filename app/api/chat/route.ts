@@ -196,6 +196,7 @@ export async function POST(req: Request) {
       supabase,
       date,
       timezone,
+      principal: auth.principal,
     });
 
     const result = streamText({

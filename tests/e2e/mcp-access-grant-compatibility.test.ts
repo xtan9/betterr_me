@@ -1,14 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  isSupportedLoopbackRegistrationRedirect,
+  validatePublicClientProfile,
+} from "@/e2e/mcp-access-grant-policy";
+import {
   LOOPBACK_HOSTS,
   buildLoopbackUrls,
   buildPublicNativeClientMetadata,
   buildRegistrationNegativeCases,
   grantClientId,
-  isSupportedLoopbackRegistrationRedirect,
-  validatePublicClientProfile,
-} from "@/e2e/mcp-access-grant-policy";
+} from "@/e2e/mcp-access-grant-journey";
 import {
   browserUrlCredentialEvidence,
   classifyAuthorizationOutcome,

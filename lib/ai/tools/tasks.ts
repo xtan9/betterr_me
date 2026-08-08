@@ -1,10 +1,16 @@
 import { z } from "zod";
 import { TasksDB } from "@/lib/db";
 import type { RecurrenceRule } from "@/lib/db";
+import type { Task } from "@/lib/db/types";
 import {
   createTaskWrites,
   taskDeletionErrorMessage,
 } from "@/lib/tasks/writes";
+import {
+  TaskCoverageUnavailableError,
+  type TaskReadQuery,
+} from "@/lib/tasks/query";
+import { createSupabaseTaskQuery } from "@/lib/tasks/supabase-query";
 import {
   createActivatedRecurringTaskLifecycle,
   createAuthenticatedRecurringTaskCapabilities,
@@ -16,11 +22,6 @@ import {
   toOccurrenceEditIntent,
 } from "@/lib/recurring-tasks/occurrence-adapter";
 import { createSupabaseOccurrenceAdapter } from "@/lib/recurring-tasks/supabase-occurrence-adapter";
-import {
-  ensureRecurringTaskCoverage,
-  RecurringCoverageUnavailableError,
-  taskReadCoverageRange,
-} from "@/lib/recurring-tasks/coverage";
 import { addLocalDays } from "@/lib/recurring-tasks/recurrence";
 import {
   createSupabaseSeriesStateAdapter,
@@ -152,12 +153,7 @@ export function taskTools(): ToolDefinition[] {
         date: z.string().describe("Date in YYYY-MM-DD format"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        await ensureAiRecurringCoverage(ctx, taskReadCoverageRange({
-          view: "today",
-          date: params.date,
-        })!);
-        const db = new TasksDB(ctx.supabase);
-        return db.getTodayTasks(ctx.userId, params.date);
+        return readAiTasks(ctx, { type: "today", date: params.date });
       },
     },
     {
@@ -171,13 +167,11 @@ export function taskTools(): ToolDefinition[] {
           .describe("Number of days to look ahead (default 7)"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        await ensureAiRecurringCoverage(ctx, taskReadCoverageRange({
-          view: "upcoming",
+        return readAiTasks(ctx, {
+          type: "upcoming",
           date: params.date,
           days: params.days,
-        })!);
-        const db = new TasksDB(ctx.supabase);
-        return db.getUpcomingTasks(ctx.userId, params.date, params.days);
+        });
       },
     },
     {
@@ -187,12 +181,7 @@ export function taskTools(): ToolDefinition[] {
         date: z.string().describe("Current date in YYYY-MM-DD format"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        await ensureAiRecurringCoverage(ctx, taskReadCoverageRange({
-          view: "overdue",
-          date: params.date,
-        })!);
-        const db = new TasksDB(ctx.supabase);
-        return db.getOverdueTasks(ctx.userId, params.date);
+        return readAiTasks(ctx, { type: "overdue", date: params.date });
       },
     },
     {
@@ -624,18 +613,22 @@ function recurringTaskCapabilities(ctx: ToolContext) {
   });
 }
 
-async function ensureAiRecurringCoverage(
+async function readAiTasks(
   ctx: ToolContext,
-  range: { from: string; to: string },
-): Promise<void> {
-  const coverage = await ensureRecurringTaskCoverage(
-    ctx.supabase,
-    ctx.userId,
-    range,
-  );
-  if (coverage.status === "partial") {
-    throw new RecurringCoverageUnavailableError(coverage.warning);
+  request: Exclude<TaskReadQuery, { type: "list" }>,
+): Promise<Task[]> {
+  if (!ctx.principal) {
+    throw new Error("Authenticated principal required for AI task reads");
   }
+
+  const result = await createSupabaseTaskQuery(ctx.supabase, ctx.principal).read(
+    request,
+    { onIncomplete: "fail" },
+  );
+  if (result.completeness && result.completeness.status !== "complete") {
+    throw new TaskCoverageUnavailableError(result.completeness);
+  }
+  return result.tasks;
 }
 
 function toSeriesScopeInput(input: {
