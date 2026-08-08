@@ -121,10 +121,16 @@ describe("Household Runway Plan Adjustment policy", () => {
   });
 
   it("normalizes stored values without applying relative limits", () => {
+    const hostile = {
+      [Symbol.toPrimitive]() {
+        throw new Error("unusable stored value");
+      },
+    };
+
     expect(
       normalizeStoredHouseholdRunwayPlanAdjustment({
         expense_reduction_cents: 900_000.5,
-        added_cash_cents: -1,
+        added_cash_cents: hostile as unknown as number,
         added_monthly_income_cents: Number.POSITIVE_INFINITY,
       }),
     ).toEqual(
@@ -163,16 +169,24 @@ describe("Household Runway Plan Adjustment policy", () => {
     expect(
       normalizeHouseholdRunwayPlanAdjustmentIntent({
         patch: {
-          expense_reduction_cents: 1,
+          expense_reduction_cents: GLOBAL_MAX_CENTS,
           added_cash_cents: GLOBAL_MAX_CENTS,
-          usable_illiquid_investments_cents: 1,
+          added_monthly_income_cents: GLOBAL_MAX_CENTS,
+          expected_unconfirmed_funds_cents: GLOBAL_MAX_CENTS,
+          usable_illiquid_investments_cents: GLOBAL_MAX_CENTS,
+          usable_retirement_tax_deferred_cents: GLOBAL_MAX_CENTS,
+          usable_retirement_tax_free_cents: GLOBAL_MAX_CENTS,
         },
         planInputs: null,
       }),
     ).toEqual({
       expense_reduction_cents: 0,
       added_cash_cents: GLOBAL_MAX_CENTS,
+      added_monthly_income_cents: GLOBAL_MAX_CENTS,
+      expected_unconfirmed_funds_cents: GLOBAL_MAX_CENTS,
       usable_illiquid_investments_cents: 0,
+      usable_retirement_tax_deferred_cents: 0,
+      usable_retirement_tax_free_cents: 0,
     });
   });
 
