@@ -1,12 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   initialSeriesCoverage,
+  executeSeriesCompatibilityIntent,
+  isSeriesCompatibilitySuccess,
   toCreateSeriesCommand,
   toLifecycleRecurrenceDates,
   toReviseSeriesCommand,
   toSeriesStateCommand,
   toRecurringTaskResponse,
+  type SeriesCompatibilityCommandPort,
   type SeriesCreationCompatibilityInput,
 } from "@/lib/recurring-tasks/compatibility";
 import type {
@@ -54,6 +57,330 @@ function publicSeries(): SeriesProjection {
 }
 
 describe("recurring task compatibility", () => {
+  it("executes an omitted-date pause through only the matching command", async () => {
+    const outcome = {
+      type: "paused" as const,
+      status: "complete" as const,
+      operation: "recurring-task.series.pause" as const,
+      operationId: "pause-operation",
+      series: publicSeries(),
+    };
+    const pauseSeries = vi.fn().mockResolvedValue(outcome);
+    const commands: SeriesCompatibilityCommandPort = {
+      reviseSeries: vi.fn(),
+      pauseSeries,
+      resumeSeries: vi.fn(),
+      endSeries: vi.fn(),
+    };
+
+    const result = await executeSeriesCompatibilityIntent(commands, {
+      type: "pause",
+      command: {
+        operationId: "pause-operation",
+        seriesId: "series-1",
+        version: publicSeries().version,
+      },
+      referenceDate: "2026-08-08",
+    });
+
+    expect(result).toBe(outcome);
+    expect(pauseSeries).toHaveBeenCalledTimes(1);
+    expect(pauseSeries).toHaveBeenCalledWith({
+      operationId: "pause-operation",
+      seriesId: "series-1",
+      version: publicSeries().version,
+      effectiveDate: "2026-08-08",
+    });
+    expect(commands.reviseSeries).not.toHaveBeenCalled();
+    expect(commands.resumeSeries).not.toHaveBeenCalled();
+    expect(commands.endSeries).not.toHaveBeenCalled();
+  });
+
+  it("passes operation, Series, version, and explicit date values through unchanged", async () => {
+    const pauseSeries = vi.fn().mockResolvedValue({
+      type: "paused",
+      status: "complete",
+      operation: "recurring-task.series.pause",
+      operationId: "opaque operation",
+      series: publicSeries(),
+    });
+    const commands: SeriesCompatibilityCommandPort = {
+      reviseSeries: vi.fn(),
+      pauseSeries,
+      resumeSeries: vi.fn(),
+      endSeries: vi.fn(),
+    };
+    const version = "opaque version/token" as SeriesVersion;
+
+    await executeSeriesCompatibilityIntent(commands, {
+      type: "pause",
+      command: {
+        operationId: "opaque operation",
+        seriesId: " series/opaque id ",
+        version,
+        effectiveDate: "2026-08-08",
+      },
+      referenceDate: "2026-08-01",
+    });
+
+    expect(pauseSeries).toHaveBeenCalledWith({
+      operationId: "opaque operation",
+      seriesId: " series/opaque id ",
+      version,
+      effectiveDate: "2026-08-08",
+    });
+  });
+
+  it("executes resume with the explicit date and inclusive requested range", async () => {
+    const outcome = {
+      type: "resumed" as const,
+      status: "already-applied" as const,
+      operation: "recurring-task.series.resume" as const,
+      operationId: "resume-operation",
+      series: publicSeries(),
+    };
+    const resumeSeries = vi.fn().mockResolvedValue(outcome);
+    const commands: SeriesCompatibilityCommandPort = {
+      reviseSeries: vi.fn(),
+      pauseSeries: vi.fn(),
+      resumeSeries,
+      endSeries: vi.fn(),
+    };
+
+    const result = await executeSeriesCompatibilityIntent(commands, {
+      type: "resume",
+      command: {
+        operationId: "resume-operation",
+        seriesId: "series-1",
+        version: publicSeries().version,
+        effectiveDate: "2026-08-09",
+      },
+      referenceDate: "2026-08-01",
+    });
+
+    expect(result).toBe(outcome);
+    expect(resumeSeries).toHaveBeenCalledTimes(1);
+    expect(resumeSeries).toHaveBeenCalledWith({
+      operationId: "resume-operation",
+      seriesId: "series-1",
+      version: publicSeries().version,
+      effectiveDate: "2026-08-09",
+      coverage: { from: "2026-08-09", to: "2026-08-16" },
+    });
+    expect(commands.reviseSeries).not.toHaveBeenCalled();
+    expect(commands.pauseSeries).not.toHaveBeenCalled();
+    expect(commands.endSeries).not.toHaveBeenCalled();
+  });
+
+  it("resolves an omitted resume date from its reference date", async () => {
+    const resumeSeries = vi.fn().mockResolvedValue({
+      type: "resumed",
+      status: "complete",
+      operation: "recurring-task.series.resume",
+      operationId: "resume-reference",
+      series: publicSeries(),
+    });
+    const commands: SeriesCompatibilityCommandPort = {
+      reviseSeries: vi.fn(),
+      pauseSeries: vi.fn(),
+      resumeSeries,
+      endSeries: vi.fn(),
+    };
+
+    await executeSeriesCompatibilityIntent(commands, {
+      type: "resume",
+      command: {
+        operationId: "resume-reference",
+        seriesId: "series-1",
+        version: publicSeries().version,
+      },
+      referenceDate: "2026-08-12",
+    });
+
+    expect(resumeSeries).toHaveBeenCalledWith({
+      operationId: "resume-reference",
+      seriesId: "series-1",
+      version: publicSeries().version,
+      effectiveDate: "2026-08-12",
+      coverage: { from: "2026-08-12", to: "2026-08-19" },
+    });
+  });
+
+  it("executes an omitted-date end through only the matching command", async () => {
+    const outcome = {
+      type: "ended" as const,
+      status: "complete" as const,
+      operation: "recurring-task.series.end" as const,
+      operationId: "end-operation",
+      series: publicSeries(),
+    };
+    const endSeries = vi.fn().mockResolvedValue(outcome);
+    const commands: SeriesCompatibilityCommandPort = {
+      reviseSeries: vi.fn(),
+      pauseSeries: vi.fn(),
+      resumeSeries: vi.fn(),
+      endSeries,
+    };
+
+    const result = await executeSeriesCompatibilityIntent(commands, {
+      type: "end",
+      command: {
+        operationId: "end-operation",
+        seriesId: "series-1",
+        version: publicSeries().version,
+      },
+      referenceDate: "2026-08-10",
+    });
+
+    expect(result).toBe(outcome);
+    expect(endSeries).toHaveBeenCalledTimes(1);
+    expect(endSeries).toHaveBeenCalledWith({
+      operationId: "end-operation",
+      seriesId: "series-1",
+      version: publicSeries().version,
+      effectiveDate: "2026-08-10",
+    });
+    expect(commands.reviseSeries).not.toHaveBeenCalled();
+    expect(commands.pauseSeries).not.toHaveBeenCalled();
+    expect(commands.resumeSeries).not.toHaveBeenCalled();
+  });
+
+  it("executes revision intent through only the matching command", async () => {
+    const outcome = {
+      type: "revised" as const,
+      status: "complete" as const,
+      operation: "recurring-task.series.revise" as const,
+      operationId: "revise-operation",
+      series: publicSeries(),
+    };
+    const reviseSeries = vi.fn().mockResolvedValue(outcome);
+    const commands: SeriesCompatibilityCommandPort = {
+      reviseSeries,
+      pauseSeries: vi.fn(),
+      resumeSeries: vi.fn(),
+      endSeries: vi.fn(),
+    };
+
+    const result = await executeSeriesCompatibilityIntent(commands, {
+      type: "revise",
+      command: {
+        operationId: "revise-operation",
+        seriesId: "series-1",
+        version: publicSeries().version,
+        effectiveDate: "2026-08-11",
+        title: "Updated review",
+        dueTime: "09:00",
+      },
+    });
+
+    expect(result).toBe(outcome);
+    expect(reviseSeries).toHaveBeenCalledTimes(1);
+    expect(reviseSeries).toHaveBeenCalledWith({
+      operationId: "revise-operation",
+      seriesId: "series-1",
+      version: publicSeries().version,
+      effectiveDate: "2026-08-11",
+      defaults: { title: "Updated review", dueTime: "09:00:00" },
+    });
+    expect(commands.pauseSeries).not.toHaveBeenCalled();
+    expect(commands.resumeSeries).not.toHaveBeenCalled();
+    expect(commands.endSeries).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      type: "validation",
+      status: "validation",
+      operation: "recurring-task.series.pause",
+      operationId: "pause-validation",
+      reason: "invalid command",
+    },
+    {
+      type: "not-found",
+      status: "not-found",
+      operation: "recurring-task.series.pause",
+      operationId: "pause-not-found",
+    },
+    {
+      type: "conflict",
+      status: "conflict",
+      operation: "recurring-task.series.pause",
+      operationId: "pause-conflict",
+    },
+    {
+      type: "invalid-transition",
+      status: "invalid-transition",
+      operation: "recurring-task.series.pause",
+      operationId: "pause-invalid-transition",
+      reason: "already ended",
+    },
+    {
+      type: "coverage-unavailable",
+      status: "coverage-unavailable",
+      operation: "recurring-task.series.pause",
+      operationId: "pause-coverage",
+      requestedRange: { from: "2026-08-08", to: "2026-08-15" },
+      reason: "coverage unavailable",
+    },
+  ] as const)("returns the typed $type outcome unchanged", async (failure) => {
+    const pauseSeries = vi.fn().mockResolvedValue(failure);
+    const commands: SeriesCompatibilityCommandPort = {
+      reviseSeries: vi.fn(),
+      pauseSeries,
+      resumeSeries: vi.fn(),
+      endSeries: vi.fn(),
+    };
+
+    const result = await executeSeriesCompatibilityIntent(commands, {
+      type: "pause",
+      command: {
+        operationId: failure.operationId,
+        seriesId: "series-1",
+        version: publicSeries().version,
+        effectiveDate: "2026-08-08",
+      },
+      referenceDate: "2026-08-01",
+    });
+
+    expect(result).toBe(failure);
+  });
+
+  it("leaves thrown command errors unchanged", async () => {
+    const cause = new Error("command failed");
+    const commands: SeriesCompatibilityCommandPort = {
+      reviseSeries: vi.fn(),
+      pauseSeries: vi.fn().mockRejectedValue(cause),
+      resumeSeries: vi.fn(),
+      endSeries: vi.fn(),
+    };
+
+    await expect(
+      executeSeriesCompatibilityIntent(commands, {
+        type: "pause",
+        command: {
+          operationId: "pause-error",
+          seriesId: "series-1",
+          version: publicSeries().version,
+          effectiveDate: "2026-08-08",
+        },
+        referenceDate: "2026-08-01",
+      }),
+    ).rejects.toBe(cause);
+  });
+
+  it.each(["complete", "already-applied"] as const)(
+    "classifies a %s result as compatibility success",
+    (status) => {
+      expect(isSeriesCompatibilitySuccess({
+        type: "paused",
+        status,
+        operation: "recurring-task.series.pause",
+        operationId: "pause-success",
+        series: publicSeries(),
+      })).toBe(true);
+    },
+  );
+
   it("maps legacy creation fields to an owned capability command", () => {
     const input: SeriesCreationCompatibilityInput = {
       operationId: "series-create-1",
