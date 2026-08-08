@@ -1,7 +1,7 @@
 import {
   LOOPBACK_HOSTS,
   type LoopbackHost,
-} from "./mcp-access-grant-policy";
+} from "./mcp-access-grant-journey";
 
 const DEFAULT_ANON_KEY_ENV = "MCP_SUPABASE_ANON_KEY";
 const DEFAULT_EMAIL_ENV = "MCP_TEST_EMAIL";
