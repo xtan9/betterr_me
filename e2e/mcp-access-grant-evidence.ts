@@ -200,7 +200,7 @@ const SAFE_KEYS = new Set([
   "rootReplayDetected", "everyIssuedDescendantRejected", "familyMemberCountExercised", "familyResults", "grantCount",
   "registeredClientIdPresent", "grant", "grantStatus", "grantRevoked", "grantIdentified", "revokeEndpointObserved", "requestStatus",
   "accessTokenHasIssuedAt", "accessTokenHasExpiry", "documentedLifetimeSeconds", "secondsRemaining", "withinDocumentedLifetime",
-  "operationStatus", "accessTokenLifetime", "cases", "id", "responseType", "callbackHost", "callbackPath",
+  "operationStatus", "accessTokenLifetime", "cases", "id", "responseType", "callbackHost", "callbackPath", "rejectedCount", "authorizedCount",
   "tokenRequestObserved", "initial", "firstDescendant", "secondDescendant", "familyResults", "grantRevoked",
 ]);
 const SENSITIVE_KEY = /^(?:access_token|refresh_token|id_token|client_secret|code_verifier|password|cookie|authorization|secret|token|code)$/i;

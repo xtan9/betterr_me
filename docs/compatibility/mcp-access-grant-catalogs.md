@@ -87,3 +87,25 @@ gate, with the fixed public leaf and aggregate order preserved.
 
 No live adapter invokes these new producers yet. The operation remains a
 deterministic integration-branch capability until the planned atomic cutover.
+
+## Issue #912 aggregate compatibility evidence
+
+`e2e/mcp-access-grant-aggregate-profile.ts` adds the aggregate
+`runAggregateCompatibilityEvidence` operation. Each invocation owns one private
+session and gives its callback two source-bound recorder ports: the
+compatibility recorder is authoritative, while the public-client recorder can
+submit only closed shadow resource/provider discovery observations. Public
+shadow discovery is retained as context but cannot decide the shared gates.
+
+The operation derives the core compatibility profile in fixed order through
+discovery, registration, authorization, loopback, S256 PKCE, protocol-negative
+proofs, delegated-token verification, and an authenticated MCP operation.
+Credential presence is computed from bounded primitive response surfaces, and
+issuer, resource, client, grant, signing-key, and sampled-time context is
+derived by the deterministic kernel. Family identity and conclusion fields are
+rejected at both recorder layers.
+
+Refresh, grant revocation, post-revocation behavior, cleanup, and the nested
+public journey remain explicit `not-proven` gates in catalog order. No live
+adapter invokes this operation yet; its deterministic aggregate goldens are
+the evidence boundary for this slice.
