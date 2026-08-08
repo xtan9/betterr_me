@@ -3,7 +3,7 @@ import { authenticateRequest } from '@/lib/auth/authenticated-request';
 import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { getLocalDateString } from '@/lib/utils';
 import { log } from '@/lib/logger';
-import { createSupabaseDashboardSnapshot } from '@/lib/dashboard/supabase-dashboard-snapshot';
+import { createSupabaseDashboardQuery } from '@/lib/dashboard/supabase-query';
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ['cookie'],
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
           { status: 500 },
         );
     }
-    const { principal: { userId }, client: supabase } = auth;
+    const { client: supabase } = auth;
 
     const searchParams = request.nextUrl.searchParams;
     const date = searchParams.get('date') || getLocalDateString();
@@ -47,10 +47,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const outcome = await createSupabaseDashboardSnapshot(supabase).load({
-      userId,
-      date,
-    });
+    const outcome = await createSupabaseDashboardQuery(
+      supabase,
+      auth.principal,
+    ).read({ date }, { onIncomplete: 'return-available' });
     if (outcome.status === 'failed') {
       return NextResponse.json(
         { error: 'Failed to fetch dashboard data' },
