@@ -197,18 +197,31 @@ begin
   if not failed
      or (select is_completed from public.tasks
          where id = '68200000-0000-0000-0000-000000000103')
-         is distinct from false
-     or exists (
-       select 1 from public.recurring_task_idempotency
-       where user_id = '68200000-0000-0000-0000-000000000001'
-         and operation_key = 'task-rollback-682'
-     ) then
+         is distinct from false then
     raise exception 'Task Command failure did not roll back the ordinary write';
   end if;
 end
 $rollback$;
 
 rollback to savepoint task_command_rollback_682;
+do $rollback_hidden_state$
+declare
+  replay jsonb;
+begin
+  replay := public.task_command_replay(
+    'complete',
+    jsonb_build_object(
+      'userId', '68200000-0000-0000-0000-000000000001',
+      'taskId', '68200000-0000-0000-0000-000000000103',
+      'idempotencyKey', 'task-rollback-682'
+    )
+  );
+  if replay->>'status' <> 'not-found'
+     or replay->>'type' <> 'not-found' then
+    raise exception 'Task Command failure persisted hidden idempotency state: %', replay;
+  end if;
+end
+$rollback_hidden_state$;
 do $rollback_retry$
 declare
   outcome jsonb;
