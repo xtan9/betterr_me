@@ -19,6 +19,26 @@ describe("MCP access-grant evidence architecture", () => {
     expect(kernel).toMatch(/export function verifyEvidence/);
   });
 
+  it("keeps the public-client Candidate 2 boundary deterministic and source-bound", () => {
+    const profile = source("e2e/mcp-access-grant-public-client-profile.ts");
+    const adapters = [
+      source("e2e/mcp-access-grant-public-client.ts"),
+      source("e2e/mcp-access-grant-compatibility.ts"),
+    ];
+    const factBoundaryStart = profile.indexOf("export type PublicClientFact");
+    const factBoundaryEnd = profile.indexOf("export type PublicClientNegativeRegistrationCase");
+    const factBoundary = profile.slice(factBoundaryStart, factBoundaryEnd);
+
+    expect(profile).not.toMatch(/@playwright\/test|@modelcontextprotocol|@supabase\/supabase-js/);
+    expect(profile).not.toMatch(/node:(?:child_process|fs|http|net|timers|worker_threads)/);
+    expect(profile).not.toMatch(/mcp-access-grant-(?:public-client|compatibility)\.ts/);
+    expect(profile).toMatch(/export async function runPublicClientEvidence/);
+    expect(profile).toMatch(/requiredGateIds: PUBLIC_CLIENT_PROFILE\.expandedGateIds/);
+    expect(factBoundary).not.toMatch(/\b(?:profile|source|gateId|outcome)\s*:/);
+    expect(factBoundary).not.toMatch(/\bstatus\s*:/);
+    expect(adapters.join("\n")).not.toMatch(/mcp-access-grant-public-client-profile/);
+  });
+
   it("leaves live capabilities, journey sequencing, and suite manifests in the adapters", () => {
     const adapters = [
       source("e2e/mcp-access-grant-public-client.ts"),
