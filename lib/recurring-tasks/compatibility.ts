@@ -209,7 +209,7 @@ export type SeriesCompatibilityCommandPort = Pick<
 export type SeriesCompatibilityIntent =
   | {
       type: "revise";
-      command: SeriesRevisionCompatibilityInput;
+      command: ReviseSeriesCommand;
     }
   | {
       type: "pause";
@@ -233,13 +233,13 @@ export type SeriesCompatibilityResult =
   | ResumeSeriesResult
   | EndSeriesResult;
 
-/** Execute one selected Series status intent through the authenticated port. */
+/** Execute one selected Series mutation intent through the authenticated port. */
 export async function executeSeriesCompatibilityIntent(
   commands: SeriesCompatibilityCommandPort,
   intent: SeriesCompatibilityIntent,
 ): Promise<SeriesCompatibilityResult> {
   if (intent.type === "revise") {
-    return commands.reviseSeries(toSeriesRevisionExecutionCommand(intent.command));
+    return commands.reviseSeries(intent.command);
   }
   if (intent.type === "pause") {
     return commands.pauseSeries(
@@ -288,19 +288,6 @@ function toSeriesStateExecutionCommand(
     version: input.version,
     effectiveDate,
     ...(coverage === undefined ? {} : { coverage }),
-  };
-}
-
-function toSeriesRevisionExecutionCommand(
-  input: SeriesRevisionCompatibilityInput,
-): ReviseSeriesCommand {
-  const command = toReviseSeriesCommand(input);
-  return {
-    ...command,
-    operationId: input.operationId,
-    seriesId: input.seriesId,
-    version: input.version,
-    effectiveDate: input.effectiveDate,
   };
 }
 

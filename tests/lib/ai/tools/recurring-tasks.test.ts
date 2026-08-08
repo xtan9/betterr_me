@@ -250,6 +250,26 @@ describe("recurring task tools", () => {
     expect(names).toContain("deleteRecurringTask");
   });
 
+  it("requires an explicit formatted Scheduled Date for revisions", () => {
+    const parameters = findTool("updateRecurringTask").parameters;
+    const common = {
+      operationId: "ai-revision-schema",
+      recurringTaskId: "rt1",
+      version: "rt-series-v1.test-version",
+      title: "Updated title",
+    };
+
+    expect(parameters.safeParse(common).success).toBe(false);
+    expect(parameters.safeParse({
+      ...common,
+      effectiveDate: "not-a-date",
+    }).success).toBe(false);
+    expect(parameters.safeParse({
+      ...common,
+      effectiveDate: "2026-04-11",
+    }).success).toBe(true);
+  });
+
   it("getRecurringTasks reads through the authenticated query capability", async () => {
     const ctx = makeCtx();
     const result = await findTool("getRecurringTasks").execute(

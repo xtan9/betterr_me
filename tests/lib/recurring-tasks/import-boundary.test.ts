@@ -100,11 +100,17 @@ describe("recurring lifecycle import boundary", () => {
 
     expect(compatibility).toContain("SeriesCompatibilityCommandPort");
     expect(compatibility).toContain("executeSeriesCompatibilityIntent");
+    expect(compatibility).toContain("return commands.reviseSeries(intent.command)");
+    expect(compatibility).not.toContain("toSeriesRevisionExecutionCommand");
+    expect(http).toContain("command: toReviseSeriesCommand({");
+    expect(ai).toContain("command: toReviseSeriesCommand({");
     expect(compatibilityImports).not.toMatch(
       /(?:Supabase|NextRequest|NextResponse|authenticate|AuthenticatedPrincipal|SeriesQueries|logger|persistence|lifecycle)/i,
     );
     expect(http).not.toMatch(/seriesCommands\.(?:pause|resume|end)Series\s*\(/);
     expect(ai).not.toMatch(/seriesCommands\.(?:pause|resume|end)Series\s*\(/);
+    expect(http).not.toMatch(/seriesCommands\.reviseSeries\s*\(/);
+    expect(ai).not.toMatch(/seriesCommands\.reviseSeries\s*\(/);
     expect(http).not.toContain("addLocalDays(");
     expect(ai).not.toContain("addLocalDays(");
   });
@@ -203,7 +209,8 @@ describe("recurring lifecycle import boundary", () => {
     expect(sidebarRoute).not.toContain("createAuthenticatedRecurringTaskCapabilities");
     expect(sidebarQuery).toContain("createSidebarCountsQuery");
     expect(sidebarQuery).toContain('status: "failed"');
-    expect(sidebarComposition).toContain(
+    expect(sidebarComposition).toContain("createCoverageRead");
+    expect(sidebarComposition).not.toContain(
       "createAuthenticatedRecurringTaskCapabilities",
     );
     expect(sidebarComposition).toContain("createSidebarCountsQuery");
