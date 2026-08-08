@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import type { RecurringLifecycleObserver } from "./observability";
 import { createSupabaseRecurringTaskLifecycle } from "./supabase-lifecycle";
 
 /**
@@ -13,6 +14,10 @@ export const RECURRING_TASK_LIFECYCLE_CUTOVER = Object.freeze({
   mode: "lifecycle",
 } as const);
 
+export interface RecurringTaskLifecycleActivationOptions {
+  observer?: RecurringLifecycleObserver;
+}
+
 /**
  * Return the only lifecycle port that production delivery code may use.
  * Compatibility request/response translation belongs above this function;
@@ -20,6 +25,7 @@ export const RECURRING_TASK_LIFECYCLE_CUTOVER = Object.freeze({
  */
 export function createActivatedRecurringTaskLifecycle(
   supabase: SupabaseClient,
+  options: RecurringTaskLifecycleActivationOptions = {},
 ) {
-  return createSupabaseRecurringTaskLifecycle(supabase);
+  return createSupabaseRecurringTaskLifecycle(supabase, options);
 }

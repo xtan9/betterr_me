@@ -47,6 +47,11 @@ function makeCtx(overrides?: Partial<ToolContext>): ToolContext {
     } as unknown as ToolContext["supabase"],
     date: "2026-04-08",
     timezone: "America/Toronto",
+    principal: {
+      type: "user",
+      userId: "user-123",
+      credential: "cookie",
+    },
     ...overrides,
   };
 }
@@ -72,6 +77,9 @@ describe("taskTools", () => {
         status: "complete",
         type: "complete",
         task: { id: "t1", is_completed: true, status: "done" },
+        series: [],
+        occurrences: [],
+        intentionalAbsences: [],
       },
       error: null,
     });
@@ -112,6 +120,18 @@ describe("taskTools", () => {
     const result = await getTodayTasks.execute({ date: "2026-04-08" }, ctx);
 
     expect(mockGetTodayTasks).toHaveBeenCalledWith("user-123", "2026-04-08");
+    expect(mockRpc).toHaveBeenCalledWith("recurring_task_lifecycle", {
+      p_operation: "ensure-user-coverage",
+      p_request: {
+        userId: "user-123",
+        range: { from: "2026-04-08", to: "2026-04-08" },
+        idempotencyKey: "task-read-coverage:user-123:2026-04-08:2026-04-08",
+        source: "interactive",
+      },
+    });
+    expect(mockRpc.mock.invocationCallOrder[0]).toBeLessThan(
+      mockGetTodayTasks.mock.invocationCallOrder[0],
+    );
     expect(result).toEqual([{ id: "t1", title: "Buy groceries" }]);
   });
 
@@ -129,6 +149,31 @@ describe("taskTools", () => {
         warning: expect.objectContaining({
           code: "recurring_coverage_unavailable",
           requestedRange: { from: "2026-04-08", to: "2026-04-08" },
+        }),
+      });
+    expect(mockGetTodayTasks).not.toHaveBeenCalled();
+  });
+
+  it("maps partial Coverage to the same typed AI failure", async () => {
+    const ctx = makeCtx();
+    const getTodayTasks = taskTools().find((t) => t.name === "getTodayTasks")!;
+    mockRpc.mockResolvedValueOnce({
+      data: {
+        status: "partial",
+        series: [],
+        occurrences: [],
+        intentionalAbsences: [],
+        failedSeriesIds: ["series-2", "series-1"],
+      },
+      error: null,
+    });
+
+    await expect(getTodayTasks.execute({ date: "2026-04-08" }, ctx))
+      .rejects.toMatchObject({
+        name: "RecurringCoverageUnavailableError",
+        completeness: expect.objectContaining({
+          status: "partial",
+          failedSeriesIds: ["series-1", "series-2"],
         }),
       });
     expect(mockGetTodayTasks).not.toHaveBeenCalled();
@@ -255,6 +300,9 @@ describe("taskTools", () => {
       p_request: {
         userId: "user-123",
         range: { from: "2026-04-08", to: "2026-04-22" },
+        idempotencyKey:
+          "task-read-coverage:user-123:2026-04-08:2026-04-22",
+        source: "interactive",
       },
     });
     expect(result).toEqual([{ id: "t1" }]);
