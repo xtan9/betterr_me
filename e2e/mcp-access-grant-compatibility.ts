@@ -61,6 +61,9 @@ import {
 import {
   runPublicClientLoopbackConsentCompatibility,
 } from "./mcp-access-grant-public-client";
+import {
+  COMPATIBILITY_REQUIRED_GATE_IDS as CATALOG_COMPATIBILITY_REQUIRED_GATE_IDS,
+} from "./mcp-access-grant-catalogs";
 
 export type { CompatibilityGate, CompatibilityReport } from "./mcp-access-grant-evidence";
 export {
@@ -86,27 +89,7 @@ interface CallbackResult {
   error?: string;
 }
 
-export const REQUIRED_GATE_IDS = [
-  "resource-discovery",
-  "provider-discovery",
-  "public-client-registration",
-  "authorization-consent",
-  "loopback-pkce",
-  "pkce-negative-proof",
-  "resource-binding-negative",
-  "delegated-token-validation",
-  "delegated-token-negative-boundary",
-  "authenticated-mcp-operation",
-  "refresh-rotation",
-  "refresh-replay-containment",
-  "grant-identification-revocation",
-  "post-revocation-refresh",
-  "post-revocation-access",
-  "cleanup",
-  "reproducible-configuration",
-  "sanitized-evidence",
-  "versions",
-] as const;
+export const REQUIRED_GATE_IDS = CATALOG_COMPATIBILITY_REQUIRED_GATE_IDS;
 
 function addGate(
   gates: GateAccumulator,
