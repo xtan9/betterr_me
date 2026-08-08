@@ -63,9 +63,12 @@ describe("authenticated dashboard query", () => {
     const query = createDashboardQuery(principal, {
       ...createDependencies(events),
       coverage: {
-        ensure: async ({ range: requestedRange }) => {
+        ensure: async (requestedRange) => {
           events.push(`coverage:${requestedRange.from}:${requestedRange.to}`);
-          return completeCoverage();
+          return {
+            ...completeCoverage(),
+            requestedRange,
+          };
         },
       },
     });
@@ -157,14 +160,41 @@ describe("authenticated dashboard query", () => {
     }]);
   });
 
-  it("normalizes thrown Coverage into unavailable completeness before reading", async () => {
+  it("composes Coverage and independent Dashboard warnings in projection order", async () => {
     const events: string[] = [];
-    const query = createDashboardQuery(principal, createDependencies(events, {
+    const completeness = {
+      status: "partial" as const,
+      type: "partial" as const,
+      requestedRange: range,
+      failedSeriesIds: ["series-2", "series-1", "series-2"],
+    };
+    const dependencies = createDependencies(events, {
       ensure: async () => {
         events.push("coverage");
-        throw new Error("coverage failed");
+        return completeness;
       },
-    }));
+    });
+    dependencies.snapshot = {
+      load: async ({ userId, date }) => {
+        events.push(`read:${userId}:${date}`);
+        return {
+          status: "degraded",
+          snapshot,
+          warnings: [
+            {
+              code: "habit_logs_unavailable",
+              message:
+                "Absence data is unavailable because habit logs are temporarily unavailable.",
+            },
+            {
+              code: "milestones_unavailable",
+              message: "Today's milestones are temporarily unavailable.",
+            },
+          ],
+        };
+      },
+    };
+    const query = createDashboardQuery(principal, dependencies);
 
     const result = await query.read({ date: "2026-08-07" }, {
       onIncomplete: "return-available",
@@ -174,20 +204,21 @@ describe("authenticated dashboard query", () => {
     expect(result).toEqual({
       status: "degraded",
       snapshot,
-      completeness: {
-        status: "unavailable",
-        type: "unavailable",
-        requestedRange: range,
-        failedSeriesIds: [],
-        reason: "Coverage could not be ensured",
-      },
+      completeness,
       warnings: [{
+        code: "habit_logs_unavailable",
+        message:
+          "Absence data is unavailable because habit logs are temporarily unavailable.",
+      }, {
         code: "recurring_coverage_unavailable",
         message:
           "Some recurring tasks may not appear because Coverage Horizon is unavailable for the requested range.",
         type: "coverage-unavailable",
         requestedRange: range,
-        failedSeriesIds: [],
+        failedSeriesIds: ["series-1", "series-2"],
+      }, {
+        code: "milestones_unavailable",
+        message: "Today's milestones are temporarily unavailable.",
       }],
     });
   });
