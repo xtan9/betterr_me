@@ -219,4 +219,66 @@ describe("Household Runway Runtime Plan Adjustment boundary", () => {
       },
     });
   });
+
+  it("normalizes hostile values safely across all seven fields", () => {
+    const runtime = completedRuntime();
+    runtime.send({
+      type: "set_plan_adjustment",
+      patch: {
+        expense_reduction_cents: Symbol("expense"),
+        added_cash_cents: Symbol("cash"),
+        added_monthly_income_cents: Symbol("income"),
+        expected_unconfirmed_funds_cents: Symbol("expected"),
+        usable_illiquid_investments_cents: Symbol("illiquid"),
+        usable_retirement_tax_deferred_cents: Symbol("deferred"),
+        usable_retirement_tax_free_cents: Symbol("free"),
+        unknown_field: 999,
+      } as unknown as Partial<RunwayAdjustments>,
+    });
+
+    expect(adjustmentFrom(runtime)).toEqual({
+      expense_reduction_cents: 0,
+      added_cash_cents: 0,
+      added_monthly_income_cents: 0,
+      expected_unconfirmed_funds_cents: 0,
+      usable_illiquid_investments_cents: 0,
+      usable_retirement_tax_deferred_cents: 0,
+      usable_retirement_tax_free_cents: 0,
+    });
+  });
+
+  it("preserves unpatched fields while ignoring unknown fields", () => {
+    const runtime = completedRuntime();
+    runtime.send({
+      type: "set_plan_adjustment",
+      patch: {
+        added_cash_cents: 123_456,
+        added_monthly_income_cents: 234_567,
+      },
+    });
+    runtime.send({
+      type: "set_plan_adjustment",
+      patch: { unknown_field: 999 } as unknown as Partial<RunwayAdjustments>,
+    });
+
+    expect(adjustmentFrom(runtime)).toMatchObject({
+      added_cash_cents: 123_456,
+      added_monthly_income_cents: 234_567,
+    });
+  });
+
+  it("treats a non-object intent patch as an empty partial patch", () => {
+    const runtime = completedRuntime();
+    runtime.send({
+      type: "set_plan_adjustment",
+      patch: { added_cash_cents: 123_456 },
+    });
+    runtime.send({
+      type: "set_plan_adjustment",
+      patch: null as unknown as Partial<RunwayAdjustments>,
+    });
+
+    expect(adjustmentFrom(runtime).added_cash_cents).toBe(123_456);
+    expect(adjustmentFrom(runtime).added_monthly_income_cents).toBe(0);
+  });
 });
