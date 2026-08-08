@@ -79,6 +79,9 @@ export const OWNERSHIP_REGISTRY = [
   // settings/browser gates as the surviving owner modules.
   rule("settings", [/^components\/settings\//, /^app\/(?:dashboard\/settings|api\/(?:current-profile|preferences|profile(?:\/|$)|profile-details|user-time-zone))/, /^lib\/(?:current-profile\.ts|preferences|legacy-telemetry\.ts|profile-preference-cache\.ts|submit-profile-preference-intent\.ts|db\/(?:appearance|current-profile|fitness|localization|notifications|profile-details|profiles|user-time-zone)|hooks\/(?:use-appearance|use-current-profile|use-localization|use-notifications|use-profile-preferences|use-profile-theme|use-timezone)|validations\/(?:preferences|profile))/], fullE2E()),
   rule("cron", [/^app\/api\/(?:cron|email|push|reminder-defaults|reminders)\//, /^hooks\/use-push-notifications\./, /^lib\/cron\//, /^lib\/(?:reminders|push|email)\//, /^lib\/db\/notifications\./, /^lib\/(?:db|validations)\/(?:push-subscriptions|reminder-defaults|reminders)\./], fullE2E()),
+  // Retain ownership for deletion-only diffs while the retired paths still
+  // exist in the base commit used by the change classifier.
+  rule("control-plane", [/^(?:app|components)\/control-plane\//, /^app\/api\/control-plane\//, /^lib\/control-plane\//], fullE2E({ fullTests: true })),
   rule("admin", [/^app\/dashboard\/admin\//, /^components\/admin\//], fullE2E()),
   rule("habits", [/^app\/(?:api\/)?habits\//, /^components\/habits\//, /^lib\/(?:habits\/|db\/habit|hooks\/use-habit|validations\/habit)/], targetedE2E(HABIT_SPECS)),
   rule("tasks", [/^app\/(?:api\/)?(?:projects|recurring-tasks|tasks)\//, /^components\/(?:kanban|projects|tasks)\//, /^lib\/(?:projects|recurring-tasks|tasks)\//, /^lib\/(?:db|validations)\/(?:projects?|recurring-tasks?|tasks?)\./], targetedE2E(TASK_SPECS)),
