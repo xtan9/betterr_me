@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
-import { GET, PATCH, DELETE } from "@/app/api/recurring-tasks/[id]/route";
+import {
+  GET,
+  PATCH,
+  DELETE,
+  resolveHttpReferenceDate,
+} from "@/app/api/recurring-tasks/[id]/route";
 
 const {
   mockReviseSeries,
@@ -73,6 +78,48 @@ import { createClient } from "@/lib/supabase/server";
 const mutationHeaders = (operationId: string) => ({
   "Idempotency-Key": operationId,
   "If-Match": "rt-series-v1.test-version",
+});
+
+describe("HTTP Series reference dates", () => {
+  it("uses the authenticated profile timezone and injected clock", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: { timezone: "America/Los_Angeles" },
+      error: null,
+    });
+    const supabase = {
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({ maybeSingle })),
+        })),
+      })),
+    };
+
+    const referenceDate = await resolveHttpReferenceDate(
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1"),
+      supabase as any,
+      "user-123",
+      () => new Date("2026-08-08T06:00:00.000Z"),
+    );
+
+    expect(referenceDate).toBe("2026-08-07");
+    expect(maybeSingle).toHaveBeenCalledTimes(1);
+  });
+
+  it("honors an explicitly supplied reference date before profile lookup", async () => {
+    const from = vi.fn();
+
+    const referenceDate = await resolveHttpReferenceDate(
+      new NextRequest(
+        "http://localhost:3000/api/recurring-tasks/rt-1?reference_date=2026-08-09",
+      ),
+      { from } as any,
+      "user-123",
+      () => new Date("2026-08-08T06:00:00.000Z"),
+    );
+
+    expect(referenceDate).toBe("2026-08-09");
+    expect(from).not.toHaveBeenCalled();
+  });
 });
 
 describe("GET /api/recurring-tasks/[id]", () => {
@@ -196,7 +243,7 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
 
   it("routes pause and resume actions through typed capabilities", async () => {
     await PATCH(
-      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?action=pause", {
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?action=pause&reference_date=2026-08-07", {
         method: "PATCH",
         headers: mutationHeaders("http-pause-1"),
       }),
@@ -214,6 +261,7 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
       operationId: "http-pause-1",
       seriesId: "rt-1",
       version: "rt-series-v1.test-version",
+      effectiveDate: "2026-08-07",
     });
     expect(mockResumeSeries).toHaveBeenCalledWith({
       operationId: "http-resume-1",
@@ -226,7 +274,7 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
 
   it("routes the end action through the canonical endSeries capability", async () => {
     const response = await PATCH(
-      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?action=end", {
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?action=end&reference_date=2026-08-07", {
         method: "PATCH",
         headers: mutationHeaders("http-end-action-1"),
       }),
@@ -241,7 +289,63 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
       operationId: "http-end-action-1",
       seriesId: "rt-1",
       version: "rt-series-v1.test-version",
+      effectiveDate: "2026-08-07",
     });
+  });
+
+  it("keeps Active-Series desired-status handling in HTTP", async () => {
+    mockGetSeriesQuery.mockResolvedValue({
+      type: "found",
+      operation: "recurring-task.series.get",
+      series: { id: "rt-1", status: "paused" },
+    });
+
+    const resumed = await PATCH(
+      new NextRequest(
+        "http://localhost:3000/api/recurring-tasks/rt-1?reference_date=2026-08-07",
+        {
+          method: "PATCH",
+          headers: mutationHeaders("http-active-paused-1"),
+          body: JSON.stringify({ status: "active" }),
+        },
+      ),
+      { params: Promise.resolve({ id: "rt-1" }) },
+    );
+
+    expect(resumed.status).toBe(200);
+    expect(mockGetSeriesQuery).toHaveBeenCalledWith({ seriesId: "rt-1" });
+    expect(mockResumeSeries).toHaveBeenCalledWith({
+      operationId: "http-active-paused-1",
+      seriesId: "rt-1",
+      version: "rt-series-v1.test-version",
+      effectiveDate: "2026-08-07",
+      coverage: { from: "2026-08-07", to: "2026-08-14" },
+    });
+
+    mockGetSeriesQuery.mockResolvedValue({
+      type: "found",
+      operation: "recurring-task.series.get",
+      series: { id: "rt-1", status: "ended" },
+    });
+    mockResumeSeries.mockClear();
+
+    const rejected = await PATCH(
+      new NextRequest(
+        "http://localhost:3000/api/recurring-tasks/rt-1?reference_date=2026-08-07",
+        {
+          method: "PATCH",
+          headers: mutationHeaders("http-active-ended-1"),
+          body: JSON.stringify({ status: "active" }),
+        },
+      ),
+      { params: Promise.resolve({ id: "rt-1" }) },
+    );
+
+    expect(rejected.status).toBe(400);
+    expect(await rejected.json()).toEqual({
+      error: "Ended Series cannot be resumed",
+    });
+    expect(mockResumeSeries).not.toHaveBeenCalled();
   });
 
   it("maps typed command conflicts and not-found results", async () => {
