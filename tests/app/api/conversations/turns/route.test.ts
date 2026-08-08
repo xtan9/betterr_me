@@ -27,7 +27,7 @@ const initialTurn = {
   turnId: "turn-1",
   userMessage: "Help me make a realistic weekly plan for my goals",
   assistantMessage: "Let's build a plan around your available time.",
-  assistantModel: "gpt-5.4-mini",
+  assistantModel: "gpt-5.3-codex-spark",
 };
 
 function makeRequest(body: unknown) {
@@ -51,7 +51,7 @@ describe("POST /api/conversations/turns", () => {
       title: "Help me make a realistic weekly plan for…",
       messages: [
         { id: "message-1", role: "user" },
-        { id: "message-2", role: "assistant", model: "gpt-5.4-mini" },
+        { id: "message-2", role: "assistant", model: "gpt-5.3-codex-spark" },
       ],
     });
 
@@ -69,7 +69,7 @@ describe("POST /api/conversations/turns", () => {
       turnId: "turn-1",
       userContent: initialTurn.userMessage,
       assistantContent: initialTurn.assistantMessage,
-      assistantModel: "gpt-5.4-mini",
+      assistantModel: "gpt-5.3-codex-spark",
       title: "Help me make a realistic weekly plan for…",
     });
   });

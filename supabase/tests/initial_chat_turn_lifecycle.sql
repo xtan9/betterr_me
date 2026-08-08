@@ -43,7 +43,7 @@ begin
     'foreign-first-turn',
     'This user id is not the caller.',
     'This response must not be persisted.',
-    'gpt-5.4-mini',
+    'gpt-5.3-codex-spark',
     'Foreign turn'
   );
   raise exception 'cross-user initial turn unexpectedly succeeded';
@@ -80,7 +80,7 @@ begin
     'stable-first-turn',
     'Help me plan a balanced week.',
     'Let us start with your fixed commitments.',
-    'gpt-5.4-mini',
+    'gpt-5.3-codex-spark',
     'Help me plan a balanced week.'
   );
 
@@ -89,7 +89,7 @@ begin
     'stable-first-turn',
     'Help me plan a balanced week.',
     'Let us start with your fixed commitments.',
-    'gpt-5.4-mini',
+    'gpt-5.3-codex-spark',
     'Help me plan a balanced week.'
   );
 
@@ -100,7 +100,7 @@ begin
     or jsonb_array_length(first_outcome->'messages') <> 2
     or first_outcome->'messages'->0->>'role' <> 'user'
     or first_outcome->'messages'->1->>'role' <> 'assistant'
-    or first_outcome->'messages'->1->>'model' <> 'gpt-5.4-mini' then
+    or first_outcome->'messages'->1->>'model' <> 'gpt-5.3-codex-spark' then
     raise exception 'initial turn lifecycle outcome was incorrect: first=%, retry=%',
       first_outcome,
       retry_outcome;
@@ -140,7 +140,7 @@ begin
     'stable-first-turn',
     'Changed content must not be accepted.',
     'Let us start with your fixed commitments.',
-    'gpt-5.4-mini',
+    'gpt-5.3-codex-spark',
     'Changed title'
   );
   raise exception 'conflicting retry unexpectedly succeeded';

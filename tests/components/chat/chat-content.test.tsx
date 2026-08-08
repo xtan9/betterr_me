@@ -74,7 +74,6 @@ vi.mock("@/components/chat/chat-input", () => ({
         data-testid="chat-input"
         data-streaming={String(props.isStreaming)}
         data-disabled={String(props.disabled ?? false)}
-        data-model-id={String(props.modelId ?? "")}
       >
         <button
           data-testid="mock-send"
@@ -87,14 +86,6 @@ vi.mock("@/components/chat/chat-input", () => ({
           onClick={() => (props.onStop as () => void)()}
         >
           Stop
-        </button>
-        <button
-          data-testid="mock-model-change"
-          onClick={() =>
-            (props.onModelChange as (modelId: string) => void)("gpt-5.6-sol")
-          }
-        >
-          Change model
         </button>
       </div>
     ),
@@ -420,7 +411,7 @@ describe("ChatContent", () => {
             turnId: "1",
             userMessage: "hello",
             assistantMessage: "hi there",
-            assistantModel: "gpt-5.4-mini",
+            assistantModel: "gpt-5.3-codex-spark",
           }),
         }),
       );
@@ -571,7 +562,7 @@ describe("ChatContent", () => {
             turnId: "1",
             userMessage: "hi",
             assistantMessage: "hello there",
-            assistantModel: "gpt-5.4-mini",
+            assistantModel: "gpt-5.3-codex-spark",
           }),
         }),
       );
@@ -724,7 +715,7 @@ describe("ChatContent", () => {
     );
   });
 
-  it("persists the model selected when the turn was submitted", async () => {
+  it("persists Codex 5.3 Spark for the submitted turn", async () => {
     const msgs = [
       makeMessage("model-turn-id", "user", "hi"),
       makeMessage("2", "assistant", "hello there"),
@@ -739,10 +730,6 @@ describe("ChatContent", () => {
       id: "test-chat",
     });
 
-    let rejectModelUpdate!: (error: Error) => void;
-    const modelUpdate = new Promise<Response>((_resolve, reject) => {
-      rejectModelUpdate = reject;
-    });
     const mockFetch = vi.fn((url: string, init?: RequestInit) => {
       if (
         url === "/api/conversations/conv-model/turns" &&
@@ -754,9 +741,6 @@ describe("ChatContent", () => {
           status: 201,
         });
       }
-      if (url === "/api/conversations/conv-model" && init?.method === "PATCH") {
-        return modelUpdate;
-      }
       return Promise.resolve({
         json: () => Promise.resolve({ messages: [] }),
         ok: true,
@@ -766,20 +750,7 @@ describe("ChatContent", () => {
     vi.stubGlobal("fetch", mockFetch);
 
     const { rerender } = render(<ChatContent conversationId="conv-model" />);
-    fireEvent.click(screen.getByTestId("mock-model-change"));
-    expect(screen.getByTestId("chat-input")).toHaveAttribute(
-      "data-model-id",
-      "gpt-5.6-sol",
-    );
     fireEvent.click(screen.getByTestId("mock-send"));
-
-    rejectModelUpdate(new Error("model update failed"));
-    await waitFor(() =>
-      expect(screen.getByTestId("chat-input")).toHaveAttribute(
-        "data-model-id",
-        "gpt-5.4-mini",
-      ),
-    );
 
     mockUseChat.mockReturnValue({
       messages: msgs,
@@ -800,7 +771,7 @@ describe("ChatContent", () => {
       );
       expect(turnCall).toBeTruthy();
       expect(JSON.parse((turnCall![1] as RequestInit).body as string)).toEqual(
-        expect.objectContaining({ assistantModel: "gpt-5.6-sol" }),
+        expect.objectContaining({ assistantModel: "gpt-5.3-codex-spark" }),
       );
     });
   });
@@ -1012,54 +983,4 @@ describe("ChatContent", () => {
     expect(sidebar).toHaveAttribute("data-active-id", "");
   });
 
-  // --- Model validation on conversation select ---
-
-  it("uses valid stored model when selecting a conversation", () => {
-    mockSwrData.current = {
-      conversations: [
-        { id: "conv-123", title: "Test", model: "gpt-5.6-sol", created_at: "", updated_at: "" },
-      ],
-    };
-    render(<ChatContent />);
-
-    fireEvent.click(screen.getByTestId("sidebar-select"));
-
-    expect(screen.getByTestId("chat-input")).toHaveAttribute(
-      "data-model-id",
-      "gpt-5.6-sol"
-    );
-  });
-
-  it("falls back to default model when stored model is invalid/stale", () => {
-    mockSwrData.current = {
-      conversations: [
-        { id: "conv-123", title: "Test", model: "claude-haiku-4-5", created_at: "", updated_at: "" },
-      ],
-    };
-    render(<ChatContent />);
-
-    fireEvent.click(screen.getByTestId("sidebar-select"));
-
-    // Should fall back to DEFAULT_MODEL_ID, not use the stale "claude-haiku-4-5"
-    expect(screen.getByTestId("chat-input")).toHaveAttribute(
-      "data-model-id",
-      "gpt-5.4-mini"
-    );
-  });
-
-  it("falls back to default model when conversation has no model stored", () => {
-    mockSwrData.current = {
-      conversations: [
-        { id: "conv-123", title: "Test", created_at: "", updated_at: "" },
-      ],
-    };
-    render(<ChatContent />);
-
-    fireEvent.click(screen.getByTestId("sidebar-select"));
-
-    expect(screen.getByTestId("chat-input")).toHaveAttribute(
-      "data-model-id",
-      "gpt-5.4-mini"
-    );
-  });
 });
