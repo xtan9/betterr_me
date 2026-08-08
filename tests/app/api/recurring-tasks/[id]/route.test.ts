@@ -7,16 +7,25 @@ const {
   mockDeleteSeries,
   mockStateFactory,
   mockState,
-  mockGetSeries,
+  mockGetSeriesQuery,
+  mockCreateCapabilities,
+  mockCapabilities,
   mockLifecycle,
-  mockToRecurringTaskCompatibility,
+  mockToRecurringTaskResponse,
 } = vi.hoisted(() => {
   const mockDeleteSeries = vi.fn();
   const mockGetSeries = vi.fn();
+  const mockGetSeriesQuery = vi.fn();
   const mockState = {
     update: vi.fn(),
     pause: vi.fn(),
     resume: vi.fn(),
+  };
+  const mockCreateCapabilities = vi.fn();
+  const mockCapabilities = {
+    seriesCommands: {},
+    seriesQueries: { getSeries: mockGetSeriesQuery },
+    coverage: { ensure: vi.fn() },
   };
   return {
     mockCreateTaskWrites: vi.fn(() => ({ deleteSeries: mockDeleteSeries })),
@@ -24,8 +33,11 @@ const {
     mockStateFactory: vi.fn(() => mockState),
     mockState,
     mockGetSeries,
+    mockGetSeriesQuery,
+    mockCreateCapabilities,
+    mockCapabilities,
     mockLifecycle: { getSeries: mockGetSeries },
-    mockToRecurringTaskCompatibility: vi.fn(),
+    mockToRecurringTaskResponse: vi.fn(),
   };
 });
 
@@ -52,16 +64,17 @@ vi.mock("@/lib/recurring-tasks", async () => {
     ...actual,
     createSupabaseSeriesStateAdapter: mockStateFactory,
     createActivatedRecurringTaskLifecycle: vi.fn(() => mockLifecycle),
+    createAuthenticatedRecurringTaskCapabilities: mockCreateCapabilities,
   };
 });
 
-vi.mock("@/lib/recurring-tasks/creation", async () => {
+vi.mock("@/lib/recurring-tasks/compatibility", async () => {
   const actual = await vi.importActual<
-    typeof import("@/lib/recurring-tasks/creation")
-  >("@/lib/recurring-tasks/creation");
+    typeof import("@/lib/recurring-tasks/compatibility")
+  >("@/lib/recurring-tasks/compatibility");
   return {
     ...actual,
-    toRecurringTaskCompatibility: mockToRecurringTaskCompatibility,
+    toRecurringTaskResponse: mockToRecurringTaskResponse,
   };
 });
 
@@ -73,14 +86,15 @@ describe("GET /api/recurring-tasks/[id]", () => {
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: { id: "user-123" } } })) },
     } as any);
-    mockToRecurringTaskCompatibility.mockImplementation((series) => series);
+    mockCreateCapabilities.mockReturnValue(mockCapabilities);
+    mockToRecurringTaskResponse.mockImplementation((series) => series);
   });
 
   it("should return template by ID", async () => {
     const template = { id: "rt-1", title: "Daily standup" };
-    mockGetSeries.mockResolvedValue({
-      status: "complete",
-      type: "complete",
+    mockGetSeriesQuery.mockResolvedValue({
+      type: "found",
+      operation: "recurring-task.series.get",
       series: template,
     });
 
@@ -94,11 +108,15 @@ describe("GET /api/recurring-tasks/[id]", () => {
 
     expect(response.status).toBe(200);
     expect(data.recurring_task).toEqual(template);
-    expect(mockGetSeries).toHaveBeenCalledWith("user-123", "rt-1");
+    expect(mockGetSeriesQuery).toHaveBeenCalledWith({ seriesId: "rt-1" });
   });
 
   it("should return 404 if not found", async () => {
-    mockGetSeries.mockResolvedValue({ status: "not-found", type: "not-found" });
+    mockGetSeriesQuery.mockResolvedValue({
+      status: "not-found",
+      type: "not-found",
+      operation: "recurring-task.series.get",
+    });
 
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks/nonexistent",
@@ -108,6 +126,27 @@ describe("GET /api/recurring-tasks/[id]", () => {
     });
 
     expect(response.status).toBe(404);
+  });
+
+  it("maps typed detail query failures without inspecting error text", async () => {
+    mockGetSeriesQuery.mockResolvedValue({
+      status: "conflict",
+      type: "conflict",
+      operation: "recurring-task.series.get",
+      reason: "private database detail",
+    });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/recurring-tasks/rt-1",
+    );
+    const response = await GET(request, {
+      params: Promise.resolve({ id: "rt-1" }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: "Recurring task operation conflict",
+    });
   });
 
   it("should return 401 if unauthenticated", async () => {

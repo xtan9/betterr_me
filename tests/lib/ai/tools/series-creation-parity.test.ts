@@ -6,8 +6,9 @@ import { taskTools } from "@/lib/ai/tools/tasks";
 import type { ToolContext } from "@/lib/ai/tools/types";
 
 const {
-  mockCreate,
-  mockCreateSeriesCreation,
+  mockCreateSeries,
+  mockCreateCapabilities,
+  mockToRecurringTaskResponse,
   mockEnsureProfile,
   httpSupabase,
   aiSupabase,
@@ -20,11 +21,13 @@ const {
     },
   };
   const aiSupabase = {};
-  const mockCreate = vi.fn();
-  const mockCreateSeriesCreation = vi.fn(() => ({ create: mockCreate }));
+  const mockCreateSeries = vi.fn();
+  const mockCreateCapabilities = vi.fn();
+  const mockToRecurringTaskResponse = vi.fn();
   return {
-    mockCreate,
-    mockCreateSeriesCreation,
+    mockCreateSeries,
+    mockCreateCapabilities,
+    mockToRecurringTaskResponse,
     mockEnsureProfile: vi.fn(),
     httpSupabase,
     aiSupabase,
@@ -39,11 +42,21 @@ vi.mock("@/lib/db/ensure-profile", () => ({
   ensureProfile: mockEnsureProfile,
 }));
 
-vi.mock("@/lib/recurring-tasks/creation", async () => {
+vi.mock("@/lib/recurring-tasks", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/recurring-tasks")>(
+    "@/lib/recurring-tasks",
+  );
+  return {
+    ...actual,
+    createAuthenticatedRecurringTaskCapabilities: mockCreateCapabilities,
+  };
+});
+
+vi.mock("@/lib/recurring-tasks/compatibility", async () => {
   const actual = await vi.importActual<
-    typeof import("@/lib/recurring-tasks/creation")
-  >("@/lib/recurring-tasks/creation");
-  return { ...actual, createSeriesCreation: mockCreateSeriesCreation };
+    typeof import("@/lib/recurring-tasks/compatibility")
+  >("@/lib/recurring-tasks/compatibility");
+  return { ...actual, toRecurringTaskResponse: mockToRecurringTaskResponse };
 });
 
 const presentedRecurringTask = {
@@ -60,6 +73,7 @@ const presentedRecurringTask = {
   end_date: null,
   end_count: 3,
   status: "active",
+  version: "rt-series-v1.test-version",
   created_at: "2026-08-01T12:00:00.000Z",
   updated_at: "2026-08-01T12:00:00.000Z",
 };
@@ -131,23 +145,35 @@ function lifecycleSeries() {
   };
 }
 
+function capabilitySeries() {
+  const { userId: _userId, revisionToken: _revisionToken, ...projection } =
+    lifecycleSeries();
+  return { ...projection, version: "rt-series-v1.test-version" };
+}
+
 describe("AI and HTTP Series creation parity", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockEnsureProfile.mockResolvedValue(undefined);
-    mockCreate.mockResolvedValue({
-      mode: "lifecycle",
-      outcome: {
-        status: "complete",
-        type: "complete",
-        series: lifecycleSeries(),
-      },
+    mockCreateCapabilities.mockReturnValue({
+      seriesCommands: { createSeries: mockCreateSeries },
+      seriesQueries: { listSeries: vi.fn(), getSeries: vi.fn() },
+      coverage: { ensure: vi.fn() },
+    });
+    mockToRecurringTaskResponse.mockReturnValue(presentedRecurringTask);
+    mockCreateSeries.mockResolvedValue({
+      type: "created",
+      status: "complete",
+      operation: "recurring-task.series.create",
+      operationId: "series-create-1",
+      series: capabilitySeries(),
     });
   });
 
   it("maps equivalent product and AI intents to one shared creation request", async () => {
     const aiResult = await createRecurringTaskTool().execute(
       {
+        operationId: "series-create-1",
         title: "Daily review",
         description: "  Review the plan  ",
         priority: 2,
@@ -163,6 +189,7 @@ describe("AI and HTTP Series creation parity", () => {
     const httpResponse = await POST(
       new NextRequest("http://localhost:3000/api/recurring-tasks", {
         method: "POST",
+        headers: { "Idempotency-Key": "series-create-1" },
         body: JSON.stringify({
           title: "Daily review",
           description: "Review the plan",
@@ -183,41 +210,57 @@ describe("AI and HTTP Series creation parity", () => {
     expect(await httpResponse.json()).toEqual({
       recurring_task: presentedRecurringTask,
     });
-    expect(mockCreateSeriesCreation).toHaveBeenNthCalledWith(1, aiSupabase);
-    expect(mockCreateSeriesCreation).toHaveBeenNthCalledWith(2, httpSupabase);
-    expect(mockCreate.mock.calls).toEqual([
+    expect(mockCreateCapabilities).toHaveBeenNthCalledWith(1, {
+      supabase: aiSupabase,
+      principal: {
+        type: "user",
+        userId: "user-123",
+        credential: "mcp",
+      },
+    });
+    expect(mockCreateCapabilities).toHaveBeenNthCalledWith(2, {
+      supabase: httpSupabase,
+      principal: expect.objectContaining({
+        type: "user",
+        userId: "user-123",
+        credential: "cookie",
+      }),
+    });
+    expect(mockCreateSeries.mock.calls).toEqual([
       [
         {
-          userId: "user-123",
-          title: "Daily review",
-          description: "Review the plan",
-          priority: 2,
-          categoryId: "00000000-0000-0000-0000-000000000001",
-          dueTime: "09:00:00",
+          operationId: "series-create-1",
           recurrenceRule: { frequency: "daily", interval: 1 },
           recurrenceAnchor: "2026-08-01",
           activationDate: "2026-08-01",
-          endType: "after_count",
-          endDate: null,
-          endCount: 3,
-          coverageThrough: "2026-08-08",
+          defaults: {
+            title: "Daily review",
+            description: "Review the plan",
+            priority: 2,
+            categoryId: "00000000-0000-0000-0000-000000000001",
+            dueTime: "09:00:00",
+          },
+          occurrenceLimit: 3,
+          lastScheduledDate: null,
+          coverage: { from: "2026-08-01", to: "2026-08-08" },
         },
       ],
       [
         {
-          userId: "user-123",
-          title: "Daily review",
-          description: "Review the plan",
-          priority: 2,
-          categoryId: "00000000-0000-0000-0000-000000000001",
-          dueTime: "09:00:00",
+          operationId: "series-create-1",
           recurrenceRule: { frequency: "daily", interval: 1 },
           recurrenceAnchor: "2026-08-01",
           activationDate: "2026-08-01",
-          endType: "after_count",
-          endDate: null,
-          endCount: 3,
-          coverageThrough: "2026-08-08",
+          defaults: {
+            title: "Daily review",
+            description: "Review the plan",
+            priority: 2,
+            categoryId: "00000000-0000-0000-0000-000000000001",
+            dueTime: "09:00:00",
+          },
+          occurrenceLimit: 3,
+          lastScheduledDate: null,
+          coverage: { from: "2026-08-01", to: "2026-08-08" },
         },
       ],
     ]);
@@ -264,10 +307,15 @@ describe("AI and HTTP Series creation parity", () => {
   ] as const)(
     "keeps the %s lifecycle outcome typed at each channel boundary",
     async (_name, outcome, expected) => {
-      mockCreate.mockResolvedValue({ mode: "lifecycle", outcome });
+      mockCreateSeries.mockResolvedValue({
+        ...outcome,
+        operation: "recurring-task.series.create",
+        operationId: "series-create-1",
+      });
 
       const aiResult = await createRecurringTaskTool().execute(
         {
+          operationId: "series-create-1",
           title: "Daily review",
           startDate: "2026-08-01",
           recurrenceRule: { frequency: "daily", interval: 1 },
@@ -277,6 +325,7 @@ describe("AI and HTTP Series creation parity", () => {
       const httpResponse = await POST(
         new NextRequest("http://localhost:3000/api/recurring-tasks", {
           method: "POST",
+          headers: { "Idempotency-Key": "series-create-1" },
           body: JSON.stringify({
             title: "Daily review",
             recurrence_rule: { frequency: "daily", interval: 1 },
