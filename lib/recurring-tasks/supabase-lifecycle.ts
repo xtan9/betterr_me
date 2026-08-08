@@ -293,6 +293,7 @@ function isCoverageOperation(
 
 export function createSupabaseRecurringTaskLifecycle(
   supabase: SupabaseClient,
+  options: { observer?: RecurringLifecycleObserver } = {},
 ): SupabaseRecurringTaskLifecycle {
-  return new SupabaseRecurringTaskLifecycle(supabase);
+  return new SupabaseRecurringTaskLifecycle(supabase, options);
 }

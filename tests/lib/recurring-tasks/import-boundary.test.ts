@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const lifecycleBoundarySources = [
+  "app/api/dashboard/route.ts",
   "app/api/tasks/route.ts",
   "app/api/tasks/[id]/route.ts",
   "app/api/tasks/[id]/toggle/route.ts",
@@ -19,7 +20,8 @@ const lifecycleBoundarySources = [
   "lib/recurring-tasks/supabase-series-state-adapter.ts",
   "lib/recurring-tasks/activation.ts",
   "lib/dashboard/dashboard-snapshot.ts",
-  "lib/dashboard/supabase-dashboard-snapshot.ts",
+  "lib/dashboard/query.ts",
+  "lib/dashboard/supabase-query.ts",
   "lib/db/tasks.ts",
   "lib/recurring-tasks/coverage.ts",
 ];
@@ -104,13 +106,47 @@ describe("recurring lifecycle import boundary", () => {
       "utf8",
     );
     const dashboard = readFileSync(
-      resolve(process.cwd(), "lib/dashboard/dashboard-snapshot.ts"),
+      resolve(process.cwd(), "lib/dashboard/query.ts"),
       "utf8",
     );
 
     expect(taskQueries).toMatch(/\.from\(["']tasks["']\)/);
     expect(taskQueries).not.toMatch(/recurring_task_series|virtual|expand/i);
-    expect(dashboard).toContain("ensureRecurringCoverage");
+    expect(dashboard).toContain("dependencies.coverage.ensure");
+    expect(dashboard).toContain("dependencies.snapshot.load");
     expect(dashboard).not.toMatch(/generateRecurringTasks|ensureRecurringInstances/);
+  });
+
+  it("routes date-bounded Task API and AI reads through the focused query", () => {
+    const taskApi = readFileSync(
+      resolve(process.cwd(), "app/api/tasks/route.ts"),
+      "utf8",
+    );
+    const aiTasks = readFileSync(
+      resolve(process.cwd(), "lib/ai/tools/tasks.ts"),
+      "utf8",
+    );
+
+    expect(taskApi).toContain("createSupabaseTaskQuery");
+    expect(aiTasks).toContain("createSupabaseTaskQuery");
+    for (const source of [taskApi, aiTasks]) {
+      expect(source).not.toMatch(
+        /ensureRecurringTaskCoverage|ensureRecurringTaskCoverageThrough|taskReadCoverageRange/,
+      );
+    }
+  });
+
+  it("routes dashboard delivery through the authenticated focused query", () => {
+    const dashboardRoute = readFileSync(
+      resolve(process.cwd(), "app/api/dashboard/route.ts"),
+      "utf8",
+    );
+
+    expect(dashboardRoute).toContain("createSupabaseDashboardQuery");
+    expect(dashboardRoute).toContain('onIncomplete: \'return-available\'');
+    expect(dashboardRoute).not.toMatch(
+      /ensureRecurringTaskCoverage|ensureRecurringTaskCoverageThrough|createSupabaseDashboardSnapshot/,
+    );
+    expect(dashboardRoute).not.toMatch(/new\s+\w+DB\s*\(|\buserId\b/);
   });
 });

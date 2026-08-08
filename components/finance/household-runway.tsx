@@ -50,7 +50,6 @@ import {
   type HouseholdRunwayInterviewIntent,
   type HouseholdRunwayInterviewRuntimeScreen,
   HOUSEHOLD_RUNWAY_DRAFT_RETENTION_DAYS,
-  type HouseholdRunwayReportPresentation,
 } from "@/lib/finance/household-runway-interview-runtime";
 import type { HouseholdRunwayBrowserReportPresentation } from "@/lib/finance/household-runway-browser-adapter";
 import { useHouseholdRunwayRuntime } from "@/lib/finance/household-runway-react-adapter";
@@ -77,18 +76,6 @@ interface HouseholdRunwayProps {
   isAuthenticated: boolean;
   hasSavedPlan: boolean;
   initialSnapshots: RunwaySnapshotSummary[];
-}
-
-function runwayAnswersForPresentation(
-  interviewAnswers: HouseholdRunwayAnswers,
-): HouseholdRunwayAnswers {
-  return {
-    ...interviewAnswers,
-    country: interviewAnswers.country ?? "US",
-    region: interviewAnswers.region ?? "",
-    currency: interviewAnswers.currency ?? "USD",
-    updated_at: interviewAnswers.updated_at ?? "1970-01-01T00:00:00.000Z",
-  } as HouseholdRunwayAnswers;
 }
 
 function interviewValidationMessage(
@@ -161,28 +148,32 @@ export function HouseholdRunway({
   const locale = normalizeRunwayLocale(useLocale());
   const localeRef = useRef(locale);
   const reportPresentationRef = useRef<HouseholdRunwayBrowserReportPresentation | null>(null);
-  const reportPresentation = useCallback(({ assessment, locale: reportLocale }: Parameters<HouseholdRunwayBrowserReportPresentation>[0]): HouseholdRunwayReportPresentation => {
-    const presentationAnswers = runwayAnswersForPresentation(assessment.answers);
+  const reportPresentation = useCallback(({ country, region, currency, locale: reportLocale }: Parameters<HouseholdRunwayBrowserReportPresentation>[0]): ReturnType<HouseholdRunwayBrowserReportPresentation> => {
     return {
-      location: `${presentationAnswers.country} · ${runwayRegionLabel(presentationAnswers.country, presentationAnswers.region, reportLocale) ?? presentationAnswers.region}`,
+      location: `${country} · ${runwayRegionLabel(country, region, reportLocale) ?? region}`,
       formatMoney: (cents) =>
-        formatCents(cents, reportLocale, presentationAnswers.currency),
+        formatCents(cents, reportLocale, currency),
       formatScenario: (scenario) => t(`scenarios.${scenario}`),
       formatSimulation: (simulation) =>
         simulation.sustainable
           ? t("comparison.sustainable")
-          : `${(simulation.months_covered ?? 0).toFixed(1)} ${t("whatIf.months")}`,
+          : `${(simulation.monthsCovered ?? 0).toFixed(1)} ${t("whatIf.months")}`,
       formatCashTarget: (months, cents) =>
-        `${t("actionsPlan.cashTarget", { months })}: ${formatCents(cents, reportLocale, presentationAnswers.currency)}`,
+        `${t("actionsPlan.cashTarget", { months })}: ${formatCents(cents, reportLocale, currency)}`,
       formatLargestReduction: (category, cents) =>
-        `${t("actionsPlan.largest")}: ${t(`expenseCategories.${category}`)} (${formatCents(cents, reportLocale, presentationAnswers.currency)})`,
-      precisionAdvice:
-        presentationAnswers.expense_mode === "quick"
-          ? t("precision.expenses")
-          : presentationAnswers.mine.take_home_source === "estimated" ||
-              presentationAnswers.partner?.take_home_source === "estimated"
-            ? t("precision.takeHome")
-            : t("precision.complete"),
+        `${t("actionsPlan.largest")}: ${t(`expenseCategories.${category}`)} (${formatCents(cents, reportLocale, currency)})`,
+      precisionAdvice: (notice) => {
+        switch (notice) {
+          case "cashNotConfirmed":
+            return t("precision.cash");
+          case "takeHomeEstimated":
+            return t("precision.takeHome");
+          case "quickExpenses":
+            return t("precision.expenses");
+          case "coreInputsComplete":
+            return t("precision.complete");
+        }
+      },
     };
   }, [t]);
   useEffect(() => {
@@ -213,7 +204,6 @@ export function HouseholdRunway({
   const activeExpenseCategory =
     renderModel.kind === "expenses" ? renderModel.activeCategory : null;
   const deviceStorageConsent = snapshot.draft.deviceStorageConsent;
-  const snapshots = snapshot.assessmentHistory;
   const draftSyncOperation = snapshot.operations.draftSynchronization;
   const draftSyncState =
     draftSyncOperation.status === "succeeded"
@@ -229,10 +219,10 @@ export function HouseholdRunway({
         ? "saved"
         : planOperation.status === "failed"
           ? "failed"
-          : planOperation.status === "dirty"
-            ? "dirty"
-            : snapshot.plan.current
-              ? "saved"
+          : snapshot.plan.current
+            ? "saved"
+            : snapshot.interviewStatus === "reviewing"
+              ? "dirty"
               : "idle";
   const saving = planOperation.status === "pending";
   const saved = planOperationState === "saved";
@@ -266,8 +256,7 @@ export function HouseholdRunway({
 
   const landingModel = renderModel.kind === "landing" ? renderModel : null;
   const resumeModel = renderModel.kind === "resume_choice" ? renderModel : null;
-  const resultModel = renderModel.kind === "stage" ? renderModel : null;
-  const assessment = snapshot.derived.assessment ?? resultModel?.assessment ?? null;
+  const resultModel = renderModel.kind === "result" ? renderModel : null;
   const showLanding = hydrated && !isAuthenticated && landingModel !== null;
 
   const startInterview = () => {
@@ -331,7 +320,7 @@ export function HouseholdRunway({
               onPrimary={startInterview}
               onStartOver={startNewInterview}
             />
-          ) : resultModel && assessment ? (
+          ) : resultModel ? (
             <ResultExperience
               t={t}
               locale={locale}
@@ -350,7 +339,6 @@ export function HouseholdRunway({
               saving={saving}
               onSave={savePlan}
               error={error || operationError}
-              snapshots={[...snapshots]}
             />
           ) : (
             <InterviewShell
@@ -362,7 +350,7 @@ export function HouseholdRunway({
               onBack={() => {
                 dispatchInterviewCommand({ type: "back" });
               }}
-              onSkip={snapshot.affordances.skip ? skip : undefined}
+              onSkip={snapshot.actions.skip.applicable ? skip : undefined}
               onContinue={next}
               onClear={clearDraft}
               continueLabel={stepId === "review" ? t("actions.reveal") : t("actions.continue")}
@@ -1418,21 +1406,22 @@ function ReviewStep({
   locale: string;
   model: HouseholdRunwayReviewRenderModel;
 }) {
-  const answers = runwayAnswersForPresentation(
-    model.answers as unknown as HouseholdRunwayAnswers,
-  );
+  const location = model.location;
+  const country = location.country ?? "US";
+  const region = location.region ?? "";
+  const currency = location.currency ?? "USD";
   return (
     <>
       {title}
       <div className="mt-7 grid gap-3 sm:grid-cols-2">
-        <ReviewRow label={t("review.location")} value={`${t(`countries.${answers.country}`)} · ${runwayRegionLabel(answers.country, answers.region, locale) ?? t("confidence.needs_review")} · ${answers.currency}`} status={answers.region ? "confirmed" : "needs_review"} t={t} />
-        <ReviewRow label={t("review.household")} value={t(answers.partner ? "review.twoAdults" : "review.oneAdult")} status="confirmed" t={t} />
-        <ReviewRow label={t("review.cash")} value={formatCents(answers.available_cash.cents, locale, answers.currency)} status={answers.available_cash.confidence} t={t} />
-        <ReviewRow label={t("review.expenses")} value={`${formatCents(model.totals.current, locale, answers.currency)} → ${formatCents(model.totals.interruption, locale, answers.currency)}`} status={answers.expense_mode === "quick" ? answers.quick_expenses.confidence : "confirmed"} t={t} />
-        <ReviewRow label={t("review.income")} value={formatCents(model.monthlyIncomeCents, locale, answers.currency)} status={answers.mine.confidence === "estimated" || answers.partner?.confidence === "estimated" ? "estimated" : "confirmed"} t={t} />
-        <ReviewRow label={t("review.otherIncome")} value={formatCents(model.otherIncomeCents, locale, answers.currency)} status={answers.other_income_sources.length ? "confirmed" : "skipped"} t={t} />
-        <ReviewRow label={t("review.investments")} value={formatCents(answers.assets.liquid_investments.cents, locale, answers.currency)} status={answers.assets.liquid_investments.confidence} t={t} />
-        <ReviewRow label={t("review.lastResort")} value={formatCents(model.excludedAssetCents, locale, answers.currency)} status={model.excludedAssetCents ? "confirmed" : "skipped"} t={t} />
+        <ReviewRow label={t("review.location")} value={`${t(`countries.${country}`)} · ${runwayRegionLabel(country, region, locale) ?? t("confidence.needs_review")} · ${currency}`} status={location.kind === "complete" ? "confirmed" : "needs_review"} t={t} />
+        <ReviewRow label={t("review.household")} value={t(model.household.adultCount === 2 ? "review.twoAdults" : "review.oneAdult")} status={model.household.confidence} t={t} />
+        <ReviewRow label={t("review.cash")} value={formatCents(model.cash.cents, locale, currency)} status={model.cash.confidence} t={t} />
+        <ReviewRow label={t("review.expenses")} value={`${formatCents(model.expenses.currentMonthlyCents, locale, currency)} → ${formatCents(model.expenses.interruptionMonthlyCents, locale, currency)}`} status={model.expenses.confidence} t={t} />
+        <ReviewRow label={t("review.income")} value={formatCents(model.earnedIncome.monthlyCents, locale, currency)} status={model.earnedIncome.confidence} t={t} />
+        <ReviewRow label={t("review.otherIncome")} value={formatCents(model.otherIncome.monthlyCents, locale, currency)} status={model.otherIncome.confidence} t={t} />
+        <ReviewRow label={t("review.investments")} value={formatCents(model.liquidInvestments.cents, locale, currency)} status={model.liquidInvestments.confidence} t={t} />
+        <ReviewRow label={t("review.lastResort")} value={formatCents(model.lastResortAssets.cents, locale, currency)} status={model.lastResortAssets.confidence} t={t} />
       </div>
     </>
   );
