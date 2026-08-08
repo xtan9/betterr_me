@@ -6,16 +6,25 @@ const {
   mockEnsureProfile,
   mockCreateSeries,
   mockListSeries,
-  mockToRecurringTaskCompatibility,
-  mockLifecycle,
+  mockCreateCapabilities,
+  mockToRecurringTaskResponse,
+  mockCapabilities,
 } = vi.hoisted(() => {
   const mockListSeries = vi.fn();
+  const mockCreateSeries = vi.fn();
+  const mockCreateCapabilities = vi.fn();
+  const mockCapabilities = {
+    seriesCommands: { createSeries: mockCreateSeries },
+    seriesQueries: { listSeries: mockListSeries },
+    coverage: { ensure: vi.fn() },
+  };
   return {
     mockEnsureProfile: vi.fn(),
-    mockCreateSeries: vi.fn(),
+    mockCreateSeries,
     mockListSeries,
-    mockToRecurringTaskCompatibility: vi.fn(),
-    mockLifecycle: { listSeries: mockListSeries },
+    mockCreateCapabilities,
+    mockToRecurringTaskResponse: vi.fn(),
+    mockCapabilities,
   };
 });
 
@@ -39,18 +48,17 @@ vi.mock("@/lib/recurring-tasks", async () => {
   );
   return {
     ...actual,
-    createActivatedRecurringTaskLifecycle: vi.fn(() => mockLifecycle),
+    createAuthenticatedRecurringTaskCapabilities: mockCreateCapabilities,
   };
 });
 
-vi.mock("@/lib/recurring-tasks/creation", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/recurring-tasks/creation")>(
-    "@/lib/recurring-tasks/creation",
+vi.mock("@/lib/recurring-tasks/compatibility", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/recurring-tasks/compatibility")>(
+    "@/lib/recurring-tasks/compatibility",
   );
   return {
     ...actual,
-    createSeriesCreation: vi.fn(() => ({ create: mockCreateSeries })),
-    toRecurringTaskCompatibility: mockToRecurringTaskCompatibility,
+    toRecurringTaskResponse: mockToRecurringTaskResponse,
   };
 });
 
@@ -66,22 +74,19 @@ describe("GET /api/recurring-tasks", () => {
         })),
       },
     } as any);
-    mockCreateSeries.mockResolvedValue({
-      mode: "lifecycle",
-      outcome: {
-        status: "complete",
-        type: "complete",
-        series: {},
-      },
-    });
-    mockToRecurringTaskCompatibility.mockImplementation((series) => series);
+    mockCreateCapabilities.mockReturnValue(mockCapabilities);
+    mockToRecurringTaskResponse.mockImplementation((series) => series);
   });
 
   it("should return recurring tasks for authenticated user", async () => {
     const mockTemplates = [
       { id: "rt-1", user_id: "user-123", title: "Daily standup" },
     ];
-    mockListSeries.mockResolvedValue({ series: mockTemplates });
+    mockListSeries.mockResolvedValue({
+      type: "listed",
+      operation: "recurring-task.series.list",
+      series: mockTemplates,
+    });
 
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks",
@@ -91,38 +96,37 @@ describe("GET /api/recurring-tasks", () => {
 
     expect(response.status).toBe(200);
     expect(data.recurring_tasks).toEqual(mockTemplates);
-    expect(mockListSeries).toHaveBeenCalledWith(
-      "user-123",
-      undefined,
-    );
+    expect(mockListSeries).toHaveBeenCalledWith({ status: undefined });
   });
 
   it("should filter by status query param", async () => {
-    mockListSeries.mockResolvedValue({ series: [] });
+    mockListSeries.mockResolvedValue({
+      type: "listed",
+      operation: "recurring-task.series.list",
+      series: [],
+    });
 
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks?status=paused",
     );
     await GET(request);
 
-    expect(mockListSeries).toHaveBeenCalledWith(
-      "user-123",
-      "paused",
-    );
+    expect(mockListSeries).toHaveBeenCalledWith({ status: "paused" });
   });
 
   it("should ignore invalid status param", async () => {
-    mockListSeries.mockResolvedValue({ series: [] });
+    mockListSeries.mockResolvedValue({
+      type: "listed",
+      operation: "recurring-task.series.list",
+      series: [],
+    });
 
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks?status=invalid",
     );
     await GET(request);
 
-    expect(mockListSeries).toHaveBeenCalledWith(
-      "user-123",
-      undefined,
-    );
+    expect(mockListSeries).toHaveBeenCalledWith({ status: undefined });
   });
 
   it("should return 401 if not authenticated", async () => {
@@ -138,15 +142,20 @@ describe("GET /api/recurring-tasks", () => {
     expect(response.status).toBe(401);
   });
 
-  it("should return 500 on internal error", async () => {
-    mockListSeries.mockRejectedValue(new Error("DB fail"));
+  it("maps a typed list validation failure", async () => {
+    mockListSeries.mockResolvedValue({
+      type: "validation",
+      status: "validation",
+      operation: "recurring-task.series.list",
+      reason: "invalid-query",
+    });
 
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks",
     );
     const response = await GET(request);
 
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(400);
   });
 });
 
@@ -161,24 +170,26 @@ describe("POST /api/recurring-tasks", () => {
       },
     } as any);
     mockEnsureProfile.mockResolvedValue(undefined);
+    mockCreateCapabilities.mockReturnValue(mockCapabilities);
     mockCreateSeries.mockResolvedValue({
-      mode: "lifecycle",
-      outcome: {
-        status: "complete",
-        type: "complete",
-        series: {},
-      },
+      type: "created",
+      status: "complete",
+      operation: "recurring-task.series.create",
+      operationId: "operation-1",
+      series: {},
     });
+    mockToRecurringTaskResponse.mockImplementation((series) => series);
   });
 
   it("should create a recurring task with valid body", async () => {
     const created = { id: "rt-1", title: "Read daily" };
-    mockToRecurringTaskCompatibility.mockReturnValue(created);
+    mockToRecurringTaskResponse.mockReturnValue(created);
 
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks",
       {
         method: "POST",
+        headers: { "Idempotency-Key": "operation-1" },
         body: JSON.stringify({
           title: "Read daily",
           recurrence_rule: { frequency: "daily", interval: 1 },
@@ -194,12 +205,101 @@ describe("POST /api/recurring-tasks", () => {
     expect(data.recurring_task).toEqual(created);
     expect(mockCreateSeries).toHaveBeenCalledWith(
       expect.objectContaining({
-        userId: "user-123",
-        title: "Read daily",
+        operationId: "operation-1",
+        defaults: expect.objectContaining({ title: "Read daily" }),
         recurrenceAnchor: "2026-02-01",
         activationDate: "2026-02-01",
       }),
     );
+  });
+
+  it("requires a caller-supplied operation ID", async () => {
+    mockCreateSeries.mockResolvedValue({
+      type: "validation",
+      status: "validation",
+      operation: "recurring-task.series.create",
+      operationId: "",
+      field: "operationId",
+      reason: "Operation ID is required",
+    });
+    const request = new NextRequest(
+      "http://localhost:3000/api/recurring-tasks",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Read daily",
+          recurrence_rule: { frequency: "daily", interval: 1 },
+          start_date: "2026-02-01",
+        }),
+      },
+    );
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(400);
+    expect(mockCreateSeries).toHaveBeenCalledWith(
+      expect.objectContaining({ operationId: "" }),
+    );
+  });
+
+  it("maps typed capability failures without inspecting error text", async () => {
+    mockCreateSeries.mockResolvedValue({
+      type: "conflict",
+      status: "conflict",
+      operation: "recurring-task.series.create",
+      operationId: "operation-1",
+      reason: "private database detail",
+    });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/recurring-tasks",
+      {
+        method: "POST",
+        headers: { "Idempotency-Key": "operation-1" },
+        body: JSON.stringify({
+          title: "Read daily",
+          recurrence_rule: { frequency: "daily", interval: 1 },
+          start_date: "2026-02-01",
+        }),
+      },
+    );
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: "Recurring task creation conflict",
+    });
+  });
+
+  it("returns the authoritative Series on an idempotent replay", async () => {
+    const replayed = { id: "rt-1", title: "Read daily", version: "opaque" };
+    mockCreateSeries.mockResolvedValue({
+      type: "created",
+      status: "already-applied",
+      operation: "recurring-task.series.create",
+      operationId: "operation-1",
+      series: replayed,
+    });
+    mockToRecurringTaskResponse.mockReturnValue(replayed);
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/recurring-tasks",
+      {
+        method: "POST",
+        headers: { "Idempotency-Key": "operation-1" },
+        body: JSON.stringify({
+          title: "Read daily",
+          recurrence_rule: { frequency: "daily", interval: 1 },
+          start_date: "2026-02-01",
+        }),
+      },
+    );
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ recurring_task: replayed });
   });
 
   it("should return 400 on validation failure (missing title)", async () => {
@@ -259,12 +359,13 @@ describe("POST /api/recurring-tasks", () => {
   });
 
   it("should call ensureProfile before creating", async () => {
-    mockToRecurringTaskCompatibility.mockReturnValue({ id: "rt-1" });
+    mockToRecurringTaskResponse.mockReturnValue({ id: "rt-1" });
 
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks",
       {
         method: "POST",
+        headers: { "Idempotency-Key": "operation-1" },
         body: JSON.stringify({
           title: "Task",
           recurrence_rule: { frequency: "daily", interval: 1 },

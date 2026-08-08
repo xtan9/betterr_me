@@ -51,6 +51,7 @@ export function registerTools(server: McpServer): void {
       supabase,
       date: today,
       timezone: "UTC",
+      principal: { type: "user", userId, credential: "mcp" },
     };
   });
 }

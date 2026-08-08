@@ -310,7 +310,7 @@ export class SeriesStateAdapter {
     if (!isLifecycleSeriesSuccess(outcome)) {
       throw new Error(seriesStateErrorMessage(outcome));
     }
-    return toRecurringTaskResponse(outcome.series);
+    return toRecurringTaskResponse(outcome.series, userId);
   }
 
   private async lifecycleTarget(
@@ -490,7 +490,7 @@ function attachRecurringTask(
     return normalized;
   }
   const recurringTask = Array.isArray(normalized.series.revisions)
-    ? toRecurringTaskResponse(normalized.series)
+    ? toRecurringTaskResponse(normalized.series, normalized.series.userId)
     : undefined;
   return {
     ...normalized,
