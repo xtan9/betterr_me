@@ -1853,6 +1853,15 @@ function aggregateGate(base: typeof FAMILY_GATE_BASES[number], statuses: Readonl
   }, children.every((child) => child === undefined) ? { kind: "missing-observation" } : undefined);
 }
 
+function applyDependency(
+  derived: DerivedGate,
+  dependency: DerivedGate,
+): DerivedGate {
+  return derived.status === "pass" && dependency.status !== "pass"
+    ? gate(derived.gateId, "not-proven", undefined, { kind: "missing-observation", code: "dependency-not-proven" })
+    : derived;
+}
+
 function deepFreeze<T>(value: T): T {
   if (value && typeof value === "object" && !Object.isFrozen(value)) {
     for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
@@ -2037,59 +2046,69 @@ function internalObservations(
     error: derived.error,
   });
 
-  for (const gateId of ["resource-discovery", "provider-discovery", "reproducible-configuration", "versions"]) {
-    const derived = shared.get(gateId);
-    if (derived) {
-      observations.push(normalizedGate(conflictingGateIds.has(gateId)
-        ? gate(gateId, "fail", { observedBoundary: "conflict" }, { kind: "conflicting-observation" })
-        : derived));
-    }
+  const rawGates = new Map<string, DerivedGate>();
+  for (const [gateId, derived] of shared) {
+    rawGates.set(gateId, conflictingGateIds.has(gateId)
+      ? gate(gateId, "fail", { observedBoundary: "conflict" }, { kind: "conflicting-observation" })
+      : derived);
   }
 
   for (const base of FAMILY_GATE_BASES) {
     const byFamily = family.get(base) ?? new Map<PublicClientFamily, DerivedGate>();
-    if (base === "registration-negative-validation") {
-      const negativeByFamily = negative.get(base) ?? new Map();
-      for (const currentFamily of MCP_ACCESS_GRANT_FAMILIES) {
+    const negativeByFamily = negative.get(base) ?? new Map<PublicClientFamily, Map<PublicClientNegativeRegistrationCase, DerivedGate>>();
+    for (const currentFamily of MCP_ACCESS_GRANT_FAMILIES) {
+      const identity = `${base}-${currentFamily}`;
+      let derived: DerivedGate | undefined;
+      if (base === "registration-negative-validation") {
         const cases = negativeByFamily.get(currentFamily);
         const statuses = NEGATIVE_CASES.map((caseId) => cases?.get(caseId)?.status);
         const status = cases && cases.size > 0 ? statusFromFamilyValues(statuses) : undefined;
         const evidence = cases
           ? { cases: NEGATIVE_CASES.map((caseId) => ({ case: caseId, status: cases.get(caseId)?.status ?? "not-proven" })) }
           : undefined;
-        const identity = `registration-negative-validation-${currentFamily}`;
-        observations.push(normalizedGate(conflictingGateIds.has(identity)
-          ? gate(identity, "fail", { observedBoundary: "conflict" }, { kind: "conflicting-observation" })
-          : gate(identity, status, evidence, status === undefined ? { kind: "missing-observation" } : undefined)));
-      }
-    } else {
-      for (const currentFamily of MCP_ACCESS_GRANT_FAMILIES) {
-        const derived = base === "consent-cleanup"
+        derived = gate(identity, status, evidence, status === undefined ? { kind: "missing-observation" } : undefined);
+      } else {
+        derived = base === "consent-cleanup"
           ? cleanupByFamily.get(currentFamily)
           : byFamily.get(currentFamily);
-        const identity = `${base}-${currentFamily}`;
-        observations.push(normalizedGate(conflictingGateIds.has(identity)
-          ? gate(identity, "fail", { observedBoundary: "conflict" }, { kind: "conflicting-observation" })
-          : derived ?? gate(identity, undefined, undefined, { kind: "missing-observation" })));
       }
+      rawGates.set(identity, conflictingGateIds.has(identity)
+        ? gate(identity, "fail", { observedBoundary: "conflict" }, { kind: "conflicting-observation" })
+        : derived ?? gate(identity, undefined, undefined, { kind: "missing-observation" }));
     }
+  }
+
+  const resolvedGates = new Map<string, DerivedGate>();
+  const resolving = new Set<string>();
+  const resolveGate = (gateId: string): DerivedGate => {
+    const resolved = resolvedGates.get(gateId);
+    if (resolved) return resolved;
+    if (resolving.has(gateId)) throw new PublicClientEvidenceBoundaryError();
+    resolving.add(gateId);
+    const derived = rawGates.get(gateId) ?? gate(gateId, undefined, undefined, { kind: "missing-observation" });
+    const withDependencies = (MCP_ACCESS_GRANT_CATALOGS.dependencies[gateId] ?? []).reduce(
+      (current, dependencyId) => applyDependency(current, resolveGate(dependencyId)),
+      derived,
+    );
+    resolving.delete(gateId);
+    resolvedGates.set(gateId, withDependencies);
+    return withDependencies;
+  };
+
+  for (const gateId of ["resource-discovery", "provider-discovery", "reproducible-configuration", "versions"]) {
+    if (shared.has(gateId)) observations.push(normalizedGate(resolveGate(gateId)));
+  }
+
+  for (const base of FAMILY_GATE_BASES) {
     const statuses = new Map<PublicClientFamily, GateStatus | undefined>();
     for (const currentFamily of MCP_ACCESS_GRANT_FAMILIES) {
-      if (base === "registration-negative-validation") {
-        const cases = negative.get(base)?.get(currentFamily);
-        const identity = `${base}-${currentFamily}`;
-        statuses.set(currentFamily, conflictingGateIds.has(identity)
-          ? "fail"
-          : cases && cases.size > 0 ? statusFromFamilyValues(NEGATIVE_CASES.map((caseId) => cases.get(caseId)?.status)) : undefined);
-      } else {
-        const identity = `${base}-${currentFamily}`;
-        const derived = base === "consent-cleanup"
-          ? cleanupByFamily.get(currentFamily)
-          : byFamily.get(currentFamily);
-        statuses.set(currentFamily, conflictingGateIds.has(identity) ? "fail" : derived?.status);
-      }
+      const derived = resolveGate(`${base}-${currentFamily}`);
+      observations.push(normalizedGate(derived));
+      statuses.set(currentFamily, derived.status);
     }
-    observations.push(normalizedGate(aggregateGate(base, statuses)));
+    const aggregate = aggregateGate(base, statuses);
+    rawGates.set(`${base}-both`, aggregate);
+    observations.push(normalizedGate(resolveGate(`${base}-both`)));
   }
 
   if (includeFactRequests) {
