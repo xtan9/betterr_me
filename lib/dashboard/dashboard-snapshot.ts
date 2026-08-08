@@ -17,9 +17,7 @@ import {
 import type { WorkoutsDB } from "@/lib/db/workouts";
 import { computeMissedDays } from "@/lib/habits/absence";
 import { log } from "@/lib/logger";
-import type {
-  RecurringCoverageResult,
-} from "@/lib/recurring-tasks/coverage";
+import type { CoverageCompleteness } from "@/lib/recurring-tasks/capabilities";
 import type { LocalDateRange } from "@/lib/recurring-tasks/lifecycle";
 import { addLocalDays } from "@/lib/recurring-tasks/recurrence";
 
@@ -30,10 +28,6 @@ export interface DashboardSnapshotDependencies {
   milestones: Pick<HabitMilestonesDB, "getTodaysMilestones">;
   localization: Pick<LocalizationDB, "getWeekStartPreference">;
   workouts: Pick<WorkoutsDB, "getLastCompletedAt" | "getWeekWorkoutCount">;
-  ensureRecurringCoverage(
-    userId: string,
-    range: { from: string; to: string },
-  ): Promise<RecurringCoverageResult>;
 }
 
 export interface DashboardSnapshotInput {
@@ -140,21 +134,29 @@ function warning(
   return { code, message: WARNING_DEFINITIONS[code].message, ...details };
 }
 
-function recurringWarningDetails(
-  requestedRange: LocalDateRange,
-  result?: RecurringCoverageResult,
-): Pick<
-  DashboardSnapshotWarning,
-  "type" | "requestedRange" | "failedSeriesIds"
-> {
-  const failedSeriesIds = result && "failedSeriesIds" in result
-    ? result.failedSeriesIds
-    : [];
+export const DASHBOARD_COVERAGE_WARNING_CODE =
+  "recurring_coverage_unavailable" as const;
+
+export function dashboardCoverageWarning(
+  completeness: Exclude<CoverageCompleteness, { status: "complete" }>,
+): DashboardSnapshotWarning {
   return {
+    code: DASHBOARD_COVERAGE_WARNING_CODE,
+    message: WARNING_DEFINITIONS.recurring_coverage_unavailable.message,
     type: "coverage-unavailable",
-    requestedRange,
-    failedSeriesIds,
+    requestedRange: completeness.requestedRange,
+    failedSeriesIds: [...new Set(completeness.failedSeriesIds)].sort(),
   };
+}
+
+export function sortDashboardSnapshotWarnings(
+  warnings: DashboardSnapshotWarning[],
+): DashboardSnapshotWarning[] {
+  return [...warnings].sort(
+    (left, right) =>
+      WARNING_DEFINITIONS[left.code].priority -
+      WARNING_DEFINITIONS[right.code].priority,
+  );
 }
 
 async function optional<T>(
@@ -200,29 +202,6 @@ export function createDashboardSnapshot(
       const tomorrow = addLocalDays(date, 1);
       const lookbackStart = offsetDate(date, -30);
       const warnings: DashboardSnapshotWarning[] = [];
-
-      try {
-        const recurringResult = await dependencies.ensureRecurringCoverage(userId, {
-          from: date,
-          to: tomorrow,
-        });
-        if (recurringResult.status === "partial") {
-          warnings.push(warning(
-            "recurring_coverage_unavailable",
-            recurringWarningDetails({ from: date, to: tomorrow }, recurringResult),
-          ));
-        }
-      } catch (error) {
-        log.error(
-          "[dashboard-snapshot] recurring generation unavailable",
-          error,
-          { userId, date },
-        );
-        warnings.push(warning(
-          "recurring_coverage_unavailable",
-          recurringWarningDetails({ from: date, to: tomorrow }),
-        ));
-      }
 
       let requiredData: Awaited<
         ReturnType<typeof acquireRequiredDashboardData>
@@ -383,14 +362,10 @@ export function createDashboardSnapshot(
             week_workout_count: weekWorkoutCount,
           },
       };
-      warnings.sort(
-        (left, right) =>
-          WARNING_DEFINITIONS[left.code].priority -
-          WARNING_DEFINITIONS[right.code].priority,
-      );
-      return warnings.length === 0
+      const sortedWarnings = sortDashboardSnapshotWarnings(warnings);
+      return sortedWarnings.length === 0
         ? { status: "complete" as const, snapshot }
-        : { status: "degraded" as const, snapshot, warnings };
+        : { status: "degraded" as const, snapshot, warnings: sortedWarnings };
     },
   };
 }
