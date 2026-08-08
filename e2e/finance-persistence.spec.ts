@@ -88,6 +88,24 @@ test.describe('Authenticated finance persistence', () => {
 
     await page.getByRole('button', { name: 'Review inputs', exact: true }).click();
     await expect(page.locator('[data-runway-progress="reviewing"]')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await expect(page.locator('[data-interview-stage="reductions"][data-interview-render="reductions"]')).toBeVisible();
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await expect(page.locator('[data-interview-stage="expenses"][data-interview-render="expenses"]')).toBeVisible();
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await expect(page.locator('[data-interview-stage="assets"][data-interview-render="assets"]')).toBeVisible();
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await expect(page.locator('[data-interview-stage="cash"][data-interview-render="cash"]')).toBeVisible();
+    await page.getByRole('textbox', { name: 'Cash available now' }).fill('36000');
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expect(page.locator('[data-interview-stage="assets"][data-interview-render="assets"]')).toBeVisible();
+    await page.getByRole('button', { name: 'Skip for now', exact: true }).click();
+    await expect(page.locator('[data-interview-stage="expenses"][data-interview-render="expenses"]')).toBeVisible();
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expect(page.locator('[data-interview-stage="reductions"][data-interview-render="reductions"]')).toBeVisible();
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expect(page.locator('[data-runway-progress="reviewing"]')).toBeVisible();
     await page.getByRole('button', { name: 'Show my runway', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Save this runway', exact: true })).toBeVisible();
 
@@ -115,7 +133,7 @@ test.describe('Authenticated finance persistence', () => {
     await expect(page.getByRole('button', { name: 'Saved', exact: true })).toBeVisible();
     await expect(page.getByText('Cash available now', { exact: true })).toBeVisible();
     await expect(
-      page.getByRole('main').getByText('$35,000', { exact: true }).first(),
+      page.getByRole('main').getByText('$36,000', { exact: true }).first(),
     ).toBeVisible();
   });
 

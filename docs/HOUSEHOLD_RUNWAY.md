@@ -98,6 +98,12 @@ numeric change only when their Scenario and calculation-model version match.
 A transition to or from sustainability is described qualitatively instead of
 being converted to a numeric month delta.
 
+The supported Household Runway Runtime emits review and result as first-class
+semantic screen variants. The React result UI consumes that snapshot directly
+for localized labels, formatting, accessible table markup, and host actions;
+raw Plan inputs, Assessments, derived facts, and persistence summaries are not
+part of the supported snapshot.
+
 ## Persistence and security
 
 The V2 migration extends the user-owned `finance_cushions` plan and adds:
@@ -127,7 +133,17 @@ them safely.
 - Amount-free analytics boundary:
   `tests/app/api/finance/cushion/events-route.test.ts`
 - RLS and grants: `supabase/tests/finance_cushion_rls.sql`
+- Runtime/result cutover contracts:
+  `tests/lib/finance/household-runway-result-runtime-contract.test.ts`,
+  `tests/lib/finance/household-runway-focused-projection.test.ts`,
+  `tests/lib/finance/household-runway-import-boundary.test.ts`,
+  `tests/components/finance-household-runway-result.test.tsx`
 - Public desktop and 390 px mobile journeys: `e2e/financial-cushion.spec.ts`
+
+The public visual evidence is captured by that Playwright flow in
+`docs/screenshots/household-runway-result-desktop.png` and
+`docs/screenshots/household-runway-result-mobile-390.png`; the mobile project
+uses a fixed 390 px viewport.
 
 The RLS fixture requires a running local Supabase stack and executes inside a
 rollback-only transaction with two synthetic authenticated users.
