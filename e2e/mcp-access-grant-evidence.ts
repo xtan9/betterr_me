@@ -198,7 +198,7 @@ const SAFE_KEYS = new Set([
   "previous", "replacement", "providerReturnedAccessToken", "providerReturnedRefreshToken", "accessTokenChanged",
   "refreshTokenChanged", "tokenEndpointStatus", "succeeded", "tokenSummary", "errorDetail", "requestStatuses",
   "rootReplayDetected", "everyIssuedDescendantRejected", "familyMemberCountExercised", "familyResults", "grantCount",
-  "registeredClientIdPresent", "grant", "grantRevoked", "grantIdentified", "revokeEndpointObserved", "requestStatus",
+  "registeredClientIdPresent", "grant", "grantStatus", "grantRevoked", "grantIdentified", "revokeEndpointObserved", "requestStatus",
   "accessTokenHasIssuedAt", "accessTokenHasExpiry", "documentedLifetimeSeconds", "secondsRemaining", "withinDocumentedLifetime",
   "operationStatus", "accessTokenLifetime", "cases", "id", "responseType", "callbackHost", "callbackPath",
   "tokenRequestObserved", "initial", "firstDescendant", "secondDescendant", "familyResults", "grantRevoked",
