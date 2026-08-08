@@ -37,7 +37,7 @@ This refinement deepens the package boundary already chosen by ADR-0005; it does
 
 ### Read contract
 
-Focused task, sidebar, dashboard, and calendar query services ensure the requested Coverage before reading materialized Task Occurrences. They return their projection together with a structured completeness result of `complete`, `partial`, or `unavailable`; incomplete data is never represented as complete.
+Focused task, sidebar, dashboard, and calendar query services ensure the requested Coverage before reading materialized Task Occurrences. They return their projection together with a structured completeness result of `complete`, `partial`, or `unavailable`; incomplete data is never represented as complete. Calendar's accepted atomic-layer policy keeps incomplete Task Occurrence overlays unavailable while preserving independently successful Habit and Workout layers, and keeps Calendar Events on their separate full-fidelity recurrence path.
 
 Delivery policy remains explicit at the channel edge. Task reads may return available data with warnings, sidebar reads may fail closed, and AI may return a typed failure. These are presentation choices over one shared Coverage fact, not separate Coverage implementations.
 
@@ -62,6 +62,7 @@ The following evidence describes the activated post-#692 lifecycle before the co
 | HTTP creation/list/read | `app/api/recurring-tasks/route.ts` and `[id]/route.ts` call the activated lifecycle; response translation is explicit and tested in the route suites. |
 | AI creation/list/read | `lib/ai/tools/tasks.ts` uses the lifecycle and the same response adapter; `tests/lib/ai/tools/recurring-tasks.test.ts` and `series-creation-parity.test.ts` prove parity. |
 | Dashboard/read | `lib/dashboard/query.ts` and `lib/dashboard/supabase-query.ts` bind the authenticated principal, ensure structured Coverage before the dashboard reads materialized Task Occurrences, and preserve available data with a typed warning when Coverage is incomplete. No fallback generator or virtual expansion is available. |
+| Calendar overlay/read | `lib/calendar/query.ts` owns authenticated Coverage orchestration before materialized Task Occurrence reads; `lib/calendar/supabase-query.ts` binds that query to the authenticated capability factory. `tests/lib/calendar/query.test.ts`, `supabase-query.test.ts`, and the overlay route suite prove structured completeness, fail-closed task overlays, range boundaries, authorization, and the separate Calendar Event path. |
 | Task writes | `lib/tasks/writes.ts`, `occurrence-adapter.ts`, and `series-state-adapter.ts` use narrow Task/Occurrence and Series State seams; ordinary Task Writes reject scoped recurrence mutations unless the lifecycle adapter owns them. |
 | Storage contract | `20260803000002_contract_recurring_task_lifecycle.sql` checks the completed immutable cutover, rewrites installed delivery functions to target storage, removes the legacy table/columns/functions/indexes, and retains only migration facts needed for audit. |
 | SQL fixture | `supabase/tests/recurring_task_legacy_contract.sql` is registered as a constrained transactional fixture and checks retired storage, active function bodies, RLS, execute/direct-write privileges, and rollback. |

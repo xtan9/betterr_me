@@ -1,14 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import * as supabaseOverlayFeed from "@/lib/calendar/supabase-overlay-feed";
+import * as supabaseCalendarQuery from "@/lib/calendar/supabase-query";
 
-const { ensureRecurringTaskCoverageThrough } = vi.hoisted(() => ({
-  ensureRecurringTaskCoverageThrough: vi.fn(),
+const { createCapabilities, coverageEnsure } = vi.hoisted(() => ({
+  createCapabilities: vi.fn(),
+  coverageEnsure: vi.fn(),
 }));
 
-vi.mock("@/lib/recurring-tasks/coverage", () => ({
-  ensureRecurringTaskCoverageThrough,
+vi.mock("@/lib/recurring-tasks/capabilities", () => ({
+  createAuthenticatedRecurringTaskCapabilities: createCapabilities,
 }));
 
 const request = {
@@ -32,18 +33,25 @@ function supabaseFor(builders: Record<string, ReturnType<typeof queryBuilder>>) 
   return { client, supabase: client as unknown as SupabaseClient };
 }
 
-describe("querySupabaseCalendarOverlayFeed", () => {
+describe("Supabase calendar query", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    ensureRecurringTaskCoverageThrough.mockResolvedValue({
+    coverageEnsure.mockResolvedValue({
+      type: "coverage",
       status: "complete",
-      failedSeriesIds: [],
+      completeness: {
+        status: "complete",
+        type: "complete",
+        requestedRange: request.range,
+        failedSeriesIds: [],
+      },
     });
+    createCapabilities.mockReturnValue({ coverage: { ensure: coverageEnsure } });
   });
 
   it("is the adapter's only runtime export", () => {
-    expect(Object.keys(supabaseOverlayFeed)).toEqual([
-      "querySupabaseCalendarOverlayFeed",
+    expect(Object.keys(supabaseCalendarQuery)).toEqual([
+      "createSupabaseCalendarQuery",
     ]);
   });
 
@@ -51,17 +59,24 @@ describe("querySupabaseCalendarOverlayFeed", () => {
     const tasks = queryBuilder({ data: [], error: null });
     const { client, supabase } = supabaseFor({ tasks });
 
-    await expect(supabaseOverlayFeed.querySupabaseCalendarOverlayFeed(
-      { ...request, layers: ["tasks"] },
+    await expect(supabaseCalendarQuery.createSupabaseCalendarQuery(
       supabase,
-    )).resolves.toEqual({ status: "complete", items: [], unavailable: [] });
+      { type: "user", userId: "user-1", credential: "cookie" },
+    ).read({ range: request.range, layers: ["tasks"] })).resolves.toMatchObject({
+      status: "complete",
+      items: [],
+      unavailable: [],
+      completeness: { status: "complete", requestedRange: request.range },
+    });
 
-    expect(ensureRecurringTaskCoverageThrough).toHaveBeenCalledWith(
+    expect(createCapabilities).toHaveBeenCalledWith(
       supabase,
-      "user-1",
-      "2026-04-01",
-      "2026-04-07",
+      { type: "user", userId: "user-1", credential: "cookie" },
     );
+    expect(coverageEnsure).toHaveBeenCalledWith({
+      operationId: "calendar-read-coverage:user-1:2026-04-01:2026-04-07",
+      range: request.range,
+    });
     expect(client.from).toHaveBeenCalledWith("tasks");
     expect(tasks.select).toHaveBeenCalledWith("*");
     expect(tasks.eq).toHaveBeenCalledWith("user_id", "user-1");
@@ -77,10 +92,15 @@ describe("querySupabaseCalendarOverlayFeed", () => {
     const habitLogs = queryBuilder({ data: [], error: null });
     const { client, supabase } = supabaseFor({ habits, habit_logs: habitLogs });
 
-    await expect(supabaseOverlayFeed.querySupabaseCalendarOverlayFeed(
-      { ...request, layers: ["habits"] },
+    await expect(supabaseCalendarQuery.createSupabaseCalendarQuery(
       supabase,
-    )).resolves.toEqual({ status: "complete", items: [], unavailable: [] });
+      { type: "user", userId: "user-1", credential: "cookie" },
+    ).read({ range: request.range, layers: ["habits"] })).resolves.toMatchObject({
+      status: "complete",
+      items: [],
+      unavailable: [],
+      completeness: null,
+    });
 
     expect(client.from).toHaveBeenCalledWith("habits");
     expect(habits.select).toHaveBeenCalledWith("*");
@@ -98,14 +118,19 @@ describe("querySupabaseCalendarOverlayFeed", () => {
     const workouts = queryBuilder({ data: [], error: null });
     const { client, supabase } = supabaseFor({ workouts });
 
-    await expect(supabaseOverlayFeed.querySupabaseCalendarOverlayFeed(
-      {
-        ...request,
-        layers: ["workouts"],
-        timezone: "America/Los_Angeles",
-      },
+    await expect(supabaseCalendarQuery.createSupabaseCalendarQuery(
       supabase,
-    )).resolves.toEqual({ status: "complete", items: [], unavailable: [] });
+      { type: "user", userId: "user-1", credential: "cookie" },
+    ).read({
+      range: request.range,
+      layers: ["workouts"],
+      timezone: "America/Los_Angeles",
+    })).resolves.toMatchObject({
+      status: "complete",
+      items: [],
+      unavailable: [],
+      completeness: null,
+    });
 
     expect(client.from).toHaveBeenCalledWith("workouts");
     expect(workouts.select).toHaveBeenCalledWith("*");
