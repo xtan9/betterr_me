@@ -206,26 +206,17 @@ export function HouseholdRunway({
   const deviceStorageConsent = snapshot.draft.deviceStorageConsent;
   const draftSyncOperation = snapshot.operations.draftSynchronization;
   const draftSyncState =
-    draftSyncOperation.status === "succeeded"
-      ? "synchronized"
-      : draftSyncOperation.status === "failed"
-        ? "failed"
-        : "pending";
+    draftSyncOperation.status === "failed"
+      ? "failed"
+      : draftSyncOperation.status === "pending"
+        ? "pending"
+        : snapshot.draft.synchronized
+          ? "synchronized"
+          : "idle";
   const planOperation = snapshot.operations.planPersistence;
-  const planOperationState =
-    planOperation.status === "pending"
-      ? "saving"
-      : planOperation.status === "succeeded"
-        ? "saved"
-        : planOperation.status === "failed"
-          ? "failed"
-          : snapshot.plan.current
-            ? "saved"
-            : snapshot.interviewStatus === "reviewing"
-              ? "dirty"
-              : "idle";
+  const planCurrentState = snapshot.plan.current ? "true" : "false";
   const saving = planOperation.status === "pending";
-  const saved = planOperationState === "saved";
+  const saved = snapshot.plan.current;
   const issue = snapshot.issues[0]?.code;
   const error =
     issue === "currency_change_confirmation_required" &&
@@ -288,7 +279,8 @@ export function HouseholdRunway({
           data-runway-presentation={isAuthenticated ? "authenticated" : "public"}
           data-runway-progress={snapshot.interviewStatus}
           data-runway-draft-sync={draftSyncState}
-          data-runway-plan-operation={planOperationState}
+          data-runway-plan-operation={planOperation.status}
+          data-runway-plan-current={planCurrentState}
         >
           {!isAuthenticated ? <RunwayHeader t={t} /> : null}
           {!showLanding ? (

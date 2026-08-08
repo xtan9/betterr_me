@@ -1,6 +1,6 @@
 # Household Runway result projection contract
 
-Status: accepted design; implementation pending
+Status: implemented; supported Runtime and result UI cutover landed
 
 This contract completes the presentation-neutral Runtime boundary established
 by ADR-0011. It replaces raw Household Runway Plan inputs and raw Household
@@ -21,6 +21,12 @@ Four accepted correctness changes accompany the ownership cutover:
   Assessment unavailable.
 
 All other visible behavior and copy remain unchanged.
+
+The supported `getSnapshot()` result is now the single focused projection for
+both review and result screens. The private composition no longer exposes a
+second focused-snapshot getter or a compatibility projection; raw Plan inputs,
+Assessments, and persistence summaries remain behind the private Runtime and
+capability boundaries.
 
 ## Supported screen contract
 
@@ -421,19 +427,10 @@ type HouseholdRunwayRuntimeDraftFacts = {
   synchronized: boolean;
 };
 
-type HouseholdRunwayFocusedRuntimeSnapshot = {
-  lifecycle: HouseholdRunwayInterviewRuntimeLifecycle;
-  interviewStatus: HouseholdRunwayInterviewStatus;
-  stage: HouseholdRunwayInterviewStage | null;
-  screen: HouseholdRunwayInterviewRuntimeScreen;
-  plan: HouseholdRunwayRuntimePlanFacts;
-  draft: HouseholdRunwayRuntimeDraftFacts;
-  issues: readonly HouseholdRunwayInterviewRuntimeIssue[];
-  operations: HouseholdRunwayRuntimeOperations;
-  confirmation: HouseholdRunwayInterviewRuntimeConfirmation;
-  actions: HouseholdRunwayRuntimeActions;
-};
 ```
+
+The public snapshot uses the existing `HouseholdRunwayInterviewRuntimeSnapshot`
+name. There is no exported focused-snapshot alias or private composition getter.
 
 Applicability means that an intent belongs to the current lifecycle and screen
 and may be attempted. It does not guarantee validation success, authentication,
