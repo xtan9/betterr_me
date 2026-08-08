@@ -20,6 +20,8 @@ const lifecycleBoundarySources = [
   "lib/recurring-tasks/activation.ts",
   "lib/dashboard/dashboard-snapshot.ts",
   "lib/dashboard/supabase-dashboard-snapshot.ts",
+  "lib/sidebar/query.ts",
+  "lib/sidebar/supabase-query.ts",
   "lib/db/tasks.ts",
   "lib/recurring-tasks/coverage.ts",
 ];
@@ -131,5 +133,34 @@ describe("recurring lifecycle import boundary", () => {
         /ensureRecurringTaskCoverage|ensureRecurringTaskCoverageThrough|taskReadCoverageRange/,
       );
     }
+  });
+
+  it("routes sidebar counts through the authenticated focused query", () => {
+    const sidebarRoute = readFileSync(
+      resolve(process.cwd(), "app/api/sidebar/counts/route.ts"),
+      "utf8",
+    );
+    const sidebarQuery = readFileSync(
+      resolve(process.cwd(), "lib/sidebar/query.ts"),
+      "utf8",
+    );
+    const sidebarComposition = readFileSync(
+      resolve(process.cwd(), "lib/sidebar/supabase-query.ts"),
+      "utf8",
+    );
+
+    expect(sidebarRoute).toContain("createSupabaseSidebarCountsQuery");
+    expect(sidebarRoute).not.toMatch(
+      /ensureRecurringTaskCoverage|ensureRecurringTaskCoverageThrough|recurringCoverageWarning/,
+    );
+    expect(sidebarRoute).not.toMatch(/new (?:HabitsDB|TasksDB)\s*\(/);
+    expect(sidebarRoute).not.toMatch(/\buserId\b/);
+    expect(sidebarRoute).not.toContain("createAuthenticatedRecurringTaskCapabilities");
+    expect(sidebarQuery).toContain("createSidebarCountsQuery");
+    expect(sidebarQuery).toContain('status: "failed"');
+    expect(sidebarComposition).toContain(
+      "createAuthenticatedRecurringTaskCapabilities",
+    );
+    expect(sidebarComposition).toContain("createSidebarCountsQuery");
   });
 });
