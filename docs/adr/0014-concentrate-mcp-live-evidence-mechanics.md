@@ -21,3 +21,13 @@ The public-client subjourney no longer finalizes or writes an intermediate repor
 ## Candidate 2 supersession
 
 For Candidate 2 and issue #906, the partial-artifact sentence above is superseded for an unexpected callback. The callback is a rejected observation: accepted work is closed and drained, raw callback references are discarded, evidence finalization and writing are skipped, and a stable secret-free error is rethrown. The deterministic private kernel remains separate from the live session boundary; the locked profile and cross-reference contract is documented in [the Candidate 2 MCP evidence catalogs](../compatibility/mcp-access-grant-catalogs.md).
+
+## Issue #915 atomic cutover
+
+The live cutover uses one immutable target snapshot and one explicit capability
+set per target run. The standalone public-client journey invokes only the
+public-client profile operation. The aggregate journey invokes only the
+compatibility profile operation and passes the nested public journey only its
+public recorder. Adapters emit primitive observations; the deterministic
+profiles own all source, gate, status, security-policy, report, verification,
+and artifact decisions.
