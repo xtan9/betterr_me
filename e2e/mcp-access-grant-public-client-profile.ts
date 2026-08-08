@@ -378,10 +378,13 @@ const MAX_JWKS_LENGTH = 65_536;
 const MAX_JWKS_KEYS = 32;
 const MAX_CONFIGURED_SECRETS = 32;
 const MAX_CONFIGURED_SECRET_LENGTH = 500;
+const MAX_RETAINED_FACTS = 1_024;
+const MAX_UNIQUE_PAYLOADS_PER_IDENTITY = 2;
 const CONCLUSION_KEYS = new Set([
   "profile", "source", "gateId", "gate", "status", "outcome", "issue", "template", "templateFamily",
   "evidenceProjection", "detail", "finalize", "finalizeEvidence", "finalizeReport", "artifactFilename",
   "authorized", "rejected", "passed", "failed", "valid", "success", "signatureValid", "algorithmAllowed",
+  "identity", "factIdentity", "catalogIdentity", "authority", "semanticRole",
 ]);
 const SENSITIVE_KEY = /^(?:access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|code[_-]?verifier|password|cookie|authorization|secret|token|verifier|state|code)$/i;
 const CREDENTIAL_KEY = /^(?:access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|password|cookie|authorization|secret|token|code)$/i;
@@ -424,9 +427,99 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
+function snapshotFactInput(value: unknown): PublicClientFact {
+  const snapshot = copyFactInput(value, 0, new WeakSet<object>());
+  if (!isRecord(snapshot)) throw new PublicClientEvidenceBoundaryError();
+  return snapshot as PublicClientFact;
+}
+
+function copyFactInput(value: unknown, depth: number, parents: WeakSet<object>): unknown {
+  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === undefined) return value;
+  if (depth > MAX_FACT_DEPTH) return "[REDACTED: depth limit]";
+  if (typeof value !== "object") return "[REDACTED: unsupported value]";
+  if (parents.has(value)) return "[REDACTED: cyclic value]";
+  parents.add(value);
+  try {
+    if (Array.isArray(value)) {
+      if (value.length > MAX_FACT_ARRAY_ITEMS) return "[REDACTED: array limit]";
+      const keys = Reflect.ownKeys(value);
+      if (keys.length !== value.length + 1 || !keys.includes("length")) throw new PublicClientEvidenceBoundaryError();
+      const result: unknown[] = [];
+      for (let index = 0; index < value.length; index += 1) {
+        const key = String(index);
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        if (descriptor === undefined || !descriptor.enumerable || !Object.prototype.hasOwnProperty.call(descriptor, "value")) throw new PublicClientEvidenceBoundaryError();
+        result.push(copyFactInput(descriptor.value, depth + 1, parents));
+      }
+      if (keys.some((key) => key !== "length" && (typeof key !== "string" || !/^(?:0|[1-9]\d*)$/.test(key) || Number(key) >= value.length))) {
+        throw new PublicClientEvidenceBoundaryError();
+      }
+      return result;
+    }
+    if (!isRecord(value)) return "[REDACTED: unsupported value]";
+    const keys = Reflect.ownKeys(value);
+    if (keys.length > MAX_FACT_OBJECT_KEYS) return "[REDACTED: object limit]";
+    const result: Record<string, unknown> = {};
+    for (const key of keys) {
+      if (typeof key !== "string") throw new PublicClientEvidenceBoundaryError();
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (descriptor === undefined || !descriptor.enumerable || !Object.prototype.hasOwnProperty.call(descriptor, "value")) throw new PublicClientEvidenceBoundaryError();
+      result[key] = copyFactInput(descriptor.value, depth + 1, parents);
+    }
+    return result;
+  } finally {
+    parents.delete(value);
+  }
+}
+
 function assertNoConclusionFields(value: Record<string, unknown>): void {
-  for (const key of Object.keys(value)) {
-    if (CONCLUSION_KEYS.has(key)) throw new PublicClientEvidenceBoundaryError();
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== "string" || CONCLUSION_KEYS.has(key)) throw new PublicClientEvidenceBoundaryError();
+  }
+}
+
+function hasOnlyOwnDataKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
+  return Reflect.ownKeys(value).every((key) => {
+    if (typeof key !== "string" || !allowed.includes(key)) return false;
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor !== undefined && descriptor.enumerable && Object.prototype.hasOwnProperty.call(descriptor, "value");
+  });
+}
+
+function hasOnlyOwnDataProperties(value: Record<string, unknown>): boolean {
+  return Reflect.ownKeys(value).every((key) => {
+    if (typeof key !== "string") return false;
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor !== undefined && descriptor.enumerable && Object.prototype.hasOwnProperty.call(descriptor, "value");
+  });
+}
+
+function isDenseArray(value: unknown, maximumLength: number): value is readonly unknown[] {
+  if (!Array.isArray(value) || value.length > maximumLength) return false;
+  const keys = Reflect.ownKeys(value);
+  if (keys.length !== value.length + 1 || !keys.includes("length")) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+    if (descriptor === undefined || !descriptor.enumerable || !Object.prototype.hasOwnProperty.call(descriptor, "value")) return false;
+  }
+  return keys.every((key) => key === "length" || (typeof key === "string" && /^(?:0|[1-9]\d*)$/.test(key) && Number(key) < value.length));
+}
+
+function nonEmptyBoundedString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= MAX_FACT_STRING_LENGTH;
+}
+
+function nonEmptyConfiguredSecret(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= MAX_CONFIGURED_SECRET_LENGTH;
+}
+
+function validHttpUrl(value: unknown): value is string {
+  if (!nonEmptyBoundedString(value)) return false;
+  try {
+    const url = new URL(value);
+    return (url.protocol === "http:" || url.protocol === "https:") && url.hostname.length > 0 && !url.username && !url.password;
+  } catch {
+    return false;
   }
 }
 
@@ -1748,33 +1841,64 @@ function omitUndefined(value: unknown): unknown {
   );
 }
 
+function stableSerialize(value: unknown): string {
+  if (value === undefined) return "undefined";
+  if (value === null || typeof value === "boolean" || typeof value === "number") return JSON.stringify(value);
+  if (typeof value === "string") return JSON.stringify(value);
+  if (Array.isArray(value)) return "[" + value.map(stableSerialize).join(",") + "]";
+  if (isRecord(value)) {
+    return "{" + Object.keys(value).sort().map((key) => JSON.stringify(key) + ":" + stableSerialize(value[key])).join(",") + "}";
+  }
+  return JSON.stringify(String(value));
+}
+
+function factFingerprint(fact: NormalizedFact): string {
+  return stableSerialize({ data: fact.data, request: fact.request?.request });
+}
+
 function snapshotOptions(options: PublicClientEvidenceOptions): PublicClientEvidenceOptions {
-  if (!isRecord(options.target) || typeof options.clock !== "function") throw new PublicClientEvidenceBoundaryError();
-  if (!options.writer || (typeof options.writer !== "function" && typeof options.writer.write !== "function")) throw new PublicClientEvidenceBoundaryError();
-  if (!isRecord(options.versions) || Object.keys(options.versions).length > MAX_FACT_OBJECT_KEYS) throw new PublicClientEvidenceBoundaryError();
-  const configuredSecrets = options.configuredSecrets ?? [];
-  if (!Array.isArray(configuredSecrets) || configuredSecrets.length > MAX_CONFIGURED_SECRETS || configuredSecrets.some((secret) => typeof secret !== "string" || secret.length > MAX_CONFIGURED_SECRET_LENGTH)) {
+  if (!isRecord(options) || !hasOnlyOwnDataKeys(options, ["target", "versions", "configuredSecrets", "clock", "writer"])) throw new PublicClientEvidenceBoundaryError();
+  if (!isRecord(options.target) || !hasOnlyOwnDataKeys(options.target, ["name", "canonicalResource", "supabaseUrl", "expectedAuthorizationServer", "loopbackHosts"])) throw new PublicClientEvidenceBoundaryError();
+  if (!nonEmptyBoundedString(options.target.name) || !validHttpUrl(options.target.canonicalResource) || !validHttpUrl(options.target.supabaseUrl) || !validHttpUrl(options.target.expectedAuthorizationServer)) {
+    throw new PublicClientEvidenceBoundaryError();
+  }
+  if (typeof options.clock !== "function") throw new PublicClientEvidenceBoundaryError();
+  if (!options.writer || (typeof options.writer !== "function" && (!isRecord(options.writer) || !hasOnlyOwnDataKeys(options.writer, ["write"]) || typeof options.writer.write !== "function"))) {
+    throw new PublicClientEvidenceBoundaryError();
+  }
+  if (!isRecord(options.versions) || Object.keys(options.versions).length > MAX_FACT_OBJECT_KEYS || !hasOnlyOwnDataProperties(options.versions)) {
+    throw new PublicClientEvidenceBoundaryError();
+  }
+  const configuredSecrets = options.configuredSecrets === undefined ? [] : options.configuredSecrets;
+  if (!isDenseArray(configuredSecrets, MAX_CONFIGURED_SECRETS) || configuredSecrets.some((secret) => !nonEmptyConfiguredSecret(secret)) || new Set(configuredSecrets).size !== configuredSecrets.length) {
     throw new PublicClientEvidenceBoundaryError();
   }
   const versions = Object.fromEntries(Object.entries(options.versions).map(([key, value]) => {
-    if (key.length > MAX_FACT_STRING_LENGTH || typeof value !== "string" || value.length > MAX_FACT_STRING_LENGTH) throw new PublicClientEvidenceBoundaryError();
+    if (!nonEmptyBoundedString(key) || !nonEmptyBoundedString(value)) throw new PublicClientEvidenceBoundaryError();
     return [key, value];
   }));
-  const targetLoopbackHosts = options.target.loopbackHosts
-    ? [...options.target.loopbackHosts]
-    : [MCP_ACCESS_GRANT_LOOPBACK_HOSTS.ipv4, MCP_ACCESS_GRANT_LOOPBACK_HOSTS.ipv6];
+  const targetLoopbackHosts = options.target.loopbackHosts === undefined
+    ? [MCP_ACCESS_GRANT_LOOPBACK_HOSTS.ipv4, MCP_ACCESS_GRANT_LOOPBACK_HOSTS.ipv6]
+    : isDenseArray(options.target.loopbackHosts, 2)
+      ? [...options.target.loopbackHosts]
+      : [];
   if (targetLoopbackHosts.length !== 2 || targetLoopbackHosts.some((host) => typeof host !== "string" || host.length > MAX_FACT_STRING_LENGTH) ||
     targetLoopbackHosts.join("|") !== [MCP_ACCESS_GRANT_LOOPBACK_HOSTS.ipv4, MCP_ACCESS_GRANT_LOOPBACK_HOSTS.ipv6].join("|")) {
     throw new PublicClientEvidenceBoundaryError();
   }
   const target = {
-    name: boundedString(options.target.name) ?? "",
-    canonicalResource: boundedString(options.target.canonicalResource) ?? "",
-    supabaseUrl: boundedString(options.target.supabaseUrl) ?? "",
-    expectedAuthorizationServer: boundedString(options.target.expectedAuthorizationServer) ?? "",
+    name: options.target.name,
+    canonicalResource: options.target.canonicalResource,
+    supabaseUrl: options.target.supabaseUrl,
+    expectedAuthorizationServer: options.target.expectedAuthorizationServer,
     loopbackHosts: targetLoopbackHosts,
   } satisfies CompatibilityReportTarget;
-  const writer = writerFunction(options.writer);
+  let writer: (artifact: PublicClientArtifact) => void | Promise<void>;
+  try {
+    writer = writerFunction(options.writer);
+  } catch {
+    throw new PublicClientEvidenceBoundaryError();
+  }
   return deepFreeze({
     target,
     versions,
@@ -1788,13 +1912,14 @@ function sampleIso(clock: () => string, previous?: number): { value: string; mil
   let value: unknown;
   try {
     value = clock();
+    if (typeof value !== "string" || value.trim().length === 0 || value.length > 64) throw new Error("invalid clock");
+    const millis = Date.parse(value);
+    if (!Number.isFinite(millis) || (previous !== undefined && millis < previous)) throw new Error("invalid clock");
+    const normalized = new Date(millis).toISOString();
+    return { value: normalized, millis };
   } catch {
     throw new PublicClientEvidenceBoundaryError();
   }
-  if (typeof value !== "string" || value.length > 64) throw new PublicClientEvidenceBoundaryError();
-  const millis = Date.parse(value);
-  if (!Number.isFinite(millis) || (previous !== undefined && millis < previous)) throw new PublicClientEvidenceBoundaryError();
-  return { value: new Date(millis).toISOString(), millis };
 }
 
 function writerFunction(writer: PublicClientArtifactWriter): (artifact: PublicClientArtifact) => void | Promise<void> {
@@ -1802,7 +1927,7 @@ function writerFunction(writer: PublicClientArtifactWriter): (artifact: PublicCl
 }
 
 function factNeedsClockSample(fact: unknown): boolean {
-  return isRecord(fact) && fact.kind === "delegated-token";
+  return isRecord(fact) && fact.kind === "delegated-token" && fact.role === "validation";
 }
 
 async function persist(
@@ -1837,7 +1962,7 @@ function internalObservations(
     const derived = deriveFactGate(fact, target, history);
     const cleanupFact = fact.kind === "grant" || fact.kind === "cleanup";
     const semanticGateId = cleanupFact && fact.family ? `consent-cleanup-${fact.family}` : derived?.gateId;
-    const serialized = JSON.stringify(derived ?? fact.data);
+    const serialized = factFingerprint(fact);
     const previous = seen.get(fact.identity);
     if (previous !== undefined && semanticGateId !== undefined) {
       if (previous.payload !== serialized) {
@@ -1945,6 +2070,19 @@ function finalizeRun(
   finishedAt: string,
   artifactWriteSucceeded?: boolean,
 ) {
+  if (facts.length > MAX_RETAINED_FACTS) throw new PublicClientEvidenceBoundaryError();
+  for (const fact of facts) {
+    if (!fact.identity || !fact.kind || !fact.role) throw new PublicClientEvidenceBoundaryError();
+    const catalogIdentity = classifyFactIdentity({
+      profile: "public-client",
+      source: "public-client",
+      kind: fact.kind as CatalogFactKind,
+      role: fact.role,
+      family: (fact.family ?? "none") as CatalogFamily,
+    });
+    if (!catalogIdentity.accepted || catalogIdentity.authority !== "authoritative") throw new PublicClientEvidenceBoundaryError();
+    void factFingerprint(fact);
+  }
   const context = createEvidenceRunContext({
     configuredSecrets: options.configuredSecrets ?? [],
     time: { startedAt, finishedAt },
@@ -1974,6 +2112,7 @@ export async function runPublicClientEvidence(
   optionsInput: PublicClientEvidenceOptions,
   journey: (recorder: { readonly record: (fact: PublicClientFact) => Promise<void> }) => void | Promise<void>,
 ): Promise<PublicClientEvidenceResult> {
+  if (typeof journey !== "function") throw stableFailure();
   let options: PublicClientEvidenceOptions;
   try {
     options = snapshotOptions(optionsInput);
@@ -1989,12 +2128,21 @@ export async function runPublicClientEvidence(
   }
 
   const facts: NormalizedFact[] = [];
-  const identities = new Map<string, string>();
+  const identityPayloads = new Map<string, Set<string>>();
   const pending = new Set<Promise<void>>();
   let closed = false;
   let poisoned = false;
   let lastClock = start.millis;
   let recordChain = Promise.resolve();
+
+  const discard = (): void => {
+    facts.length = 0;
+    identityPayloads.clear();
+  };
+
+  const drain = async (): Promise<void> => {
+    while (pending.size > 0) await Promise.allSettled([...pending]);
+  };
 
   const record = (fact: PublicClientFact): Promise<void> => {
     if (closed) {
@@ -2002,17 +2150,33 @@ export async function runPublicClientEvidence(
       void failure.catch(() => undefined);
       return failure;
     }
+    let capturedFact: PublicClientFact;
+    try {
+      capturedFact = snapshotFactInput(fact);
+    } catch (error) {
+      poisoned = true;
+      const failure = Promise.reject(stableFailure(error));
+      void failure.catch(() => undefined);
+      return failure;
+    }
     const accepted = recordChain.then(async () => {
       try {
-        const clock = factNeedsClockSample(fact)
+        const currentFact = capturedFact;
+        capturedFact = undefined as never;
+        const clock = factNeedsClockSample(currentFact)
           ? sampleIso(options.clock, lastClock)
           : { value: "", millis: lastClock };
         lastClock = clock.millis;
-        const normalized = await normalizeFact(fact, clock.millis);
-        const payload = JSON.stringify(normalized);
-        const previous = identities.get(normalized.identity);
-        if (previous === undefined) identities.set(normalized.identity, payload);
-        if (previous === undefined || previous !== payload || normalized.request !== undefined) facts.push(normalized);
+        const normalized = await normalizeFact(currentFact, clock.millis);
+        const payload = factFingerprint(normalized);
+        const payloads = identityPayloads.get(normalized.identity) ?? new Set<string>();
+        const requestLike = normalized.request !== undefined;
+        if (!requestLike && payloads.has(payload)) return;
+        if (!requestLike && payloads.size >= MAX_UNIQUE_PAYLOADS_PER_IDENTITY) return;
+        if (facts.length >= MAX_RETAINED_FACTS) throw new PublicClientEvidenceBoundaryError();
+        if (!payloads.has(payload) && payloads.size < MAX_UNIQUE_PAYLOADS_PER_IDENTITY) payloads.add(payload);
+        identityPayloads.set(normalized.identity, payloads);
+        facts.push(normalized);
       } catch (error) {
         poisoned = true;
         throw stableFailure(error);
@@ -2029,22 +2193,36 @@ export async function runPublicClientEvidence(
     await journey(recorder);
   } catch (error) {
     closed = true;
-    await Promise.allSettled([...pending]);
+    await drain();
+    discard();
     throw stableFailure(error);
   }
   closed = true;
-  await Promise.allSettled([...pending]);
-  if (poisoned) throw stableFailure();
+  await drain();
+  if (poisoned) {
+    discard();
+    throw stableFailure();
+  }
 
   let finish: { value: string; millis: number };
   try {
     finish = sampleIso(options.clock, lastClock);
   } catch (error) {
+    discard();
+    throw stableFailure(error);
+  }
+
+  let finalized: ReturnType<typeof finalizeRun>;
+  let failure: ReturnType<typeof finalizeRun>;
+  try {
+    finalized = finalizeRun(facts, options, start.value, finish.value, true);
+    failure = finalizeRun(facts, options, start.value, finish.value, false);
+  } catch (error) {
+    discard();
     throw stableFailure(error);
   }
 
   const writer = writerFunction(options.writer);
-  const finalized = finalizeRun(facts, options, start.value, finish.value, true);
   const artifact = makeArtifact(finalized.verification.serialized);
   const optimisticWriteSucceeded = finalized.verification.sanitized && await persist(writer, artifact);
   if (optimisticWriteSucceeded) {
@@ -2056,7 +2234,6 @@ export async function runPublicClientEvidence(
     };
   }
 
-  const failure = finalizeRun(facts, options, start.value, finish.value, false);
   const failureArtifact = makeArtifact(failure.verification.serialized);
   let failureWriteSucceeded = false;
   for (let attempt = 0; attempt < 2 && !failureWriteSucceeded; attempt += 1) {
