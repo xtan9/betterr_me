@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   InMemoryRecurringTaskLifecyclePersistence,
   type RecurringTaskLifecyclePersistence,
+  type RecurringTaskLifecycleState,
   RecurringTaskLifecycle,
 } from "@/lib/recurring-tasks/lifecycle";
 
@@ -17,6 +18,103 @@ function defaults(title: string, priority: 0 | 1 | 2 | 3 = 0) {
 }
 
 describe("RecurringTaskLifecycle revision behavior", () => {
+  it("revalidates visible Task identity, scope, Scheduled Date, and revision in the mutation transaction", async () => {
+    const revision = {
+      id: "revision-1",
+      seriesId: "series-1",
+      effectiveFrom: "2026-08-01",
+      effectiveTo: null,
+      state: "active" as const,
+      recurrenceRule: { frequency: "daily" as const, interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("Visible task"),
+      createdAt: "2026-08-01T00:00:00.000Z",
+    };
+    const series = {
+      id: "series-1",
+      userId: "owner",
+      status: "active" as const,
+      timeZone: "UTC",
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      occurrenceLimit: null,
+      lastScheduledDate: null,
+      coverageHorizon: "2026-08-01",
+      currentRevisionId: revision.id,
+      revisionToken: 1,
+      revisions: [revision],
+      occurrences: [{
+        id: "occurrence-1",
+        seriesId: "series-1",
+        revisionId: revision.id,
+        scheduledDate: "2026-08-01",
+        dueDate: "2026-08-01",
+        details: defaults("Visible task"),
+        state: "open" as const,
+        overrides: {},
+        taskId: "task-1",
+        completedAt: null,
+        createdAt: "2026-08-01T00:00:00.000Z",
+      }],
+      intentionalAbsences: [],
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-08-01T00:00:00.000Z",
+    };
+    const state: RecurringTaskLifecycleState = {
+      series: new Map([[series.id, series]]),
+      idempotency: new Map(),
+    };
+    const lifecycle = new RecurringTaskLifecycle({
+      transaction: async <T>(
+        _serializationKey: string,
+        operation: (draft: RecurringTaskLifecycleState) => Promise<T>,
+      ) => operation(state),
+    });
+    const base = {
+      userId: "owner",
+      seriesId: "series-1",
+      occurrenceId: "occurrence-1",
+      taskId: "task-1",
+      scope: "this" as const,
+      scheduledDate: "2026-08-01",
+      expectedRevisionId: revision.id,
+    };
+
+    await expect(lifecycle.completeOccurrence({
+      ...base,
+      taskId: "different-task",
+    })).resolves.toEqual({ status: "not-found", type: "not-found" });
+    await expect(lifecycle.completeOccurrence({
+      ...base,
+      scope: "following",
+    })).resolves.toMatchObject({
+      status: "invalid-transition",
+      reason: "Task Occurrence state commands only support the this scope",
+    });
+    await expect(lifecycle.completeOccurrence({
+      ...base,
+      scheduledDate: "2026-08-02",
+    })).resolves.toEqual({ status: "not-found", type: "not-found" });
+    await expect(lifecycle.completeOccurrence({
+      ...base,
+      expectedRevisionId: "different-revision",
+    })).resolves.toMatchObject({
+      status: "conflict",
+      reason: "Task occurrence revision changed concurrently",
+    });
+
+    await expect(lifecycle.completeOccurrence({
+      ...base,
+      idempotencyKey: "visible-complete-1",
+    })).resolves.toMatchObject({ status: "complete", type: "complete" });
+    expect(state.series.get("series-1")?.occurrences[0]).toMatchObject({
+      taskId: "task-1",
+      scheduledDate: "2026-08-01",
+      state: "completed",
+    });
+  });
+
   it("returns one not-found outcome without opening mutation persistence for missing or foreign occurrences", async () => {
     const backing = new InMemoryRecurringTaskLifecyclePersistence();
     let mutationTransactions = 0;

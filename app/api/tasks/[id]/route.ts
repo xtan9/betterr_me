@@ -11,6 +11,13 @@ import {
   taskDeletionHttpFailure,
 } from '@/lib/tasks/writes';
 import {
+  createAuthenticatedTaskCommands,
+  isTaskCommandSuccess,
+  operationIdFromRequest,
+  taskCommandTypeFromUpdate,
+  taskCommandHttpFailure,
+} from '@/lib/tasks/commands';
+import {
   createSupabaseOccurrenceAdapter,
   createSupabaseSeriesStateAdapter,
   createActivatedRecurringTaskLifecycle,
@@ -80,7 +87,8 @@ export async function PATCH(
     if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
-    const { principal: { userId }, client: supabase } = auth;
+    const { principal, client: supabase } = auth;
+    const { userId } = principal;
 
     const body = await request.json();
     const searchParams = request.nextUrl.searchParams;
@@ -108,6 +116,26 @@ export async function PATCH(
       if (!validation.success) return validation.response;
 
       if (scopeResult.data === 'this') {
+        const commandType = taskCommandTypeFromUpdate(validation.data);
+        if (commandType) {
+          const outcome = await createAuthenticatedTaskCommands(
+            supabase,
+            principal,
+          ).execute({
+            type: commandType,
+            taskId: id,
+            scope: 'this',
+            operationId: operationIdFromRequest(request),
+          });
+          if (!isTaskCommandSuccess(outcome)) {
+            const failure = taskCommandHttpFailure(outcome);
+            return NextResponse.json(
+              { error: failure.error },
+              { status: failure.status },
+            );
+          }
+          return NextResponse.json({ success: true });
+        }
         const outcome = await createSupabaseOccurrenceAdapter(supabase).edit(
           toOccurrenceEditIntent({
             userId,
@@ -147,6 +175,26 @@ export async function PATCH(
     const validation = validateRequestBody(body, taskUpdateSchema);
     if (!validation.success) return validation.response;
 
+    const commandType = taskCommandTypeFromUpdate(validation.data);
+    if (commandType) {
+      const outcome = await createAuthenticatedTaskCommands(
+        supabase,
+        principal,
+      ).execute({
+        type: commandType,
+        taskId: id,
+        operationId: operationIdFromRequest(request),
+      });
+      if (!isTaskCommandSuccess(outcome)) {
+        const failure = taskCommandHttpFailure(outcome);
+        return NextResponse.json(
+          { error: failure.error },
+          { status: failure.status },
+        );
+      }
+      return NextResponse.json({ task: outcome.task });
+    }
+
     const outcome = await createSupabaseOccurrenceAdapter(supabase).edit(
       toOccurrenceEditIntent({
         userId,
@@ -185,7 +233,8 @@ export async function DELETE(
     if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
-    const { principal: { userId }, client: supabase } = auth;
+    const { principal, client: supabase } = auth;
+    const { userId } = principal;
 
     const searchParams = request.nextUrl.searchParams;
     const scopeParam = searchParams.get('scope');
@@ -208,14 +257,36 @@ export async function DELETE(
       }
       scope = scopeResult.data;
     }
+    const operationId = operationIdFromRequest(request);
+
+    if (scope === undefined || scope === 'this') {
+      const outcome = await createAuthenticatedTaskCommands(
+        supabase,
+        principal,
+      ).execute({
+        type: 'skip',
+        taskId: id,
+        ...(scope === undefined ? {} : { scope }),
+        operationId,
+      });
+      if (!isTaskCommandSuccess(outcome)) {
+        const failure = taskCommandHttpFailure(outcome);
+        return NextResponse.json(
+          { error: failure.error },
+          { status: failure.status },
+        );
+      }
+      return NextResponse.json({ success: true });
+    }
 
     const outcome = await createTaskWrites(supabase, {
       lifecycle: createActivatedRecurringTaskLifecycle(supabase),
     }).delete({
       taskId: id,
       userId,
-      ...(scope === undefined ? {} : { scope }),
+      scope,
       ...(dateParam === undefined ? {} : { effectiveDate: dateParam }),
+      operationId,
     });
     if (outcome.type !== 'deleted') {
       const failure = taskDeletionHttpFailure(

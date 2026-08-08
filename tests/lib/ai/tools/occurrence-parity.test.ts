@@ -11,6 +11,8 @@ const {
   mockEdit,
   mockTaskWritesFactory,
   mockDelete,
+  mockTaskCommandFactory,
+  mockTaskCommandExecute,
 } = vi.hoisted(() => {
   const httpSupabase = {};
   const mockEdit = vi.fn();
@@ -22,19 +24,31 @@ const {
     delete: mockDelete,
     deleteSeries: vi.fn(),
   }));
+  const mockTaskCommandExecute = vi.fn();
+  const mockTaskCommandFactory = vi.fn(() => ({
+    execute: mockTaskCommandExecute,
+    toggle: vi.fn(),
+  }));
   return {
     httpSupabase,
     mockCreateAdapter,
     mockEdit,
     mockTaskWritesFactory,
     mockDelete,
+    mockTaskCommandFactory,
+    mockTaskCommandExecute,
   };
 });
 
 vi.mock("@/lib/auth/authenticated-request", () => ({
   authenticateRequest: vi.fn(async () => ({
     ok: true,
-    principal: { userId: "user-123", credential: "cookie", profile: {} },
+    principal: {
+      type: "user",
+      userId: "user-123",
+      credential: "cookie",
+      profile: {},
+    },
     client: httpSupabase,
   })),
 }));
@@ -48,6 +62,17 @@ vi.mock("@/lib/tasks/writes", async () => {
     "@/lib/tasks/writes",
   );
   return { ...actual, createTaskWrites: mockTaskWritesFactory };
+});
+
+vi.mock("@/lib/tasks/commands", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/tasks/commands")>(
+    "@/lib/tasks/commands",
+  );
+  return {
+    ...actual,
+    createAuthenticatedTaskCommands: mockTaskCommandFactory,
+    createTaskCommandsForUser: mockTaskCommandFactory,
+  };
 });
 
 const aiContext: ToolContext = {
@@ -78,6 +103,12 @@ describe("HTTP and AI occurrence adapter parity", () => {
       task,
     });
     mockDelete.mockResolvedValue({ type: "deleted" });
+    mockTaskCommandExecute.mockResolvedValue({
+      status: "complete",
+      type: "complete",
+      operation: "skip",
+      operationId: "test-operation",
+    });
   });
 
   it("maps equivalent HTTP and AI edits to one canonical occurrence intent", async () => {
@@ -177,7 +208,10 @@ describe("HTTP and AI occurrence adapter parity", () => {
     const httpResponse = await DELETE(
       new NextRequest(
         "http://localhost:3000/api/tasks/task-1?scope=all&date=2026-08-09",
-        { method: "DELETE" },
+        {
+          method: "DELETE",
+          headers: { "Idempotency-Key": "scope-delete-1" },
+        },
       ),
       { params: Promise.resolve({ id: "task-1" }) },
     );
@@ -186,6 +220,7 @@ describe("HTTP and AI occurrence adapter parity", () => {
       .execute(
         {
           taskId: "task-1",
+          operationId: "scope-delete-1",
           scope: "all",
           effectiveDate: "2026-08-09",
         },
@@ -199,6 +234,7 @@ describe("HTTP and AI occurrence adapter parity", () => {
       [
         {
           taskId: "task-1",
+          operationId: "scope-delete-1",
           userId: "user-123",
           scope: "all",
           effectiveDate: "2026-08-09",
@@ -207,6 +243,7 @@ describe("HTTP and AI occurrence adapter parity", () => {
       [
         {
           taskId: "task-1",
+          operationId: "scope-delete-1",
           userId: "user-123",
           scope: "all",
           effectiveDate: "2026-08-09",
@@ -216,16 +253,25 @@ describe("HTTP and AI occurrence adapter parity", () => {
   });
 
   it("renders a shared not-found deletion outcome consistently", async () => {
-    mockDelete.mockResolvedValue({ type: "not-found" });
+    mockTaskCommandExecute.mockResolvedValue({
+      status: "not-found",
+      type: "not-found",
+      operation: "skip",
+      operationId: "missing-delete-1",
+    });
     const httpResponse = await DELETE(
       new NextRequest("http://localhost:3000/api/tasks/task-1", {
         method: "DELETE",
+        headers: { "Idempotency-Key": "missing-delete-1" },
       }),
       { params: Promise.resolve({ id: "task-1" }) },
     );
     const aiResult = await taskTools()
       .find((tool) => tool.name === "deleteTask")!
-      .execute({ taskId: "task-1" }, aiContext);
+      .execute(
+        { taskId: "task-1", operationId: "missing-delete-1" },
+        aiContext,
+      );
 
     expect(httpResponse.status).toBe(404);
     expect(await httpResponse.json()).toEqual({ error: "Task not found" });
