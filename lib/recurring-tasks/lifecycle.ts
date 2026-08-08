@@ -1107,7 +1107,9 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
     userId: string,
     status?: RecurringSeriesStatus,
   ): Promise<{ series: RecurringTaskSeries[] }> {
-    const read = this.persistence.read ?? this.persistence.transaction.bind(this.persistence);
+    const read = this.persistence.read
+      ? this.persistence.read.bind(this.persistence)
+      : this.persistence.transaction.bind(this.persistence);
     const series = await read(`user:${userId}`, async (state) =>
       [...state.series.values()]
         .filter((candidate) => candidate.userId === userId)
