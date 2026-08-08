@@ -46,15 +46,22 @@ const presentation: HouseholdRunwayReportPresentation = {
   location: "US · California",
   formatMoney: (cents) => `$${cents}`,
   formatScenario: (scenario) => `scenario:${scenario}`,
-  formatSimulation: (simulation: RunwaySimulation) =>
+  formatSimulation: (simulation) =>
     simulation.sustainable
       ? "sustainable"
-      : `${simulation.months_covered?.toFixed(1)} months`,
+      : `${simulation.monthsCovered?.toFixed(1)} months`,
   formatCashTarget: (months, cents) => `cash target ${months}: $${cents}`,
   formatLargestReduction: (category, cents) =>
     `largest ${category}: $${cents}`,
-  precisionAdvice: "inputs confirmed",
+  precisionAdvice: () => "inputs confirmed",
 };
+
+function formatSimulation(simulation: RunwaySimulation) {
+  return presentation.formatSimulation({
+    sustainable: simulation.sustainable,
+    monthsCovered: simulation.months_covered,
+  });
+}
 
 describe("household runway downloads", () => {
   it("serializes every assessment result in stable scenario and detail order", () => {
@@ -81,13 +88,13 @@ describe("household runway downloads", () => {
       "scenario:both_stop",
     ]);
     expect(report).toContain(
-      `Baseline: ${presentation.formatSimulation(firstScenario.baseline)}`,
+      `Baseline: ${formatSimulation(firstScenario.baseline)}`,
     );
     expect(report).toContain(
-      `Current lifestyle: ${presentation.formatSimulation(firstScenario.comparisons.currentLifestyle)}`,
+      `Current lifestyle: ${formatSimulation(firstScenario.comparisons.currentLifestyle)}`,
     );
     expect(report).toContain(
-      `Adjusted: ${presentation.formatSimulation(firstScenario.adjusted)}`,
+      `Adjusted: ${formatSimulation(firstScenario.adjusted)}`,
     );
     const firstScenarioStart = report.indexOf(
       "Scenario: scenario:mine_stops",

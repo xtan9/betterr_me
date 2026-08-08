@@ -62,12 +62,6 @@ function createDependencies(
       getLastCompletedAt: vi.fn().mockResolvedValue("2026-02-08T10:00:00Z"),
       getWeekWorkoutCount: vi.fn().mockResolvedValue(3),
     } as DashboardSnapshotDependencies["workouts"],
-    ensureRecurringCoverage: vi.fn().mockResolvedValue({
-      status: "complete",
-      type: "complete",
-      requestedRange: { from: "2026-02-09", to: "2026-02-10" },
-      failedSeriesIds: [],
-    }),
     ...overrides,
   };
 }
@@ -115,10 +109,6 @@ describe("DashboardSnapshot", () => {
         },
       },
     });
-    expect(dependencies.ensureRecurringCoverage).toHaveBeenCalledWith(
-      "user-1",
-      { from: "2026-02-09", to: "2026-02-10" },
-    );
     expect(dependencies.habitLogs.getAllUserLogs).toHaveBeenCalledWith(
       "user-1",
       "2026-01-10",
@@ -132,84 +122,6 @@ describe("DashboardSnapshot", () => {
       "user-1",
       "2026-02-08",
     );
-  });
-
-  it("ensures the exact dashboard horizon before acquiring ordinary task data", async () => {
-    let finishCoverage: (() => void) | undefined;
-    const coverage = new Promise<{
-      status: "complete";
-      type: "complete";
-      requestedRange: { from: string; to: string };
-      failedSeriesIds: [];
-    }>((resolve) => {
-      finishCoverage = () => resolve({
-        status: "complete",
-        type: "complete",
-        requestedRange: { from: "2026-02-09", to: "2026-02-10" },
-        failedSeriesIds: [],
-      });
-    });
-    let taskAcquisitionStarted = false;
-    const ensureRecurringCoverage = vi.fn().mockReturnValue(coverage);
-    const dependencies = createDependencies({
-      ensureRecurringCoverage,
-      tasks: {
-        getTodayTasks: vi.fn().mockImplementation(async () => {
-          taskAcquisitionStarted = true;
-          return [];
-        }),
-        getTaskCount: vi.fn().mockResolvedValue(0),
-        getUserTasks: vi.fn().mockResolvedValue([]),
-      } as DashboardSnapshotDependencies["tasks"],
-    });
-
-    const outcomePromise = createDashboardSnapshot(dependencies).load({
-      userId: "user-1",
-      date: "2026-02-09",
-    });
-    await Promise.resolve();
-
-    expect(ensureRecurringCoverage).toHaveBeenCalledWith("user-1", {
-      from: "2026-02-09",
-      to: "2026-02-10",
-    });
-    expect(taskAcquisitionStarted).toBe(false);
-    finishCoverage?.();
-    await expect(outcomePromise).resolves.not.toMatchObject({ status: "failed" });
-  });
-
-  it("retains a typed warning when dashboard coverage is only partially available", async () => {
-    const dependencies = createDependencies({
-      ensureRecurringCoverage: vi.fn().mockResolvedValue({
-        status: "partial",
-        type: "coverage-unavailable",
-        requestedRange: { from: "2026-02-09", to: "2026-02-10" },
-        failedSeriesIds: ["series-2"],
-        warning: {
-          code: "recurring_coverage_unavailable",
-          type: "coverage-unavailable",
-          message: "Recurring task coverage is unavailable for the requested date range.",
-          requestedRange: { from: "2026-02-09", to: "2026-02-10" },
-          failedSeriesIds: ["series-2"],
-        },
-      }),
-    });
-
-    const outcome = await createDashboardSnapshot(dependencies).load({
-      userId: "user-1",
-      date: "2026-02-09",
-    });
-
-    expect(outcome.status).toBe("degraded");
-    if (outcome.status !== "degraded") return;
-    expect(outcome.warnings).toContainEqual({
-      code: "recurring_coverage_unavailable",
-      message:
-        "Some recurring tasks may not appear because Coverage Horizon is unavailable for the requested range.",
-      type: "coverage-unavailable",
-      requestedRange: { from: "2026-02-09", to: "2026-02-10" },
-      failedSeriesIds: ["series-2"],
-    });
   });
 
   it("warns when optional habit history enrichment is unavailable", async () => {
@@ -269,9 +181,6 @@ describe("DashboardSnapshot", () => {
           .fn()
           .mockRejectedValue(new Error("workout count unavailable")),
       } as DashboardSnapshotDependencies["workouts"],
-      ensureRecurringCoverage: vi
-        .fn()
-        .mockRejectedValue(new Error("coverage unavailable")),
     });
     const snapshot = createDashboardSnapshot(dependencies);
 
@@ -317,14 +226,6 @@ describe("DashboardSnapshot", () => {
           code: "habit_logs_unavailable",
           message:
             "Absence data is unavailable because habit logs are temporarily unavailable.",
-        },
-        {
-          code: "recurring_coverage_unavailable",
-          message:
-            "Some recurring tasks may not appear because Coverage Horizon is unavailable for the requested range.",
-          type: "coverage-unavailable",
-          requestedRange: { from: "2026-02-11", to: "2026-02-12" },
-          failedSeriesIds: [],
         },
         {
           code: "localization_unavailable",

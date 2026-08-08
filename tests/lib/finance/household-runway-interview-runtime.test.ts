@@ -73,20 +73,24 @@ function driveToReview(runtime: ReturnType<typeof createHouseholdRunwayInterview
   runtime.send({ type: "continue" });
 }
 
-function completedPlanInputs() {
+async function completedPlanInputs() {
+  let capturedInputs: HouseholdRunwayInterviewRuntimePlanResult["planInputs"] | undefined;
   const source = createHouseholdRunwayInterviewRuntime({
     now: () => now,
     createId: () => "source",
+    persistPlan: (request) => {
+      capturedInputs = request.inputs;
+      return { success: false, error: "network" };
+    },
   });
   source.start();
   driveToReview(source);
   source.send({ type: "continue" });
-  const inputs = source.getSnapshot().derived.planInputs as
-    | HouseholdRunwayInterviewRuntimePlanResult["planInputs"]
-    | null;
-  if (!inputs) throw new Error("expected committed Plan inputs");
+  source.send({ type: "save_plan" });
+  await settle([]);
+  if (!capturedInputs) throw new Error("expected committed Plan inputs");
   source.dispose();
-  return inputs;
+  return capturedInputs;
 }
 
 describe("Household Runway Interview Runtime", () => {
@@ -136,6 +140,10 @@ describe("Household Runway Interview Runtime", () => {
       lifecycle: "ready",
       interviewStatus: "not_started",
       screen: { kind: "landing" },
+      actions: {
+        start: { applicable: true },
+        startNew: { applicable: false },
+      },
     });
 
     runtime.send({ type: "start", stage: "location" });
@@ -197,7 +205,7 @@ describe("Household Runway Interview Runtime", () => {
     expect(runtime.getSnapshot()).toBe(snapshot);
   });
 
-  it("exposes only frozen screen facts, derived facts, issues, and affordances", () => {
+  it("exposes only frozen focused screen facts, issues, operations, and actions", () => {
     const runtime = createHouseholdRunwayInterviewRuntime({
       now: () => now,
       createId: () => "interview-1",
@@ -213,7 +221,6 @@ describe("Household Runway Interview Runtime", () => {
       currency: null,
       canContinue: false,
     });
-    expect(snapshot.derived).toEqual({ planInputs: null, assessment: null });
     expect(snapshot.plan).toEqual({ exists: false, current: false });
     expect(snapshot.draft).toEqual({
       current: true,
@@ -221,22 +228,26 @@ describe("Household Runway Interview Runtime", () => {
       session: false,
       device: false,
       deviceStorageConsent: false,
+      synchronized: false,
     });
     expect(snapshot.confirmation).toEqual({ status: "idle" });
     expect(snapshot.issues).toEqual([]);
     expect(snapshot.operations).toEqual({
-      draftSynchronization: { status: "dirty" },
+      draftSynchronization: { status: "idle" },
       deviceDraft: { status: "idle" },
       planPersistence: { status: "idle" },
       reportDownload: { status: "idle" },
       analytics: { status: "idle" },
     });
-    expect(snapshot.affordances).toMatchObject({
-      continue: true,
-      back: true,
-      skip: false,
-      startNew: false,
+    expect(snapshot.actions).toMatchObject({
+      continue: { applicable: true },
+      back: { applicable: true },
+      skip: { applicable: false },
+      startNew: { applicable: false },
     });
+    expect(snapshot).not.toHaveProperty("derived");
+    expect(snapshot).not.toHaveProperty("assessmentHistory");
+    expect(snapshot).not.toHaveProperty("affordances");
     expect(snapshot).not.toHaveProperty("events");
     expect(snapshot).not.toHaveProperty("effects");
     expect(snapshot).not.toHaveProperty("transition");
@@ -283,24 +294,21 @@ describe("Household Runway Interview Runtime", () => {
     expect(snapshot.interviewStatus).toBe("reviewing");
     expect(snapshot.screen).toMatchObject({
       kind: "review",
-      ready: true,
-      planInputs: {
+      readiness: "ready",
+      location: {
+        kind: "complete",
         country: "US",
         region: "CA",
         currency: "USD",
-        available_cash: { cents: 3_000_000, confidence: "confirmed" },
       },
-    });
-    expect(snapshot.derived.planInputs).not.toBeNull();
-    expect(snapshot.derived.assessment).toMatchObject({
-      answers: snapshot.derived.planInputs,
+      cash: { cents: 3_000_000, confidence: "confirmed" },
     });
     expect(snapshot.issues).toEqual([]);
-    expect(snapshot.affordances).toMatchObject({
-      continue: true,
-      back: true,
-      savePlan: false,
-      downloadReport: false,
+    expect(snapshot.actions).toMatchObject({
+      continue: { applicable: true },
+      back: { applicable: true },
+      savePlan: { applicable: false },
+      downloadReport: { applicable: false },
     });
   });
 
@@ -317,15 +325,12 @@ describe("Household Runway Interview Runtime", () => {
       interviewStatus: "completed",
       stage: "result",
       screen: {
-        kind: "stage",
+        kind: "result",
         stage: "result",
-        assessment: expect.any(Object),
-      },
-      derived: {
-        assessment: expect.any(Object),
+        readiness: "ready",
       },
     });
-    expect(runtime.getSnapshot().screen).not.toHaveProperty("resultProjection");
+    expect(runtime.getSnapshot().screen).not.toHaveProperty("assessment");
 
     runtime.send({ type: "edit_completed_plan" });
     expect(runtime.getSnapshot()).toMatchObject({
@@ -351,8 +356,6 @@ describe("Household Runway Interview Runtime", () => {
     runtime.send({ type: "continue" });
     await settle(scheduled);
 
-    const assessment = runtime.getSnapshot().derived.assessment;
-    if (!assessment) throw new Error("expected a successful Assessment");
     const published = vi.fn();
     runtime.subscribe(published);
 
@@ -367,13 +370,13 @@ describe("Household Runway Interview Runtime", () => {
     await settle(scheduled);
 
     expect(downloadReport).toHaveBeenCalledWith({
-      assessment,
+      assessment: expect.objectContaining({ modelVersion: "4.0.0" }),
       locale: "zh-TW",
     });
     expect(runtime.getSnapshot().operations.reportDownload).toEqual({
       status: "succeeded",
     });
-    expect(runtime.getSnapshot().derived.assessment).toEqual(assessment);
+    expect(runtime.getSnapshot().screen).toMatchObject({ kind: "result", readiness: "ready" });
   });
 
   const throwingReport = (): never => {
@@ -397,8 +400,6 @@ describe("Household Runway Interview Runtime", () => {
     driveToReview(runtime);
     runtime.send({ type: "continue" });
     await settle(scheduled);
-    const assessment = runtime.getSnapshot().derived.assessment;
-
     runtime.send({ type: "request_report_download" });
     await settle(scheduled);
 
@@ -406,7 +407,7 @@ describe("Household Runway Interview Runtime", () => {
       status: "failed",
       error,
     });
-    expect(runtime.getSnapshot().derived.assessment).toEqual(assessment);
+    expect(runtime.getSnapshot().screen).toMatchObject({ kind: "result", readiness: "ready" });
   });
 
   it("retries a failed report only after another explicit download intent", async () => {
@@ -468,9 +469,6 @@ describe("Household Runway Interview Runtime", () => {
     driveToReview(runtime);
     runtime.send({ type: "continue" });
     await settle(scheduled);
-    const assessment = runtime.getSnapshot().derived.assessment;
-    if (!assessment) throw new Error("expected a successful Assessment");
-
     runtime.send({ type: "registration_clicked" });
     runtime.send({ type: "request_report_download" });
     expect(runtime.getSnapshot().operations).toMatchObject({
@@ -484,7 +482,7 @@ describe("Household Runway Interview Runtime", () => {
       stage: "result",
     });
     expect(downloadReport).toHaveBeenCalledWith({
-      assessment,
+      assessment: expect.objectContaining({ modelVersion: "4.0.0" }),
       locale: "en",
     });
     expect(runtime.getSnapshot().operations.reportDownload).toEqual({
@@ -499,7 +497,7 @@ describe("Household Runway Interview Runtime", () => {
       status: "failed",
       error: "analytics_failed",
     });
-    expect(runtime.getSnapshot().derived.assessment).toEqual(assessment);
+    expect(runtime.getSnapshot().screen).toMatchObject({ kind: "result", readiness: "ready" });
     expect(runtime.getSnapshot().operations.reportDownload).toEqual({
       status: "succeeded",
     });
@@ -571,7 +569,7 @@ describe("Household Runway Interview Runtime", () => {
     await settle(scheduled);
 
     expect(runtime.getSnapshot().lifecycle).toBe("disposed");
-    expect(runtime.getSnapshot().derived.assessment).toEqual(afterEdit.derived.assessment);
+    expect(runtime.getSnapshot().screen).toEqual(afterEdit.screen);
     expect(runtime.getSnapshot().operations.reportDownload).toEqual({
       status: "pending",
     });
@@ -627,7 +625,7 @@ describe("Household Runway Interview Runtime", () => {
       | ((value: HouseholdRunwayInterviewRuntimePlanResult) => void)
       | undefined;
     const persistPlan = vi.fn(
-      () =>
+      (_request: HouseholdRunwayInterviewRuntimePlanRequest) =>
         new Promise<HouseholdRunwayInterviewRuntimePlanResult>((resolve) => {
           resolvePlan = resolve;
         }),
@@ -661,16 +659,16 @@ describe("Household Runway Interview Runtime", () => {
       }),
     );
 
-    runtime.dispose();
-    const result = runtime.getSnapshot().derived;
-    if (!resolvePlan || !result.planInputs || !result.assessment) {
+    const request = persistPlan.mock.calls[0]?.[0] as HouseholdRunwayInterviewRuntimePlanRequest | undefined;
+    if (!resolvePlan || !request) {
       throw new Error("expected a pending plan result");
     }
     resolvePlan({
       planRevision: 1,
-      planInputs: result.planInputs as HouseholdRunwayInterviewRuntimePlanResult["planInputs"],
-      assessment: result.assessment as HouseholdRunwayInterviewRuntimePlanResult["assessment"],
+      planInputs: request.inputs,
+      assessment: request.assessment,
     });
+    runtime.dispose();
     await Promise.resolve();
     await Promise.resolve();
 
@@ -680,7 +678,7 @@ describe("Household Runway Interview Runtime", () => {
   it("projects operation status without exposing protocol or retry metadata", async () => {
     const scheduled: (() => void)[] = [];
     const persistPlan = vi.fn(
-      () =>
+      (_request: HouseholdRunwayInterviewRuntimePlanRequest) =>
         new Promise<HouseholdRunwayInterviewRuntimePlanResult>(() => {
           // Keep the capability pending so the public status is observable.
         }),
@@ -742,7 +740,7 @@ describe("Household Runway Interview Runtime", () => {
       | ((value: HouseholdRunwayInterviewRuntimePlanResult) => void)
       | undefined;
     const persistPlan = vi.fn(
-      () =>
+      (_request: HouseholdRunwayInterviewRuntimePlanRequest) =>
         new Promise<HouseholdRunwayInterviewRuntimePlanResult>((resolve) => {
           resolvePlan = resolve;
         }),
@@ -766,8 +764,8 @@ describe("Household Runway Interview Runtime", () => {
     await Promise.resolve();
     scheduled.splice(0).forEach((task) => task());
 
-    const pending = runtime.getSnapshot().derived;
-    if (!resolvePlan || !pending.planInputs || !pending.assessment) {
+    const pending = persistPlan.mock.calls[0]?.[0] as HouseholdRunwayInterviewRuntimePlanRequest | undefined;
+    if (!resolvePlan || !pending) {
       throw new Error("expected a pending plan result");
     }
     runtime.send({
@@ -777,10 +775,8 @@ describe("Household Runway Interview Runtime", () => {
     const afterEdit = published.mock.calls.length;
     resolvePlan({
       planRevision: 1,
-      planInputs:
-        pending.planInputs as HouseholdRunwayInterviewRuntimePlanResult["planInputs"],
-      assessment:
-        pending.assessment as HouseholdRunwayInterviewRuntimePlanResult["assessment"],
+      planInputs: pending.inputs,
+      assessment: pending.assessment,
     });
     await Promise.resolve();
     await Promise.resolve();
@@ -847,6 +843,7 @@ describe("Household Runway Interview Runtime", () => {
       session: true,
       device: true,
       deviceStorageConsent: true,
+      synchronized: false,
     });
     expect(published.map((snapshot) => snapshot.lifecycle)).toEqual([
       "initializing",
@@ -959,16 +956,7 @@ describe("Household Runway Interview Runtime", () => {
   });
 
   it("exposes a resume choice when the selected Draft differs from the committed Plan", async () => {
-    const source = createHouseholdRunwayInterviewRuntime({
-      now: () => now,
-      createId: () => "source",
-    });
-    source.start();
-    driveToReview(source);
-    const planInputs = source.getSnapshot().derived.planInputs as
-      | HouseholdRunwayInterviewRuntimePlanResult["planInputs"]
-      | null;
-    if (!planInputs) throw new Error("expected plan inputs");
+    const planInputs = await completedPlanInputs();
 
     const runtime = createHouseholdRunwayInterviewRuntime({
       now: () => now,
@@ -997,22 +985,13 @@ describe("Household Runway Interview Runtime", () => {
     runtime.send({ type: "resume_committed_plan" });
     expect(runtime.getSnapshot()).toMatchObject({
       interviewStatus: "completed",
-      screen: { kind: "stage", stage: "result" },
+      screen: { kind: "result", stage: "result", readiness: "ready" },
       plan: { exists: true, current: true },
     });
   });
 
   it("resumes the selected Draft through the explicit Draft choice", async () => {
-    const source = createHouseholdRunwayInterviewRuntime({
-      now: () => now,
-      createId: () => "source",
-    });
-    source.start();
-    driveToReview(source);
-    const inputs = source.getSnapshot().derived.planInputs as
-      | HouseholdRunwayInterviewRuntimePlanResult["planInputs"]
-      | null;
-    if (!inputs) throw new Error("expected Plan inputs");
+    const inputs = await completedPlanInputs();
 
     const runtime = createHouseholdRunwayInterviewRuntime({
       now: () => now,
@@ -1040,17 +1019,7 @@ describe("Household Runway Interview Runtime", () => {
   });
 
   it("holds authenticated Plan bootstrap behind initialization and publishes committed history", async () => {
-    const source = createHouseholdRunwayInterviewRuntime({
-      now: () => now,
-      createId: () => "source",
-    });
-    source.start();
-    driveToReview(source);
-    source.send({ type: "continue" });
-    const planInputs = source.getSnapshot().derived.planInputs as
-      | HouseholdRunwayInterviewRuntimePlanResult["planInputs"]
-      | null;
-    if (!planInputs) throw new Error("expected committed Plan inputs");
+    const planInputs = await completedPlanInputs();
 
     const scheduled: (() => void)[] = [];
     let resolvePlan:
@@ -1096,31 +1065,20 @@ describe("Household Runway Interview Runtime", () => {
     expect(runtime.getSnapshot()).toMatchObject({
       lifecycle: "ready",
       interviewStatus: "completed",
-      plan: { exists: true, current: true, inputs: planInputs },
-      assessmentHistory: [history],
+      plan: { exists: true, current: true },
     });
 
     runtime.send({ type: "edit_completed_plan" });
     runtime.send({ type: "continue" });
     expect(runtime.getSnapshot()).toMatchObject({
-      screen: { kind: "stage", stage: "result" },
+      screen: { kind: "result", stage: "result", readiness: "ready" },
       plan: { exists: true, current: true },
-      operations: { planPersistence: { status: "dirty" } },
+      operations: { planPersistence: { status: "idle" } },
     });
   });
 
   it("rejects the complete restored history when a sibling outcome is incoherent", async () => {
-    const source = createHouseholdRunwayInterviewRuntime({
-      now: () => now,
-      createId: () => "source",
-    });
-    source.start();
-    driveToReview(source);
-    source.send({ type: "continue" });
-    const planInputs = source.getSnapshot().derived.planInputs as
-      | HouseholdRunwayInterviewRuntimePlanResult["planInputs"]
-      | null;
-    if (!planInputs) throw new Error("expected committed Plan inputs");
+    const planInputs = await completedPlanInputs();
 
     const history = {
       id: "snapshot-valid",
@@ -1151,8 +1109,7 @@ describe("Household Runway Interview Runtime", () => {
     expect(runtime.getSnapshot()).toMatchObject({
       lifecycle: "ready",
       interviewStatus: "completed",
-      screen: { kind: "stage", stage: "result", assessment: expect.any(Object) },
-      assessmentHistory: [],
+      screen: { kind: "result", stage: "result", readiness: "ready", history: [] },
       issues: [{ code: "assessment_history_invalid" }],
     });
   });
@@ -1166,6 +1123,7 @@ describe("Household Runway Interview Runtime", () => {
     ["sustainable outcome", { sustainable: true }],
     ["depleting outcome", { months_covered: null }],
   ] as const)("rejects restored history with malformed %s", async (_kind, corruption) => {
+    const planInputs = await completedPlanInputs();
     const history = {
       id: "snapshot-valid",
       trigger: "completed" as const,
@@ -1184,7 +1142,7 @@ describe("Household Runway Interview Runtime", () => {
       now: () => now,
       createId: () => "interview-1",
       restorePlan: () => ({
-        plan: { revision: 7, inputs: completedPlanInputs() },
+        plan: { revision: 7, inputs: planInputs },
         snapshots: [history, malformed],
       }),
     });
@@ -1195,24 +1153,13 @@ describe("Household Runway Interview Runtime", () => {
     expect(runtime.getSnapshot()).toMatchObject({
       lifecycle: "ready",
       interviewStatus: "completed",
-      screen: { kind: "stage", stage: "result", assessment: expect.any(Object) },
-      assessmentHistory: [],
+      screen: { kind: "result", stage: "result", readiness: "ready", history: [] },
       issues: [{ code: "assessment_history_invalid" }],
     });
   });
 
   it("lets authenticated Plan bootstrap replace or clear a stale initial Plan", async () => {
-    const source = createHouseholdRunwayInterviewRuntime({
-      now: () => now,
-      createId: () => "source",
-    });
-    source.start();
-    driveToReview(source);
-    source.send({ type: "continue" });
-    const inputs = source.getSnapshot().derived.planInputs as
-      | HouseholdRunwayInterviewRuntimePlanResult["planInputs"]
-      | null;
-    if (!inputs) throw new Error("expected Plan inputs");
+    const inputs = await completedPlanInputs();
 
     const scheduled: (() => void)[] = [];
     const runtime = createHouseholdRunwayInterviewRuntime({
@@ -1229,7 +1176,7 @@ describe("Household Runway Interview Runtime", () => {
     await settle(scheduled);
     expect(runtime.getSnapshot().plan).toMatchObject({
       exists: true,
-      inputs,
+      current: true,
     });
 
     const cleared = createHouseholdRunwayInterviewRuntime({
@@ -1286,7 +1233,7 @@ describe("Household Runway Interview Runtime", () => {
     expect(request.idempotencyKey).toBe(request.snapshotActionId);
     expect(runtime.getSnapshot()).toMatchObject({
       plan: { exists: true, current: true },
-      assessmentHistory: [history],
+      screen: { kind: "result", readiness: "ready", history: [{ id: "snapshot-2" }] },
       operations: { planPersistence: { status: "succeeded" } },
     });
     expect(runtime.getSnapshot().draft.current).toBe(true);

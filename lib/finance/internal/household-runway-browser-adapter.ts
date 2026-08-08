@@ -2,7 +2,12 @@ import {
   HOUSEHOLD_RUNWAY_INTERVIEW_STAGE_IDS,
   type HouseholdRunwayInterviewStage,
 } from "@/lib/finance/internal/household-runway-interview";
-import type { HouseholdRunwayAnswers, RunwaySnapshotSummary } from "@/lib/finance/cushion";
+import type {
+  HouseholdRunwayAnswers,
+  RunwayCountry,
+  RunwayCurrency,
+  RunwaySnapshotSummary,
+} from "@/lib/finance/cushion";
 import type { SuccessfulHouseholdRunwayAssessment } from "@/lib/finance/household-runway-assessment";
 import { downloadHouseholdRunwayAssessment } from "@/lib/finance/internal/household-runway-download";
 import {
@@ -79,8 +84,15 @@ interface HouseholdRunwayBrowserStorageSnapshot {
   deviceStorageConsent: boolean;
 }
 
+export interface HouseholdRunwayBrowserReportPresentationRequest {
+  readonly locale: RunwayLocale;
+  readonly country: RunwayCountry;
+  readonly region: string;
+  readonly currency: RunwayCurrency;
+}
+
 export type HouseholdRunwayBrowserReportPresentation = (
-  request: HouseholdRunwayInterviewRuntimeReportRequest,
+  request: HouseholdRunwayBrowserReportPresentationRequest,
 ) => HouseholdRunwayReportPresentation;
 
 export interface HouseholdRunwayBrowserAdapterOptions
@@ -423,7 +435,13 @@ export function createHouseholdRunwayBrowserAdapterWithCapabilities(
     downloadReport:
       options.downloadReport ??
       ((request: HouseholdRunwayInterviewRuntimeReportRequest) => {
-        const presentation = options.reportPresentation?.(request);
+        const { answers } = request.assessment;
+        const presentation = options.reportPresentation?.({
+          locale: request.locale,
+          country: answers.country,
+          region: answers.region,
+          currency: answers.currency,
+        });
         return presentation
           ? downloadHouseholdRunwayAssessment(request.assessment, presentation).success
           : false;
