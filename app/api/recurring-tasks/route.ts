@@ -6,14 +6,15 @@ import { log } from '@/lib/logger';
 import { recurringTaskCreateSchema } from '@/lib/validations/recurring-task';
 import { ensureProfile } from '@/lib/db/ensure-profile';
 import { getLocalDateString } from '@/lib/utils';
-import { createActivatedRecurringTaskLifecycle } from '@/lib/recurring-tasks';
 import {
-  createSeriesCreation,
   initialSeriesCoverage,
-  normalizeSeriesCreationIntent,
-  toRecurringTaskCompatibility,
-} from '@/lib/recurring-tasks/creation';
-import { toLifecycleRecurrenceDates } from '@/lib/recurring-tasks/compatibility';
+  toCreateSeriesCommand,
+  toLifecycleRecurrenceDates,
+  toRecurringTaskResponse,
+  recurringTaskFailureHttpStatus,
+  recurringTaskFailureMessage,
+} from '@/lib/recurring-tasks/compatibility';
+import { createAuthenticatedRecurringTaskCapabilities } from '@/lib/recurring-tasks';
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ['cookie'],
@@ -47,12 +48,22 @@ export async function GET(request: NextRequest) {
       ? (statusParam as 'active' | 'paused' | 'archived')
       : null;
 
-    const lifecycle = createActivatedRecurringTaskLifecycle(supabase);
-    const result = await lifecycle.listSeries(
-      userId,
-      status === 'archived' ? 'ended' : status ?? undefined,
+    const capabilities = createAuthenticatedRecurringTaskCapabilities({
+      supabase,
+      principal: auth.principal,
+    });
+    const result = await capabilities.seriesQueries.listSeries({
+      status: status === 'archived' ? 'ended' : status ?? undefined,
+    });
+    if (result.type !== 'listed') {
+      return NextResponse.json(
+        { error: recurringTaskFailureMessage(result) },
+        { status: recurringTaskFailureHttpStatus(result) },
+      );
+    }
+    const templates = result.series.map((series) =>
+      toRecurringTaskResponse(series, userId),
     );
-    const templates = result.series.map(toRecurringTaskCompatibility);
 
     return NextResponse.json({ recurring_tasks: templates });
   } catch (error) {
@@ -93,8 +104,9 @@ export async function POST(request: NextRequest) {
     // the AI adapter.
     const today = body.date || getLocalDateString();
     const recurrenceDates = toLifecycleRecurrenceDates(validation.data.start_date);
-    const intent = normalizeSeriesCreationIntent({
-      userId,
+    const operationId = request.headers.get('Idempotency-Key') ?? '';
+    const command = toCreateSeriesCommand({
+      operationId,
       title: validation.data.title,
       description: validation.data.description ?? null,
       priority: validation.data.priority ?? 0,
@@ -110,35 +122,20 @@ export async function POST(request: NextRequest) {
         today,
       ).to,
     });
-    const result = await createSeriesCreation(supabase).create(intent);
-    const outcome = result.outcome;
-    if (outcome.status === 'complete' || outcome.status === 'already-applied') {
+    const capabilities = createAuthenticatedRecurringTaskCapabilities({
+      supabase,
+      principal: auth.principal,
+    });
+    const result = await capabilities.seriesCommands.createSeries(command);
+    if (result.type === 'created') {
       return NextResponse.json(
-        { recurring_task: toRecurringTaskCompatibility(outcome.series) },
-        { status: 201 },
-      );
-    }
-    if (outcome.status === 'conflict') {
-      return NextResponse.json(
-        { error: 'Recurring task creation conflict' },
-        { status: 409 },
-      );
-    }
-    if (outcome.status === 'coverage-unavailable') {
-      return NextResponse.json(
-        { error: 'Recurring task coverage is temporarily unavailable' },
-        { status: 503 },
-      );
-    }
-    if (outcome.status === 'not-found') {
-      return NextResponse.json(
-        { error: 'Recurring task not found' },
-        { status: 404 },
+        { recurring_task: toRecurringTaskResponse(result.series, userId) },
+        { status: result.status === 'already-applied' ? 200 : 201 },
       );
     }
     return NextResponse.json(
-      { error: outcome.reason },
-      { status: 400 },
+      { error: recurringTaskFailureMessage(result) },
+      { status: recurringTaskFailureHttpStatus(result) },
     );
   } catch (error) {
     log.error('POST /api/recurring-tasks error', error);

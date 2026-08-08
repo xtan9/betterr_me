@@ -14,11 +14,16 @@ import {
 } from '@/lib/recurring-tasks/recurrence';
 import {
   createSupabaseSeriesStateAdapter,
+  createAuthenticatedRecurringTaskCapabilities,
   createActivatedRecurringTaskLifecycle,
   isSeriesStateSuccess,
   seriesStateHttpFailure,
 } from '@/lib/recurring-tasks';
-import { toRecurringTaskCompatibility } from '@/lib/recurring-tasks/creation';
+import {
+  recurringTaskFailureHttpStatus,
+  recurringTaskFailureMessage,
+  toRecurringTaskResponse,
+} from '@/lib/recurring-tasks/compatibility';
 import type { RecurringTaskUpdateValues } from '@/lib/validations/recurring-task';
 
 const READ_REQUEST_POLICY = {
@@ -50,17 +55,21 @@ export async function GET(
     }
     const { principal: { userId }, client: supabase } = auth;
 
-    const outcome = await createActivatedRecurringTaskLifecycle(supabase)
-      .getSeries(userId, id);
+    const result = await createAuthenticatedRecurringTaskCapabilities({
+      supabase,
+      principal: auth.principal,
+    }).seriesQueries.getSeries({ seriesId: id });
 
-    if (outcome.status === 'not-found') {
-      return NextResponse.json({ error: 'Recurring task not found' }, { status: 404 });
-    }
-    if (outcome.status !== 'complete' && outcome.status !== 'already-applied') {
-      return NextResponse.json({ error: 'Failed to fetch recurring task' }, { status: 503 });
+    if (result.type !== 'found') {
+      return NextResponse.json(
+        { error: recurringTaskFailureMessage(result) },
+        { status: recurringTaskFailureHttpStatus(result) },
+      );
     }
 
-    return NextResponse.json({ recurring_task: toRecurringTaskCompatibility(outcome.series) });
+    return NextResponse.json({
+      recurring_task: toRecurringTaskResponse(result.series, userId),
+    });
   } catch (error) {
     log.error('GET /api/recurring-tasks/[id] error', error);
     return NextResponse.json(

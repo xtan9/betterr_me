@@ -6,8 +6,9 @@ const { mockEnsureProfile, mockGetUser } = vi.hoisted(() => ({
   mockEnsureProfile: vi.fn(),
   mockGetUser: vi.fn(),
 }));
-const { mockEnsureRecurringCoverageThrough } = vi.hoisted(() => ({
-  mockEnsureRecurringCoverageThrough: vi.fn(),
+const { mockCreateTaskQuery, mockTaskQueryRead } = vi.hoisted(() => ({
+  mockCreateTaskQuery: vi.fn(),
+  mockTaskQueryRead: vi.fn(),
 }));
 const apiKeyMocks = vi.hoisted(() => ({
   from: vi.fn(),
@@ -68,33 +69,12 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-vi.mock('@/lib/db/ensure-profile', () => ({
-  ensureProfile: mockEnsureProfile,
+vi.mock('@/lib/tasks/supabase-query', () => ({
+  createSupabaseTaskQuery: mockCreateTaskQuery,
 }));
 
-vi.mock('@/lib/recurring-tasks/coverage', () => ({
-  ensureRecurringTaskCoverageThrough: mockEnsureRecurringCoverageThrough,
-  taskReadCoverageRange: ({
-    date,
-    dueDate,
-    view,
-    days,
-  }: { date: string; dueDate?: string; view?: string; days?: number }) => {
-    const from = dueDate ?? date;
-    if (view === 'upcoming') {
-      const end = new Date(`${from}T00:00:00.000Z`);
-      end.setUTCDate(end.getUTCDate() + (days ?? 7));
-      return { from, to: end.toISOString().slice(0, 10) };
-    }
-    return { from, to: from };
-  },
-  recurringCoverageWarning: (requestedRange: { from: string; to: string }) => ({
-    code: 'recurring_coverage_unavailable',
-    type: 'coverage-unavailable',
-    message: 'Recurring task coverage is unavailable for the requested date range.',
-    requestedRange,
-    failedSeriesIds: [],
-  }),
+vi.mock('@/lib/db/ensure-profile', () => ({
+  ensureProfile: mockEnsureProfile,
 }));
 
 import { createClient } from '@/lib/supabase/server';
@@ -113,10 +93,8 @@ describe('GET /api/tasks', () => {
       },
       error: null,
     });
-    mockEnsureRecurringCoverageThrough.mockResolvedValue({
-      status: 'complete',
-      failedSeriesIds: [],
-    });
+    mockCreateTaskQuery.mockReturnValue({ read: mockTaskQueryRead });
+    mockTaskQueryRead.mockResolvedValue({ tasks: [], completeness: null });
     vi.stubEnv('API_KEY_HMAC_SECRET', 'test-hmac-secret');
     vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://test.supabase.co');
     vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'test-service-role-key');
@@ -154,7 +132,7 @@ describe('GET /api/tasks', () => {
     const mockTasks = [
       { id: '1', user_id: 'user-123', title: 'Task 1', is_completed: false },
     ];
-    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue(mockTasks as any);
+    mockTaskQueryRead.mockResolvedValue({ tasks: mockTasks, completeness: null });
 
     const request = new NextRequest('http://localhost:3000/api/tasks');
     const response = await GET(request);
@@ -162,83 +140,111 @@ describe('GET /api/tasks', () => {
 
     expect(response.status).toBe(200);
     expect(data.tasks).toEqual(mockTasks);
-    expect(mockTasksDB.getUserTasks).toHaveBeenCalledWith('user-123', {});
+    expect(mockCreateTaskQuery).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        type: 'user',
+        userId: 'user-123',
+      }),
+    );
+    expect(mockTaskQueryRead).toHaveBeenCalledWith(
+      { type: 'list', filters: {} },
+      { onIncomplete: 'return-available' },
+    );
   });
 
   it('should apply filters from query params', async () => {
-    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+    mockTaskQueryRead.mockResolvedValue({ tasks: [], completeness: null });
 
     const request = new NextRequest(
       'http://localhost:3000/api/tasks?is_completed=true&priority=2'
     );
     await GET(request);
 
-    expect(mockTasksDB.getUserTasks).toHaveBeenCalledWith('user-123', {
-      is_completed: true,
-      priority: 2,
-    });
+    expect(mockTaskQueryRead).toHaveBeenCalledWith(
+      {
+        type: 'list',
+        filters: { is_completed: true, priority: 2 },
+      },
+      { onIncomplete: 'return-available' },
+    );
   });
 
   it('ensures the exact requested coverage for a due-date read', async () => {
-    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+    mockTaskQueryRead.mockResolvedValue({
+      tasks: [],
+      completeness: {
+        status: 'complete',
+        type: 'complete',
+        requestedRange: { from: '2026-02-17', to: '2026-02-17' },
+        failedSeriesIds: [],
+      },
+    });
 
     const request = new NextRequest(
       'http://localhost:3000/api/tasks?due_date=2026-02-17',
     );
     await GET(request);
 
-    expect(mockEnsureRecurringCoverageThrough).toHaveBeenCalledWith(
-      expect.anything(),
-      'user-123',
-      '2026-02-17',
-      '2026-02-17',
+    expect(mockTaskQueryRead).toHaveBeenCalledWith(
+      { type: 'list', filters: { due_date: '2026-02-17' } },
+      { onIncomplete: 'return-available' },
     );
   });
 
   it('ensures the exact requested coverage for an overdue read', async () => {
-    vi.mocked(mockTasksDB.getOverdueTasks).mockResolvedValue([]);
+    mockTaskQueryRead.mockResolvedValue({
+      tasks: [],
+      completeness: {
+        status: 'complete',
+        type: 'complete',
+        requestedRange: { from: '2026-02-17', to: '2026-02-17' },
+        failedSeriesIds: [],
+      },
+    });
 
     const request = new NextRequest(
       'http://localhost:3000/api/tasks?view=overdue&date=2026-02-17',
     );
     await GET(request);
 
-    expect(mockEnsureRecurringCoverageThrough).toHaveBeenCalledWith(
-      expect.anything(),
-      'user-123',
-      '2026-02-17',
-      '2026-02-17',
+    expect(mockTaskQueryRead).toHaveBeenCalledWith(
+      { type: 'overdue', date: '2026-02-17' },
+      { onIncomplete: 'return-available' },
     );
   });
 
   it('ensures the exact requested coverage for an upcoming read', async () => {
-    vi.mocked(mockTasksDB.getUpcomingTasks).mockResolvedValue([]);
+    mockTaskQueryRead.mockResolvedValue({
+      tasks: [],
+      completeness: {
+        status: 'complete',
+        type: 'complete',
+        requestedRange: { from: '2026-02-17', to: '2026-03-03' },
+        failedSeriesIds: [],
+      },
+    });
 
     const request = new NextRequest(
       'http://localhost:3000/api/tasks?view=upcoming&date=2026-02-17&days=14',
     );
     await GET(request);
 
-    expect(mockEnsureRecurringCoverageThrough).toHaveBeenCalledWith(
-      expect.anything(),
-      'user-123',
-      '2026-02-17',
-      '2026-03-03',
+    expect(mockTaskQueryRead).toHaveBeenCalledWith(
+      { type: 'upcoming', date: '2026-02-17', days: 14 },
+      { onIncomplete: 'return-available' },
     );
   });
 
   it('returns a typed warning when a date-bounded task read is degraded', async () => {
-    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
-    mockEnsureRecurringCoverageThrough.mockResolvedValueOnce({
-      status: 'partial',
-      warning: {
-        code: 'recurring_coverage_unavailable',
-        type: 'coverage-unavailable',
-        message: 'Recurring task coverage is unavailable for the requested date range.',
+    mockTaskQueryRead.mockResolvedValueOnce({
+      tasks: [],
+      completeness: {
+        status: 'partial',
+        type: 'partial',
         requestedRange: { from: '2026-02-17', to: '2026-02-17' },
         failedSeriesIds: ['series-2'],
       },
-      failedSeriesIds: ['series-2'],
     });
 
     const response = await GET(new NextRequest(

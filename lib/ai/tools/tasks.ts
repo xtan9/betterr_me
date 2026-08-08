@@ -1,22 +1,26 @@
 import { z } from "zod";
 import { TasksDB } from "@/lib/db";
 import type { RecurrenceRule } from "@/lib/db";
+import type { Task } from "@/lib/db/types";
 import {
   createTaskWrites,
   taskDeletionErrorMessage,
 } from "@/lib/tasks/writes";
-import { createActivatedRecurringTaskLifecycle } from "@/lib/recurring-tasks";
+import {
+  TaskCoverageUnavailableError,
+  type TaskReadQuery,
+} from "@/lib/tasks/query";
+import { createSupabaseTaskQuery } from "@/lib/tasks/supabase-query";
+import {
+  createActivatedRecurringTaskLifecycle,
+  createAuthenticatedRecurringTaskCapabilities,
+} from "@/lib/recurring-tasks";
 import {
   isOccurrenceSuccess,
   occurrenceErrorMessage,
   toOccurrenceEditIntent,
 } from "@/lib/recurring-tasks/occurrence-adapter";
 import { createSupabaseOccurrenceAdapter } from "@/lib/recurring-tasks/supabase-occurrence-adapter";
-import {
-  ensureRecurringTaskCoverage,
-  RecurringCoverageUnavailableError,
-  taskReadCoverageRange,
-} from "@/lib/recurring-tasks/coverage";
 import { addLocalDays } from "@/lib/recurring-tasks/recurrence";
 import {
   createSupabaseSeriesStateAdapter,
@@ -25,12 +29,12 @@ import {
   seriesStateErrorMessage,
 } from "@/lib/recurring-tasks";
 import {
-  createSeriesCreation,
   initialSeriesCoverage,
-  normalizeSeriesCreationIntent,
-  toRecurringTaskCompatibility,
-} from "@/lib/recurring-tasks/creation";
-import { toLifecycleRecurrenceDates } from "@/lib/recurring-tasks/compatibility";
+  recurringTaskFailureMessage,
+  toCreateSeriesCommand,
+  toLifecycleRecurrenceDates,
+  toRecurringTaskResponse,
+} from "@/lib/recurring-tasks/compatibility";
 import {
   hasTaskUpdateValues,
   taskFormSchema,
@@ -133,12 +137,7 @@ export function taskTools(): ToolDefinition[] {
         date: z.string().describe("Date in YYYY-MM-DD format"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        await ensureAiRecurringCoverage(ctx, taskReadCoverageRange({
-          view: "today",
-          date: params.date,
-        })!);
-        const db = new TasksDB(ctx.supabase);
-        return db.getTodayTasks(ctx.userId, params.date);
+        return readAiTasks(ctx, { type: "today", date: params.date });
       },
     },
     {
@@ -152,13 +151,11 @@ export function taskTools(): ToolDefinition[] {
           .describe("Number of days to look ahead (default 7)"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        await ensureAiRecurringCoverage(ctx, taskReadCoverageRange({
-          view: "upcoming",
+        return readAiTasks(ctx, {
+          type: "upcoming",
           date: params.date,
           days: params.days,
-        })!);
-        const db = new TasksDB(ctx.supabase);
-        return db.getUpcomingTasks(ctx.userId, params.date, params.days);
+        });
       },
     },
     {
@@ -168,12 +165,7 @@ export function taskTools(): ToolDefinition[] {
         date: z.string().describe("Current date in YYYY-MM-DD format"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        await ensureAiRecurringCoverage(ctx, taskReadCoverageRange({
-          view: "overdue",
-          date: params.date,
-        })!);
-        const db = new TasksDB(ctx.supabase);
-        return db.getOverdueTasks(ctx.userId, params.date);
+        return readAiTasks(ctx, { type: "overdue", date: params.date });
       },
     },
     {
@@ -342,12 +334,15 @@ export function taskTools(): ToolDefinition[] {
           .describe("Filter by status (default: all)"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const lifecycle = createActivatedRecurringTaskLifecycle(ctx.supabase);
-        const result = await lifecycle.listSeries(
-          ctx.userId,
-          params.status === "archived" ? "ended" : params.status,
+        const result = await recurringTaskCapabilities(ctx).seriesQueries.listSeries({
+          status: params.status === "archived" ? "ended" : params.status,
+        });
+        if (result.type !== "listed") {
+          return { error: recurringTaskFailureMessage(result) };
+        }
+        return result.series.map((series) =>
+          toRecurringTaskResponse(series, ctx.userId),
         );
-        return result.series.map(toRecurringTaskCompatibility);
       },
     },
     {
@@ -355,6 +350,10 @@ export function taskTools(): ToolDefinition[] {
       description:
         "Create a new recurring task that generates instances automatically. Always confirm with the user before calling this tool.",
       parameters: z.object({
+        operationId: z
+          .string()
+          .min(1)
+          .describe("Caller-stable operation ID; reuse it when retrying this creation"),
         title: z.string().describe("Task title"),
         description: z.string().optional().describe("Task description"),
         priority: z
@@ -419,9 +418,9 @@ export function taskTools(): ToolDefinition[] {
       }),
       execute: async (params, ctx: ToolContext) => {
         const recurrenceDates = toLifecycleRecurrenceDates(params.startDate);
-        const result = await createSeriesCreation(ctx.supabase).create(
-          normalizeSeriesCreationIntent({
-            userId: ctx.userId,
+        const result = await recurringTaskCapabilities(ctx).seriesCommands.createSeries(
+          toCreateSeriesCommand({
+            operationId: params.operationId,
             title: params.title,
             description: params.description ?? null,
             priority: (params.priority ?? 0) as 0 | 1 | 2 | 3,
@@ -441,20 +440,10 @@ export function taskTools(): ToolDefinition[] {
             ).to,
           }),
         );
-        const outcome = result.outcome;
-        if (outcome.status === "complete" || outcome.status === "already-applied") {
-          return toRecurringTaskCompatibility(outcome.series);
+        if (result.type === "created") {
+          return toRecurringTaskResponse(result.series, ctx.userId);
         }
-        if (outcome.status === "conflict") {
-          return { error: "Recurring task creation conflict" };
-        }
-        if (outcome.status === "coverage-unavailable") {
-          return { error: "Recurring task coverage is temporarily unavailable" };
-        }
-        if (outcome.status === "not-found") {
-          return { error: "Recurring task not found" };
-        }
-        return { error: outcome.reason };
+        return { error: recurringTaskFailureMessage(result) };
       },
     },
     {
@@ -566,18 +555,33 @@ export function taskTools(): ToolDefinition[] {
   ];
 }
 
-async function ensureAiRecurringCoverage(
+function recurringTaskCapabilities(ctx: ToolContext) {
+  return createAuthenticatedRecurringTaskCapabilities({
+    supabase: ctx.supabase,
+    principal: {
+      type: "user",
+      userId: ctx.userId,
+      credential: "mcp",
+    },
+  });
+}
+
+async function readAiTasks(
   ctx: ToolContext,
-  range: { from: string; to: string },
-): Promise<void> {
-  const coverage = await ensureRecurringTaskCoverage(
-    ctx.supabase,
-    ctx.userId,
-    range,
-  );
-  if (coverage.status === "partial") {
-    throw new RecurringCoverageUnavailableError(coverage.warning);
+  request: Exclude<TaskReadQuery, { type: "list" }>,
+): Promise<Task[]> {
+  if (!ctx.principal) {
+    throw new Error("Authenticated principal required for AI task reads");
   }
+
+  const result = await createSupabaseTaskQuery(ctx.supabase, ctx.principal).read(
+    request,
+    { onIncomplete: "fail" },
+  );
+  if (result.completeness && result.completeness.status !== "complete") {
+    throw new TaskCoverageUnavailableError(result.completeness);
+  }
+  return result.tasks;
 }
 
 function toSeriesScopeInput(input: {
