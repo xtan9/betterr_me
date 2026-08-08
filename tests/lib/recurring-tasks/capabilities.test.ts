@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createAuthenticatedRecurringTaskCapabilities,
   createRecurringTaskCapabilitiesForLifecycle,
+  encodeSeriesVersion,
   RECURRING_TASK_OPERATION_IDS,
   type AuthenticatedRecurringTaskCapabilities,
   type CreateSeriesCommand,
@@ -149,6 +150,13 @@ function handleSupabaseFixtureOperation(
   }
 
   if (!current || request.userId !== current.userId) {
+    return { status: "not-found", type: "not-found" };
+  }
+  if (
+    ["get-series", "revise-series", "pause-series", "resume-series", "end-series"]
+      .includes(operation)
+    && request.seriesId !== current.id
+  ) {
     return { status: "not-found", type: "not-found" };
   }
 
@@ -471,6 +479,115 @@ function runWalkingSkeleton(
       expect(ended.operation).toBe(RECURRING_TASK_OPERATION_IDS.endSeries);
       if (!("series" in ended)) return;
       expect(ended.series.status).toBe("ended");
+    });
+
+    it("returns typed invalid, missing, stale, and replay outcomes for state commands", async () => {
+      const capabilities = makeCapabilities();
+      const created = await capabilities.seriesCommands.createSeries({
+        ...createInput(),
+        operationId: "typed-outcome-create",
+        coverage: undefined,
+      });
+      if (!("series" in created)) return;
+
+      const missingOperation = await capabilities.seriesCommands.pauseSeries({
+        operationId: "",
+        seriesId: created.series.id,
+        version: created.series.version,
+      });
+      expect(missingOperation).toMatchObject({
+        type: "validation",
+        status: "validation",
+        operation: RECURRING_TASK_OPERATION_IDS.pauseSeries,
+        field: "operationId",
+      });
+
+      const missingVersion = await capabilities.seriesCommands.pauseSeries({
+        operationId: "missing-version",
+        seriesId: created.series.id,
+        version: "" as never,
+      });
+      expect(missingVersion).toMatchObject({
+        type: "validation",
+        status: "validation",
+        operation: RECURRING_TASK_OPERATION_IDS.pauseSeries,
+        field: "version",
+      });
+
+      const missingSeries = await capabilities.seriesCommands.pauseSeries({
+        operationId: "missing-series",
+        seriesId: "missing-series",
+        version: encodeSeriesVersion("missing-series", 1),
+      });
+      expect(missingSeries).toMatchObject({
+        type: "not-found",
+        status: "not-found",
+        operation: RECURRING_TASK_OPERATION_IDS.pauseSeries,
+      });
+
+      const pauseInput = {
+        operationId: "typed-pause",
+        seriesId: created.series.id,
+        version: created.series.version,
+        effectiveDate: "2026-08-04",
+      };
+      const paused = await capabilities.seriesCommands.pauseSeries(pauseInput);
+      expect(paused).toMatchObject({ type: "paused", status: "complete" });
+      if (!("series" in paused)) return;
+
+      const replay = await capabilities.seriesCommands.pauseSeries(pauseInput);
+      expect(replay).toMatchObject({
+        type: "paused",
+        status: "already-applied",
+        operationId: "typed-pause",
+      });
+
+      const staleResume = await capabilities.seriesCommands.resumeSeries({
+        operationId: "stale-resume",
+        seriesId: created.series.id,
+        version: created.series.version,
+        effectiveDate: "2026-08-05",
+      });
+      expect(staleResume).toMatchObject({
+        type: "conflict",
+        status: "conflict",
+        operation: RECURRING_TASK_OPERATION_IDS.resumeSeries,
+        expectedVersion: created.series.version,
+        actualVersion: paused.series.version,
+      });
+
+      const invalidPause = await capabilities.seriesCommands.pauseSeries({
+        operationId: "invalid-pause",
+        seriesId: created.series.id,
+        version: paused.series.version,
+        effectiveDate: "2026-08-05",
+      });
+      expect(invalidPause).toMatchObject({
+        type: "invalid-transition",
+        status: "invalid-transition",
+        operation: RECURRING_TASK_OPERATION_IDS.pauseSeries,
+      });
+
+      const ended = await capabilities.seriesCommands.endSeries({
+        operationId: "typed-end",
+        seriesId: created.series.id,
+        version: paused.series.version,
+        effectiveDate: "2026-08-05",
+      });
+      expect(ended).toMatchObject({ type: "ended", status: "complete" });
+      if (!("series" in ended)) return;
+
+      const endReplay = await capabilities.seriesCommands.endSeries({
+        operationId: "typed-end",
+        seriesId: created.series.id,
+        version: paused.series.version,
+        effectiveDate: "2026-08-05",
+      });
+      expect(endReplay).toMatchObject({
+        type: "ended",
+        status: "already-applied",
+        operationId: "typed-end",
+      });
     });
 
     it("returns structured Coverage completeness and stable validation failures", async () => {

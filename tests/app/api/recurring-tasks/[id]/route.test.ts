@@ -156,6 +156,11 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
       type: "resumed",
       series: { id: "rt-1", status: "active" },
     });
+    mockEndSeries.mockResolvedValue({
+      status: "complete",
+      type: "ended",
+      series: { id: "rt-1", status: "ended" },
+    });
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: { id: "user-123" } } })) },
     } as any);
@@ -216,6 +221,26 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
       version: "rt-series-v1.test-version",
       effectiveDate: "2026-08-08",
       coverage: { from: "2026-08-08", to: "2026-08-15" },
+    });
+  });
+
+  it("routes the end action through the canonical endSeries capability", async () => {
+    const response = await PATCH(
+      new NextRequest("http://localhost:3000/api/recurring-tasks/rt-1?action=end", {
+        method: "PATCH",
+        headers: mutationHeaders("http-end-action-1"),
+      }),
+      { params: Promise.resolve({ id: "rt-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      recurring_task: { id: "rt-1", status: "ended" },
+    });
+    expect(mockEndSeries).toHaveBeenCalledWith({
+      operationId: "http-end-action-1",
+      seriesId: "rt-1",
+      version: "rt-series-v1.test-version",
     });
   });
 
