@@ -4,7 +4,6 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Send, CircleStop, Paperclip, X } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { ModelSelector } from "@/components/chat/model-selector";
 import type { FileUIPart } from "ai";
 
 interface ChatInputProps {
@@ -12,8 +11,6 @@ interface ChatInputProps {
   onStop: () => void;
   isStreaming: boolean;
   disabled?: boolean;
-  modelId: string;
-  onModelChange: (modelId: string) => void;
 }
 
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
@@ -25,8 +22,6 @@ export function ChatInput({
   onStop,
   isStreaming,
   disabled,
-  modelId,
-  onModelChange,
 }: ChatInputProps) {
   const t = useTranslations("chat");
   const [input, setInput] = useState("");
@@ -273,13 +268,6 @@ export function ChatInput({
             <Send className="h-4 w-4" />
           </Button>
         )}
-      </div>
-      <div className="mt-1">
-        <ModelSelector
-          modelId={modelId}
-          onModelChange={onModelChange}
-          disabled={isStreaming}
-        />
       </div>
     </div>
   );

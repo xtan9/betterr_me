@@ -6,16 +6,10 @@ vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
 }));
 
-vi.mock("@/components/chat/model-selector", () => ({
-  ModelSelector: () => <div data-testid="model-selector" />,
-}));
-
 const defaultProps = {
   onSend: vi.fn(),
   onStop: vi.fn(),
   isStreaming: false,
-  modelId: "claude-haiku-4-5-20251001",
-  onModelChange: vi.fn(),
 };
 
 describe("ChatInput", () => {
@@ -28,6 +22,11 @@ describe("ChatInput", () => {
     expect(screen.getByRole("textbox")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "input.send" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "input.attach" })).toBeInTheDocument();
+  });
+
+  it("does not render a model selector", () => {
+    render(<ChatInput {...defaultProps} />);
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 
   it("send button is disabled when input is empty", () => {

@@ -45,7 +45,7 @@ const completedTurn = {
   turnId: "turn-1",
   userMessage: "How am I doing?",
   assistantMessage: "You are making progress.",
-  assistantModel: "gpt-5.4-mini",
+  assistantModel: "gpt-5.3-codex-spark",
 };
 
 describe("POST /api/conversations/[id]/turns", () => {
@@ -85,7 +85,7 @@ describe("POST /api/conversations/[id]/turns", () => {
       turnId: "turn-1",
       userContent: "How am I doing?",
       assistantContent: "You are making progress.",
-      assistantModel: "gpt-5.4-mini",
+      assistantModel: "gpt-5.3-codex-spark",
     });
   });
 
