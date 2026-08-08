@@ -73,6 +73,22 @@ function driveToReview(runtime: ReturnType<typeof createHouseholdRunwayInterview
   runtime.send({ type: "continue" });
 }
 
+function completedPlanInputs() {
+  const source = createHouseholdRunwayInterviewRuntime({
+    now: () => now,
+    createId: () => "source",
+  });
+  source.start();
+  driveToReview(source);
+  source.send({ type: "continue" });
+  const inputs = source.getSnapshot().derived.planInputs as
+    | HouseholdRunwayInterviewRuntimePlanResult["planInputs"]
+    | null;
+  if (!inputs) throw new Error("expected committed Plan inputs");
+  source.dispose();
+  return inputs;
+}
+
 describe("Household Runway Interview Runtime", () => {
   it("has side-effect-free construction and publishes initializing then usable startup", async () => {
     const scheduled: (() => void)[] = [];
@@ -1092,6 +1108,98 @@ describe("Household Runway Interview Runtime", () => {
     });
   });
 
+  it("rejects the complete restored history when a sibling outcome is incoherent", async () => {
+    const source = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "source",
+    });
+    source.start();
+    driveToReview(source);
+    source.send({ type: "continue" });
+    const planInputs = source.getSnapshot().derived.planInputs as
+      | HouseholdRunwayInterviewRuntimePlanResult["planInputs"]
+      | null;
+    if (!planInputs) throw new Error("expected committed Plan inputs");
+
+    const history = {
+      id: "snapshot-valid",
+      trigger: "completed" as const,
+      scenario: "current" as const,
+      months_covered: 4,
+      sustainable: false,
+      model_version: "4.0.0",
+      created_at: now,
+    };
+    const malformed = {
+      ...history,
+      id: "snapshot-malformed",
+      months_covered: null,
+    } as unknown as RunwaySnapshotSummary;
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      restorePlan: () => ({
+        plan: { revision: 7, inputs: planInputs },
+        snapshots: [history, malformed],
+      }),
+    });
+
+    runtime.start();
+    await settle([]);
+
+    expect(runtime.getSnapshot()).toMatchObject({
+      lifecycle: "ready",
+      interviewStatus: "completed",
+      screen: { kind: "stage", stage: "result", assessment: expect.any(Object) },
+      assessmentHistory: [],
+      issues: [{ code: "assessment_history_invalid" }],
+    });
+  });
+
+  it.each([
+    ["identity", { id: "" }],
+    ["trigger", { trigger: "unknown" }],
+    ["Scenario", { scenario: "unknown" }],
+    ["model version", { model_version: "" }],
+    ["creation time", { created_at: "not-a-date" }],
+    ["sustainable outcome", { sustainable: true }],
+    ["depleting outcome", { months_covered: null }],
+  ] as const)("rejects restored history with malformed %s", async (_kind, corruption) => {
+    const history = {
+      id: "snapshot-valid",
+      trigger: "completed" as const,
+      scenario: "current" as const,
+      months_covered: 4,
+      sustainable: false,
+      model_version: "4.0.0",
+      created_at: now,
+    };
+    const malformed = {
+      ...history,
+      id: "snapshot-malformed",
+      ...corruption,
+    } as unknown as RunwaySnapshotSummary;
+    const runtime = createHouseholdRunwayInterviewRuntime({
+      now: () => now,
+      createId: () => "interview-1",
+      restorePlan: () => ({
+        plan: { revision: 7, inputs: completedPlanInputs() },
+        snapshots: [history, malformed],
+      }),
+    });
+
+    runtime.start();
+    await settle([]);
+
+    expect(runtime.getSnapshot()).toMatchObject({
+      lifecycle: "ready",
+      interviewStatus: "completed",
+      screen: { kind: "stage", stage: "result", assessment: expect.any(Object) },
+      assessmentHistory: [],
+      issues: [{ code: "assessment_history_invalid" }],
+    });
+  });
+
   it("lets authenticated Plan bootstrap replace or clear a stale initial Plan", async () => {
     const source = createHouseholdRunwayInterviewRuntime({
       now: () => now,
@@ -1140,7 +1248,7 @@ describe("Household Runway Interview Runtime", () => {
       id: "snapshot-2",
       trigger: "updated" as const,
       scenario: "current" as const,
-      months_covered: 6,
+      months_covered: null,
       sustainable: true,
       model_version: "4.0.0",
       created_at: now,
