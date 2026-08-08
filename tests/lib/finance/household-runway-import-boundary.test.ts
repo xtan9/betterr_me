@@ -198,6 +198,70 @@ describe("Household Runway Runtime import boundary", () => {
       /adjustmentLimits|MAX_CUSHION_AMOUNT_CENTS|expenseTotals/,
     );
   });
+
+  it("removes replaced Plan Adjustment helpers instead of retaining wrappers", () => {
+    const runtime = readFileSync(
+      resolve(root, "lib/finance/internal/household-runway-interview-runtime.ts"),
+      "utf8",
+    );
+    const interview = readFileSync(
+      resolve(root, "lib/finance/internal/household-runway-interview.ts"),
+      "utf8",
+    );
+    const assessment = readFileSync(
+      resolve(root, "lib/finance/household-runway-assessment.ts"),
+      "utf8",
+    );
+    const projection = readFileSync(
+      resolve(root, "lib/finance/internal/household-runway-focused-projection.ts"),
+      "utf8",
+    );
+    const runtimeFacade = readFileSync(
+      resolve(root, "lib/finance/household-runway-interview-runtime.ts"),
+      "utf8",
+    );
+    const policy = readFileSync(
+      resolve(root, "lib/finance/internal/household-runway-plan-adjustment.ts"),
+      "utf8",
+    );
+    const consumers = [runtime, interview, assessment, projection];
+    const replacedHelper =
+      /\b(?:emptyPlanAdjustment|normalizePlanAdjustment|hasPlanAdjustment|planAdjustmentFields|applyPlanAdjustmentToAnswers|adjustmentFieldFor|adjustmentEffectFor|adjustmentProjectionFor)\b/;
+    const relativeLimitPolicy =
+      /\b(?:PLAN_ADJUSTMENT_FIELDS|RELATIONAL_FIELDS|(?:adjustment|relative)Limits|MAX_CUSHION_AMOUNT_CENTS)\b/;
+
+    const financeViolations = walk(resolve(root, "lib/finance"))
+      .filter((file) => replacedHelper.test(readFileSync(file, "utf8")))
+      .map((file) => file.slice(root.length + 1).replaceAll("\\", "/"));
+    expect(financeViolations).toEqual([]);
+    expect(consumers.some((source) => relativeLimitPolicy.test(source))).toBe(false);
+    expect(policy).toMatch(/const PLAN_ADJUSTMENT_FIELDS = \[/);
+    expect(policy).toMatch(/const RELATIONAL_FIELDS = \[/);
+    expect(runtimeFacade).not.toMatch(/HouseholdRunwayPlanAdjustment/);
+    expect(
+      existsSync(resolve(root, "lib/finance/household-runway-plan-adjustment.ts")),
+    ).toBe(false);
+    expect(interview).toMatch(/applyHouseholdRunwayPlanAdjustment\(\{/);
+    expect(assessment).toMatch(/validateHouseholdRunwayPlanAdjustment\(\{/);
+    expect(runtime).toMatch(/normalizeHouseholdRunwayPlanAdjustmentIntent\(\{/);
+    expect(interview).toMatch(/projectHouseholdRunwayPlanAdjustment\(\{/);
+
+    const resultProjectionStart = interview.indexOf(
+      "function focusedResultProjectionForDraft",
+    );
+    const reviewProjectionStart = interview.indexOf(
+      "function reviewProjectionForDraft",
+    );
+    expect(resultProjectionStart).toBeGreaterThanOrEqual(0);
+    expect(reviewProjectionStart).toBeGreaterThan(resultProjectionStart);
+    const resultProjection = interview.slice(
+      resultProjectionStart,
+      reviewProjectionStart,
+    );
+    expect(resultProjection).not.toMatch(
+      /expenseTotals|Math\.min|expense_reduction_cents|usable_(?:illiquid_investments|retirement_tax_deferred|retirement_tax_free)_cents/,
+    );
+  });
 });
 
 function walk(directory: string): string[] {

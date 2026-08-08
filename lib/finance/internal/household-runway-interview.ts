@@ -3475,25 +3475,6 @@ function setReduction(
   );
 }
 
-function applyPlanAdjustmentToAnswers(
-  state: HouseholdRunwayInterviewState,
-  command: Extract<
-    HouseholdRunwayInterviewCommand,
-    { type: "apply_plan_adjustment" }
-  >,
-): HouseholdRunwayInterviewAnswers | null {
-  const planInputs = state.planInputs;
-  if (!planInputs) return null;
-
-  const next = applyHouseholdRunwayPlanAdjustment({
-    answers: planInputs,
-    adjustment: state.draft.planAdjustment,
-    occurredAt: command.occurredAt,
-    incomeSourceId: `plan-adjustment-${command.commandId}`.slice(0, 100),
-  });
-  return normalizeAnswers(next, state.draft.location);
-}
-
 function setPlanAdjustment(
   state: HouseholdRunwayInterviewState,
   command: Extract<
@@ -3566,8 +3547,17 @@ function applyPlanAdjustment(
   if (state.status !== "reviewing" && state.status !== "completed") {
     return ignored(state, command, "plan_adjustment_unavailable");
   }
-  const answers = applyPlanAdjustmentToAnswers(state, command);
-  if (!answers) return ignored(state, command, "plan_adjustment_unavailable");
+  const planInputs = state.planInputs;
+  if (!planInputs) return ignored(state, command, "plan_adjustment_unavailable");
+  const answers = normalizeAnswers(
+    applyHouseholdRunwayPlanAdjustment({
+      answers: planInputs,
+      adjustment: state.draft.planAdjustment,
+      occurredAt: command.occurredAt,
+      incomeSourceId: `plan-adjustment-${command.commandId}`.slice(0, 100),
+    }),
+    state.draft.location,
+  );
   const draft = normalizeDraft({
     ...state.draft,
     revision: state.draft.revision + 1,
