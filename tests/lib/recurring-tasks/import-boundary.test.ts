@@ -110,4 +110,23 @@ describe("recurring lifecycle import boundary", () => {
     expect(dashboard).toContain("ensureRecurringCoverage");
     expect(dashboard).not.toMatch(/generateRecurringTasks|ensureRecurringInstances/);
   });
+
+  it("routes date-bounded Task API and AI reads through the focused query", () => {
+    const taskApi = readFileSync(
+      resolve(process.cwd(), "app/api/tasks/route.ts"),
+      "utf8",
+    );
+    const aiTasks = readFileSync(
+      resolve(process.cwd(), "lib/ai/tools/tasks.ts"),
+      "utf8",
+    );
+
+    expect(taskApi).toContain("createSupabaseTaskQuery");
+    expect(aiTasks).toContain("createSupabaseTaskQuery");
+    for (const source of [taskApi, aiTasks]) {
+      expect(source).not.toMatch(
+        /ensureRecurringTaskCoverage|ensureRecurringTaskCoverageThrough|taskReadCoverageRange/,
+      );
+    }
+  });
 });
