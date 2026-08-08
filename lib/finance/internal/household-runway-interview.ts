@@ -15,6 +15,7 @@ import {
   type HouseholdRunwayAnswers,
   type HousingTenure,
   type IncomeAnswer,
+  type InputConfidence,
   type MoneyAnswer,
   type QuickExpenses,
   type RecurringIncomeSource,
@@ -613,6 +614,8 @@ export interface HouseholdRunwayReviewRenderModel {
   selectedScenario: RunwayScenario | null;
   planAdjustment: RunwayAdjustments;
   assessmentModelVersion: typeof RUNWAY_MODEL_VERSION | null;
+  /** Private focused facts for the later supported review projection cutover. */
+  reviewProjection: HouseholdRunwayReviewProjection;
   totals: { current: number; interruption: number };
   monthlyIncomeCents: number;
   otherIncomeCents: number;
@@ -1919,19 +1922,124 @@ function blockingIssueFor(
 }
 
 interface HouseholdRunwayReviewProjection {
+  readiness: "ready" | "blocked";
+  location:
+    | {
+        kind: "complete";
+        country: RunwayCountry;
+        region: string;
+        currency: RunwayCurrency;
+      }
+    | {
+        kind: "incomplete";
+        country: RunwayCountry | null;
+        region: string | null;
+        currency: RunwayCurrency | null;
+      };
+  household: { adultCount: 1 | 2; confidence: "confirmed" };
+  cash: { cents: number; confidence: InputConfidence };
+  expenses: {
+    currentMonthlyCents: number;
+    interruptionMonthlyCents: number;
+    confidence: InputConfidence;
+  };
+  earnedIncome: {
+    monthlyCents: number;
+    confidence: "confirmed" | "estimated";
+  };
+  otherIncome: {
+    monthlyCents: number;
+    confidence: "confirmed" | "skipped";
+  };
+  liquidInvestments: { cents: number; confidence: InputConfidence };
+  lastResortAssets: {
+    cents: number;
+    confidence: "confirmed" | "skipped";
+  };
+}
+
+interface HouseholdRunwayReviewDerivation {
   planInputs: HouseholdRunwayAnswers | null;
   assessment: SuccessfulHouseholdRunwayAssessment | null;
   validationIssue: HouseholdRunwayValidationIssue | null;
+  reviewProjection: HouseholdRunwayReviewProjection;
+}
+
+function focusedReviewProjectionForDraft(
+  draft: HouseholdRunwayInterviewDraft,
+  readiness: HouseholdRunwayReviewProjection["readiness"],
+): HouseholdRunwayReviewProjection {
+  const answers = draft.answers;
+  const totals = expenseTotals(calculationAnswers(answers));
+  const lastResortCents =
+    answers.assets.illiquid_investments.cents +
+    answers.assets.home_equity.cents +
+    answers.assets.retirement_tax_deferred.cents +
+    answers.assets.retirement_tax_free.cents;
+
+  return {
+    readiness,
+    location:
+      answers.country && answers.region && answers.currency
+        ? {
+            kind: "complete",
+            country: answers.country,
+            region: answers.region,
+            currency: answers.currency,
+          }
+        : {
+            kind: "incomplete",
+            country: answers.country,
+            region: answers.region,
+            currency: answers.currency,
+          },
+    household: {
+      adultCount: answers.partner ? 2 : 1,
+      confidence: "confirmed",
+    },
+    cash: answers.available_cash,
+    expenses: {
+      currentMonthlyCents: totals.current,
+      interruptionMonthlyCents: totals.interruption,
+      confidence:
+        answers.expense_mode === "quick"
+          ? answers.quick_expenses.confidence
+          : "confirmed",
+    },
+    earnedIncome: {
+      monthlyCents:
+        answers.mine.monthly_take_home_cents +
+        (answers.partner?.monthly_take_home_cents ?? 0),
+      confidence:
+        answers.mine.confidence === "estimated" ||
+        answers.partner?.confidence === "estimated"
+          ? "estimated"
+          : "confirmed",
+    },
+    otherIncome: {
+      monthlyCents: answers.other_income_sources.reduce(
+        (sum, source) => sum + source.monthly_cents,
+        0,
+      ),
+      confidence: answers.other_income_sources.length ? "confirmed" : "skipped",
+    },
+    liquidInvestments: answers.assets.liquid_investments,
+    lastResortAssets: {
+      cents: lastResortCents,
+      confidence: lastResortCents ? "confirmed" : "skipped",
+    },
+  };
 }
 
 function reviewProjectionForDraft(
   draft: HouseholdRunwayInterviewDraft,
-): HouseholdRunwayReviewProjection {
+): HouseholdRunwayReviewDerivation {
   const normalized = normalizeHouseholdRunwayDraft(draft);
   if (!normalized.success) {
     return {
       planInputs: null,
       assessment: null,
+      reviewProjection: focusedReviewProjectionForDraft(draft, "blocked"),
       validationIssue: normalized.validationIssues[0] ?? {
         code: "plan_input_invalid",
         stage: "review",
@@ -1948,6 +2056,7 @@ function reviewProjectionForDraft(
     return {
       planInputs: normalized.planInputs,
       assessment: null,
+      reviewProjection: focusedReviewProjectionForDraft(draft, "blocked"),
       validationIssue: {
         code: "assessment_required",
         stage: "review",
@@ -1957,6 +2066,7 @@ function reviewProjectionForDraft(
   return {
     planInputs: normalized.planInputs,
     assessment,
+    reviewProjection: focusedReviewProjectionForDraft(draft, "ready"),
     validationIssue: null,
   };
 }
@@ -1966,7 +2076,7 @@ function renderFor(
   stage: HouseholdRunwayInterviewStage | null,
   draft: HouseholdRunwayInterviewDraft,
   validationIssue: HouseholdRunwayValidationIssue | null,
-  reviewProjection: HouseholdRunwayReviewProjection | null,
+  reviewProjection: HouseholdRunwayReviewDerivation | null,
   resumeChoice: HouseholdRunwayInterviewResumeChoice | null,
   committedPlan: HouseholdRunwayPlan | null,
 ): HouseholdRunwayInterviewRenderModel {
@@ -2189,8 +2299,9 @@ function renderFor(
   }
 
   if (stage === "review") {
-    const calculation = calculationAnswers(draft.answers);
-    const answers = draft.answers;
+    const focusedReviewProjection =
+      reviewProjection?.reviewProjection ??
+      focusedReviewProjectionForDraft(draft, "blocked");
     return {
       kind: "review",
       stage,
@@ -2206,19 +2317,14 @@ function renderFor(
       selectedScenario: draft.selectedScenario,
       planAdjustment: draft.planAdjustment,
       assessmentModelVersion: reviewProjection?.assessment?.modelVersion ?? null,
-      totals: expenseTotals(calculation),
-      monthlyIncomeCents:
-        answers.mine.monthly_take_home_cents +
-        (answers.partner?.monthly_take_home_cents ?? 0),
-      otherIncomeCents: answers.other_income_sources.reduce(
-        (sum, source) => sum + source.monthly_cents,
-        0,
-      ),
-      excludedAssetCents:
-        answers.assets.illiquid_investments.cents +
-        answers.assets.home_equity.cents +
-        answers.assets.retirement_tax_deferred.cents +
-        answers.assets.retirement_tax_free.cents,
+      reviewProjection: focusedReviewProjection,
+      totals: {
+        current: focusedReviewProjection.expenses.currentMonthlyCents,
+        interruption: focusedReviewProjection.expenses.interruptionMonthlyCents,
+      },
+      monthlyIncomeCents: focusedReviewProjection.earnedIncome.monthlyCents,
+      otherIncomeCents: focusedReviewProjection.otherIncome.monthlyCents,
+      excludedAssetCents: focusedReviewProjection.lastResortAssets.cents,
       ready: blockingIssue === null && reviewProjection?.assessment != null,
       availableStages,
       stageStatus,

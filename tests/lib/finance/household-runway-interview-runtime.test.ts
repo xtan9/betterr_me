@@ -316,6 +316,7 @@ describe("Household Runway Interview Runtime", () => {
       stage: "review",
       screen: { kind: "review" },
     });
+    expect(runtime.getSnapshot().screen).not.toHaveProperty("reviewProjection");
   });
 
   it("publishes report pending before deferred locale-aware work and preserves the Assessment", async () => {
