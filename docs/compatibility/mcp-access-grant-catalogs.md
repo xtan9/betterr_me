@@ -43,3 +43,32 @@ Validate the complete catalog with:
 ```text
 pnpm exec vitest run tests/e2e/mcp-access-grant-catalogs.test.ts
 ```
+
+## Issue #910 public-client evidence operation
+
+`e2e/mcp-access-grant-public-client-profile.ts` is the deterministic Candidate 2
+public-client value entry point. `runPublicClientEvidence` owns the fixed
+`publicClient` profile, report issue, gate manifest, templates, sanitization,
+ordering, serialization, and one artifact boundary. Its journey callback gets
+only a source-bound asynchronous `record` function; facts contain primitive
+observations and cannot select a source, profile, gate, status, or finalizer.
+
+The accepted public facts cover resource/provider discovery, configuration and
+versions, primary and negative registration, untrusted metadata, approval,
+denial, abandonment, cleanup, exact IPv4/IPv6 loopback callback and request
+binding, and S256 PKCE. Response, browser, callback, verifier, state, and token
+surfaces are bounded and minimized before the recorder promise resolves.
+Credential presence is tri-state; an incomplete or bounded-overflow surface is
+`unknown`, and only proven absence can pass a negative-registration gate.
+Missing later producers are emitted in manifest order as stable `not-proven`
+gates. The artifact writer is injected, so fixed-clock tests exercise the whole
+callback-to-artifact path without ambient time, filesystem, environment,
+browser, SDK, or network access.
+
+This issue deliberately does not invoke either live adapter. Delegated-token
+validation and authenticated MCP-operation producers remain `not-proven` in
+this profile until the later producer slices land; the adapter cutover remains
+out of scope. The local deterministic contract is therefore the exact
+integration limitation for #910: it proves the recorder/report/artifact
+boundary and all earlier facts without claiming live provider or browser
+execution.
