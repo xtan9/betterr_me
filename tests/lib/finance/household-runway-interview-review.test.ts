@@ -123,7 +123,230 @@ function atReview(shared = false) {
   return dispatch(state, { type: "continue" }, "review").state;
 }
 
+function reviewProjectionOf(state: HouseholdRunwayInterviewState) {
+  if (state.renderModel.kind !== "review") {
+    throw new Error(`expected review render model, received ${state.renderModel.kind}`);
+  }
+  return state.renderModel.reviewProjection;
+}
+
+function atGuidedReview() {
+  return dispatch(
+    atReview(true),
+    {
+      type: "update_answers",
+      patch: {
+        expense_mode: "guided",
+        expense_category_modes: { housing: "subtotal" },
+        expense_category_subtotals: {
+          housing: {
+            current_monthly_cents: 700_000,
+            interruption_monthly_cents: 450_000,
+            confidence: "needs_review",
+          },
+        },
+      },
+    },
+    "guided-review",
+  ).state;
+}
+
 describe("reviewable Household Runway Assessment boundary", () => {
+  it.each([
+    ["quick one-adult", atReview(), {
+      readiness: "ready",
+      location: { kind: "complete", country: "US", region: "CA", currency: "USD" },
+      household: { adultCount: 1, confidence: "confirmed" },
+      cash: { cents: 3_000_000, confidence: "confirmed" },
+      expenses: { currentMonthlyCents: 600_000, interruptionMonthlyCents: 400_000, confidence: "confirmed" },
+      earnedIncome: { monthlyCents: 0, confidence: "estimated" },
+      otherIncome: { monthlyCents: 0, confidence: "skipped" },
+      liquidInvestments: { cents: 0, confidence: "skipped" },
+      lastResortAssets: { cents: 0, confidence: "skipped" },
+    }],
+    ["guided two-adult", atGuidedReview(), {
+      readiness: "ready",
+      location: { kind: "complete", country: "US", region: "CA", currency: "USD" },
+      household: { adultCount: 2, confidence: "confirmed" },
+      cash: { cents: 3_000_000, confidence: "confirmed" },
+      expenses: { currentMonthlyCents: 700_000, interruptionMonthlyCents: 450_000, confidence: "confirmed" },
+      earnedIncome: { monthlyCents: 900_000, confidence: "confirmed" },
+      otherIncome: { monthlyCents: 0, confidence: "skipped" },
+      liquidInvestments: { cents: 0, confidence: "skipped" },
+      lastResortAssets: { cents: 0, confidence: "skipped" },
+    }],
+  ] as const)("projects exact focused facts for %s", (_name, state, expected) => {
+    expect(reviewProjectionOf(state)).toEqual(expected);
+  });
+
+  it("preserves the current income confidence rule for either adult", () => {
+    const confirmed = atReview(true);
+    const estimated = dispatch(
+      confirmed,
+      {
+        type: "update_answers",
+        patch: {
+          mine: { ...confirmed.draft.answers.mine, confidence: "estimated" },
+        },
+      },
+      "estimated-income",
+    ).state;
+
+    expect(reviewProjectionOf(confirmed).earnedIncome).toEqual({
+      monthlyCents: 900_000,
+      confidence: "confirmed",
+    });
+    expect(reviewProjectionOf(estimated).earnedIncome).toEqual({
+      monthlyCents: 900_000,
+      confidence: "estimated",
+    });
+  });
+
+  it("retains quick expense confidence while guided expenses stay confirmed", () => {
+    const quick = atReview();
+    const needsReview = dispatch(
+      quick,
+      {
+        type: "update_answers",
+        patch: {
+          quick_expenses: {
+            ...quick.draft.answers.quick_expenses,
+            confidence: "needs_review",
+          },
+        },
+      },
+      "quick-confidence",
+    ).state;
+
+    expect(reviewProjectionOf(needsReview).expenses).toEqual({
+      currentMonthlyCents: 600_000,
+      interruptionMonthlyCents: 400_000,
+      confidence: "needs_review",
+    });
+    expect(reviewProjectionOf(atGuidedReview()).expenses).toEqual({
+      currentMonthlyCents: 700_000,
+      interruptionMonthlyCents: 450_000,
+      confidence: "confirmed",
+    });
+  });
+
+  it("treats optional other income as confirmed only when a source exists", () => {
+    const state = dispatch(
+      atReview(),
+      {
+        type: "set_other_income_sources",
+        sources: [
+          {
+            id: "rent",
+            type: "rental_net",
+            monthly_cents: 125_000,
+            confidence: "skipped",
+          },
+        ],
+      },
+      "other-income",
+    ).state;
+
+    expect(reviewProjectionOf(state).otherIncome).toEqual({
+      monthlyCents: 125_000,
+      confidence: "confirmed",
+    });
+    expect(reviewProjectionOf(atReview()).otherIncome).toEqual({
+      monthlyCents: 0,
+      confidence: "skipped",
+    });
+  });
+
+  it("preserves input confidence for cash and liquid investments and derives last-resort assets", () => {
+    const state = dispatch(
+      atReview(),
+      {
+        type: "update_answers",
+        patch: {
+          available_cash: { cents: 3_500_000, confidence: "needs_review" },
+          assets: {
+            liquid_investments: { cents: 500_000, confidence: "estimated" },
+            illiquid_investments: { cents: 600_000, confidence: "confirmed" },
+            home_equity: { cents: 700_000, confidence: "confirmed" },
+            retirement_tax_deferred: { cents: 800_000, confidence: "confirmed" },
+            retirement_tax_free: { cents: 900_000, confidence: "confirmed" },
+          },
+        },
+      },
+      "assets",
+    ).state;
+
+    expect(reviewProjectionOf(state).cash).toEqual({
+      cents: 3_500_000,
+      confidence: "needs_review",
+    });
+    expect(reviewProjectionOf(state).liquidInvestments).toEqual({
+      cents: 500_000,
+      confidence: "estimated",
+    });
+    expect(reviewProjectionOf(state).lastResortAssets).toEqual({
+      cents: 3_000_000,
+      confidence: "confirmed",
+    });
+    expect(reviewProjectionOf(atReview()).lastResortAssets).toEqual({
+      cents: 0,
+      confidence: "skipped",
+    });
+  });
+
+  it("keeps incomplete location facts null and blocks an otherwise reviewable draft", () => {
+    const ready = atReview();
+    const incomplete = restoreHouseholdRunwayInterview({
+      version: 2,
+      status: "reviewing",
+      stage: "review",
+      draft: {
+        ...ready.draft,
+        location: { ...ready.draft.location, country: null, region: null, currency: null },
+        answers: { ...ready.draft.answers, country: null, region: null, currency: null },
+      },
+      validationIssue: null,
+    });
+
+    expect(reviewProjectionOf(incomplete)).toMatchObject({
+      readiness: "blocked",
+      location: {
+        kind: "incomplete",
+        country: null,
+        region: null,
+        currency: null,
+      },
+    });
+    expect(reviewProjectionOf(incomplete).location).not.toEqual(
+      expect.objectContaining({ country: "US", currency: "USD" }),
+    );
+  });
+
+  it("distinguishes an unavailable Assessment from a ready review projection", () => {
+    const unavailable = dispatch(
+      atReview(),
+      { type: "set_plan_adjustment", patch: { expense_reduction_cents: 999_999_999 } },
+      "invalid-adjustment",
+    ).state;
+
+    expect(reviewProjectionOf(unavailable)).toMatchObject({
+      readiness: "blocked",
+      location: { kind: "complete", country: "US", region: "CA", currency: "USD" },
+      household: { adultCount: 1, confidence: "confirmed" },
+      cash: { cents: 3_000_000, confidence: "confirmed" },
+      expenses: {
+        currentMonthlyCents: 600_000,
+        interruptionMonthlyCents: 400_000,
+        confidence: "confirmed",
+      },
+      earnedIncome: { monthlyCents: 0, confidence: "estimated" },
+      otherIncome: { monthlyCents: 0, confidence: "skipped" },
+      liquidInvestments: { cents: 0, confidence: "skipped" },
+      lastResortAssets: { cents: 0, confidence: "skipped" },
+    });
+    expect(unavailable.assessment).toBeNull();
+  });
+
   it("normalizes a Draft into complete Plan inputs and derives the current model", () => {
     const state = atReview();
 
