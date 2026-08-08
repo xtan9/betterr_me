@@ -671,6 +671,8 @@ const MAX_JWKS_LENGTH = 65_536;
 const MAX_JWKS_KEYS = 32;
 const MAX_CONFIGURED_SECRETS = 32;
 const MAX_CONFIGURED_SECRET_LENGTH = 500;
+const MAX_RETAINED_FACTS = 1_024;
+const MAX_UNIQUE_PAYLOADS_PER_IDENTITY = 2;
 
 const SENSITIVE_KEY = /^(?:access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|code[_-]?verifier|password|cookie|authorization|secret|token|verifier|state|code)$/i;
 const CREDENTIAL_KEY = /^(?:access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|code[_-]?verifier|password|cookie|authorization|secret|token|code)$/i;
@@ -682,6 +684,7 @@ const CONCLUSION_KEYS = new Set([
   "accessTokenChanged", "refreshTokenChanged", "providerReturnedAccessToken", "providerReturnedRefreshToken",
   "rootReplayDetected", "everyIssuedDescendantRejected", "replacementCredentialsStored", "grantIdentified",
   "grantRevoked", "withinDocumentedLifetime", "operationStatus", "succeeded",
+  "identity", "factIdentity", "catalogIdentity", "authority", "semanticRole",
 ]);
 
 const PKCE_NEGATIVE_CASES: readonly AggregatePkceNegativeCase[] = [
@@ -759,6 +762,96 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
+}
+
+function snapshotFactInput(value: unknown): AggregateCompatibilityFact | AggregatePublicClientFact {
+  const snapshot = copyFactInput(value, 0, new WeakSet<object>());
+  if (!isRecord(snapshot)) throw new AggregateCompatibilityEvidenceBoundaryError();
+  return snapshot as AggregateCompatibilityFact | AggregatePublicClientFact;
+}
+
+function copyFactInput(value: unknown, depth: number, parents: WeakSet<object>): unknown {
+  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === undefined) return value;
+  if (depth > MAX_DEPTH) return "[REDACTED: depth limit]";
+  if (typeof value !== "object") return "[REDACTED: unsupported value]";
+  if (parents.has(value)) return "[REDACTED: cyclic value]";
+  parents.add(value);
+  try {
+    if (Array.isArray(value)) {
+      if (value.length > MAX_ARRAY_ITEMS) return "[REDACTED: array limit]";
+      const keys = Reflect.ownKeys(value);
+      if (keys.length !== value.length + 1 || !keys.includes("length")) throw new AggregateCompatibilityEvidenceBoundaryError();
+      const result: unknown[] = [];
+      for (let index = 0; index < value.length; index += 1) {
+        const key = String(index);
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        if (descriptor === undefined || !descriptor.enumerable || !Object.prototype.hasOwnProperty.call(descriptor, "value")) throw new AggregateCompatibilityEvidenceBoundaryError();
+        result.push(copyFactInput(descriptor.value, depth + 1, parents));
+      }
+      if (keys.some((key) => key !== "length" && (typeof key !== "string" || !/^(?:0|[1-9]\d*)$/.test(key) || Number(key) >= value.length))) {
+        throw new AggregateCompatibilityEvidenceBoundaryError();
+      }
+      return result;
+    }
+    if (!isRecord(value)) return "[REDACTED: unsupported value]";
+    const keys = Reflect.ownKeys(value);
+    if (keys.length > MAX_OBJECT_KEYS) return "[REDACTED: object limit]";
+    const result: Record<string, unknown> = {};
+    for (const key of keys) {
+      if (typeof key !== "string") throw new AggregateCompatibilityEvidenceBoundaryError();
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (descriptor === undefined || !descriptor.enumerable || !Object.prototype.hasOwnProperty.call(descriptor, "value")) throw new AggregateCompatibilityEvidenceBoundaryError();
+      result[key] = copyFactInput(descriptor.value, depth + 1, parents);
+    }
+    return result;
+  } finally {
+    parents.delete(value);
+  }
+}
+
+function hasOnlyOwnDataKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
+  return Reflect.ownKeys(value).every((key) => {
+    if (typeof key !== "string" || !allowed.includes(key)) return false;
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor !== undefined && descriptor.enumerable && Object.prototype.hasOwnProperty.call(descriptor, "value");
+  });
+}
+
+function hasOnlyOwnDataProperties(value: Record<string, unknown>): boolean {
+  return Reflect.ownKeys(value).every((key) => {
+    if (typeof key !== "string") return false;
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor !== undefined && descriptor.enumerable && Object.prototype.hasOwnProperty.call(descriptor, "value");
+  });
+}
+
+function isDenseArray(value: unknown, maximumLength: number): value is readonly unknown[] {
+  if (!Array.isArray(value) || value.length > maximumLength) return false;
+  const keys = Reflect.ownKeys(value);
+  if (keys.length !== value.length + 1 || !keys.includes("length")) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+    if (descriptor === undefined || !descriptor.enumerable || !Object.prototype.hasOwnProperty.call(descriptor, "value")) return false;
+  }
+  return keys.every((key) => key === "length" || (typeof key === "string" && /^(?:0|[1-9]\d*)$/.test(key) && Number(key) < value.length));
+}
+
+function nonEmptyBoundedString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= MAX_STRING_LENGTH;
+}
+
+function nonEmptyConfiguredSecret(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= MAX_CONFIGURED_SECRET_LENGTH;
+}
+
+function validHttpUrl(value: unknown): value is string {
+  if (!nonEmptyBoundedString(value)) return false;
+  try {
+    const url = new URL(value);
+    return (url.protocol === "http:" || url.protocol === "https:") && url.hostname.length > 0 && !url.username && !url.password;
+  } catch {
+    return false;
+  }
 }
 
 function boundedString(value: unknown): string | undefined {
@@ -964,7 +1057,7 @@ function discoveryData(raw: Record<string, unknown>): Record<string, unknown> {
 }
 
 function assertNoConclusionFields(value: Record<string, unknown>): void {
-  if (Object.keys(value).some((key) => CONCLUSION_KEYS.has(key))) throw new AggregateCompatibilityEvidenceBoundaryError();
+  if (Reflect.ownKeys(value).some((key) => typeof key !== "string" || CONCLUSION_KEYS.has(key))) throw new AggregateCompatibilityEvidenceBoundaryError();
 }
 
 function assertNoFamily(value: Record<string, unknown>): void {
@@ -1228,31 +1321,31 @@ async function normalizeDelegatedToken(raw: Record<string, unknown>, sampledAtMi
   let header: DelegatedJwtHeader;
   let claims: DelegatedJwtClaims;
   try {
-    header = decodeProtectedHeader(token) as DelegatedJwtHeader;
-    claims = decodeJwt(token) as DelegatedJwtClaims;
+    header = normalizeDelegatedHeader(decodeProtectedHeader(token) as DelegatedJwtHeader);
+    claims = normalizeDelegatedClaims(decodeJwt(token) as DelegatedJwtClaims);
   } catch {
     return { ...absent, tokenObserved: true, tokenMalformed: true };
   }
 
   const rawJwks = raw.jwks ?? observation.jwks;
   if (rawJwks === undefined) {
-    return { ...absent, tokenObserved: true, header: normalizeDelegatedHeader(header), claims: normalizeDelegatedClaims(claims) };
+    return { ...absent, tokenObserved: true, header, claims };
   }
   let jwksValue: unknown = rawJwks;
   if (typeof rawJwks === "string") {
-    if (rawJwks.length === 0 || rawJwks.length > MAX_JWKS_LENGTH) return { ...absent, tokenObserved: true, header, claims: normalizeDelegatedClaims(claims), jwksObserved: true, jwksMalformed: true };
+    if (rawJwks.length === 0 || rawJwks.length > MAX_JWKS_LENGTH) return { ...absent, tokenObserved: true, header, claims, jwksObserved: true, jwksMalformed: true };
     try {
       jwksValue = JSON.parse(rawJwks);
     } catch {
-      return { ...absent, tokenObserved: true, header, claims: normalizeDelegatedClaims(claims), jwksMalformed: true };
+      return { ...absent, tokenObserved: true, header, claims, jwksMalformed: true };
     }
   }
   if (!isRecord(jwksValue) || Object.keys(jwksValue).length > MAX_OBJECT_KEYS || Object.keys(jwksValue).some((key) => key.length > MAX_STRING_LENGTH) || !Array.isArray(jwksValue.keys) || jwksValue.keys.length > MAX_JWKS_KEYS) {
-    return { ...absent, tokenObserved: true, header, claims: normalizeDelegatedClaims(claims), jwksObserved: true, jwksMalformed: true };
+    return { ...absent, tokenObserved: true, header, claims, jwksObserved: true, jwksMalformed: true };
   }
   const keys = jwksValue.keys.map((key) => minimizeSigningKey(key));
   if (keys.some((key) => key === undefined)) {
-    return { ...absent, tokenObserved: true, header, claims: normalizeDelegatedClaims(claims), jwksObserved: true, jwksMalformed: true };
+    return { ...absent, tokenObserved: true, header, claims, jwksObserved: true, jwksMalformed: true };
   }
   const signingKeys = keys as DelegatedJwk[];
   const selected = selectDelegatedSigningJwk(header, signingKeys);
@@ -1261,7 +1354,7 @@ async function normalizeDelegatedToken(raw: Record<string, unknown>, sampledAtMi
       ...absent,
       tokenObserved: true,
       header,
-      claims: normalizeDelegatedClaims(claims),
+      claims,
       jwksObserved: true,
       signingKeys: normalizeSigningKeys(signingKeys),
     };
@@ -1281,7 +1374,7 @@ async function normalizeDelegatedToken(raw: Record<string, unknown>, sampledAtMi
     jwksObserved: true,
     jwksMalformed: false,
     header,
-    claims: normalizeDelegatedClaims(claims),
+    claims,
     signingKeys: normalizeSigningKeys(signingKeys),
     keySelected: true,
     signatureValid,
@@ -2898,7 +2991,7 @@ function internalObservations(
   const conflicts = new Set<string>();
   const seen = new Map<string, string>();
   for (const fact of facts) {
-    const payload = JSON.stringify({ data: fact.data, request: fact.request });
+    const payload = factFingerprint(fact);
     const prior = seen.get(fact.identity);
     if (prior !== undefined && prior !== payload) {
       const gateId = publicFamilyGateId(fact) ?? gateForFact(fact);
@@ -3097,36 +3190,79 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
+function stableSerialize(value: unknown): string {
+  if (value === undefined) return "undefined";
+  if (value === null || typeof value === "boolean" || typeof value === "number") return JSON.stringify(value);
+  if (typeof value === "string") return JSON.stringify(value);
+  if (Array.isArray(value)) return "[" + value.map(stableSerialize).join(",") + "]";
+  if (isRecord(value)) {
+    return "{" + Object.keys(value).sort().map((key) => JSON.stringify(key) + ":" + stableSerialize(value[key])).join(",") + "}";
+  }
+  return JSON.stringify(String(value));
+}
+
+function factFingerprint(fact: NormalizedFact): string {
+  return stableSerialize({ data: fact.data, request: fact.request?.request });
+}
+
 function snapshotOptions(options: AggregateCompatibilityEvidenceOptions): AggregateCompatibilityEvidenceOptions {
-  if (!isRecord(options) || !isRecord(options.target) || typeof options.clock !== "function" || !options.writer || (typeof options.writer !== "function" && typeof options.writer.write !== "function")) throw new AggregateCompatibilityEvidenceBoundaryError();
-  if (!isRecord(options.versions) || Object.keys(options.versions).length > MAX_OBJECT_KEYS) throw new AggregateCompatibilityEvidenceBoundaryError();
-  const configuredSecrets = options.configuredSecrets ?? [];
-  if (!Array.isArray(configuredSecrets) || configuredSecrets.length > MAX_CONFIGURED_SECRETS || configuredSecrets.some((secret) => typeof secret !== "string" || secret.length > MAX_CONFIGURED_SECRET_LENGTH)) throw new AggregateCompatibilityEvidenceBoundaryError();
+  if (!isRecord(options) || !hasOnlyOwnDataKeys(options, ["target", "versions", "configuredSecrets", "clock", "writer"])) throw new AggregateCompatibilityEvidenceBoundaryError();
+  if (!isRecord(options.target) || !hasOnlyOwnDataKeys(options.target, ["name", "canonicalResource", "supabaseUrl", "expectedAuthorizationServer", "loopbackHosts"])) throw new AggregateCompatibilityEvidenceBoundaryError();
+  if (!nonEmptyBoundedString(options.target.name) || !validHttpUrl(options.target.canonicalResource) || !validHttpUrl(options.target.supabaseUrl) || !validHttpUrl(options.target.expectedAuthorizationServer)) {
+    throw new AggregateCompatibilityEvidenceBoundaryError();
+  }
+  if (typeof options.clock !== "function") throw new AggregateCompatibilityEvidenceBoundaryError();
+  if (!options.writer || (typeof options.writer !== "function" && (!isRecord(options.writer) || !hasOnlyOwnDataKeys(options.writer, ["write"]) || typeof options.writer.write !== "function"))) {
+    throw new AggregateCompatibilityEvidenceBoundaryError();
+  }
+  if (!isRecord(options.versions) || Object.keys(options.versions).length > MAX_OBJECT_KEYS || !hasOnlyOwnDataProperties(options.versions)) {
+    throw new AggregateCompatibilityEvidenceBoundaryError();
+  }
+  const configuredSecrets = options.configuredSecrets === undefined ? [] : options.configuredSecrets;
+  if (!isDenseArray(configuredSecrets, MAX_CONFIGURED_SECRETS) || configuredSecrets.some((secret) => !nonEmptyConfiguredSecret(secret)) || new Set(configuredSecrets).size !== configuredSecrets.length) {
+    throw new AggregateCompatibilityEvidenceBoundaryError();
+  }
   const versions = Object.fromEntries(Object.entries(options.versions).map(([key, value]) => {
-    if (key.length > MAX_STRING_LENGTH || typeof value !== "string" || value.length > MAX_STRING_LENGTH) throw new AggregateCompatibilityEvidenceBoundaryError();
+    if (!nonEmptyBoundedString(key) || !nonEmptyBoundedString(value)) throw new AggregateCompatibilityEvidenceBoundaryError();
     return [key, value];
   }));
+  const targetLoopbackHosts = options.target.loopbackHosts === undefined
+    ? undefined
+    : isDenseArray(options.target.loopbackHosts, 2)
+      ? [...options.target.loopbackHosts]
+      : [];
+  if (targetLoopbackHosts !== undefined && (targetLoopbackHosts.length !== 2 || targetLoopbackHosts.some((host) => typeof host !== "string" || host.length > MAX_STRING_LENGTH) ||
+    targetLoopbackHosts.join("|") !== [MCP_ACCESS_GRANT_LOOPBACK_HOSTS.ipv4, MCP_ACCESS_GRANT_LOOPBACK_HOSTS.ipv6].join("|"))) {
+    throw new AggregateCompatibilityEvidenceBoundaryError();
+  }
   const target = {
-    name: boundedString(options.target.name) ?? "",
-    canonicalResource: boundedString(options.target.canonicalResource) ?? "",
-    supabaseUrl: boundedString(options.target.supabaseUrl) ?? "",
-    expectedAuthorizationServer: boundedString(options.target.expectedAuthorizationServer) ?? "",
-    ...(options.target.loopbackHosts ? { loopbackHosts: [...options.target.loopbackHosts] } : {}),
+    name: options.target.name,
+    canonicalResource: options.target.canonicalResource,
+    supabaseUrl: options.target.supabaseUrl,
+    expectedAuthorizationServer: options.target.expectedAuthorizationServer,
+    ...(targetLoopbackHosts !== undefined ? { loopbackHosts: targetLoopbackHosts } : {}),
   } satisfies CompatibilityReportTarget;
-  return deepFreeze({ target, versions, configuredSecrets: [...configuredSecrets], clock: options.clock, writer: writerFunction(options.writer) });
+  let writer: (artifact: AggregateCompatibilityArtifact) => void | Promise<void>;
+  try {
+    writer = writerFunction(options.writer);
+  } catch {
+    throw new AggregateCompatibilityEvidenceBoundaryError();
+  }
+  return deepFreeze({ target, versions, configuredSecrets: [...configuredSecrets], clock: options.clock, writer });
 }
 
 function sampleClock(clock: () => string, previous?: number): { readonly value: string; readonly millis: number } {
   let value: unknown;
   try {
     value = clock();
+    if (typeof value !== "string" || value.trim().length === 0 || value.length > 64) throw new Error("invalid clock");
+    const millis = Date.parse(value);
+    if (!Number.isFinite(millis) || (previous !== undefined && millis < previous)) throw new Error("invalid clock");
+    const normalized = new Date(millis).toISOString();
+    return { value: normalized, millis };
   } catch {
     throw new AggregateCompatibilityEvidenceBoundaryError();
   }
-  if (typeof value !== "string" || value.length > 64) throw new AggregateCompatibilityEvidenceBoundaryError();
-  const millis = Date.parse(value);
-  if (!Number.isFinite(millis) || (previous !== undefined && millis < previous)) throw new AggregateCompatibilityEvidenceBoundaryError();
-  return { value: new Date(millis).toISOString(), millis };
 }
 
 async function persist(writer: (artifact: AggregateCompatibilityArtifact) => void | Promise<void>, artifact: AggregateCompatibilityArtifact): Promise<boolean> {
@@ -3136,6 +3272,11 @@ async function persist(writer: (artifact: AggregateCompatibilityArtifact) => voi
   } catch {
     return false;
   }
+}
+
+function factNeedsClockSample(fact: unknown): boolean {
+  if (!isRecord(fact)) return false;
+  return fact.kind === "delegated-token";
 }
 
 function artifact(contents: string): AggregateCompatibilityArtifact {
@@ -3149,6 +3290,25 @@ function finalizeRun(
   finishedAt: string,
   artifactWriteSucceeded?: boolean,
 ) {
+  if (facts.length > MAX_RETAINED_FACTS) throw new AggregateCompatibilityEvidenceBoundaryError();
+  for (const fact of facts) {
+    if (!fact.identity || !fact.kind || !fact.role) throw new AggregateCompatibilityEvidenceBoundaryError();
+    const family = fact.source === "public-client" ? fact.family ?? "none" : "none";
+    const catalogIdentity = classifyFactIdentity({
+      profile: "compatibility",
+      source: fact.source,
+      kind: fact.kind,
+      role: fact.role,
+      family,
+    });
+    const expectedAuthority = fact.source === "compatibility"
+      ? "authoritative"
+      : fact.kind === "resource-discovery" || fact.kind === "provider-discovery"
+        ? "shadow"
+        : "authoritative";
+    if (!catalogIdentity.accepted || catalogIdentity.authority !== expectedAuthority) throw new AggregateCompatibilityEvidenceBoundaryError();
+    void factFingerprint(fact);
+  }
   const context = createEvidenceRunContext({
     configuredSecrets: options.configuredSecrets ?? [],
     time: { startedAt, finishedAt },
@@ -3168,6 +3328,7 @@ export async function runAggregateCompatibilityEvidence(
   optionsInput: AggregateCompatibilityEvidenceOptions,
   journey: (recorders: AggregateCompatibilityRecorders) => void | Promise<void>,
 ): Promise<AggregateCompatibilityEvidenceResult> {
+  if (typeof journey !== "function") throw stableFailure();
   let options: AggregateCompatibilityEvidenceOptions;
   try {
     options = snapshotOptions(optionsInput);
@@ -3182,11 +3343,21 @@ export async function runAggregateCompatibilityEvidence(
   }
 
   const facts: NormalizedFact[] = [];
+  const identityPayloads = new Map<string, Set<string>>();
   const pending = new Set<Promise<void>>();
   let recordChain = Promise.resolve();
   let closed = false;
   let poisoned = false;
   let lastClock = start.millis;
+
+  const discard = (): void => {
+    facts.length = 0;
+    identityPayloads.clear();
+  };
+
+  const drain = async (): Promise<void> => {
+    while (pending.size > 0) await Promise.allSettled([...pending]);
+  };
 
   const record = (source: "compatibility" | "public-client", fact: AggregateCompatibilityFact | AggregatePublicClientFact): Promise<void> => {
     if (closed) {
@@ -3194,13 +3365,32 @@ export async function runAggregateCompatibilityEvidence(
       void failure.catch(() => undefined);
       return failure;
     }
+    let capturedFact: AggregateCompatibilityFact | AggregatePublicClientFact;
+    try {
+      capturedFact = snapshotFactInput(fact);
+    } catch (error) {
+      poisoned = true;
+      const failure = Promise.reject(stableFailure(error));
+      void failure.catch(() => undefined);
+      return failure;
+    }
     const accepted = recordChain.then(async () => {
       try {
-        const sampled = isRecord(fact) && fact.kind === "delegated-token"
+        const currentFact = capturedFact;
+        capturedFact = undefined as never;
+        const sampled = factNeedsClockSample(currentFact)
           ? sampleClock(options.clock, lastClock)
           : { value: "", millis: lastClock };
         lastClock = sampled.millis;
-        const normalized = await normalizeFact(fact, source, sampled.millis);
+        const normalized = await normalizeFact(currentFact, source, sampled.millis);
+        const payload = factFingerprint(normalized);
+        const payloads = identityPayloads.get(normalized.identity) ?? new Set<string>();
+        const requestLike = normalized.request !== undefined;
+        if (!requestLike && payloads.has(payload)) return;
+        if (!requestLike && payloads.size >= MAX_UNIQUE_PAYLOADS_PER_IDENTITY) return;
+        if (facts.length >= MAX_RETAINED_FACTS) throw new AggregateCompatibilityEvidenceBoundaryError();
+        if (!payloads.has(payload) && payloads.size < MAX_UNIQUE_PAYLOADS_PER_IDENTITY) payloads.add(payload);
+        identityPayloads.set(normalized.identity, payloads);
         facts.push(normalized);
       } catch (error) {
         poisoned = true;
@@ -3221,26 +3411,40 @@ export async function runAggregateCompatibilityEvidence(
     await journey(recorders);
   } catch (error) {
     closed = true;
-    await Promise.allSettled([...pending]);
+    await drain();
+    discard();
     throw stableFailure(error);
   }
   closed = true;
-  await Promise.allSettled([...pending]);
-  if (poisoned) throw stableFailure();
+  await drain();
+  if (poisoned) {
+    discard();
+    throw stableFailure();
+  }
 
   let finish: { readonly value: string; readonly millis: number };
   try {
     finish = sampleClock(options.clock, lastClock);
   } catch (error) {
+    discard();
     throw stableFailure(error);
   }
+
+  let preliminary: ReturnType<typeof finalizeRun>;
+  let failure: ReturnType<typeof finalizeRun>;
+  try {
+    preliminary = finalizeRun(facts, options, start.value, finish.value, true);
+    failure = finalizeRun(facts, options, start.value, finish.value, false);
+  } catch (error) {
+    discard();
+    throw stableFailure(error);
+  }
+
   const writer = writerFunction(options.writer);
-  const preliminary = finalizeRun(facts, options, start.value, finish.value, true);
   const preliminaryArtifact = artifact(preliminary.verification.serialized);
   if (preliminary.verification.sanitized && await persist(writer, preliminaryArtifact)) {
     return { report: preliminary.report, artifact: preliminaryArtifact, verification: preliminary.verification, artifactWriteSucceeded: true };
   }
-  const failure = finalizeRun(facts, options, start.value, finish.value, false);
   const failureArtifact = artifact(failure.verification.serialized);
   let failureWriteSucceeded = false;
   for (let attempt = 0; attempt < 2 && !failureWriteSucceeded; attempt += 1) failureWriteSucceeded = await persist(writer, failureArtifact);
