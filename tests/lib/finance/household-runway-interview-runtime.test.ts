@@ -325,6 +325,7 @@ describe("Household Runway Interview Runtime", () => {
         assessment: expect.any(Object),
       },
     });
+    expect(runtime.getSnapshot().screen).not.toHaveProperty("resultProjection");
 
     runtime.send({ type: "edit_completed_plan" });
     expect(runtime.getSnapshot()).toMatchObject({

@@ -130,6 +130,35 @@ function reviewProjectionOf(state: HouseholdRunwayInterviewState) {
   return state.renderModel.reviewProjection;
 }
 
+function resultProjectionOf(state: HouseholdRunwayInterviewState) {
+  if (state.renderModel.kind !== "stage") {
+    throw new Error(`expected result render model, received ${state.renderModel.kind}`);
+  }
+  const projection = state.renderModel.resultProjection;
+  if (projection.readiness !== "ready") {
+    throw new Error("expected a ready result projection");
+  }
+  return projection;
+}
+
+function atResult(shared = false) {
+  return dispatch(atReview(shared), { type: "continue" }, "result").state;
+}
+
+function atResultWithCash(cents: number) {
+  const reviewed = dispatch(
+    atReview(),
+    {
+      type: "update_answers",
+      patch: {
+        available_cash: { cents, confidence: "confirmed" },
+      },
+    },
+    `cash-${cents}`,
+  ).state;
+  return dispatch(reviewed, { type: "continue" }, `result-${cents}`).state;
+}
+
 function atGuidedReview() {
   return dispatch(
     atReview(true),
@@ -629,5 +658,278 @@ describe("reviewable Household Runway Assessment boundary", () => {
     expect(revealed.events.map((event) => event.type)).not.toContain(
       "snapshot_created",
     );
+  });
+});
+
+describe("focused Household Runway result projection", () => {
+  it("projects the selected Assessment with canonical Scenario order and its model version", () => {
+    const selected = dispatch(
+      atReview(true),
+      { type: "select_scenario", scenario: "partner_stops" },
+      "select-partner-stops",
+    ).state;
+    const result = dispatch(selected, { type: "continue" }, "result").state;
+
+    expect(resultProjectionOf(result)).toMatchObject({
+      readiness: "ready",
+      modelVersion: RUNWAY_MODEL_VERSION,
+      country: "US",
+      currency: "USD",
+      scenarios: {
+        selected: "partner_stops",
+        available: [
+          { id: "mine_stops" },
+          { id: "partner_stops" },
+          { id: "both_stop" },
+        ],
+      },
+    });
+  });
+
+  it("retains an applicable selection after an unrelated edit and falls back when it disappears", () => {
+    let state = atReview(true);
+    state = dispatch(
+      state,
+      { type: "select_scenario", scenario: "partner_stops" },
+      "select-partner-stops",
+    ).state;
+    state = dispatch(
+      state,
+      {
+        type: "update_answers",
+        patch: {
+          available_cash: { cents: 3_500_000, confidence: "confirmed" },
+        },
+      },
+      "unrelated-edit",
+    ).state;
+    expect(
+      resultProjectionOf(dispatch(state, { type: "continue" }, "retained-result").state)
+        .scenarios.selected,
+    ).toBe("partner_stops");
+
+    state = dispatch(
+      state,
+      { type: "set_household", sharesFinances: false },
+      "remove-partner",
+    ).state;
+    const fallback = resultProjectionOf(
+      dispatch(state, { type: "continue" }, "fallback-result").state,
+    );
+    expect(fallback.scenarios).toEqual({
+      selected: "mine_stops",
+      available: [{ id: "mine_stops" }],
+    });
+  });
+
+  it("does not expose partial result facts when a restored Assessment is unavailable", () => {
+    const reviewed = atReview();
+    const restored = restoreHouseholdRunwayInterview({
+      version: 2,
+      status: "completed",
+      stage: "result",
+      draft: {
+        ...reviewed.draft,
+        planAdjustment: {
+          ...reviewed.draft.planAdjustment,
+          expense_reduction_cents: 999_999_999,
+        },
+      },
+      validationIssue: null,
+    });
+
+    expect(restored.renderModel).toMatchObject({
+      kind: "stage",
+      resultProjection: { readiness: "unavailable" },
+    });
+    expect(restored.renderModel).not.toHaveProperty(
+      "resultProjection.primary",
+    );
+  });
+
+  it.each([
+    [
+      "sustainable",
+      atResult(true),
+      { kind: "sustainable" },
+      "sustainable",
+    ],
+    [
+      "under three months",
+      atResultWithCash(800_000),
+      {
+        kind: "depletes",
+        monthsCovered: 2,
+        depletion: { kind: "dated", date: "2026-10-02" },
+      },
+      "underThree",
+    ],
+    [
+      "exactly three months",
+      atResultWithCash(1_200_000),
+      {
+        kind: "depletes",
+        monthsCovered: 3,
+        depletion: { kind: "dated", date: "2026-11-02" },
+      },
+      "threeToUnderSix",
+    ],
+    [
+      "exactly six months",
+      atResultWithCash(2_400_000),
+      {
+        kind: "depletes",
+        monthsCovered: 6,
+        depletion: { kind: "dated", date: "2027-02-02" },
+      },
+      "sixPlus",
+    ],
+    [
+      "outside the representable date range",
+      atResultWithCash(100_000_000_000),
+      {
+        kind: "depletes",
+        monthsCovered: 250_000,
+        depletion: { kind: "outsideDateRange" },
+      },
+      "sixPlus",
+    ],
+  ] as const)("projects the %s outcome and guidance", (_name, state, outcome, guidance) => {
+    const primary = resultProjectionOf(state).primary;
+
+    expect(primary.outcome).toEqual(outcome);
+    expect(primary.guidance).toBe(guidance);
+    if (primary.outcome.kind === "sustainable") {
+      expect(primary.outcome).not.toHaveProperty("monthsCovered");
+      expect(primary.outcome).not.toHaveProperty("depletion");
+    } else {
+      expect(Number.isFinite(primary.outcome.monthsCovered)).toBe(true);
+      expect(primary.outcome.monthsCovered).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it("uses the live What-if preview for the primary result and the unadjusted baseline for interruption", () => {
+    const adjusted = dispatch(
+      atReview(),
+      {
+        type: "set_plan_adjustment",
+        patch: { added_monthly_income_cents: 400_000 },
+      },
+      "add-income",
+    ).state;
+    const projection = resultProjectionOf(
+      dispatch(adjusted, { type: "continue" }, "result").state,
+    );
+
+    expect(projection.primary.outcome).toEqual({ kind: "sustainable" });
+    expect(projection.comparisons.interruption.outcome).toEqual({
+      kind: "depletes",
+      monthsCovered: 7.5,
+    });
+  });
+
+  it("projects simulation resources, separate explanation amounts, and semantic comparison outcomes", () => {
+    const base = atReview();
+    const withAssets = dispatch(
+      base,
+      {
+        type: "update_answers",
+        patch: {
+          assets: {
+            ...base.draft.answers.assets,
+            liquid_investments: { cents: 700_000, confidence: "confirmed" },
+            illiquid_investments: { cents: 600_000, confidence: "confirmed" },
+            home_equity: { cents: 2_000_000, confidence: "confirmed" },
+            retirement_tax_deferred: { cents: 800_000, confidence: "confirmed" },
+            retirement_tax_free: { cents: 900_000, confidence: "confirmed" },
+          },
+        },
+      },
+      "assets",
+    ).state;
+    const adjusted = dispatch(
+      withAssets,
+      {
+        type: "set_plan_adjustment",
+        patch: {
+          expense_reduction_cents: 100_000,
+          added_cash_cents: 100_000,
+          added_monthly_income_cents: 50_000,
+          usable_illiquid_investments_cents: 200_000,
+          usable_retirement_tax_deferred_cents: 300_000,
+          usable_retirement_tax_free_cents: 400_000,
+        },
+      },
+      "adjustment",
+    ).state;
+    const projection = resultProjectionOf(
+      dispatch(adjusted, { type: "continue" }, "result").state,
+    );
+
+    expect(projection.primary.resources).toEqual({
+      startingCents: 4_700_000,
+      continuingMonthlyIncomeCents: 50_000,
+      interruptionExpensesCents: 300_000,
+      reducibleExpensesCents: 200_000,
+      excludedAssetsCents: 3_400_000,
+    });
+    expect(projection.explanation).toEqual({
+      availableCashCents: 3_000_000,
+      liquidInvestmentsCents: 700_000,
+    });
+    expect(projection.comparisons.currentLifestyle.outcome).toEqual({
+      kind: "depletes",
+      monthsCovered: 6.166666666666667,
+    });
+    expect(projection.comparisons.interruption.outcome).toEqual({
+      kind: "depletes",
+      monthsCovered: 9.25,
+    });
+    expect(projection.comparisons.extremeMode.outcome).toEqual({
+      kind: "depletes",
+      monthsCovered: 9.25,
+    });
+  });
+
+  it("projects every modeled month through a 240-month horizon", () => {
+    const series = resultProjectionOf(atResultWithCash(96_000_000)).primary.series;
+
+    expect(series.kind).toBe("monthly");
+    expect(series.throughMonth).toBe(240);
+    expect(series.points).toHaveLength(240);
+    expect(series.points.map((point) => point.month)).toEqual(
+      Array.from({ length: 240 }, (_, index) => index + 1),
+    );
+  });
+
+  it("projects long horizons as bounded sorted checkpoints with values for their named month", () => {
+    const series = resultProjectionOf(
+      atResultWithCash(100_000_000_000),
+    ).primary.series;
+
+    expect(series.kind).toBe("checkpoints");
+    if (series.kind !== "checkpoints") throw new Error("expected checkpoint series");
+    expect(series.throughMonth).toBe(250_000);
+    expect(series.completeMonthlyThrough).toBe(12);
+    expect(series.points.length).toBeLessThanOrEqual(60);
+
+    const months = series.points.map((point) => point.month);
+    expect(months.slice(0, 12)).toEqual(
+      Array.from({ length: 12 }, (_, index) => index + 1),
+    );
+    expect(months.at(-1)).toBe(250_000);
+    expect(months).toEqual([...months].sort((a, b) => a - b));
+    expect(new Set(months).size).toBe(months.length);
+    expect(months.filter((month) => month > 12 && month < 250_000).length).toBeLessThanOrEqual(47);
+
+    const checkpoint = series.points.find((point) => point.month === 5_208);
+    expect(checkpoint).toEqual({
+      month: 5_208,
+      openingBalanceCents: 97_917_200_000,
+      continuingIncomeCents: 0,
+      oneTimeFundsCents: 0,
+      essentialOutflowCents: 400_000,
+      closingBalanceCents: 97_916_800_000,
+    });
   });
 });
