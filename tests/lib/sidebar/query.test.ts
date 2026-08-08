@@ -46,9 +46,9 @@ describe("authenticated sidebar counts query", () => {
     const query = createSidebarCountsQuery(principal, {
       ...createDependencies(events),
       coverage: {
-        ensure: async ({ principal: owner, range: requestedRange }) => {
+        ensure: async (requestedRange) => {
           events.push(
-            `coverage:${owner.userId}:${requestedRange.from}:${requestedRange.to}`,
+            `coverage:${requestedRange.from}:${requestedRange.to}`,
           );
           return completeCoverage();
         },
@@ -58,7 +58,7 @@ describe("authenticated sidebar counts query", () => {
     const result = await query.read({ date: "2026-08-07" });
 
     expect(events).toEqual([
-      "coverage:user-1:2026-08-07:2026-08-07",
+      "coverage:2026-08-07:2026-08-07",
       "read:user-1:2026-08-07",
     ]);
     expect(result).toEqual({
@@ -126,41 +126,6 @@ describe("authenticated sidebar counts query", () => {
       });
     },
   );
-
-  it("normalizes a thrown Coverage failure to unavailable and fails closed", async () => {
-    const events: string[] = [];
-    const query = createSidebarCountsQuery(
-      principal,
-      createDependencies(events, {
-        ensure: async () => {
-          events.push("coverage");
-          throw new Error("coverage failed");
-        },
-      }),
-    );
-
-    const result = await query.read({ date: "2026-08-07" });
-
-    expect(events).toEqual(["coverage"]);
-    expect(result).toEqual({
-      status: "failed",
-      completeness: {
-        status: "unavailable",
-        type: "unavailable",
-        requestedRange: range,
-        failedSeriesIds: [],
-        reason: "Coverage could not be ensured",
-      },
-      warning: expect.objectContaining({
-        code: "recurring_coverage_unavailable",
-        requestedRange: range,
-      }),
-      error: {
-        code: "coverage_unavailable",
-        message: "Recurring task coverage is temporarily unavailable.",
-      },
-    });
-  });
 
   it("rejects a non-user principal at the authenticated seam", () => {
     expect(() =>

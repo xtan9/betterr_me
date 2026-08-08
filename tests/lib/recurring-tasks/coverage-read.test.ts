@@ -1,10 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  createCoverageRead,
-  type CoverageReadSource,
-} from "@/lib/recurring-tasks/coverage-read";
+import { createCoverageRead } from "@/lib/recurring-tasks/coverage-read";
 
 const principal = {
   type: "user" as const,
@@ -43,11 +40,11 @@ describe("authenticated Coverage Read", () => {
     async (source, operationId) => {
       const { client, rpc } = supabaseFor(completeOutcome());
       const boundPrincipal = { ...principal };
-      const read = createCoverageRead(
-        client,
-        boundPrincipal,
-        source as CoverageReadSource,
-      );
+      const read = createCoverageRead({
+        supabase: client,
+        principal: boundPrincipal,
+        source,
+      });
 
       boundPrincipal.userId = "caller-supplied-attacker";
       const result = await read.ensure(range);
@@ -73,14 +70,14 @@ describe("authenticated Coverage Read", () => {
   it("rejects a source outside the closed Coverage Read vocabulary", () => {
     const { client } = supabaseFor(completeOutcome());
 
-    expect(() => createCoverageRead(
-      client,
+    expect(() => createCoverageRead({
+      supabase: client,
       principal,
-      "reports" as never,
-    )).toThrow("Coverage Read source is invalid");
+      source: "reports" as never,
+    } as never)).toThrow("Coverage Read source is invalid");
   });
 
-  it("supports options-bound construction without exposing operation inputs", async () => {
+  it("does not cache or coalesce repeated Coverage acquisition", async () => {
     const { client, rpc } = supabaseFor(completeOutcome());
     const read = createCoverageRead({
       supabase: client,
@@ -88,20 +85,18 @@ describe("authenticated Coverage Read", () => {
       source: "task",
     });
 
-    await read.ensure(range);
+    await Promise.all([read.ensure(range), read.ensure(range)]);
 
-    expect(rpc).toHaveBeenCalledWith("recurring_task_lifecycle", {
-      p_operation: "ensure-user-coverage",
-      p_request: expect.objectContaining({
-        userId: "user-1",
-        idempotencyKey: "task-read-coverage:user-1:2026-08-07:2026-08-09",
-      }),
-    });
+    expect(rpc).toHaveBeenCalledTimes(2);
   });
 
   it("returns complete Coverage Completeness unchanged", async () => {
     const { client } = supabaseFor(completeOutcome());
-    const read = createCoverageRead(client, principal, "task");
+    const read = createCoverageRead({
+      supabase: client,
+      principal,
+      source: "task",
+    });
 
     await expect(read.ensure(range)).resolves.toEqual({
       status: "complete",
@@ -121,7 +116,11 @@ describe("authenticated Coverage Read", () => {
       occurrences: [],
       intentionalAbsences: [],
     });
-    const read = createCoverageRead(client, principal, "task");
+    const read = createCoverageRead({
+      supabase: client,
+      principal,
+      source: "task",
+    });
 
     await expect(read.ensure(range)).resolves.toEqual({
       status: "partial",
@@ -139,7 +138,11 @@ describe("authenticated Coverage Read", () => {
       coverageHorizon: null,
       reason: "The database is still catching up",
     });
-    const read = createCoverageRead(client, principal, "task");
+    const read = createCoverageRead({
+      supabase: client,
+      principal,
+      source: "task",
+    });
 
     await expect(read.ensure(range)).resolves.toEqual({
       status: "unavailable",
@@ -177,7 +180,11 @@ describe("authenticated Coverage Read", () => {
           type: failure,
           ...(failure === "invalid-transition" ? { reason: "private detail" } : {}),
         });
-      const read = createCoverageRead(client, principal, "task");
+      const read = createCoverageRead({
+        supabase: client,
+        principal,
+        source: "task",
+      });
 
       const result = await read.ensure(requestFactory() as typeof range);
 
@@ -199,7 +206,11 @@ describe("authenticated Coverage Read", () => {
       coverageHorizon: "2026-08-06",
       reason: "Coverage horizon could not be advanced",
     });
-    const read = createCoverageRead(client, principal, "dashboard");
+    const read = createCoverageRead({
+      supabase: client,
+      principal,
+      source: "dashboard",
+    });
 
     await expect(read.ensure(range)).resolves.toMatchObject({
       status: "unavailable",
@@ -211,11 +222,11 @@ describe("authenticated Coverage Read", () => {
     const rpc = vi.fn().mockRejectedValue(
       new RangeError("private validation detail"),
     );
-    const read = createCoverageRead(
-      { rpc } as unknown as SupabaseClient,
+    const read = createCoverageRead({
+      supabase: { rpc } as unknown as SupabaseClient,
       principal,
-      "task",
-    );
+      source: "task",
+    });
     const observer = vi.fn();
 
     await expect(read.ensure(range, observer)).resolves.toEqual({
@@ -231,11 +242,11 @@ describe("authenticated Coverage Read", () => {
   it("observes an unexpected cause once and returns no raw diagnostic", async () => {
     const cause = new Error("secret database details");
     const rpc = vi.fn().mockRejectedValue(cause);
-    const read = createCoverageRead(
-      { rpc } as unknown as SupabaseClient,
+    const read = createCoverageRead({
+      supabase: { rpc } as unknown as SupabaseClient,
       principal,
-      "calendar",
-    );
+      source: "calendar",
+    });
     const observer = vi.fn();
 
     const result = await read.ensure(range, observer);
@@ -255,11 +266,11 @@ describe("authenticated Coverage Read", () => {
   it("swallows observer failures without changing the generic unavailable result", async () => {
     const cause = { private: "cause" };
     const rpc = vi.fn().mockRejectedValue(cause);
-    const read = createCoverageRead(
-      { rpc } as unknown as SupabaseClient,
+    const read = createCoverageRead({
+      supabase: { rpc } as unknown as SupabaseClient,
       principal,
-      "sidebar",
-    );
+      source: "sidebar",
+    });
     const observer = vi.fn().mockRejectedValue(new Error("observer failed"));
 
     await expect(read.ensure(range, observer)).resolves.toEqual({
