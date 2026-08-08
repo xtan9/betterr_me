@@ -114,6 +114,7 @@ describe('POST /api/conversations/[id]/title', () => {
     expect(data.title).toBe('Test Title');
     expect(mockGenerateText).toHaveBeenCalledWith(
       expect.objectContaining({
+        model: "mock-model:gpt-5.3-codex-spark",
         maxOutputTokens: 30,
       }),
     );

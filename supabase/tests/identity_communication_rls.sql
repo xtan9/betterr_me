@@ -55,13 +55,13 @@ values
     '57700000-0000-0000-0000-000000000010',
     '57700000-0000-0000-0000-000000000001',
     'Owner conversation',
-    'gpt-5.4-mini'
+    'gpt-5.3-codex-spark'
   ),
   (
     '57700000-0000-0000-0000-000000000011',
     '57700000-0000-0000-0000-000000000001',
     'Conversation to delete',
-    'gpt-5.4-mini'
+    'gpt-5.3-codex-spark'
   );
 
 insert into public.chat_messages (id, conversation_id, role, content)
@@ -581,7 +581,7 @@ begin
       '57700000-0000-0000-0000-000000000012',
       '57700000-0000-0000-0000-000000000001',
       'Cross-user conversation',
-      'gpt-5.4-mini'
+      'gpt-5.3-codex-spark'
     );
   exception when others then
     get stacked diagnostics operation_sqlstate = returned_sqlstate;
@@ -1384,7 +1384,7 @@ begin
       '57700000-0000-0000-0000-000000000013',
       '57700000-0000-0000-0000-000000000001',
       'Anonymous conversation',
-      'gpt-5.4-mini'
+      'gpt-5.3-codex-spark'
     );
   exception when others then
     get stacked diagnostics operation_sqlstate = returned_sqlstate;

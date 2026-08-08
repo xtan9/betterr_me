@@ -158,7 +158,7 @@ describe('ChatMessagesDB', () => {
         turnId: 'turn-1',
         userContent: 'Hello',
         assistantContent: 'Hi there',
-        assistantModel: 'gpt-5.4-mini',
+        assistantModel: 'gpt-5.3-codex-spark',
       });
 
       expect(result).toEqual(saved);
@@ -167,7 +167,7 @@ describe('ChatMessagesDB', () => {
         p_turn_id: 'turn-1',
         p_user_content: 'Hello',
         p_assistant_content: 'Hi there',
-        p_assistant_model: 'gpt-5.4-mini',
+        p_assistant_model: 'gpt-5.3-codex-spark',
       });
     });
 
@@ -181,7 +181,7 @@ describe('ChatMessagesDB', () => {
         turnId: 'turn-1',
         userContent: 'Hello',
         assistantContent: 'Hi there',
-        assistantModel: 'gpt-5.4-mini',
+        assistantModel: 'gpt-5.3-codex-spark',
       })).rejects.toEqual(error);
     });
   });

@@ -2,8 +2,10 @@ import { describe, it, expect } from "vitest";
 import { AVAILABLE_MODELS, DEFAULT_MODEL_ID, getModelById } from "@/lib/ai/models";
 
 describe("models", () => {
-  it("exports a non-empty list of available models", () => {
-    expect(AVAILABLE_MODELS.length).toBeGreaterThan(0);
+  it("exposes only Codex 5.3 Spark", () => {
+    expect(AVAILABLE_MODELS).toEqual([
+      { id: "gpt-5.3-codex-spark", label: "Codex 5.3 Spark" },
+    ]);
   });
 
   it("each model has id and label", () => {
@@ -13,8 +15,8 @@ describe("models", () => {
     }
   });
 
-  it("uses the low-cost OpenAI model by default", () => {
-    expect(DEFAULT_MODEL_ID).toBe("gpt-5.4-mini");
+  it("uses Codex 5.3 Spark by default", () => {
+    expect(DEFAULT_MODEL_ID).toBe("gpt-5.3-codex-spark");
   });
 
   it("default model exists in the available models list", () => {
@@ -23,9 +25,9 @@ describe("models", () => {
   });
 
   it("getModelById returns the correct model", () => {
-    const model = getModelById("gpt-5.6-sol");
+    const model = getModelById("gpt-5.3-codex-spark");
     expect(model).toBeDefined();
-    expect(model!.label).toBe("GPT-5.6 Sol");
+    expect(model!.label).toBe("Codex 5.3 Spark");
   });
 
   it("getModelById returns undefined for unknown model", () => {

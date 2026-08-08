@@ -23,7 +23,7 @@ insert into public.conversations (id, user_id, model)
 values (
   '48900000-0000-0000-0000-000000000010',
   '48900000-0000-0000-0000-000000000001',
-  'gpt-5.4-mini'
+  'gpt-5.3-codex-spark'
 );
 
 select set_config(
@@ -36,7 +36,7 @@ insert into public.conversations (id, user_id, model)
 values (
   '48900000-0000-0000-0000-000000000020',
   '48900000-0000-0000-0000-000000000002',
-  'gpt-5.4-mini'
+  'gpt-5.3-codex-spark'
 );
 
 select set_config(
@@ -83,7 +83,7 @@ begin
     'foreign-turn',
     'This user does not own the conversation.',
     'This response must not be persisted.',
-    'gpt-5.4-mini'
+    'gpt-5.3-codex-spark'
   );
   raise exception 'cross-user completed turn unexpectedly succeeded';
 exception
@@ -120,7 +120,7 @@ begin
     'turn-1',
     'How am I doing?',
     'You are making progress.',
-    'gpt-5.4-mini'
+    'gpt-5.3-codex-spark'
   );
 
   retry_outcome := public.save_completed_chat_turn(
@@ -128,7 +128,7 @@ begin
     'turn-1',
     'How am I doing?',
     'You are making progress.',
-    'gpt-5.4-mini'
+    'gpt-5.3-codex-spark'
   );
 
   if first_outcome->>'outcome' <> 'saved'
@@ -136,7 +136,7 @@ begin
     or jsonb_array_length(first_outcome->'messages') <> 2
     or first_outcome->'messages'->0->>'role' <> 'user'
     or first_outcome->'messages'->1->>'role' <> 'assistant'
-    or first_outcome->'messages'->1->>'model' <> 'gpt-5.4-mini' then
+    or first_outcome->'messages'->1->>'model' <> 'gpt-5.3-codex-spark' then
     raise exception 'completed turn outcome was incorrect: first=%, retry=%',
       first_outcome,
       retry_outcome;
