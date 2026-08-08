@@ -1,16 +1,16 @@
 import {
-  RUNWAY_MODEL_VERSION,
   expenseTotals,
   monthlyIncomeTotal,
   type RunwayScenario,
+  type RunwaySimulation,
 } from "@/lib/finance/cushion";
 import type {
   HouseholdRunwayScenarioAssessment,
   SuccessfulHouseholdRunwayAssessment,
 } from "@/lib/finance/household-runway-assessment";
-import type { HouseholdRunwayReportPresentation } from "@/lib/finance/household-runway-interview-runtime";
+import type { HouseholdRunwayReportPresentation } from "@/lib/finance/internal/household-runway-interview-runtime";
 
-export type { HouseholdRunwayReportPresentation } from "@/lib/finance/household-runway-interview-runtime";
+export type { HouseholdRunwayReportPresentation } from "@/lib/finance/internal/household-runway-interview-runtime";
 
 interface HouseholdRunwayDownloadEnvironment {
   createBlob: (content: string) => Blob;
@@ -52,7 +52,17 @@ const REPORT_SCENARIO_ORDER: readonly RunwayScenario[] = [
 function adviceLines(
   scenario: HouseholdRunwayScenarioAssessment,
   presentation: HouseholdRunwayReportPresentation,
+  answers: SuccessfulHouseholdRunwayAssessment["answers"],
 ): string[] {
+  const precisionNotice =
+    answers.available_cash.confidence !== "confirmed"
+      ? "cashNotConfirmed"
+      : answers.mine.take_home_source === "estimated" ||
+          answers.partner?.take_home_source === "estimated"
+        ? "takeHomeEstimated"
+        : answers.expense_mode === "quick"
+          ? "quickExpenses"
+          : "coreInputsComplete";
   const advice = [
     scenario.advice.cashGapCents > 0
       ? presentation.formatCashTarget(
@@ -66,10 +76,17 @@ function adviceLines(
           scenario.advice.largestReducibleCategory.reducible,
         )
       : null,
-    presentation.precisionAdvice,
+    presentation.precisionAdvice(precisionNotice),
   ].filter((line): line is string => Boolean(line));
 
   return advice.slice(0, 3).map((line, index) => `${index + 1}. ${line}`);
+}
+
+function simulationPresentationFor(simulation: RunwaySimulation) {
+  return {
+    sustainable: simulation.sustainable,
+    monthsCovered: simulation.months_covered,
+  };
 }
 
 /**
@@ -90,19 +107,19 @@ export function createHouseholdRunwayReport(
     )
     .flatMap((scenario) => [
     `Scenario: ${presentation.formatScenario(scenario.scenario)}`,
-    `Baseline: ${presentation.formatSimulation(scenario.baseline)}`,
-    `Current lifestyle: ${presentation.formatSimulation(scenario.comparisons.currentLifestyle)}`,
-    `Interruption plan: ${presentation.formatSimulation(scenario.comparisons.interruptionPlan)}`,
-    `Extreme mode: ${presentation.formatSimulation(scenario.comparisons.extremeMode)}`,
-    `Adjusted: ${presentation.formatSimulation(scenario.adjusted)}`,
+    `Baseline: ${presentation.formatSimulation(simulationPresentationFor(scenario.baseline))}`,
+    `Current lifestyle: ${presentation.formatSimulation(simulationPresentationFor(scenario.comparisons.currentLifestyle))}`,
+    `Interruption plan: ${presentation.formatSimulation(simulationPresentationFor(scenario.comparisons.interruptionPlan))}`,
+    `Extreme mode: ${presentation.formatSimulation(simulationPresentationFor(scenario.comparisons.extremeMode))}`,
+    `Adjusted: ${presentation.formatSimulation(simulationPresentationFor(scenario.adjusted))}`,
     "Advice:",
-    ...adviceLines(scenario, presentation),
+    ...adviceLines(scenario, presentation, answers),
     "",
   ]);
 
   return [
     "BetterR.me Household Runway",
-    `Model: ${RUNWAY_MODEL_VERSION}`,
+    `Model: ${assessment.modelVersion}`,
     `Location: ${presentation.location}`,
     `Cash: ${presentation.formatMoney(answers.available_cash.cents)}`,
     `Liquid investments: ${presentation.formatMoney(answers.assets.liquid_investments.cents)}`,
