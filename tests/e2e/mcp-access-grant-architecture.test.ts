@@ -98,6 +98,33 @@ describe("MCP access-grant evidence architecture", () => {
     ]);
   });
 
+  it("uses one canonical public-client journey fact port without an adapter bridge", () => {
+    const contract = source("e2e/mcp-access-grant-public-client-semantics.ts");
+    const journey = source("e2e/mcp-access-grant-public-client.ts");
+    const publicProfile = source("e2e/mcp-access-grant-public-client-profile.ts");
+    const aggregateProfile = source("e2e/mcp-access-grant-aggregate-profile.ts");
+    const aggregateAdapter = source("e2e/mcp-access-grant-compatibility.ts");
+
+    expect(contract).toMatch(/export type PublicClientJourneyFact\s*=/);
+    expect(contract).toMatch(/kind: "resource-discovery"/);
+    expect(contract).toMatch(/kind: "provider-discovery"/);
+    expect(contract).toMatch(/family: PublicClientFamily/);
+    expect(contract).not.toMatch(/kind: "(?:configuration|versions)"/);
+    expect(contract).not.toMatch(/@playwright\/test|@modelcontextprotocol|@supabase\/supabase-js/);
+    expect(contract).not.toMatch(/node:(?:child_process|fs|http|net|timers|worker_threads)/);
+    expect(contract).not.toMatch(/mcp-access-grant-(?:public-client|compatibility)(?:\.ts|-profile)/);
+    expect(valueImports("e2e/mcp-access-grant-public-client-semantics.ts")).toEqual([]);
+    expect(journey).toMatch(/mcp-access-grant-public-client-semantics/);
+    expect(journey).toMatch(/record: \(fact: PublicClientJourneyFact\)/);
+    expect(publicProfile).toMatch(/mcp-access-grant-public-client-semantics/);
+    expect(publicProfile).toMatch(/record: \(fact: PublicClientJourneyFact\)/);
+    expect(aggregateProfile).toMatch(/mcp-access-grant-public-client-semantics/);
+    expect(aggregateProfile).toMatch(/record: \(fact: PublicClientJourneyFact\)/);
+    expect(aggregateAdapter).toMatch(/record: recorders\.publicClient\.record/);
+    expect(aggregateAdapter).not.toMatch(/aggregatePublicFact|as unknown as/);
+    expect([publicProfile, aggregateProfile, aggregateAdapter].join("\n")).not.toMatch(/(?:PublicClientFact|AggregatePublicClientFact|aggregatePublicFact)/);
+  });
+
   it("keeps the canonical target and explicit capability construction at the session boundary", () => {
     const targetBoundary = source("e2e/mcp-access-grant-target.ts");
     const session = source("e2e/mcp-access-grant-live-session.ts");

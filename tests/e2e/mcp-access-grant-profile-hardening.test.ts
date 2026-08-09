@@ -83,7 +83,7 @@ describe("MCP profile evidence lifecycle hardening", () => {
     const resultPromise = runPublicClientEvidence(input, async (recorder) => {
       (input as unknown as { target: Record<string, unknown> }).target = { ...input.target, canonicalResource: "https://mutated.example/mcp" };
       (input.versions as Record<string, string>).node = "mutated";
-      await recorder.record({
+      await recorder.recordProfileFact({
         kind: "configuration",
         role: "snapshot",
         observation: { loopbackHosts: ["127.0.0.1", "::1"] },
@@ -105,7 +105,7 @@ describe("MCP profile evidence lifecycle hardening", () => {
       .mockReturnValueOnce("2026-08-07T23:59:00.000Z");
 
     await expect(runPublicClientEvidence(publicOptions(writes, { clock: clockSpy }), async (recorder) => {
-      await recorder.record({
+      await recorder.recordProfileFact({
         kind: "configuration",
         role: "snapshot",
         observation: { loopbackHosts: ["127.0.0.1", "::1"] },
@@ -118,7 +118,7 @@ describe("MCP profile evidence lifecycle hardening", () => {
   it("drains ignored accepted records but poisons the outer public run for ignored invalid records", async () => {
     const writes: PublicClientArtifact[] = [];
     const success = await runPublicClientEvidence(publicOptions(writes), async (recorder) => {
-      void recorder.record({
+      void recorder.recordProfileFact({
         kind: "configuration",
         role: "snapshot",
         observation: { loopbackHosts: ["127.0.0.1", "::1"] },
@@ -127,7 +127,7 @@ describe("MCP profile evidence lifecycle hardening", () => {
     expect(success.report.gates.find(({ id }) => id === "reproducible-configuration")).toMatchObject({ status: "pass" });
 
     await expect(runPublicClientEvidence(publicOptions(writes), async (recorder) => {
-      void recorder.record({ kind: "configuration", role: "not-a-role" } as never);
+      void recorder.recordProfileFact({ kind: "configuration", role: "not-a-role" } as never);
     })).rejects.toThrow(/evidence journey failed/i);
     expect(writes).toHaveLength(1);
   });
@@ -152,9 +152,9 @@ describe("MCP profile evidence lifecycle hardening", () => {
         role: "snapshot" as const,
         observation: { loopbackHosts: ["127.0.0.1", "::1"] },
       };
-      await recorder.record(configuration);
-      await recorder.record(configuration);
-      await recorder.record({
+      await recorder.recordProfileFact(configuration);
+      await recorder.recordProfileFact(configuration);
+      await recorder.recordProfileFact({
         ...configuration,
         observation: { loopbackHosts: ["127.0.0.1"] },
       });
@@ -210,7 +210,7 @@ describe("MCP profile evidence lifecycle hardening", () => {
     };
     const result = profile === "public"
       ? await runPublicClientEvidence(publicOptions(writes as PublicClientArtifact[]), async (recorder) => {
-        const pending = recorder.record(fact);
+        const pending = recorder.recordProfileFact(fact);
         (fact.observation.loopbackHosts as string[])[0] = "mutated-host";
         await pending;
       })
@@ -268,7 +268,7 @@ describe("MCP profile evidence lifecycle hardening", () => {
   it("rejects forged identity fields and impossible aggregate source pairings before persistence", async () => {
     const publicWrites: PublicClientArtifact[] = [];
     await expect(runPublicClientEvidence(publicOptions(publicWrites), async (recorder) => {
-      await recorder.record({
+      await recorder.recordProfileFact({
         kind: "configuration",
         role: "snapshot",
         identity: "reproducible-configuration",
@@ -280,7 +280,7 @@ describe("MCP profile evidence lifecycle hardening", () => {
     await expect(runAggregateCompatibilityEvidence(aggregateOptions(aggregateWrites), async ({ publicClient }) => {
       await publicClient.record({
         kind: "resource-discovery",
-        role: "primary",
+        role: "shadow",
       } as never);
     })).rejects.toThrow(/evidence journey failed/i);
 
@@ -308,7 +308,7 @@ describe("MCP profile evidence lifecycle hardening", () => {
     const writes: PublicClientArtifact[] = [];
     const clockSpy = vi.fn(() => startedAt);
     await expect(runPublicClientEvidence(publicOptions(writes, { clock: clockSpy }), async (recorder) => {
-      void recorder.record({
+      void recorder.recordProfileFact({
         kind: "configuration",
         role: "snapshot",
         observation: { loopbackHosts: ["127.0.0.1", "::1"] },

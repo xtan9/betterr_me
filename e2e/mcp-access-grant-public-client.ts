@@ -35,18 +35,18 @@ import {
   type LiveEvidenceRequestObservation,
   type LiveEvidenceSession,
 } from "./mcp-access-grant-live-session";
-import {
-  runPublicClientEvidence,
-  type PublicClientAuthorizationOutcomeObservation,
-  type PublicClientConsentObservation,
-  type PublicClientFact,
-  type PublicClientGrantObservation,
-  type PublicClientJsonValue,
-  type PublicClientMcpOperationObservation,
-  type PublicClientNegativeRegistrationCase,
-  type PublicClientRequestInput,
-  type PublicClientResponseSurface,
-} from "./mcp-access-grant-public-client-profile";
+import { runPublicClientEvidence } from "./mcp-access-grant-public-client-profile";
+import type {
+  PublicClientAuthorizationOutcomeObservation,
+  PublicClientConsentObservation,
+  PublicClientGrantObservation,
+  PublicClientJourneyFact,
+  PublicClientJsonValue,
+  PublicClientMcpOperationObservation,
+  PublicClientNegativeRegistrationCase,
+  PublicClientRequestInput,
+  PublicClientResponseSurface,
+} from "./mcp-access-grant-public-client-semantics";
 import type {
   McpAccessGrantTarget,
   McpAccessGrantTargetConfiguration,
@@ -84,10 +84,8 @@ interface PublicClientJourneyOptions {
   readonly page: Page;
   readonly request: LiveEvidenceRequestCapability;
   readonly sdkVersion: string;
-  readonly record: (fact: PublicClientFact) => Promise<void>;
+  readonly record: (fact: PublicClientJourneyFact) => Promise<void>;
 }
-
-export type PublicClientJourneyFact = PublicClientFact;
 
 interface GrantSnapshot {
   readonly grants: readonly unknown[];
@@ -553,7 +551,7 @@ async function recordConsentOutcome(
   clientInformation: OAuthClientInformationMixed,
   page: Page,
   request: LiveEvidenceRequestCapability,
-  record: (fact: PublicClientFact) => Promise<void>,
+  record: (fact: PublicClientJourneyFact) => Promise<void>,
 ): Promise<void> {
   const family = familyOf(host);
   const callback = new LoopbackCallback(host);
@@ -933,8 +931,8 @@ export async function runMcpAccessGrantPublicClient(
   const session: LiveEvidenceSession = createLiveEvidenceSession({ target, targetConfiguration, testInfo });
   const options = await session.publicClientOptions();
   const result = await runPublicClientEvidence(options, async (recorder) => {
-    await recorder.record({ kind: "configuration", role: "snapshot", observation: { loopbackHosts: session.target.loopbackHosts, providerCredentialsAvailable: Boolean(session.target.email && session.target.password) } });
-    await recorder.record({ kind: "versions", role: "snapshot", values: options.versions });
+    await recorder.recordProfileFact({ kind: "configuration", role: "snapshot", observation: { loopbackHosts: session.target.loopbackHosts, providerCredentialsAvailable: Boolean(session.target.email && session.target.password) } });
+    await recorder.recordProfileFact({ kind: "versions", role: "snapshot", values: options.versions });
     await runPublicClientJourney({ target: session.target, page, request: session.capabilities.request, sdkVersion: options.versions["@modelcontextprotocol/sdk"] ?? "unavailable", record: recorder.record });
   });
   return result.report;

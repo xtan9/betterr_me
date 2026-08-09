@@ -13,11 +13,13 @@ import { s256CodeChallenge } from "../../e2e/mcp-access-grant-journey";
 import {
   runPublicClientEvidence,
   type PublicClientArtifact,
-  type PublicClientFact,
   type PublicClientEvidenceOptions,
+  type PublicClientEvidenceRecorder,
   type PublicClientJsonValue,
   type PublicClientNegativeRegistrationCase,
+  type PublicClientProfileFact,
 } from "../../e2e/mcp-access-grant-public-client-profile";
+import type { PublicClientJourneyFact } from "../../e2e/mcp-access-grant-public-client-semantics";
 
 const target = {
   name: "profile-fixture",
@@ -49,7 +51,7 @@ function familyHost(family: CatalogFamily): "127.0.0.1" | "::1" {
   throw new Error(`Unsupported fixture family ${family}`);
 }
 
-function familyFacts(family: "ipv4" | "ipv6"): PublicClientFact[] {
+function familyFacts(family: "ipv4" | "ipv6"): PublicClientJourneyFact[] {
   const host = familyHost(family);
   const registeredRedirectUri = host === "::1"
     ? "http://[::1]/oauth/callback"
@@ -163,10 +165,10 @@ function familyFacts(family: "ipv4" | "ipv6"): PublicClientFact[] {
         requestResource: target.canonicalResource,
       },
     },
-  ] satisfies PublicClientFact[];
+  ] satisfies PublicClientJourneyFact[];
 }
 
-function sharedFacts(): PublicClientFact[] {
+function sharedFacts(): PublicClientProfileFact[] {
   return [
     {
       kind: "resource-discovery",
@@ -205,8 +207,8 @@ function sharedFacts(): PublicClientFact[] {
 
 function familyPrerequisiteFacts(
   family: "ipv4" | "ipv6",
-  kinds: readonly PublicClientFact["kind"][],
-): PublicClientFact[] {
+  kinds: readonly PublicClientProfileFact["kind"][],
+): PublicClientProfileFact[] {
   return [
     ...sharedFacts(),
     ...familyFacts(family).filter((fact) => kinds.includes(fact.kind) && (fact.kind !== "registration" || fact.role === "primary")),
@@ -236,7 +238,7 @@ function options(
 async function completedDelegatedTokenFacts(
   family: "ipv4" | "ipv6",
   lifetimeSeconds = 3600,
-): Promise<PublicClientFact[]> {
+): Promise<PublicClientJourneyFact[]> {
   const { privateKey, publicKey } = await generateKeyPair("RS256");
   const key = await exportJWK(publicKey);
   key.kid = `key-${family}`;
@@ -315,7 +317,19 @@ async function completedDelegatedTokenFacts(
         requestStatus: 200,
       },
     },
-  ] as never as PublicClientFact[];
+  ] as never as PublicClientJourneyFact[];
+}
+
+async function recordFact(recorder: PublicClientEvidenceRecorder, fact: PublicClientProfileFact): Promise<void> {
+  if (fact.kind === "configuration" || fact.kind === "versions") {
+    await recorder.recordProfileFact(fact);
+    return;
+  }
+  await recorder.record(fact);
+}
+
+async function recordFacts(recorder: PublicClientEvidenceRecorder, facts: readonly PublicClientProfileFact[]): Promise<void> {
+  for (const fact of facts) await recordFact(recorder, fact);
 }
 
 describe("public-client Candidate 2 evidence profile", () => {
@@ -327,7 +341,7 @@ describe("public-client Candidate 2 evidence profile", () => {
     }
 
     const result = await runPublicClientEvidence(options(writes), async (recorder) => {
-      for (const fact of facts) await recorder.record(fact);
+      await recordFacts(recorder, facts);
     });
 
     expect(result.report.gates.find(({ id }) => id === "delegated-token-validation-both")).toMatchObject({ status: "pass" });
@@ -371,7 +385,7 @@ describe("public-client Candidate 2 evidence profile", () => {
       : fact);
 
     const failed = await runPublicClientEvidence(options([]), async (recorder) => {
-      for (const fact of [...failedShared, registrationFact]) await recorder.record(fact);
+      await recordFacts(recorder, [...failedShared, registrationFact]);
     });
     expect(failed.report.gates.find(({ id }) => id === "provider-discovery")).toMatchObject({ status: "not-proven" });
     expect(failed.report.gates.find(({ id }) => id === "public-client-registration-ipv4")).toMatchObject({
@@ -379,14 +393,14 @@ describe("public-client Candidate 2 evidence profile", () => {
       evidence: { errorKind: "missing-observation", errorCode: "dependency-not-proven" },
     });
 
-    const providerFact = shared.find(({ kind }) => kind === "provider-discovery") as Extract<PublicClientFact, { kind: "provider-discovery" }> | undefined;
+    const providerFact = shared.find(({ kind }) => kind === "provider-discovery") as Extract<PublicClientJourneyFact, { kind: "provider-discovery" }> | undefined;
     if (!providerFact) throw new Error("Missing provider discovery fixture");
     const conflictingProvider = {
       ...providerFact,
       response: surface({ issuer: "https://conflicting.example.test" }),
-    } satisfies Extract<PublicClientFact, { kind: "provider-discovery" }>;
+    } satisfies Extract<PublicClientJourneyFact, { kind: "provider-discovery" }>;
     const conflicting = await runPublicClientEvidence(options([]), async (recorder) => {
-      for (const fact of shared) await recorder.record(fact);
+      await recordFacts(recorder, shared);
       await recorder.record(conflictingProvider);
       await recorder.record(registrationFact);
     });
@@ -436,7 +450,7 @@ describe("public-client Candidate 2 evidence profile", () => {
 
   it("fails closed when a valid-shaped delegated token has an invalid signature", async () => {
     const writes: PublicClientArtifact[] = [];
-    const tokenFact = (await completedDelegatedTokenFacts("ipv4"))[0] as Extract<PublicClientFact, { kind: "delegated-token" }>;
+    const tokenFact = (await completedDelegatedTokenFacts("ipv4"))[0] as Extract<PublicClientJourneyFact, { kind: "delegated-token" }>;
     const token = tokenFact.token;
     const tokenParts = token?.split(".");
     const tamperedToken = tokenParts?.length === 3
@@ -512,7 +526,7 @@ describe("public-client Candidate 2 evidence profile", () => {
     };
     const tokenFacts = await completedDelegatedTokenFacts("ipv4", 10);
     const result = await runPublicClientEvidence(options(writes, sampledClock), async (recorder) => {
-      for (const fact of familyPrerequisiteFacts("ipv4", ["registration", "loopback", "pkce"])) await recorder.record(fact);
+      await recordFacts(recorder, familyPrerequisiteFacts("ipv4", ["registration", "loopback", "pkce"]));
       await recorder.record(tokenFacts[0]);
     });
 
@@ -522,9 +536,7 @@ describe("public-client Candidate 2 evidence profile", () => {
   it("runs both exact loopback families through one recorder and one artifact", async () => {
     const writes: PublicClientArtifact[] = [];
     const result = await runPublicClientEvidence(options(writes), async (recorder) => {
-      for (const fact of [...sharedFacts(), ...MCP_ACCESS_GRANT_FAMILIES.flatMap(familyFacts)]) {
-        await recorder.record(fact);
-      }
+      await recordFacts(recorder, [...sharedFacts(), ...MCP_ACCESS_GRANT_FAMILIES.flatMap(familyFacts)]);
     });
 
     expect(result.report.issue).toBe("#765");
@@ -640,7 +652,7 @@ describe("public-client Candidate 2 evidence profile", () => {
 
     const stateWrites: PublicClientArtifact[] = [];
     const stateResult = await runPublicClientEvidence(options(stateWrites), async (recorder) => {
-      for (const fact of familyPrerequisiteFacts("ipv4", ["registration", "consent"])) await recorder.record(fact);
+      await recordFacts(recorder, familyPrerequisiteFacts("ipv4", ["registration", "consent"]));
       await recorder.record({
         kind: "authorization",
         role: "denial",
@@ -662,12 +674,12 @@ describe("public-client Candidate 2 evidence profile", () => {
   it("turns contradictory primitive observations into a stable gate failure", async () => {
     const writes: PublicClientArtifact[] = [];
     const result = await runPublicClientEvidence(options(writes), async (recorder) => {
-      await recorder.record({
+      await recorder.recordProfileFact({
         kind: "configuration",
         role: "snapshot",
         observation: { loopbackHosts: ["127.0.0.1", "::1"], providerCredentialsAvailable: false },
       });
-      await recorder.record({
+      await recorder.recordProfileFact({
         kind: "configuration",
         role: "snapshot",
         observation: { loopbackHosts: ["127.0.0.1"], providerCredentialsAvailable: false },

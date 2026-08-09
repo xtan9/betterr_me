@@ -100,8 +100,8 @@ describe("MCP live evidence session cutover", () => {
     const session = createLiveEvidenceSession({ target, targetConfiguration: configuration, capabilities: fixture.capabilities });
     const options = await session.publicClientOptions();
     const result = await runPublicClientEvidence(options, async (recorder) => {
-      await recorder.record({ kind: "configuration", role: "snapshot", observation: { loopbackHosts: target.loopbackHosts } });
-      await recorder.record({ kind: "versions", role: "snapshot", values: options.versions });
+      await recorder.recordProfileFact({ kind: "configuration", role: "snapshot", observation: { loopbackHosts: target.loopbackHosts } });
+      await recorder.recordProfileFact({ kind: "versions", role: "snapshot", values: options.versions });
       await recorder.record({
         kind: "resource-discovery",
         role: "primary",
@@ -123,7 +123,7 @@ describe("MCP live evidence session cutover", () => {
     const result = await runAggregateCompatibilityEvidence(options, async (recorders) => {
       await recorders.compatibility.record({ kind: "configuration", role: "snapshot", observation: { loopbackHosts: target.loopbackHosts } });
       await recorders.compatibility.record({ kind: "versions", role: "snapshot", values: options.versions });
-      await recorders.publicClient.record({ kind: "resource-discovery", role: "shadow", advertisedResource: target.canonicalResource, advertisedAuthorizationServer: target.expectedAuthorizationServer });
+      await recorders.publicClient.record({ kind: "resource-discovery", role: "primary", advertisedResource: target.canonicalResource, advertisedAuthorizationServer: target.expectedAuthorizationServer });
     });
 
     expect(result.report.issue).toBe("#768");

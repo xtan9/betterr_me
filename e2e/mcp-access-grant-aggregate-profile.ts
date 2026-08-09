@@ -37,6 +37,7 @@ import {
   type DelegatedJwtHeader,
 } from "./mcp-access-grant-policy";
 import { s256CodeChallenge } from "./mcp-access-grant-journey";
+import type { PublicClientJourneyFact } from "./mcp-access-grant-public-client-semantics";
 
 /**
  * The deterministic aggregate compatibility profile for Candidate 2.
@@ -476,104 +477,12 @@ export type AggregateCompatibilityFact =
       readonly request?: AggregateCompatibilityRequest;
     };
 
-export type AggregatePublicClientFact =
-  | {
-      readonly kind: "resource-discovery";
-      readonly role: "shadow";
-      readonly response?: AggregateCompatibilityResponseSurface;
-      readonly advertisedResource?: string;
-      readonly advertisedAuthorizationServer?: string;
-      readonly observation?: AggregateCompatibilityDiscoveryObservation;
-      readonly request?: AggregateCompatibilityRequest;
-    }
-  | {
-      readonly kind: "provider-discovery";
-      readonly role: "shadow";
-      readonly response?: AggregateCompatibilityResponseSurface;
-      readonly issuer?: string;
-      readonly authorizationEndpoint?: string;
-      readonly registrationEndpoint?: string;
-      readonly tokenEndpoint?: string;
-      readonly jwksUri?: string;
-      readonly grantTypesSupported?: readonly string[];
-      readonly responseTypesSupported?: readonly string[];
-      readonly tokenEndpointAuthMethodsSupported?: readonly string[];
-      readonly codeChallengeMethodsSupported?: readonly string[];
-      readonly observation?: AggregateCompatibilityDiscoveryObservation;
-      readonly request?: AggregateCompatibilityRequest;
-    }
-  | {
-      readonly kind: "registration";
-      readonly role: "primary" | "negative";
-      readonly family: AggregatePublicClientFamily;
-      readonly caseId?: AggregatePublicClientNegativeRegistrationCase;
-      readonly response?: AggregateCompatibilityResponseSurface;
-      readonly request?: AggregateCompatibilityRequest;
-    }
-  | {
-      readonly kind: "consent";
-      readonly role: "metadata";
-      readonly family: AggregatePublicClientFamily;
-      readonly observation?: AggregatePublicClientConsentObservation;
-    }
-  | {
-      readonly kind: "authorization";
-      readonly role: "approval" | "denial" | "abandonment";
-      readonly family: AggregatePublicClientFamily;
-      readonly observation?: AggregatePublicClientAuthorizationObservation;
-      readonly request?: AggregateCompatibilityRequest;
-    }
-  | {
-      readonly kind: "loopback";
-      readonly role: "callback" | "request";
-      readonly family: AggregatePublicClientFamily;
-      readonly observation?: AggregatePublicClientLoopbackObservation;
-      readonly request?: AggregateCompatibilityRequest;
-    }
-  | {
-      readonly kind: "pkce";
-      readonly role: "exchange";
-      readonly family: AggregatePublicClientFamily;
-      readonly observation?: AggregatePublicClientPkceObservation;
-      readonly request?: AggregateCompatibilityRequest;
-    }
-  | {
-      readonly kind: "delegated-token";
-      readonly role: "validation";
-      readonly family: AggregatePublicClientFamily;
-      readonly token?: string;
-      readonly jwks?: string | AggregateCompatibilityJsonValue;
-      readonly observation?: AggregatePublicClientDelegatedTokenObservation;
-      readonly request?: AggregateCompatibilityRequest;
-    }
-  | {
-      readonly kind: "mcp-operation";
-      readonly role: "authenticated";
-      readonly family: AggregatePublicClientFamily;
-      readonly observation?: AggregatePublicClientMcpOperationObservation;
-      readonly request?: AggregateCompatibilityRequest;
-    }
-  | {
-      readonly kind: "grant";
-      readonly role: "cleanup";
-      readonly family: AggregatePublicClientFamily;
-      readonly observation?: AggregatePublicClientGrantObservation;
-      readonly request?: AggregateCompatibilityRequest;
-    }
-  | {
-      readonly kind: "cleanup";
-      readonly role: "family";
-      readonly family: AggregatePublicClientFamily;
-      readonly observation?: AggregatePublicClientCleanupObservation;
-      readonly request?: AggregateCompatibilityRequest;
-    };
-
 export interface AggregateCompatibilityRecorders {
   readonly compatibility: {
     readonly record: (fact: AggregateCompatibilityFact) => Promise<void>;
   };
   readonly publicClient: {
-    readonly record: (fact: AggregatePublicClientFact) => Promise<void>;
+    readonly record: (fact: PublicClientJourneyFact) => Promise<void>;
   };
 }
 
@@ -774,10 +683,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-function snapshotFactInput(value: unknown): AggregateCompatibilityFact | AggregatePublicClientFact {
+function snapshotFactInput(value: unknown): AggregateCompatibilityFact | PublicClientJourneyFact {
   const snapshot = copyFactInput(value, 0, new WeakSet<object>());
   if (!isRecord(snapshot)) throw new AggregateCompatibilityEvidenceBoundaryError();
-  return snapshot as AggregateCompatibilityFact | AggregatePublicClientFact;
+  return snapshot as AggregateCompatibilityFact | PublicClientJourneyFact;
 }
 
 function copyFactInput(value: unknown, depth: number, parents: WeakSet<object>): unknown {
@@ -1430,7 +1339,7 @@ function loopbackUrl(value: unknown): {
 }
 
 function normalizeFact(
-  value: AggregateCompatibilityFact | AggregatePublicClientFact,
+  value: AggregateCompatibilityFact | PublicClientJourneyFact,
   source: "compatibility" | "public-client",
   sampledAtMillis: number,
 ): Promise<NormalizedFact> | NormalizedFact {
@@ -1443,21 +1352,24 @@ function normalizeFact(
   const family = source === "public-client" && "family" in value
     ? value.family
     : "none";
-  classifyIdentity(source, kind as CatalogFactKind, role, family as CatalogFamily);
+  const catalogRole = source === "public-client" && (kind === "resource-discovery" || kind === "provider-discovery")
+    ? "shadow"
+    : role;
+  classifyIdentity(source, kind as CatalogFactKind, catalogRole, family as CatalogFamily);
 
   if (kind === "resource-discovery" || kind === "provider-discovery") {
-    if (role !== (source === "compatibility" ? "primary" : "shadow")) throw new AggregateCompatibilityEvidenceBoundaryError();
+    if (role !== "primary") throw new AggregateCompatibilityEvidenceBoundaryError();
     const data = discoveryData(value);
     return {
       source,
-      identity: `${source}|${kind}|${role}`,
+      identity: `${source}|${kind}|${catalogRole}`,
       kind,
-      role,
+      role: catalogRole,
       data,
       request: normalizeRequest(value.request),
     };
   }
-  if (source === "public-client") return normalizePublicFamilyFact(value as AggregatePublicClientFact, sampledAtMillis);
+  if (source === "public-client") return normalizePublicFamilyFact(value as PublicClientJourneyFact, sampledAtMillis);
   if (source !== "compatibility") throw new AggregateCompatibilityEvidenceBoundaryError();
   if (kind === "configuration") {
     if (role !== "snapshot") throw new AggregateCompatibilityEvidenceBoundaryError();
@@ -1868,9 +1780,9 @@ function hasUnnegatedEndorsementLanguage(text: string): boolean {
   return false;
 }
 
-function normalizePublicFamilyFact(value: AggregatePublicClientFact, sampledAtMillis: number): Promise<NormalizedFact> | NormalizedFact {
+function normalizePublicFamilyFact(value: PublicClientJourneyFact, sampledAtMillis: number): Promise<NormalizedFact> | NormalizedFact {
   if (!isRecord(value)) throw new AggregateCompatibilityEvidenceBoundaryError();
-  const raw = value as unknown as Record<string, unknown>;
+  const raw = value as Record<string, unknown>;
   const kind = raw.kind as CatalogFactKind;
   const role = typeof raw.role === "string" ? raw.role : "";
   const family = raw.family;
@@ -3409,13 +3321,13 @@ export async function runAggregateCompatibilityEvidence(
     while (pending.size > 0) await Promise.allSettled([...pending]);
   };
 
-  const record = (source: "compatibility" | "public-client", fact: AggregateCompatibilityFact | AggregatePublicClientFact): Promise<void> => {
+  const record = (source: "compatibility" | "public-client", fact: AggregateCompatibilityFact | PublicClientJourneyFact): Promise<void> => {
     if (closed) {
       const failure = Promise.reject(stableFailure());
       void failure.catch(() => undefined);
       return failure;
     }
-    let capturedFact: AggregateCompatibilityFact | AggregatePublicClientFact;
+    let capturedFact: AggregateCompatibilityFact | PublicClientJourneyFact;
     try {
       capturedFact = snapshotFactInput(fact);
     } catch (error) {
@@ -3455,7 +3367,7 @@ export async function runAggregateCompatibilityEvidence(
 
   const recorders: AggregateCompatibilityRecorders = Object.freeze({
     compatibility: Object.freeze({ record: (fact: AggregateCompatibilityFact) => record("compatibility", fact) }),
-    publicClient: Object.freeze({ record: (fact: AggregatePublicClientFact) => record("public-client", fact) }),
+    publicClient: Object.freeze({ record: (fact: PublicClientJourneyFact) => record("public-client", fact) }),
   });
   try {
     await journey(recorders);

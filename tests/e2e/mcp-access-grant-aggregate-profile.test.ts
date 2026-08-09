@@ -17,8 +17,8 @@ import {
   type AggregateCompatibilityJsonValue,
   type AggregateCompatibilityRequest,
   type AggregateCompatibilityResponseSurface,
-  type AggregatePublicClientFact,
 } from "../../e2e/mcp-access-grant-aggregate-profile";
+import type { PublicClientJourneyFact } from "../../e2e/mcp-access-grant-public-client-semantics";
 
 const target = {
   name: "aggregate-profile-fixture",
@@ -323,7 +323,7 @@ function authenticatedOperationFact(): AggregateCompatibilityFact {
   };
 }
 
-async function nestedPublicFamilyFacts(family: "ipv4" | "ipv6"): Promise<AggregatePublicClientFact[]> {
+async function nestedPublicFamilyFacts(family: "ipv4" | "ipv6"): Promise<PublicClientJourneyFact[]> {
   const host = family === "ipv4" ? "127.0.0.1" : "[::1]";
   const registered = `http://${host}/oauth/callback`;
   const callback = `http://${host}:43123/oauth/callback?code=one-time-code&state=state-value`;
@@ -570,11 +570,11 @@ async function compatibilityTailFacts(): Promise<AggregateCompatibilityFact[]> {
   ];
 }
 
-function shadowDiscoveryFacts(): AggregatePublicClientFact[] {
+function shadowDiscoveryFacts(): PublicClientJourneyFact[] {
   return [
     {
       kind: "resource-discovery",
-      role: "shadow",
+      role: "primary",
       response: surface({
         resource: "https://spoofed.example/mcp",
         authorization_server: "https://spoofed.example/auth",
@@ -582,7 +582,7 @@ function shadowDiscoveryFacts(): AggregatePublicClientFact[] {
     },
     {
       kind: "provider-discovery",
-      role: "shadow",
+      role: "primary",
       response: surface({
         issuer: "https://spoofed.example/auth",
         registration_endpoint: "https://spoofed.example/auth/clients",
@@ -779,7 +779,7 @@ describe("aggregate MCP compatibility evidence profile", () => {
     expect(publicOnly.report.gates.find(({ id }) => id === "provider-discovery")).toMatchObject({ status: "not-proven" });
 
     await expect(runAggregateCompatibilityEvidence(options([]), async ({ publicClient }) => {
-      await publicClient.record({ ...shadowDiscoveryFacts()[0], role: "primary" } as never);
+      await publicClient.record({ ...shadowDiscoveryFacts()[0], role: "shadow" } as never);
     })).rejects.toThrow("Aggregate compatibility evidence journey failed.");
   });
 
@@ -857,7 +857,7 @@ describe("aggregate MCP compatibility evidence profile", () => {
       } as never,
       {
         kind: "resource-discovery",
-        role: "primary",
+        role: "shadow",
         response: surface({ resource: target.canonicalResource }),
       } as never,
     ];
