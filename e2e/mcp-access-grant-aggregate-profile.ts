@@ -37,7 +37,14 @@ import {
   type DelegatedJwtHeader,
 } from "./mcp-access-grant-policy";
 import { s256CodeChallenge } from "./mcp-access-grant-journey";
-import type { PublicClientJourneyFact } from "./mcp-access-grant-public-client-semantics";
+import {
+  PublicClientEvidenceBoundary,
+  capturePublicClientJourneyFact,
+  evaluatePublicClientFacts,
+  type PublicClientJourneyFact,
+  type PublicClientNormalizedFact,
+  type PublicClientSemanticConclusion,
+} from "./mcp-access-grant-public-client-semantics";
 
 /**
  * The deterministic aggregate compatibility profile for Candidate 2.
@@ -632,7 +639,7 @@ const DELEGATED_NEGATIVE_CASES: readonly AggregateDelegatedTokenNegativeCase[] =
   "missing-client-context",
 ];
 
-const PUBLIC_FAMILY_GATE_BASES = [
+const _PUBLIC_FAMILY_GATE_BASES = [
   "public-client-registration",
   "registration-negative-validation",
   "untrusted-client-metadata",
@@ -655,7 +662,7 @@ const PUBLIC_NEGATIVE_REGISTRATION_CASES: readonly AggregatePublicClientNegative
   "unsafe-redirect-metadata",
 ];
 
-const PUBLIC_FAMILY_PREREQUISITES: Readonly<Partial<Record<typeof PUBLIC_FAMILY_GATE_BASES[number], readonly string[]>>> = {
+const _PUBLIC_FAMILY_PREREQUISITES: Readonly<Partial<Record<typeof _PUBLIC_FAMILY_GATE_BASES[number], readonly string[]>>> = {
   "public-client-registration": ["provider-discovery"],
   "registration-negative-validation": ["provider-discovery"],
   "untrusted-client-metadata": ["public-client-registration"],
@@ -687,6 +694,42 @@ function snapshotFactInput(value: unknown): AggregateCompatibilityFact | PublicC
   const snapshot = copyFactInput(value, 0, new WeakSet<object>());
   if (!isRecord(snapshot)) throw new AggregateCompatibilityEvidenceBoundaryError();
   return snapshot as AggregateCompatibilityFact | PublicClientJourneyFact;
+}
+
+function toAggregatePublicNormalizedFact(value: PublicClientNormalizedFact): NormalizedFact {
+  const role = value.kind === "resource-discovery" || value.kind === "provider-discovery" ? "shadow" : value.role;
+  return {
+    source: "public-client",
+    identity: `public-client|${value.kind}|${role}${value.kind === "resource-discovery" || value.kind === "provider-discovery" ? "" : value.identity.slice(value.kind.length)}`,
+    kind: value.kind,
+    role,
+    ...(value.family === undefined ? {} : { family: value.family }),
+    ...(value.caseId === undefined ? {} : { caseId: value.caseId }),
+    data: value.data,
+    ...(value.request === undefined ? {} : { request: value.request }),
+  };
+}
+
+function toCanonicalAggregatePublicFact(fact: NormalizedFact): PublicClientNormalizedFact {
+  const discovery = fact.kind === "resource-discovery" || fact.kind === "provider-discovery";
+  return {
+    identity: discovery ? `${fact.kind}|primary` : fact.identity.replace(/^public-client\|/, ""),
+    kind: fact.kind as PublicClientJourneyFact["kind"],
+    role: discovery ? "primary" : fact.role,
+    ...(fact.family === undefined ? {} : { family: fact.family }),
+    ...(fact.caseId === undefined ? {} : { caseId: fact.caseId as PublicClientNormalizedFact["caseId"] }),
+    data: fact.data,
+    ...(fact.request === undefined ? {} : { request: fact.request }),
+  };
+}
+
+function fromSharedAggregateConclusion(conclusion: PublicClientSemanticConclusion): DerivedGate {
+  return {
+    gateId: conclusion.key,
+    status: conclusion.status,
+    evidence: conclusion.evidence,
+    error: conclusion.error,
+  };
 }
 
 function copyFactInput(value: unknown, depth: number, parents: WeakSet<object>): unknown {
@@ -2411,7 +2454,7 @@ function publicRegistrationClientId(fact: NormalizedFact): string | undefined {
   return typeof clientId === "string" && clientId.length > 0 ? clientId : undefined;
 }
 
-function updatePublicHistory(history: PublicSessionHistory, fact: NormalizedFact): void {
+function _updatePublicHistory(history: PublicSessionHistory, fact: NormalizedFact): void {
   if (!fact.family) return;
   const current = publicFamilyHistory(history, fact.family);
   const clientId = publicRegistrationClientId(fact);
@@ -2507,7 +2550,7 @@ function publicMcpOperationGate(fact: NormalizedFact, target: CompatibilityRepor
   });
 }
 
-function publicCleanupGate(family: AggregatePublicClientFamily, facts: readonly NormalizedFact[], history: PublicSessionHistory): DerivedGate | undefined {
+function _publicCleanupGate(family: AggregatePublicClientFamily, facts: readonly NormalizedFact[], history: PublicSessionHistory): DerivedGate | undefined {
   const grantFacts = facts.filter((fact) => fact.family === family && fact.kind === "grant");
   const cleanupFacts = facts.filter((fact) => fact.family === family && fact.kind === "cleanup");
   if (grantFacts.length === 0 && cleanupFacts.length === 0) return undefined;
@@ -2566,7 +2609,7 @@ function publicCleanupGate(family: AggregatePublicClientFamily, facts: readonly 
   });
 }
 
-function derivePublicFamilyGate(fact: NormalizedFact, target: CompatibilityReportTarget, history: PublicSessionHistory): DerivedGate | undefined {
+function _derivePublicFamilyGate(fact: NormalizedFact, target: CompatibilityReportTarget, history: PublicSessionHistory): DerivedGate | undefined {
   const family = fact.family as AggregatePublicClientFamily;
   if (fact.kind === "registration") return publicRegistrationGate(fact);
   if (fact.kind === "consent") {
@@ -2672,7 +2715,7 @@ function derivePublicFamilyGate(fact: NormalizedFact, target: CompatibilityRepor
   return undefined;
 }
 
-function publicFamilyAggregate(base: typeof PUBLIC_FAMILY_GATE_BASES[number], statuses: ReadonlyMap<AggregatePublicClientFamily, GateStatus | undefined>): DerivedGate {
+function _publicFamilyAggregate(base: typeof _PUBLIC_FAMILY_GATE_BASES[number], statuses: ReadonlyMap<AggregatePublicClientFamily, GateStatus | undefined>): DerivedGate {
   const children = MCP_ACCESS_GRANT_FAMILIES.map((family) => statuses.get(family));
   const status = statusFromValues(children);
   return gate(`${base}-both`, status, {
@@ -2931,6 +2974,7 @@ function internalObservations(
 ): EvidenceObservation[] {
   const compatibilityFacts = facts.filter((fact) => fact.source === "compatibility");
   const publicFamilyFacts = facts.filter((fact) => fact.source === "public-client" && fact.family !== undefined);
+  const publicFacts = facts.filter((fact) => fact.source === "public-client");
   const observations = new Map<string, DerivedGate>();
   const conflicts = new Set<string>();
   const seen = new Map<string, string>();
@@ -3027,71 +3071,20 @@ function internalObservations(
   }
 
   if (publicFamilyFacts.length > 0) {
-    const publicHistory: PublicSessionHistory = new Map();
-    const publicLeaves = new Map<string, DerivedGate>();
-    const negativeCases = new Map<AggregatePublicClientFamily, Map<AggregatePublicClientNegativeRegistrationCase, DerivedGate>>();
-
-    for (const fact of publicFamilyFacts) {
-      const derived = derivePublicFamilyGate(fact, target, publicHistory);
-      if (derived && fact.kind === "registration" && fact.role === "negative" && fact.family && fact.caseId) {
-        const byCase = negativeCases.get(fact.family) ?? new Map<AggregatePublicClientNegativeRegistrationCase, DerivedGate>();
-        byCase.set(fact.caseId as AggregatePublicClientNegativeRegistrationCase, derived);
-        negativeCases.set(fact.family, byCase);
-      } else if (derived) {
-        publicLeaves.set(derived.gateId, derived);
-      }
-      updatePublicHistory(publicHistory, fact);
-    }
-
-    for (const family of MCP_ACCESS_GRANT_FAMILIES) {
-      const cases = negativeCases.get(family);
-      const negativeGateId = `registration-negative-validation-${family}`;
-      if (cases && cases.size > 0) {
-        const statuses = PUBLIC_NEGATIVE_REGISTRATION_CASES.map((caseId) => cases.get(caseId)?.status);
-        const status = statusFromValues(statuses);
-        publicLeaves.set(negativeGateId, gate(negativeGateId, status, {
-          cases: PUBLIC_NEGATIVE_REGISTRATION_CASES.map((caseId) => ({ case: caseId, status: cases.get(caseId)?.status ?? "not-proven" })),
-        }));
-      } else {
-        publicLeaves.set(negativeGateId, gate(negativeGateId, undefined, undefined, { kind: "missing-observation" }));
-      }
-      const cleanup = publicCleanupGate(family, publicFamilyFacts, publicHistory);
-      if (cleanup) publicLeaves.set(cleanup.gateId, cleanup);
-      for (const base of PUBLIC_FAMILY_GATE_BASES) {
-        if (base === "registration-negative-validation" || base === "consent-cleanup") continue;
-        const gateId = `${base}-${family}`;
-        if (!publicLeaves.has(gateId)) publicLeaves.set(gateId, gate(gateId, undefined, undefined, { kind: "missing-observation" }));
-      }
-    }
-
-    for (const [base, prerequisites] of Object.entries(PUBLIC_FAMILY_PREREQUISITES)) {
-      for (const family of MCP_ACCESS_GRANT_FAMILIES) {
-        const gateId = `${base}-${family}`;
-        const derived = publicLeaves.get(gateId);
-        if (!derived) continue;
-        const resolved = (prerequisites ?? []).reduce((current, prerequisite) => {
-          const dependency = prerequisite === "provider-discovery"
-            ? observations.get(prerequisite)
-            : publicLeaves.get(`${prerequisite}-${family}`);
-          return applyDependency(current, dependency);
-        }, derived);
-        publicLeaves.set(gateId, resolved);
-      }
-    }
-
-    for (const base of PUBLIC_FAMILY_GATE_BASES) {
-      const statuses = new Map<AggregatePublicClientFamily, GateStatus | undefined>();
-      for (const family of MCP_ACCESS_GRANT_FAMILIES) {
-        const gateId = `${base}-${family}`;
-        const derived = publicLeaves.get(gateId) ?? gate(gateId, undefined, undefined, { kind: "missing-observation" });
-        const resolved = conflicts.has(gateId)
-          ? gate(gateId, "fail", { observedBoundary: "conflict" }, { kind: "conflicting-observation" })
-          : derived;
-        publicLeaves.set(gateId, resolved);
-        statuses.set(family, resolved.status);
-        observations.set(gateId, resolved);
-      }
-      observations.set(`${base}-both`, publicFamilyAggregate(base, statuses));
+    const publicEvaluation = evaluatePublicClientFacts(
+      publicFacts.map(toCanonicalAggregatePublicFact),
+      target,
+      {
+        dependencies: {
+          resourceDiscovery: resource?.status,
+          providerDiscovery: provider?.status,
+        },
+        includeRequests: false,
+      },
+    );
+    for (const conclusion of publicEvaluation.conclusions) {
+      if (conclusion.key === "resource-discovery" || conclusion.key === "provider-discovery") continue;
+      observations.set(conclusion.key, fromSharedAggregateConclusion(conclusion));
     }
   }
 
@@ -3306,6 +3299,7 @@ export async function runAggregateCompatibilityEvidence(
 
   const facts: NormalizedFact[] = [];
   const identityPayloads = new Map<string, Set<string>>();
+  const publicBoundary = new PublicClientEvidenceBoundary();
   const pending = new Set<Promise<void>>();
   let recordChain = Promise.resolve();
   let closed = false;
@@ -3329,7 +3323,9 @@ export async function runAggregateCompatibilityEvidence(
     }
     let capturedFact: AggregateCompatibilityFact | PublicClientJourneyFact;
     try {
-      capturedFact = snapshotFactInput(fact);
+      capturedFact = source === "public-client"
+        ? capturePublicClientJourneyFact(fact)
+        : snapshotFactInput(fact);
     } catch (error) {
       poisoned = true;
       const failure = Promise.reject(stableFailure(error));
@@ -3344,6 +3340,12 @@ export async function runAggregateCompatibilityEvidence(
           ? sampleClock(options.clock, lastClock)
           : { value: "", millis: lastClock };
         lastClock = sampled.millis;
+        if (source === "public-client") {
+          if (facts.length >= MAX_RETAINED_FACTS) throw new AggregateCompatibilityEvidenceBoundaryError();
+          const admission = await publicBoundary.acceptSnapshot(currentFact as PublicClientJourneyFact, sampled.millis);
+          if (admission.disposition === "accepted") facts.push(toAggregatePublicNormalizedFact(admission.fact));
+          return;
+        }
         const normalized = await normalizeFact(currentFact, source, sampled.millis);
         const payload = factFingerprint(normalized);
         const payloads = identityPayloads.get(normalized.identity) ?? new Set<string>();
