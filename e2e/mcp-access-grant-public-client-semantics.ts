@@ -358,6 +358,9 @@ const CONCLUSION_KEYS = new Set([
 const PUBLIC_FAMILY_KINDS = new Set<PublicClientJourneyKind>([
   "registration", "consent", "authorization", "loopback", "pkce", "delegated-token", "mcp-operation", "grant", "cleanup",
 ]);
+const DIRECT_SEMANTIC_KINDS = new Set<PublicClientJourneyKind>([
+  "registration", "delegated-token", "mcp-operation", "grant", "cleanup",
+]);
 const PUBLIC_NEGATIVE_REGISTRATION_CASES: readonly PublicClientNegativeRegistrationCase[] = [
   "unsupported-client-auth-method",
   "unsupported-grant-type",
@@ -845,21 +848,21 @@ function normalizePublicLoopbackUrl(value: unknown): PublicLoopbackUrl | undefin
   }
 }
 
-function normalizeTopLevelFact(value: unknown): asserts value is Record<string, unknown> {
+function normalizeTopLevelFact(value: unknown, allowDirect: boolean): asserts value is Record<string, unknown> {
   if (!isRecord(value)) throw new PublicClientEvidenceBoundaryError();
   assertNoConclusionFields(value);
   if (typeof value.kind !== "string" || typeof value.role !== "string") throw new PublicClientEvidenceBoundaryError();
   if (!(PUBLIC_FAMILY_KINDS.has(value.kind as PublicClientJourneyKind) || value.kind === "resource-discovery" || value.kind === "provider-discovery")) throw new PublicClientEvidenceBoundaryError();
   if (PUBLIC_FAMILY_KINDS.has(value.kind as PublicClientJourneyKind)) {
-    if (value.family !== "ipv4" && value.family !== "ipv6") throw new PublicClientEvidenceBoundaryError();
+    if (value.family !== "ipv4" && value.family !== "ipv6" && !(allowDirect && DIRECT_SEMANTIC_KINDS.has(value.kind as PublicClientJourneyKind) && !Object.prototype.hasOwnProperty.call(value, "family"))) throw new PublicClientEvidenceBoundaryError();
   } else if ("family" in value) {
     throw new PublicClientEvidenceBoundaryError();
   }
 }
 
-async function normalizeCapturedPublicClientFact(value: PublicClientJourneyFact, sampledAtMillis: number): Promise<PublicClientNormalizedFact> {
+async function normalizeCapturedPublicClientFact(value: PublicClientJourneyFact, sampledAtMillis: number, allowDirect = false): Promise<PublicClientNormalizedFact> {
   if (!Number.isFinite(sampledAtMillis)) throw new PublicClientEvidenceBoundaryError();
-  normalizeTopLevelFact(value);
+  normalizeTopLevelFact(value, allowDirect);
   const raw = value as unknown as Record<string, unknown>;
   const kind = raw.kind as PublicClientJourneyKind;
   const role = raw.role as string;
@@ -868,17 +871,19 @@ async function normalizeCapturedPublicClientFact(value: PublicClientJourneyFact,
     if (role !== "primary") throw new PublicClientEvidenceBoundaryError();
     return deepFreeze({ identity: `${kind}|primary`, kind, role, data: discoveryData(raw), request: normalizeRequest(raw.request) });
   }
-  if (!family) throw new PublicClientEvidenceBoundaryError();
+  if (family === undefined && !allowDirect) throw new PublicClientEvidenceBoundaryError();
   if (kind === "registration") {
-    if (role !== "primary" && role !== "negative") throw new PublicClientEvidenceBoundaryError();
+    if (family === undefined && !allowDirect) throw new PublicClientEvidenceBoundaryError();
+    if (family === undefined ? role !== "primary" : role !== "primary" && role !== "negative") throw new PublicClientEvidenceBoundaryError();
     const response = normalizeSurface(raw.response);
     const request = normalizeRequest(raw.request);
     const caseId = raw.caseId;
     if (role === "negative" && !PUBLIC_NEGATIVE_REGISTRATION_CASES.includes(caseId as PublicClientNegativeRegistrationCase)) throw new PublicClientEvidenceBoundaryError();
     if (role === "primary" && caseId !== undefined) throw new PublicClientEvidenceBoundaryError();
-    return deepFreeze({ identity: `registration|${role}|${family}|${caseId ?? "primary"}`, kind, role, family, caseId: caseId as PublicClientNegativeRegistrationCase | undefined, data: { response, ...(role === "primary" ? { clientId: bodyString(response.body, "client_id", "clientId") } : {}) }, request });
+    return deepFreeze({ identity: `registration|${role}${family === undefined ? "" : `|${family}`}|${caseId ?? "primary"}`, kind, role, ...(family === undefined ? {} : { family }), caseId: caseId as PublicClientNegativeRegistrationCase | undefined, data: { response, ...(role === "primary" ? { clientId: bodyString(response.body, "client_id", "clientId") } : {}) }, request });
   }
   if (kind === "consent") {
+    if (family === undefined) throw new PublicClientEvidenceBoundaryError();
     if (role !== "metadata") throw new PublicClientEvidenceBoundaryError();
     const observation = isRecord(raw.observation) ? raw.observation : {};
     const endorsementText = boundedString(observation.endorsementText);
@@ -888,6 +893,7 @@ async function normalizeCapturedPublicClientFact(value: PublicClientJourneyFact,
     } });
   }
   if (kind === "authorization") {
+    if (family === undefined) throw new PublicClientEvidenceBoundaryError();
     if (role !== "approval" && role !== "denial" && role !== "abandonment") throw new PublicClientEvidenceBoundaryError();
     const observation = isRecord(raw.observation) ? raw.observation : {};
     if (role === "approval") return deepFreeze({ identity: `authorization|approval|${family}`, kind, role, family, data: {
@@ -913,6 +919,7 @@ async function normalizeCapturedPublicClientFact(value: PublicClientJourneyFact,
     }, request });
   }
   if (kind === "loopback") {
+    if (family === undefined) throw new PublicClientEvidenceBoundaryError();
     if (role !== "callback" && role !== "request") throw new PublicClientEvidenceBoundaryError();
     const observation = isRecord(raw.observation) ? raw.observation : {};
     const registeredRedirectUriRaw = boundedString(observation.registeredRedirectUri);
@@ -922,6 +929,7 @@ async function normalizeCapturedPublicClientFact(value: PublicClientJourneyFact,
     }, request: normalizeRequest(raw.request) });
   }
   if (kind === "pkce") {
+    if (family === undefined) throw new PublicClientEvidenceBoundaryError();
     if (role !== "exchange") throw new PublicClientEvidenceBoundaryError();
     const observation = isRecord(raw.observation) ? raw.observation : {};
     const verifier = boundedString(observation.verifier);
@@ -935,10 +943,12 @@ async function normalizeCapturedPublicClientFact(value: PublicClientJourneyFact,
     }, request });
   }
   if (kind === "delegated-token") {
+    if (family === undefined && !allowDirect) throw new PublicClientEvidenceBoundaryError();
     if (role !== "validation") throw new PublicClientEvidenceBoundaryError();
-    return deepFreeze({ identity: `delegated-token|validation|${family}`, kind, role, family, data: await normalizeDelegatedToken(raw, sampledAtMillis) as unknown as Record<string, unknown>, request: normalizeRequest(raw.request) });
+    return deepFreeze({ identity: `delegated-token|validation${family === undefined ? "" : `|${family}`}`, kind, role, ...(family === undefined ? {} : { family }), data: await normalizeDelegatedToken(raw, sampledAtMillis) as unknown as Record<string, unknown>, request: normalizeRequest(raw.request) });
   }
   if (kind === "mcp-operation") {
+    if (family === undefined && !allowDirect) throw new PublicClientEvidenceBoundaryError();
     if (role !== "authenticated") throw new PublicClientEvidenceBoundaryError();
     const observation = raw.observation === undefined ? {} : raw.observation;
     assertPrimitiveObservation(observation);
@@ -947,35 +957,43 @@ async function normalizeCapturedPublicClientFact(value: PublicClientJourneyFact,
     const response = normalizeSurface(observation.response);
     const operationUrl = boundedString(observation.operationUrl);
     const operationResource = boundedString(observation.operationResource);
-    return deepFreeze({ identity: `mcp-operation|authenticated|${family}`, kind, role, family, data: {
+    const request = normalizeRequest(raw.request ?? observation.request);
+    return deepFreeze({ identity: `mcp-operation|authenticated${family === undefined ? "" : `|${family}`}`, kind, role, ...(family === undefined ? {} : { family }), data: {
       operationUrl: operationUrl ? sanitizeUrl(operationUrl) : undefined, operationResource: operationResource ? sanitizeUrl(operationResource) : undefined, connected: boundedBoolean(observation.connected ?? sdk.connected), listToolsCompleted: boundedBoolean(observation.listToolsCompleted ?? sdk.listToolsCompleted ?? sdk.listToolsObserved), callToolCompleted: boundedBoolean(observation.callToolCompleted ?? sdk.callToolCompleted ?? sdk.callToolObserved), resultIsError: boundedBoolean(observation.resultIsError ?? sdk.resultIsError), toolName: boundedString(sdk.toolName), response,
-    }, request: normalizeRequest(raw.request ?? observation.request) });
+    }, request });
   }
   if (kind === "grant") {
-    if (role !== "cleanup") throw new PublicClientEvidenceBoundaryError();
+    if (family === undefined && !allowDirect) throw new PublicClientEvidenceBoundaryError();
+    if (family === undefined ? role !== "identify" && role !== "revoke" : role !== "cleanup") throw new PublicClientEvidenceBoundaryError();
     const observation = raw.observation === undefined ? {} : raw.observation;
     assertPrimitiveObservation(observation);
-    const listResponse = normalizeSurface(observation.listResponse);
-    const revokeResponse = normalizeSurface(observation.revokeResponse);
-    const listResponseStatus = boundedNumber(observation.listResponseStatus);
-    const revokeResponseStatus = boundedNumber(observation.revokeResponseStatus);
-    return deepFreeze({ identity: `grant|cleanup|${family}`, kind, role, family, data: {
-      listRequestObserved: boundedBoolean(observation.listRequestObserved ?? observation.grantListObserved), listResponse: listResponseStatus !== undefined ? { ...listResponse, complete: true, status: listResponseStatus } : listResponse, listedClientIds: normalizeStringList(observation.listedClientIds), listedGrantIds: normalizeStringList(observation.listedGrantIds), grantId: boundedString(observation.grantId), grantClientId: boundedString(observation.grantClientId ?? observation.clientId), grantPresent: boundedBoolean(observation.grantPresent), revokeRequestObserved: boundedBoolean(observation.revokeRequestObserved ?? observation.revokeObserved), revokeResponse: revokeResponseStatus !== undefined ? { ...revokeResponse, complete: true, status: revokeResponseStatus } : revokeResponse,
-    }, request: normalizeRequest(raw.request ?? observation.request) });
+    const request = normalizeRequest(raw.request ?? observation.request);
+    const listResponse = normalizeSurface(observation.listResponse ?? (role === "identify" ? request?.response : undefined));
+    const revokeResponse = normalizeSurface(observation.revokeResponse ?? (role === "revoke" ? request?.response : undefined));
+    const listResponseStatus = boundedNumber(observation.listResponseStatus) ?? (role === "identify" ? request?.request.status : undefined);
+    const revokeResponseStatus = boundedNumber(observation.revokeResponseStatus) ?? (role === "revoke" ? request?.request.status : undefined);
+    return deepFreeze({ identity: `grant|${role}${family === undefined ? "" : `|${family}`}`, kind, role, ...(family === undefined ? {} : { family }), data: {
+      listRequestObserved: boundedBoolean(observation.listRequestObserved ?? observation.grantListObserved) ?? (role === "identify" ? request !== undefined : undefined), listResponse: listResponseStatus !== undefined ? { ...listResponse, complete: true, status: listResponseStatus } : listResponse, listedClientIds: normalizeStringList(observation.listedClientIds), listedGrantIds: normalizeStringList(observation.listedGrantIds), grantId: boundedString(observation.grantId), grantClientId: boundedString(observation.grantClientId ?? observation.clientId), grantPresent: boundedBoolean(observation.grantPresent), revokeRequestObserved: boundedBoolean(observation.revokeRequestObserved ?? observation.revokeObserved) ?? (role === "revoke" ? request !== undefined : undefined), revokeResponse: revokeResponseStatus !== undefined ? { ...revokeResponse, complete: true, status: revokeResponseStatus } : revokeResponse,
+    }, request });
   }
   if (kind === "cleanup") {
-    if (role !== "family") throw new PublicClientEvidenceBoundaryError();
+    if (family === undefined ? !(allowDirect && role === "final") : role !== "family") throw new PublicClientEvidenceBoundaryError();
     const observation = isRecord(raw.observation) ? raw.observation : {};
-    const response = normalizeSurface(observation.response);
-    return deepFreeze({ identity: `cleanup|family|${family}`, kind, role, family, data: {
-      listRequestObserved: boundedBoolean(observation.listRequestObserved), remainingClientIds: normalizeStringList(observation.remainingClientIds), remainingGrantIds: normalizeStringList(observation.remainingGrantIds), grantPresent: boundedBoolean(observation.grantPresent), requestStatus: boundedNumber(observation.requestStatus) ?? response.status,
-    }, request: normalizeRequest(raw.request ?? observation.request) });
+    const request = normalizeRequest(raw.request ?? observation.request);
+    const response = normalizeSurface(observation.response ?? request?.response);
+    return deepFreeze({ identity: `cleanup|${role}${family === undefined ? "" : `|${family}`}`, kind, role, ...(family === undefined ? {} : { family }), data: {
+      listRequestObserved: boundedBoolean(observation.listRequestObserved), remainingClientIds: normalizeStringList(observation.remainingClientIds), remainingGrantIds: normalizeStringList(observation.remainingGrantIds), grantPresent: boundedBoolean(observation.grantPresent), requestStatus: boundedNumber(observation.requestStatus) ?? response.status ?? request?.request.status,
+    }, request });
   }
   throw new PublicClientEvidenceBoundaryError();
 }
 
 export async function normalizePublicClientFact(value: unknown, sampledAtMillis: number): Promise<PublicClientNormalizedFact> {
   return normalizeCapturedPublicClientFact(capturePublicClientJourneyFact(value), sampledAtMillis);
+}
+
+export async function normalizePublicClientSemanticFact(value: unknown, sampledAtMillis: number): Promise<PublicClientNormalizedFact> {
+  return normalizeCapturedPublicClientFact(capturePublicClientJourneyFact(value) as PublicClientJourneyFact, sampledAtMillis, true);
 }
 
 function stableSerialize(value: unknown): string {
@@ -1087,6 +1105,22 @@ const FAMILY_PREREQUISITES: Readonly<Partial<Record<typeof FAMILY_GATE_BASES[num
   "authenticated-mcp-operation": ["delegated-token-validation"],
 };
 
+const DIRECT_GATE_BASES = [
+  "public-client-registration",
+  "delegated-token-validation",
+  "authenticated-mcp-operation",
+  "grant-identification-revocation",
+  "cleanup",
+] as const;
+
+const DIRECT_PREREQUISITES: Readonly<Partial<Record<typeof DIRECT_GATE_BASES[number], readonly string[]>>> = {
+  "public-client-registration": ["provider-discovery"],
+  "delegated-token-validation": ["loopback-pkce"],
+  "authenticated-mcp-operation": ["delegated-token-validation"],
+  "grant-identification-revocation": ["refresh-rotation"],
+  cleanup: ["grant-identification-revocation"],
+};
+
 function semanticGate(
   key: string,
   status: GateStatus | undefined,
@@ -1095,6 +1129,12 @@ function semanticGate(
   family?: PublicClientFamily,
 ): PublicClientSemanticConclusion {
   return { key, ...(family === undefined ? {} : { family }), status, evidence, error };
+}
+
+function conflictConclusion(conclusion: PublicClientSemanticConclusion, conflicted: boolean): PublicClientSemanticConclusion {
+  return conflicted
+    ? semanticGate(conclusion.key, "fail", { observedBoundary: "conflict" }, { kind: "conflicting-observation" }, conclusion.family)
+    : conclusion;
 }
 
 function statusFromValues(values: readonly (GateStatus | undefined)[]): GateStatus {
@@ -1108,10 +1148,17 @@ function statusFromObservationFields(values: readonly (boolean | undefined)[]): 
   return "not-proven";
 }
 
-function publicRegistrationStatus(fact: PublicClientNormalizedFact): PublicClientSemanticConclusion {
-  const family = fact.family as PublicClientFamily;
+function combinePresence(values: readonly (boolean | undefined)[]): boolean | undefined {
+  if (values.some((value) => value === true)) return true;
+  if (values.some((value) => value === false)) return false;
+  return undefined;
+}
+
+function publicRegistrationStatus(fact: PublicClientNormalizedFact, target: CompatibilityReportTarget): PublicClientSemanticConclusion {
+  const family = fact.family;
   const response = fact.data.response as PublicClientNormalizedSurface;
-  const key = `${fact.role === "negative" ? "registration-negative-validation" : "public-client-registration"}-${family}`;
+  const suffix = family === undefined ? "" : `-${family}`;
+  const key = `${fact.role === "negative" ? "registration-negative-validation" : "public-client-registration"}${suffix}`;
   if (!response.complete || response.status === undefined || response.status < 200 || response.status >= 600) return semanticGate(key, "not-proven", { registrationStatus: "not-proven" }, undefined, family);
   if (fact.role === "negative") {
     const observedErrorCode = bodyString(response.body, "error_code", "error");
@@ -1132,7 +1179,9 @@ function publicRegistrationStatus(fact: PublicClientNormalizedFact): PublicClien
   const responseTypes = bodyStringArray(response.body, "response_types", "responseTypes");
   const clientId = bodyString(response.body, "client_id", "clientId");
   const authMethod = bodyString(response.body, "token_endpoint_auth_method", "tokenEndpointAuthMethod");
-  const supportedRedirects = redirectUris.length === 1 && isSupportedLoopbackRegistrationRedirect(redirectUris[0], publicLoopbackHost(family));
+  const supportedRedirects = redirectUris.length === 1 && (family === undefined
+    ? (target?.loopbackHosts ?? ["127.0.0.1", "::1"]).some((host) => isSupportedLoopbackRegistrationRedirect(redirectUris[0], host as "127.0.0.1" | "::1"))
+    : isSupportedLoopbackRegistrationRedirect(redirectUris[0], publicLoopbackHost(family)));
   const supportedGrantTypes = grantTypes.length === 1 && grantTypes[0] === "authorization_code";
   const supportedResponseTypes = responseTypes.length === 1 && responseTypes[0] === "code";
   const publicTokenAuthentication = authMethod === "none";
@@ -1141,33 +1190,34 @@ function publicRegistrationStatus(fact: PublicClientNormalizedFact): PublicClien
   return semanticGate(key, accepted ? "pass" : "fail", { registrationStatus: accepted ? "accepted" : "rejected", registrationRedirectUri: redirectUris[0] ? sanitizeUrl(redirectUris[0]) : "unavailable", clientIdPresent: Boolean(clientId), clientSecretReturned, registeredGrantTypes: grantTypes }, undefined, family);
 }
 
+type PublicSemanticScope = PublicClientFamily | "direct";
+
 interface PublicFamilyHistory {
   acceptedClientId?: string;
   acceptedGrantId?: string;
 }
 
-type PublicSessionHistory = Map<PublicClientFamily, PublicFamilyHistory>;
+type PublicSessionHistory = Map<PublicSemanticScope, PublicFamilyHistory>;
 
-function familyHistory(history: PublicSessionHistory, family: PublicClientFamily): PublicFamilyHistory {
-  const current = history.get(family);
+function familyHistory(history: PublicSessionHistory, scope: PublicSemanticScope): PublicFamilyHistory {
+  const current = history.get(scope);
   if (current) return current;
   const created: PublicFamilyHistory = {};
-  history.set(family, created);
+  history.set(scope, created);
   return created;
 }
 
-function registrationClientId(fact: PublicClientNormalizedFact): string | undefined {
-  if (fact.kind !== "registration" || fact.role !== "primary" || fact.family === undefined) return undefined;
-  const registration = publicRegistrationStatus(fact);
+function registrationClientId(fact: PublicClientNormalizedFact, target: CompatibilityReportTarget): string | undefined {
+  if (fact.kind !== "registration" || fact.role !== "primary") return undefined;
+  const registration = publicRegistrationStatus(fact, target);
   if (registration.status !== "pass") return undefined;
   const clientId = fact.data.clientId;
   return typeof clientId === "string" && clientId.length > 0 ? clientId : undefined;
 }
 
-function updateAcceptedHistory(history: PublicSessionHistory, fact: PublicClientNormalizedFact): void {
-  if (fact.family === undefined) return;
-  const current = familyHistory(history, fact.family);
-  const clientId = registrationClientId(fact);
+function updateAcceptedHistory(history: PublicSessionHistory, fact: PublicClientNormalizedFact, target: CompatibilityReportTarget): void {
+  const current = familyHistory(history, fact.family ?? "direct");
+  const clientId = registrationClientId(fact, target);
   if (clientId && current.acceptedClientId === undefined) current.acceptedClientId = clientId;
   if (fact.kind === "grant") {
     const listedClientIds = fact.data.listedClientIds as string[] | undefined;
@@ -1178,14 +1228,15 @@ function updateAcceptedHistory(history: PublicSessionHistory, fact: PublicClient
   }
 }
 
-function delegatedTokenConclusion(fact: PublicClientNormalizedFact, target: CompatibilityReportTarget, history: PublicSessionHistory): PublicClientSemanticConclusion {
-  const family = fact.family as PublicClientFamily;
+function delegatedTokenConclusion(fact: PublicClientNormalizedFact, target: CompatibilityReportTarget, history: PublicSessionHistory, scope: PublicSemanticScope): PublicClientSemanticConclusion {
+  const family = fact.family;
   const data = fact.data as unknown as DelegatedTokenData;
-  const key = `delegated-token-validation-${family}`;
-  if (!data.tokenObserved) return semanticGate(key, "not-proven", undefined, undefined, family);
-  if (data.tokenMalformed || data.jwksMalformed) return semanticGate(key, "fail", { signatureValid: false, algorithmAllowed: false, issuerMatches: false, audienceMatches: false, clientContextMatches: false, grantContextMatches: false, timeBoundsValid: false }, { kind: "malformed-observation" }, family);
-  if (!data.jwksObserved) return semanticGate(key, "not-proven", { signatureValid: false, algorithmAllowed: typeof data.header.alg === "string" && (ALLOWED_DELEGATED_JWT_ALGORITHMS as readonly string[]).includes(data.header.alg), issuerMatches: data.claims.iss === target.expectedAuthorizationServer, audienceMatches: data.claims.aud === target.canonicalResource, clientContextMatches: false, grantContextMatches: false, timeBoundsValid: false }, undefined, family);
-  const current = familyHistory(history, family);
+  const key = `delegated-token-validation${scope === "direct" ? "" : `-${scope}`}`;
+  const conclusionFamily = scope === "direct" ? undefined : family;
+  if (!data.tokenObserved) return semanticGate(key, "not-proven", undefined, undefined, conclusionFamily);
+  if (data.tokenMalformed || data.jwksMalformed) return semanticGate(key, "fail", { signatureValid: false, algorithmAllowed: false, issuerMatches: false, audienceMatches: false, clientContextMatches: false, grantContextMatches: false, timeBoundsValid: false }, { kind: "malformed-observation" }, conclusionFamily);
+  if (!data.jwksObserved) return semanticGate(key, "not-proven", { signatureValid: false, algorithmAllowed: typeof data.header.alg === "string" && (ALLOWED_DELEGATED_JWT_ALGORITHMS as readonly string[]).includes(data.header.alg), issuerMatches: data.claims.iss === target.expectedAuthorizationServer, audienceMatches: data.claims.aud === target.canonicalResource, clientContextMatches: false, grantContextMatches: false, timeBoundsValid: false }, undefined, conclusionFamily);
+  const current = familyHistory(history, scope);
   const request = fact.request?.request;
   const policyResult = evaluateDelegatedJwtPolicy(data.header, data.claims, {
     canonicalResource: target.canonicalResource,
@@ -1195,7 +1246,7 @@ function delegatedTokenConclusion(fact: PublicClientNormalizedFact, target: Comp
     tokenRequest: { clientId: request?.requestClientId, grantType: request?.requestGrantType, resource: request?.requestResource },
   });
   const grantClaim = data.claims.grant_id;
-  const grantIdentityMatches = typeof grantClaim !== "string" ? true : current.acceptedGrantId !== undefined && grantClaim === current.acceptedGrantId;
+  const grantIdentityMatches = typeof grantClaim !== "string" || current.acceptedGrantId === undefined || grantClaim === current.acceptedGrantId;
   const checks = {
     algorithmAllowed: policyResult.checks.algorithmAllowed,
     issuerMatches: policyResult.checks.issuerMatches,
@@ -1204,14 +1255,14 @@ function delegatedTokenConclusion(fact: PublicClientNormalizedFact, target: Comp
     grantContextMatches: policyResult.checks.grantContextMatches && grantIdentityMatches,
     timeBoundsValid: policyResult.checks.timeBoundsValid,
   };
-  const missingHistory = current.acceptedClientId === undefined || request === undefined || (typeof grantClaim === "string" && current.acceptedGrantId === undefined);
+  const missingHistory = current.acceptedClientId === undefined || request === undefined;
   const valid = data.keySelected && data.signatureValid && Object.values(checks).every(Boolean);
   const knownSecurityFailure = !data.keySelected || !data.signatureValid || !policyResult.checks.algorithmAllowed || !policyResult.checks.issuerMatches || !policyResult.checks.subjectPresent || !policyResult.checks.audienceMatches || !policyResult.checks.timeBoundsValid || (current.acceptedClientId !== undefined && !policyResult.checks.clientContextMatches) || (request !== undefined && (!policyResult.checks.grantContextMatches || !policyResult.checks.resourceContextMatches)) || (typeof data.claims.resource === "string" && data.claims.resource !== target.canonicalResource) || (typeof grantClaim === "string" && current.acceptedGrantId !== undefined && !grantIdentityMatches);
-  return semanticGate(key, knownSecurityFailure ? "fail" : missingHistory ? "not-proven" : valid ? "pass" : "fail", { signatureValid: data.signatureValid, ...checks }, undefined, family);
+  return semanticGate(key, knownSecurityFailure ? "fail" : missingHistory ? "not-proven" : valid ? "pass" : "fail", { signatureValid: data.signatureValid, ...checks }, undefined, conclusionFamily);
 }
 
-function mcpOperationConclusion(fact: PublicClientNormalizedFact, target: CompatibilityReportTarget): PublicClientSemanticConclusion {
-  const family = fact.family as PublicClientFamily;
+function mcpOperationConclusion(fact: PublicClientNormalizedFact, target: CompatibilityReportTarget, scope: PublicSemanticScope): PublicClientSemanticConclusion {
+  const family = fact.family;
   const data = fact.data;
   const request = fact.request;
   const response = data.response as PublicClientNormalizedSurface;
@@ -1228,7 +1279,108 @@ function mcpOperationConclusion(fact: PublicClientNormalizedFact, target: Compat
   const rejectedByBoundary = requestComplete && operationResourceMatches && (requestStatus === 401 || requestStatus === 403 || bodyString(response.body, "error", "error_code") === "invalid_token") && responseCredentialPresence === "absent";
   const attemptedFailure = requestComplete && operationResourceMatches && (resultIsError === true || rejectedByBoundary);
   const status = authorized ? "pass" : attemptedFailure || (requestComplete && !operationResourceMatches) ? "fail" : "not-proven";
-  return semanticGate(`authenticated-mcp-operation-${family}`, status, { operationUrl: operationUrl ?? "unavailable", operationResourceMatches, resultIsError: resultIsError ?? "unavailable", requestStatus: requestStatus ?? "unavailable" }, undefined, family);
+  return semanticGate(`authenticated-mcp-operation${scope === "direct" ? "" : `-${scope}`}`, status, { operationUrl: operationUrl ?? "unavailable", operationResourceMatches, resultIsError: resultIsError ?? "unavailable", requestStatus: requestStatus ?? "unavailable" }, undefined, scope === "direct" ? undefined : family);
+}
+
+interface PublicDirectGrantState {
+  readonly identified: boolean;
+  readonly revoked: boolean;
+  readonly grantId?: string;
+  readonly clientId?: string;
+  readonly requestStatus?: number;
+}
+
+function directGrantState(facts: readonly PublicClientNormalizedFact[], history: PublicSessionHistory): PublicDirectGrantState {
+  const grantFacts = facts.filter((fact) => fact.family === undefined && fact.kind === "grant");
+  const identify = grantFacts.find((fact) => fact.role === "identify");
+  const revoke = grantFacts.find((fact) => fact.role === "revoke");
+  const identityData = identify?.data;
+  const listResponse = identityData?.listResponse as PublicClientNormalizedSurface | undefined;
+  const listedClientIds = identityData?.listedClientIds as string[] | undefined;
+  const listedGrantIds = identityData?.listedGrantIds as string[] | undefined;
+  const current = familyHistory(history, "direct");
+  const grantClientId = identityData?.grantClientId as string | undefined;
+  const grantId = identityData?.grantId as string | undefined ?? current.acceptedGrantId;
+  const clientMatches = current.acceptedClientId !== undefined && (
+    grantClientId === current.acceptedClientId || grantClientId === undefined && listedClientIds?.includes(current.acceptedClientId) === true
+  );
+  const identified = Boolean(
+    identify &&
+    identityData?.listRequestObserved === true &&
+    listResponse?.complete &&
+    listResponse.status !== undefined &&
+    listResponse.status >= 200 &&
+    listResponse.status < 300 &&
+    current.acceptedClientId &&
+    clientMatches &&
+    grantId &&
+    identityData?.grantPresent !== false &&
+    (listedClientIds?.includes(current.acceptedClientId) || listedGrantIds?.includes(grantId) || grantClientId === current.acceptedClientId),
+  );
+  const revokeData = revoke?.data;
+  const revokeResponse = revokeData?.revokeResponse as PublicClientNormalizedSurface | undefined;
+  const revoked = Boolean(
+    identified &&
+    revokeData?.revokeRequestObserved === true &&
+    revokeResponse?.complete &&
+    revokeResponse.status !== undefined &&
+    revokeResponse.status >= 200 &&
+    revokeResponse.status < 300 &&
+    (revokeData.grantId === undefined || revokeData.grantId === grantId) &&
+    (revokeData.grantClientId === undefined || revokeData.grantClientId === current.acceptedClientId),
+  );
+  return { identified, revoked, grantId, clientId: current.acceptedClientId, requestStatus: revokeResponse?.status ?? listResponse?.status };
+}
+
+function directGrantConclusion(facts: readonly PublicClientNormalizedFact[], history: PublicSessionHistory): PublicClientSemanticConclusion | undefined {
+  const grantFacts = facts.filter((fact) => fact.family === undefined && fact.kind === "grant");
+  if (grantFacts.length === 0) return undefined;
+  const roles = grantFacts.map((fact) => fact.role);
+  const expectedRoles = ["identify", "revoke"] as const;
+  const orderedPrefix = roles.length <= expectedRoles.length && roles.every((role, index) => role === expectedRoles[index]);
+  const complete = orderedPrefix && roles.length === expectedRoles.length;
+  const state = directGrantState(facts, history);
+  const identityData = grantFacts.find((fact) => fact.role === "identify")?.data;
+  const revokeData = grantFacts.find((fact) => fact.role === "revoke")?.data;
+  const observed = identityData?.listRequestObserved === true ||
+    revokeData?.revokeRequestObserved === true ||
+    (identityData?.listResponse as PublicClientNormalizedSurface | undefined)?.status !== undefined ||
+    (revokeData?.revokeResponse as PublicClientNormalizedSurface | undefined)?.status !== undefined;
+  const status = !orderedPrefix ? "fail" : state.revoked ? "pass" : complete && observed ? "fail" : "not-proven";
+  return semanticGate("grant-identification-revocation", status, {
+    grant: { present: state.grantId !== undefined, clientId: state.clientId ?? "missing" },
+    grantIdentified: state.identified,
+    grantRevoked: state.revoked,
+    grantCount: state.grantId ? 1 : 0,
+    requestStatus: state.requestStatus ?? "not-observed",
+    revokeEndpointObserved: revokeData?.revokeRequestObserved === true,
+  }, status === "not-proven" ? { kind: "missing-observation" } : status === "fail" ? { kind: "unsupported-observation" } : undefined);
+}
+
+function directCleanupConclusion(facts: readonly PublicClientNormalizedFact[], history: PublicSessionHistory): PublicClientSemanticConclusion | undefined {
+  const fact = facts.find((candidate) => candidate.family === undefined && candidate.kind === "cleanup" && candidate.role === "final");
+  if (!fact) return undefined;
+  const state = directGrantState(facts, history);
+  const grantPresent = fact.data.grantPresent as boolean | undefined;
+  const status = fact.data.requestStatus as number | undefined;
+  const observed = fact.data.listRequestObserved === true && (grantPresent !== undefined || fact.data.remainingClientIds !== undefined || fact.data.remainingGrantIds !== undefined);
+  const remainingClientIds = fact.data.remainingClientIds as string[] | undefined;
+  const remainingGrantIds = fact.data.remainingGrantIds as string[] | undefined;
+  const clientPresent = remainingClientIds !== undefined && state.clientId !== undefined ? remainingClientIds.includes(state.clientId) : undefined;
+  const grantStillPresent = remainingGrantIds !== undefined && state.grantId !== undefined ? remainingGrantIds.includes(state.grantId) : undefined;
+  const stillPresent = grantPresent === true || clientPresent === true || grantStillPresent === true
+    ? true
+    : grantPresent === false || clientPresent === false || grantStillPresent === false
+      ? false
+      : undefined;
+  const requestSucceeded = status !== undefined && status >= 200 && status < 300;
+  const gateStatus = !observed || !requestSucceeded ? "not-proven" : stillPresent === true ? "fail" : stillPresent === false && state.revoked ? "pass" : "not-proven";
+  return semanticGate("cleanup", gateStatus, {
+    grantStatus: stillPresent === undefined ? "unknown" : stillPresent ? "present" : "absent",
+    grantIdentified: state.identified,
+    grantRevoked: state.revoked,
+    requestStatus: status ?? "not-observed",
+  }, gateStatus === "not-proven" ? { kind: "missing-observation" } : gateStatus === "fail" ? { kind: "unsupported-observation" } : undefined);
 }
 
 function cleanupConclusion(family: PublicClientFamily, facts: readonly PublicClientNormalizedFact[], history: PublicSessionHistory): PublicClientSemanticConclusion | undefined {
@@ -1237,7 +1389,8 @@ function cleanupConclusion(family: PublicClientFamily, facts: readonly PublicCli
   if (grantFacts.length === 0 && cleanupFacts.length === 0) return undefined;
   const current = familyHistory(history, family);
   let identified = false;
-  let beforePresent: boolean | undefined;
+  let beforeClientPresent: boolean | undefined;
+  let beforeGrantPresent: boolean | undefined;
   let revokeSucceeded: boolean | undefined;
   let requestStatus: number | undefined;
   for (const fact of grantFacts) {
@@ -1247,32 +1400,36 @@ function cleanupConclusion(family: PublicClientFamily, facts: readonly PublicCli
     const grantPresent = fact.data.grantPresent as boolean | undefined;
     if (listedClientIds && current.acceptedClientId) {
       identified = listedClientIds.includes(current.acceptedClientId);
-      beforePresent = identified;
+      beforeClientPresent = identified;
     }
     if (listedGrantIds && current.acceptedGrantId) {
       identified = listedGrantIds.includes(current.acceptedGrantId);
-      beforePresent = identified;
+      beforeGrantPresent = identified;
     }
     if (grantClientId !== undefined && current.acceptedClientId !== undefined) {
       identified = grantClientId === current.acceptedClientId;
-      beforePresent = grantPresent ?? identified;
-    } else if (grantPresent !== undefined) beforePresent = grantPresent;
+      beforeClientPresent = identified;
+      beforeGrantPresent = grantPresent ?? identified;
+    } else if (grantPresent !== undefined) beforeGrantPresent = grantPresent;
     const listResponse = fact.data.listResponse as PublicClientNormalizedSurface;
     const revokeResponse = fact.data.revokeResponse as PublicClientNormalizedSurface;
     const revokeRequested = fact.data.revokeRequestObserved as boolean | undefined;
     requestStatus = listResponse.status ?? revokeResponse.status ?? requestStatus;
     if (revokeRequested !== undefined) revokeSucceeded = revokeRequested && revokeResponse.complete && revokeResponse.status !== undefined && revokeResponse.status >= 200 && revokeResponse.status < 300;
   }
-  let afterPresent: boolean | undefined;
+  let afterClientPresent: boolean | undefined;
+  let afterGrantPresent: boolean | undefined;
   for (const fact of cleanupFacts) {
     const remainingClientIds = fact.data.remainingClientIds as string[] | undefined;
     const remainingGrantIds = fact.data.remainingGrantIds as string[] | undefined;
     const grantPresent = fact.data.grantPresent as boolean | undefined;
     requestStatus = (fact.data.requestStatus as number | undefined) ?? requestStatus;
-    if (grantPresent !== undefined) afterPresent = grantPresent;
-    else if (remainingClientIds && current.acceptedClientId) afterPresent = remainingClientIds.includes(current.acceptedClientId);
-    else if (remainingGrantIds && current.acceptedGrantId) afterPresent = remainingGrantIds.includes(current.acceptedGrantId);
+    if (remainingClientIds && current.acceptedClientId) afterClientPresent = remainingClientIds.includes(current.acceptedClientId);
+    if (remainingGrantIds && current.acceptedGrantId) afterGrantPresent = remainingGrantIds.includes(current.acceptedGrantId);
+    if (grantPresent !== undefined) afterGrantPresent = grantPresent;
   }
+  const afterPresent = combinePresence([afterClientPresent, afterGrantPresent]);
+  const beforePresent = combinePresence([beforeClientPresent, beforeGrantPresent]);
   const status = afterPresent === true ? "fail" : afterPresent === false && beforePresent === true ? revokeSucceeded === true ? "pass" : revokeSucceeded === false ? "fail" : "not-proven" : afterPresent === false ? "pass" : "not-proven";
   return semanticGate(`consent-cleanup-${family}`, status, { grantStatus: afterPresent === undefined ? "unknown" : afterPresent ? "present" : "absent", grantIdentified: identified, grantRevoked: afterPresent === false && (revokeSucceeded === true || beforePresent === false), requestStatus: requestStatus ?? "unavailable" }, undefined, family);
 }
@@ -1296,7 +1453,7 @@ function derivePublicConclusion(fact: PublicClientNormalizedFact, target: Compat
     const supportsGoldenPath = Boolean(fact.data.registrationEndpoint) && responseTypesSupported.includes("code") && grantTypesSupported.includes("authorization_code") && tokenEndpointAuthMethodsSupported.includes("none") && codeChallengeMethodsSupported.includes("S256");
     return semanticGate("provider-discovery", issuer === target.expectedAuthorizationServer && supportsGoldenPath ? "pass" : "fail", { issuerMatches: issuer === target.expectedAuthorizationServer, authorizationEndpoint: fact.data.authorizationEndpoint ?? "unavailable", registrationEndpoint: fact.data.registrationEndpoint ?? "unavailable", tokenEndpoint: fact.data.tokenEndpoint ?? "unavailable", jwksUri: fact.data.jwksUri ?? "unavailable" });
   }
-  if (fact.kind === "registration") return publicRegistrationStatus(fact);
+  if (fact.kind === "registration") return publicRegistrationStatus(fact, target);
   if (fact.kind === "consent") {
     const data = fact.data;
     const noEndorsementLanguage = data.endorsementLanguageVisible === undefined ? undefined : !(data.endorsementLanguageVisible as boolean);
@@ -1336,8 +1493,8 @@ function derivePublicConclusion(fact: PublicClientNormalizedFact, target: Compat
     if (data.verifierMatchesChallenge === undefined) return semanticGate(`loopback-pkce-${fact.family}`, "not-proven", { method: data.method ?? "unavailable", codeChallengePresent: data.challengePresent, codeVerifierMatchesChallenge: "unknown", resourceMatchesCanonical: data.requestResource === target.canonicalResource }, undefined, fact.family);
     return semanticGate(`loopback-pkce-${fact.family}`, data.verifierMatchesChallenge === true && data.method === "S256" && data.requestResource === target.canonicalResource ? "pass" : "fail", { method: data.method ?? "unavailable", codeChallengePresent: data.challengePresent, codeVerifierMatchesChallenge: data.verifierMatchesChallenge, resourceMatchesCanonical: data.requestResource === target.canonicalResource }, undefined, fact.family);
   }
-  if (fact.kind === "delegated-token") return delegatedTokenConclusion(fact, target, history);
-  if (fact.kind === "mcp-operation") return mcpOperationConclusion(fact, target);
+  if (fact.kind === "delegated-token") return delegatedTokenConclusion(fact, target, history, fact.family ?? "direct");
+  if (fact.kind === "mcp-operation") return mcpOperationConclusion(fact, target, fact.family ?? "direct");
   return undefined;
 }
 
@@ -1497,7 +1654,7 @@ export function evaluatePublicClientFacts(
     } else if (derived) {
       shared.set(derived.key, conflicts.has(fact.identity) ? semanticGate(derived.key, "fail", { observedBoundary: "conflict" }, { kind: "conflicting-observation" }) : derived);
     }
-    updateAcceptedHistory(history, fact);
+    updateAcceptedHistory(history, fact, target);
   }
 
   if (!hasExplicitDependencies) {
@@ -1507,11 +1664,16 @@ export function evaluatePublicClientFacts(
     }
   }
 
+  const directGrant = directGrantConclusion(facts, history);
+  if (directGrant) shared.set(directGrant.key, conflictConclusion(directGrant, facts.some((fact) => fact.family === undefined && fact.kind === "grant" && conflicts.has(fact.identity))));
+  const directCleanup = directCleanupConclusion(facts, history);
+  if (directCleanup) shared.set(directCleanup.key, conflictConclusion(directCleanup, facts.some((fact) => fact.family === undefined && fact.kind === "cleanup" && conflicts.has(fact.identity))));
+
   for (const currentFamily of ["ipv4", "ipv6"] as const) {
     const cleanup = cleanupConclusion(currentFamily, facts, history);
     if (cleanup) {
       const cleanupByFamily = family.get("consent-cleanup") ?? new Map<PublicClientFamily, PublicClientSemanticConclusion>();
-      cleanupByFamily.set(currentFamily, cleanup);
+      cleanupByFamily.set(currentFamily, conflictConclusion(cleanup, facts.some((fact) => fact.family === currentFamily && (fact.kind === "grant" || fact.kind === "cleanup") && conflicts.has(fact.identity))));
       family.set("consent-cleanup", cleanupByFamily);
     }
     const cases = negative.get(currentFamily);
@@ -1534,7 +1696,9 @@ export function evaluatePublicClientFacts(
     const byFamily = family.get(base) ?? new Map<PublicClientFamily, PublicClientSemanticConclusion>();
     for (const currentFamily of ["ipv4", "ipv6"] as const) {
       const key = `${base}-${currentFamily}`;
-      raw.set(key, byFamily.get(currentFamily) ?? semanticGate(key, undefined, undefined, { kind: "missing-observation" }, currentFamily));
+      if (!raw.has(key)) {
+        raw.set(key, byFamily.get(currentFamily) ?? semanticGate(key, undefined, undefined, { kind: "missing-observation" }, currentFamily));
+      }
     }
   }
   const resolved = new Map<string, PublicClientSemanticConclusion>();
@@ -1547,9 +1711,11 @@ export function evaluatePublicClientFacts(
     let current = raw.get(key) ?? semanticGate(key, undefined, undefined, { kind: "missing-observation" });
     const familyMatch = /^(.*)-(ipv4|ipv6)$/.exec(key);
     const base = familyMatch?.[1];
-    const prerequisites = base ? FAMILY_PREREQUISITES[base as typeof FAMILY_GATE_BASES[number]] ?? [] : [];
+    const prerequisites = base
+      ? FAMILY_PREREQUISITES[base as typeof FAMILY_GATE_BASES[number]] ?? []
+      : DIRECT_PREREQUISITES[key as typeof DIRECT_GATE_BASES[number]] ?? [];
     for (const prerequisite of prerequisites) {
-      const dependencyKey = prerequisite === "provider-discovery" ? prerequisite : `${prerequisite}-${familyMatch?.[2]}`;
+      const dependencyKey = familyMatch && prerequisite !== "provider-discovery" ? `${prerequisite}-${familyMatch[2]}` : prerequisite;
       current = applySemanticDependency(current, resolve(dependencyKey));
     }
     if (key === "provider-discovery") current = applySemanticDependency(current, resolve("resource-discovery"));
@@ -1560,6 +1726,9 @@ export function evaluatePublicClientFacts(
 
   const conclusions: PublicClientSemanticConclusion[] = [];
   for (const key of ["resource-discovery", "provider-discovery"]) {
+    if (raw.has(key)) conclusions.push(resolve(key));
+  }
+  for (const key of DIRECT_GATE_BASES) {
     if (raw.has(key)) conclusions.push(resolve(key));
   }
   for (const base of FAMILY_GATE_BASES) {
