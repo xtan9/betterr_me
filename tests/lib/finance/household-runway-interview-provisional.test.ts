@@ -4,7 +4,6 @@ import {
   type HouseholdRunwayAnswers,
 } from "@/lib/finance/cushion";
 import {
-  EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT,
   createHouseholdRunwayInterview,
   dispatchHouseholdRunwayInterview,
   householdRunwayDraftDiffersFromPlan,
@@ -14,6 +13,7 @@ import {
   type HouseholdRunwayInterviewCommandInput,
   type HouseholdRunwayInterviewState,
 } from "@/lib/finance/internal/household-runway-interview";
+import { emptyHouseholdRunwayPlanAdjustment } from "@/lib/finance/internal/household-runway-plan-adjustment";
 
 const occurredAt = "2026-08-02T15:00:00.000Z";
 
@@ -121,6 +121,42 @@ function richAnswers(): HouseholdRunwayAnswers {
   };
 }
 
+function distributedAnswers(): HouseholdRunwayAnswers {
+  const answers = richAnswers();
+  return {
+    ...answers,
+    expense_mode: "guided",
+    expense_items: [
+      {
+        id: "large-expense",
+        category: "housing",
+        type: "rent",
+        label: "Rent",
+        current_amount_cents: 400_000,
+        interruption_amount_cents: 300_000,
+        frequency: "monthly",
+        confidence: "confirmed",
+      },
+      {
+        id: "small-expense",
+        category: "other",
+        type: "other_commitment",
+        label: "Commitment",
+        current_amount_cents: 250_000,
+        interruption_amount_cents: 200_000,
+        frequency: "monthly",
+        confidence: "confirmed",
+      },
+    ],
+    completed_expense_categories: ["housing", "other"],
+    expense_category_modes: {
+      housing: "itemized",
+      other: "itemized",
+    },
+    expense_category_subtotals: {},
+  };
+}
+
 function command(
   input: HouseholdRunwayInterviewCommandInput,
   commandId: string,
@@ -161,7 +197,7 @@ describe("provisional Plan Adjustment and completed-Plan lifecycle", () => {
     expect(result.state.committedPlan?.inputs.available_cash.cents).toBe(3_000_000);
     expect(result.state.planInputs?.available_cash.cents).toBe(3_000_000);
     expect(result.state.draft.planAdjustment).toMatchObject({
-      ...EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT,
+      ...emptyHouseholdRunwayPlanAdjustment(),
       added_cash_cents: 1_000_000,
     });
     expect(result.state.draft.selectedScenario).toBe(
@@ -185,7 +221,7 @@ describe("provisional Plan Adjustment and completed-Plan lifecycle", () => {
     const reset = dispatch(adjusted, { type: "reset_plan_adjustment" }, "reset");
 
     expect(reset.state.draft.planAdjustment).toEqual(
-      EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT,
+      emptyHouseholdRunwayPlanAdjustment(),
     );
     expect(reset.state.committedPlan).toEqual(original.committedPlan);
     expect(reset.state.assessment).toEqual(original.assessment);
@@ -206,7 +242,7 @@ describe("provisional Plan Adjustment and completed-Plan lifecycle", () => {
 
     expect(applied.state.committedPlan).toEqual(original.committedPlan);
     expect(applied.state.draft.planAdjustment).toEqual(
-      EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT,
+      emptyHouseholdRunwayPlanAdjustment(),
     );
     expect(applied.state.planInputs?.available_cash.cents).toBe(4_000_000);
     expect(applied.state.planInputs?.other_income_sources).toHaveLength(1);
@@ -279,7 +315,7 @@ describe("provisional Plan Adjustment and completed-Plan lifecycle", () => {
 
     expect(applied.state.committedPlan).toEqual(original.committedPlan);
     expect(applied.state.draft.planAdjustment).toEqual(
-      EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT,
+      emptyHouseholdRunwayPlanAdjustment(),
     );
     expect(applied.state.planInputs?.available_cash).toEqual({
       cents: 3_200_000,
@@ -300,6 +336,90 @@ describe("provisional Plan Adjustment and completed-Plan lifecycle", () => {
       illiquid_investments_cents: 100_000,
       retirement_tax_deferred_cents: 200_000,
       retirement_tax_free_cents: 300_000,
+    });
+  });
+
+  it("applies all seven fields through the Interview while preserving durable application facts", () => {
+    const original = createHouseholdRunwayInterview({
+      revision: 7,
+      inputs: distributedAnswers(),
+    });
+    const adjusted = dispatch(
+      original,
+      {
+        type: "set_plan_adjustment",
+        patch: {
+          expense_reduction_cents: 350_000,
+          added_cash_cents: 200_000,
+          added_monthly_income_cents: 50_000,
+          expected_unconfirmed_funds_cents: 456_789,
+          usable_illiquid_investments_cents: 75_000,
+          usable_retirement_tax_deferred_cents: 0,
+          usable_retirement_tax_free_cents: 150_000,
+        },
+      },
+      "all-fields-preview",
+    );
+    const applied = dispatch(
+      adjusted.state,
+      { type: "apply_plan_adjustment" },
+      "all-fields-apply",
+    );
+
+    expect(applied.state.draft.answers.expense_items).toEqual([
+      expect.objectContaining({
+        id: "large-expense",
+        interruption_amount_cents: 0,
+      }),
+      expect.objectContaining({
+        id: "small-expense",
+        interruption_amount_cents: 150_000,
+      }),
+    ]);
+    expect(applied.state.draft.answers.available_cash).toEqual({
+      cents: 3_200_000,
+      confidence: "confirmed",
+    });
+    expect(applied.state.draft.answers.other_income_sources).toEqual([
+      {
+        id: "side-income",
+        type: "other",
+        label: "Side income",
+        monthly_cents: 25_000,
+        confidence: "confirmed",
+      },
+      {
+        id: "plan-adjustment-all-fields-apply",
+        type: "other",
+        label: "Applied Plan Adjustment",
+        monthly_cents: 50_000,
+        confidence: "confirmed",
+      },
+    ]);
+    expect(applied.state.draft.answers.extreme_access).toEqual({
+      illiquid_investments_cents: 75_000,
+      retirement_tax_deferred_cents: 0,
+      retirement_tax_free_cents: 150_000,
+    });
+    expect(applied.state.draft.answers).not.toHaveProperty(
+      "expected_unconfirmed_funds_cents",
+    );
+    expect(applied.state.draft.answers.updated_at).toBe(occurredAt);
+    expect(applied.state.draft.planAdjustment).toEqual(
+      emptyHouseholdRunwayPlanAdjustment(),
+    );
+    expect(applied.state.operations).toMatchObject({
+      draftSynchronization: {
+        status: "dirty",
+        sourceRevision: applied.state.draft.revision,
+      },
+      planPersistence: {
+        status: "dirty",
+        sourceRevision: applied.state.draft.revision,
+      },
+    });
+    expect(applied.events[0]).toMatchObject({
+      type: "plan_adjustment_applied",
     });
   });
 
@@ -472,7 +592,7 @@ describe("typed operation-local effects", () => {
       correlationId: "save",
       idempotencyKey: "save-key",
       expectedPlanRevision: 7,
-      adjustments: EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT,
+      adjustments: emptyHouseholdRunwayPlanAdjustment(),
       snapshotTrigger: "updated",
     });
 
@@ -536,7 +656,7 @@ describe("typed operation-local effects", () => {
     expect(saved.state.status).toBe("completed");
     expect(saved.state.committedPlan?.revision).toBe(8);
     expect(saved.state.draft.planAdjustment).toEqual(
-      EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT,
+      emptyHouseholdRunwayPlanAdjustment(),
     );
     expect(saved.state.operations.draftSynchronization).toEqual({
       status: "idle",

@@ -1,5 +1,4 @@
 import {
-  expenseTotals,
   type HouseholdRunwayAnswers,
   type RunwayAdjustments,
   type RunwaySnapshotSummary,
@@ -20,9 +19,6 @@ import {
   type RunwayCurrency,
   type RunwayScenario,
 } from "@/lib/finance/cushion";
-import {
-  MAX_CUSHION_AMOUNT_CENTS,
-} from "@/lib/validations/finance-cushion";
 import type { RunwayLocale } from "@/lib/finance/runway-regions";
 import type {
   HouseholdRunwayAnalyticsEventKind,
@@ -50,6 +46,10 @@ import {
 } from "@/lib/finance/internal/household-runway-interview";
 import type { HouseholdRunwayDraftState } from "@/lib/finance/internal/household-runway-draft-codec";
 import {
+  normalizeHouseholdRunwayPlanAdjustmentIntent,
+  type HouseholdRunwayAdjustmentProjection,
+} from "@/lib/finance/internal/household-runway-plan-adjustment";
+import {
   projectHouseholdRunwayActions,
   projectHouseholdRunwayAssessmentSnapshotHistory,
   projectHouseholdRunwayDraftFacts,
@@ -64,6 +64,11 @@ export type {
   HouseholdRunwayAssessmentSnapshotFact,
   HouseholdRunwayHistoryComparison,
 } from "@/lib/finance/internal/household-runway-focused-projection";
+export type {
+  HouseholdRunwayAdjustmentEffect,
+  HouseholdRunwayAdjustmentField,
+  HouseholdRunwayAdjustmentProjection,
+} from "@/lib/finance/internal/household-runway-plan-adjustment";
 
 /** User-facing retention policy; storage/version details remain internal. */
 export const HOUSEHOLD_RUNWAY_DRAFT_RETENTION_DAYS = 30;
@@ -511,31 +516,6 @@ export type HouseholdRunwayFocusedRuntimeSimulation = {
   series: HouseholdRunwaySeries;
 };
 
-export type HouseholdRunwayAdjustmentField = {
-  valueCents: number;
-  minimumCents: 0;
-  maximumCents: number;
-};
-
-export type HouseholdRunwayAdjustmentEffect =
-  | { kind: "none" }
-  | { kind: "monthsChanged"; deltaMonths: number }
-  | { kind: "becameSustainable" };
-
-export type HouseholdRunwayAdjustmentProjection = {
-  active: boolean;
-  fields: {
-    expenseReduction: HouseholdRunwayAdjustmentField;
-    addedCash: HouseholdRunwayAdjustmentField;
-    addedMonthlyIncome: HouseholdRunwayAdjustmentField;
-    expectedUnconfirmedFunds: HouseholdRunwayAdjustmentField;
-    usableIlliquidInvestments: HouseholdRunwayAdjustmentField;
-    usableRetirementTaxDeferred: HouseholdRunwayAdjustmentField;
-    usableRetirementTaxFree: HouseholdRunwayAdjustmentField;
-  };
-  effect: HouseholdRunwayAdjustmentEffect;
-};
-
 export type HouseholdRunwayAdviceFact =
   | { kind: "cashTarget"; targetMonths: 3 | 6; gapCents: number }
   | {
@@ -840,70 +820,6 @@ const EMPTY_STORAGE_FACTS: RuntimeStorageFacts = {
 };
 
 const runtimeIntentTypeSet = new Set<string>(RUNTIME_INTENT_TYPES);
-
-const PLAN_ADJUSTMENT_FIELDS = [
-  "expense_reduction_cents",
-  "added_cash_cents",
-  "added_monthly_income_cents",
-  "expected_unconfirmed_funds_cents",
-  "usable_illiquid_investments_cents",
-  "usable_retirement_tax_deferred_cents",
-  "usable_retirement_tax_free_cents",
-] as const satisfies readonly (keyof RunwayAdjustments)[];
-
-function normalizedPlanAdjustmentCents(value: unknown, maximumCents: number) {
-  let numeric: number;
-  try {
-    numeric = Number(value);
-  } catch {
-    return 0;
-  }
-  if (!Number.isFinite(numeric)) return 0;
-  return Math.min(maximumCents, Math.max(0, Math.round(numeric)));
-}
-
-function normalizePlanAdjustmentIntent(
-  state: HouseholdRunwayInterviewState,
-  intent: Extract<HouseholdRunwayInterviewIntent, { type: "set_plan_adjustment" }>,
-): Extract<HouseholdRunwayInterviewIntent, { type: "set_plan_adjustment" }> {
-  const planInputs = state.planInputs;
-  const domainMaximums = planInputs
-    ? {
-        expense_reduction_cents: expenseTotals(planInputs).interruption,
-        usable_illiquid_investments_cents:
-          planInputs.assets.illiquid_investments.cents,
-        usable_retirement_tax_deferred_cents:
-          planInputs.assets.retirement_tax_deferred.cents,
-        usable_retirement_tax_free_cents:
-          planInputs.assets.retirement_tax_free.cents,
-      }
-    : {
-        expense_reduction_cents: 0,
-        usable_illiquid_investments_cents: 0,
-        usable_retirement_tax_deferred_cents: 0,
-        usable_retirement_tax_free_cents: 0,
-      };
-  const maximums: Record<keyof RunwayAdjustments, number> = {
-    ...domainMaximums,
-    added_cash_cents: MAX_CUSHION_AMOUNT_CENTS,
-    added_monthly_income_cents: MAX_CUSHION_AMOUNT_CENTS,
-    expected_unconfirmed_funds_cents: MAX_CUSHION_AMOUNT_CENTS,
-  };
-  const inputPatch =
-    intent.patch && typeof intent.patch === "object" && !Array.isArray(intent.patch)
-      ? intent.patch
-      : {};
-  const patch: Partial<RunwayAdjustments> = {};
-  for (const field of PLAN_ADJUSTMENT_FIELDS) {
-    if (Object.prototype.hasOwnProperty.call(inputPatch, field)) {
-      patch[field] = normalizedPlanAdjustmentCents(
-        inputPatch[field],
-        maximums[field],
-      );
-    }
-  }
-  return { ...intent, patch };
-}
 
 function isRuntimeIntent(value: unknown): value is HouseholdRunwayInterviewIntent {
   return (
@@ -2222,7 +2138,15 @@ export function createHouseholdRunwayInterviewRuntimeComposition(
     if (intent.type === "registration_clicked") return [];
 
     if (intent.type === "set_plan_adjustment") {
-      return [normalizePlanAdjustmentIntent(state, intent)];
+      return [
+        {
+          ...intent,
+          patch: normalizeHouseholdRunwayPlanAdjustmentIntent({
+            patch: intent.patch,
+            planInputs: state.planInputs,
+          }),
+        },
+      ];
     }
 
     if (intent.type === "continue") {

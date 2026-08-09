@@ -17,7 +17,7 @@ const task = { id: "task-1", title: "Review Coverage" } as never;
 function createDependencies(events: string[]): TaskQueryDependencies {
   return {
     coverage: {
-      ensure: async ({ range }) => {
+      ensure: async (range) => {
         events.push(`coverage:${range.from}:${range.to}`);
         return {
           status: "complete",
@@ -61,6 +61,41 @@ describe("authenticated task query", () => {
         failedSeriesIds: [],
       },
     });
+  });
+
+  it("derives the default upcoming horizon as an inclusive local-date range", async () => {
+    const events: string[] = [];
+    const query = createTaskQuery(principal, createDependencies(events));
+
+    await query.read({
+      type: "upcoming",
+      date: "2026-08-07",
+    });
+
+    expect(events).toEqual([
+      "coverage:2026-08-07:2026-08-14",
+      "read:user-1:upcoming",
+    ]);
+  });
+
+  it("ensures date-shaped due-date lists but skips Coverage for other unbounded filters", async () => {
+    const events: string[] = [];
+    const query = createTaskQuery(principal, createDependencies(events));
+
+    await query.read({
+      type: "list",
+      filters: { due_date: "2026-08-07" },
+    });
+    await query.read({
+      type: "list",
+      filters: { is_completed: false, priority: 2 },
+    });
+
+    expect(events).toEqual([
+      "coverage:2026-08-07:2026-08-07",
+      "read:user-1:list",
+      "read:user-1:list",
+    ]);
   });
 
   it("returns materialized Tasks with the shared partial Coverage fact", async () => {
@@ -135,38 +170,12 @@ describe("authenticated task query", () => {
     expect(result).toEqual({ tasks: [], completeness });
   });
 
-  it("normalizes Coverage failures and leaves unbounded list reads materialized-only", async () => {
+  it("leaves unbounded list reads materialized-only", async () => {
     const events: string[] = [];
-    const dependencies: TaskQueryDependencies = {
-      coverage: {
-        ensure: async () => {
-          events.push("coverage");
-          throw new Error("coverage failed");
-        },
-      },
-      taskRead: {
-        read: async () => {
-          events.push("read");
-          return [task];
-        },
-      },
-    };
-    const query = createTaskQuery(principal, dependencies);
-
-    const unavailable = await query.read({
-      type: "overdue",
-      date: "2026-08-07",
-    });
+    const query = createTaskQuery(principal, createDependencies(events));
     const list = await query.read({ type: "list" });
 
-    expect(unavailable.completeness).toEqual({
-      status: "unavailable",
-      type: "unavailable",
-      requestedRange: { from: "2026-08-07", to: "2026-08-07" },
-      failedSeriesIds: [],
-      reason: "Coverage could not be ensured",
-    });
     expect(list).toEqual({ tasks: [task], completeness: null });
-    expect(events).toEqual(["coverage", "read", "read"]);
+    expect(events).toEqual(["read:user-1:list"]);
   });
 });

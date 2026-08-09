@@ -23,7 +23,6 @@ const lifecycleBoundarySources = [
   "lib/sidebar/query.ts",
   "lib/sidebar/supabase-query.ts",
   "lib/db/tasks.ts",
-  "lib/recurring-tasks/internal/coverage.ts",
   "lib/tasks/commands.ts",
 ];
 
@@ -78,6 +77,41 @@ describe("recurring lifecycle import boundary", () => {
     expect(ai).toContain("createAuthenticatedRecurringTaskCapabilities");
     expect(http).not.toContain("recurring-tasks/creation");
     expect(ai).not.toContain("recurring-tasks/creation");
+  });
+
+  it("keeps compatibility execution on the narrow authenticated command port", () => {
+    const compatibility = readFileSync(
+      resolve(process.cwd(), "lib/recurring-tasks/compatibility.ts"),
+      "utf8",
+    );
+    const http = readFileSync(
+      resolve(process.cwd(), "app/api/recurring-tasks/[id]/route.ts"),
+      "utf8",
+    );
+    const ai = readFileSync(
+      resolve(process.cwd(), "lib/ai/tools/tasks.ts"),
+      "utf8",
+    );
+    const compatibilityImports = compatibility.slice(
+      0,
+      compatibility.indexOf("/** Supported"),
+    );
+
+    expect(compatibility).toContain("SeriesCompatibilityCommandPort");
+    expect(compatibility).toContain("executeSeriesCompatibilityIntent");
+    expect(compatibility).toContain("return commands.reviseSeries(intent.command)");
+    expect(compatibility).not.toContain("toSeriesRevisionExecutionCommand");
+    expect(http).toContain("command: toReviseSeriesCommand({");
+    expect(ai).toContain("command: toReviseSeriesCommand({");
+    expect(compatibilityImports).not.toMatch(
+      /(?:Supabase|NextRequest|NextResponse|authenticate|AuthenticatedPrincipal|SeriesQueries|logger|persistence|lifecycle)/i,
+    );
+    expect(http).not.toMatch(/seriesCommands\.(?:pause|resume|end)Series\s*\(/);
+    expect(ai).not.toMatch(/seriesCommands\.(?:pause|resume|end)Series\s*\(/);
+    expect(http).not.toMatch(/seriesCommands\.reviseSeries\s*\(/);
+    expect(ai).not.toMatch(/seriesCommands\.reviseSeries\s*\(/);
+    expect(http).not.toContain("addLocalDays(");
+    expect(ai).not.toContain("addLocalDays(");
   });
 
   it("keeps date-bounded delivery and read modules off legacy writes and materialization", () => {
@@ -174,7 +208,9 @@ describe("recurring lifecycle import boundary", () => {
     expect(sidebarRoute).not.toContain("createAuthenticatedRecurringTaskCapabilities");
     expect(sidebarQuery).toContain("createSidebarCountsQuery");
     expect(sidebarQuery).toContain('status: "failed"');
-    expect(sidebarComposition).toContain(
+    expect(sidebarComposition).toContain("createCoverageRead");
+    expect(sidebarComposition).toContain('source: "sidebar"');
+    expect(sidebarComposition).not.toContain(
       "createAuthenticatedRecurringTaskCapabilities",
     );
     expect(sidebarComposition).toContain("createSidebarCountsQuery");
@@ -199,7 +235,9 @@ describe("recurring lifecycle import boundary", () => {
       /ensureRecurringTaskCoverage|ensureRecurringTaskCoverageThrough/,
     );
     expect(query).toContain("createCalendarQuery");
-    expect(supabaseQuery).toContain(
+    expect(supabaseQuery).toContain("createCoverageRead");
+    expect(supabaseQuery).toContain('source: "calendar"');
+    expect(supabaseQuery).not.toContain(
       "createAuthenticatedRecurringTaskCapabilities",
     );
     for (const source of [query, supabaseQuery]) {

@@ -2,15 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { TasksDB } from "@/lib/db";
 import {
-  createAuthenticatedRecurringTaskCapabilities,
+  createCoverageRead,
   type AuthenticatedRecurringTaskPrincipal,
-  type CoverageCapabilityResult,
-  type LocalDateRange,
-} from "@/lib/recurring-tasks";
+} from "@/lib/recurring-tasks/coverage-read";
 
 import {
   createTaskQuery,
-  unavailableTaskCoverage,
   type TaskQuery,
   type TaskQueryDependencies,
   type TaskReadQuery,
@@ -21,22 +18,15 @@ export function createSupabaseTaskQuery(
   supabase: SupabaseClient,
   principal: AuthenticatedRecurringTaskPrincipal,
 ): TaskQuery {
-  const recurringCapabilities = createAuthenticatedRecurringTaskCapabilities(
+  const coverageRead = createCoverageRead({
     supabase,
     principal,
-  );
+    source: "task",
+  });
   const tasks = new TasksDB(supabase);
 
   const dependencies: TaskQueryDependencies = {
-    coverage: {
-      async ensure({ principal: owner, range }) {
-        const outcome = await recurringCapabilities.coverage.ensure({
-          operationId: taskCoverageOperationId(owner.userId, range),
-          range,
-        });
-        return coverageCompleteness(outcome, range);
-      },
-    },
+    coverage: coverageRead,
     taskRead: {
       read: ({ principal: owner, request }) =>
         readMaterializedTasks(tasks, owner.userId, request),
@@ -64,19 +54,4 @@ function readMaterializedTasks(
     case "list":
       return tasks.getUserTasks(userId, request.filters);
   }
-}
-
-function coverageCompleteness(
-  outcome: CoverageCapabilityResult,
-  range: LocalDateRange,
-) {
-  if (outcome.type === "coverage") return outcome.completeness;
-  if (outcome.type === "coverage-unavailable") {
-    return unavailableTaskCoverage(range, outcome.reason);
-  }
-  return unavailableTaskCoverage(range);
-}
-
-function taskCoverageOperationId(userId: string, range: LocalDateRange): string {
-  return `task-read-coverage:${userId}:${range.from}:${range.to}`;
 }

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 import { PATCH, DELETE } from "@/app/api/recurring-tasks/[id]/route";
@@ -7,6 +7,7 @@ import type { ToolContext } from "@/lib/ai/tools/types";
 
 const {
   httpSupabase,
+  mockProfileMaybeSingle,
   mockReviseSeries,
   mockPauseSeries,
   mockResumeSeries,
@@ -36,8 +37,17 @@ const {
     seriesQueries: { getSeries: vi.fn() },
     coverage: { ensure: vi.fn() },
   };
+  const mockProfileMaybeSingle = vi.fn();
+  const httpSupabase = {
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({ maybeSingle: mockProfileMaybeSingle })),
+      })),
+    })),
+  };
   return {
-    httpSupabase: {},
+    httpSupabase,
+    mockProfileMaybeSingle,
     mockReviseSeries,
     mockPauseSeries,
     mockResumeSeries,
@@ -86,7 +96,7 @@ const headers = (operationId: string) => ({
 
 const aiContext: ToolContext = {
   userId: "user-123",
-  supabase: httpSupabase as ToolContext["supabase"],
+  supabase: httpSupabase as unknown as ToolContext["supabase"],
   date: "2026-08-01",
   timezone: "America/Los_Angeles",
 };
@@ -98,6 +108,11 @@ function findTool(name: string) {
 describe("HTTP and AI Series capability parity", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers({ now: new Date("2026-08-01T12:00:00.000Z") });
+    mockProfileMaybeSingle.mockResolvedValue({
+      data: { timezone: "America/Los_Angeles" },
+      error: null,
+    });
     mockCreateCapabilities.mockReturnValue(mockCapabilities);
     mockReviseSeries.mockResolvedValue({
       status: "complete",
@@ -119,6 +134,10 @@ describe("HTTP and AI Series capability parity", () => {
       type: "ended",
       series: recurringTask,
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("maps Series Default edits to one canonical revision command", async () => {
@@ -225,6 +244,67 @@ describe("HTTP and AI Series capability parity", () => {
     });
   });
 
+  it("resolves omitted pause and resume dates to the same reference date", async () => {
+    await PATCH(
+      new NextRequest(
+        "http://localhost:3000/api/recurring-tasks/series-1?action=pause",
+        { method: "PATCH", headers: headers("omitted-pause") },
+      ),
+      { params: Promise.resolve({ id: "series-1" }) },
+    );
+    await findTool("pauseRecurringTask").execute(
+      {
+        operationId: "omitted-pause",
+        recurringTaskId: "series-1",
+        version,
+      },
+      aiContext,
+    );
+
+    await PATCH(
+      new NextRequest(
+        "http://localhost:3000/api/recurring-tasks/series-1?action=resume",
+        { method: "PATCH", headers: headers("omitted-resume") },
+      ),
+      { params: Promise.resolve({ id: "series-1" }) },
+    );
+    await findTool("resumeRecurringTask").execute(
+      {
+        operationId: "omitted-resume",
+        recurringTaskId: "series-1",
+        version,
+      },
+      aiContext,
+    );
+
+    expect(mockPauseSeries).toHaveBeenNthCalledWith(1, {
+      operationId: "omitted-pause",
+      seriesId: "series-1",
+      version,
+      effectiveDate: "2026-08-01",
+    });
+    expect(mockPauseSeries).toHaveBeenNthCalledWith(2, {
+      operationId: "omitted-pause",
+      seriesId: "series-1",
+      version,
+      effectiveDate: "2026-08-01",
+    });
+    expect(mockResumeSeries).toHaveBeenNthCalledWith(1, {
+      operationId: "omitted-resume",
+      seriesId: "series-1",
+      version,
+      effectiveDate: "2026-08-01",
+      coverage: { from: "2026-08-01", to: "2026-08-08" },
+    });
+    expect(mockResumeSeries).toHaveBeenNthCalledWith(2, {
+      operationId: "omitted-resume",
+      seriesId: "series-1",
+      version,
+      effectiveDate: "2026-08-01",
+      coverage: { from: "2026-08-01", to: "2026-08-08" },
+    });
+  });
+
   it("maps product end and AI confirmation to one terminal command", async () => {
     const httpResponse = await DELETE(
       new NextRequest(
@@ -257,6 +337,39 @@ describe("HTTP and AI Series capability parity", () => {
       seriesId: "series-1",
       version,
       effectiveDate: "2026-08-09",
+    });
+  });
+
+  it("resolves an omitted end date identically across HTTP and AI", async () => {
+    const httpResponse = await DELETE(
+      new NextRequest(
+        "http://localhost:3000/api/recurring-tasks/series-1",
+        { method: "DELETE", headers: headers("omitted-end") },
+      ),
+      { params: Promise.resolve({ id: "series-1" }) },
+    );
+    const aiResult = await findTool("deleteRecurringTask").execute(
+      {
+        operationId: "omitted-end",
+        recurringTaskId: "series-1",
+        version,
+      },
+      aiContext,
+    );
+
+    expect(httpResponse.status).toBe(200);
+    expect(aiResult).toEqual({ success: true });
+    expect(mockEndSeries).toHaveBeenNthCalledWith(1, {
+      operationId: "omitted-end",
+      seriesId: "series-1",
+      version,
+      effectiveDate: "2026-08-01",
+    });
+    expect(mockEndSeries).toHaveBeenNthCalledWith(2, {
+      operationId: "omitted-end",
+      seriesId: "series-1",
+      version,
+      effectiveDate: "2026-08-01",
     });
   });
 });

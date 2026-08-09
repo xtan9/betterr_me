@@ -220,24 +220,27 @@ describe("Household Runway Assessment", () => {
     });
   });
 
-  it("should accept adjustments exactly at the normalized expense and asset balances", () => {
-    const answers = validAnswers();
-    answers.assets.illiquid_investments.cents = 700_000;
-    answers.assets.retirement_tax_deferred.cents = 800_000;
-    answers.assets.retirement_tax_free.cents = 900_000;
+  it.each([
+    ["expense_reduction_cents", 500_000],
+    ["usable_illiquid_investments_cents", 700_000],
+    ["usable_retirement_tax_deferred_cents", 800_000],
+    ["usable_retirement_tax_free_cents", 900_000],
+  ] as const)(
+    "should accept %s exactly at its current relational boundary",
+    (field, value) => {
+      const answers = validAnswers();
+      answers.assets.illiquid_investments.cents = 700_000;
+      answers.assets.retirement_tax_deferred.cents = 800_000;
+      answers.assets.retirement_tax_free.cents = 900_000;
 
-    const outcome = assessHouseholdRunway({
-      answers,
-      adjustments: {
-        expense_reduction_cents: 500_000,
-        usable_illiquid_investments_cents: 700_000,
-        usable_retirement_tax_deferred_cents: 800_000,
-        usable_retirement_tax_free_cents: 900_000,
-      },
-    });
+      const outcome = assessHouseholdRunway({
+        answers,
+        adjustments: { [field]: value },
+      });
 
-    expect(outcome.success).toBe(true);
-  });
+      expect(outcome.success).toBe(true);
+    },
+  );
 
   it.each([
     [
@@ -261,7 +264,7 @@ describe("Household Runway Assessment", () => {
       "Usable amount cannot exceed the entered balance",
     ],
   ] as const)(
-    "should reject %s above its applied boundary",
+    "should reject %s one cent above its current relational boundary",
     (field, value, message) => {
       const answers = validAnswers();
       answers.assets.illiquid_investments.cents = 700_000;

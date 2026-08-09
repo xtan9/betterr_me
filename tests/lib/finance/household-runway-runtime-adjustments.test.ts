@@ -67,6 +67,16 @@ function adjustmentFrom(
   } satisfies RunwayAdjustments;
 }
 
+function resultFrom(
+  runtime: ReturnType<typeof createHouseholdRunwayInterviewRuntime>,
+) {
+  const screen = runtime.getSnapshot().screen;
+  if (screen.kind !== "result" || screen.readiness !== "ready") {
+    throw new Error("expected the completed result");
+  }
+  return screen;
+}
+
 const adjustmentCases = [
   {
     name: "negative values",
@@ -218,5 +228,180 @@ describe("Household Runway Runtime Plan Adjustment boundary", () => {
         fields: { expectedUnconfirmedFunds: { valueCents: 0 } },
       },
     });
+  });
+
+  it("applies all seven preview fields through the observable Runtime result", () => {
+    const runtime = completedRuntime();
+    const baseline = resultFrom(runtime);
+
+    runtime.send({
+      type: "set_plan_adjustment",
+      patch: {
+        expense_reduction_cents: 100_000,
+        added_cash_cents: 200_000,
+        added_monthly_income_cents: 50_000,
+        expected_unconfirmed_funds_cents: 456_789,
+        usable_illiquid_investments_cents: 75_000,
+        usable_retirement_tax_deferred_cents: 0,
+        usable_retirement_tax_free_cents: 150_000,
+      },
+    });
+
+    const preview = resultFrom(runtime);
+    expect(preview.adjustment.active).toBe(true);
+    expect(preview.adjustment.fields).toMatchObject({
+      expenseReduction: { valueCents: 100_000 },
+      addedCash: { valueCents: 200_000 },
+      addedMonthlyIncome: { valueCents: 50_000 },
+      expectedUnconfirmedFunds: { valueCents: 456_789 },
+      usableIlliquidInvestments: { valueCents: 75_000 },
+      usableRetirementTaxDeferred: { valueCents: 0 },
+      usableRetirementTaxFree: { valueCents: 150_000 },
+    });
+
+    runtime.send({ type: "apply_plan_adjustment" });
+
+    const applied = resultFrom(runtime);
+    expect(applied.adjustment).toMatchObject({
+      active: false,
+      fields: {
+        expenseReduction: { valueCents: 0 },
+        addedCash: { valueCents: 0 },
+        addedMonthlyIncome: { valueCents: 0 },
+        expectedUnconfirmedFunds: { valueCents: 0 },
+        usableIlliquidInvestments: { valueCents: 0 },
+        usableRetirementTaxDeferred: { valueCents: 0 },
+        usableRetirementTaxFree: { valueCents: 0 },
+      },
+    });
+    expect(applied.explanation.availableCashCents).toBe(
+      baseline.explanation.availableCashCents + 200_000,
+    );
+    expect(applied.primary.resources.interruptionExpensesCents).toBe(
+      baseline.primary.resources.interruptionExpensesCents - 100_000,
+    );
+    expect(applied.primary.resources.continuingMonthlyIncomeCents).toBe(
+      baseline.primary.resources.continuingMonthlyIncomeCents + 50_000,
+    );
+    runtime.send({ type: "edit_completed_plan" });
+    runtime.send({ type: "back" });
+    runtime.send({ type: "back" });
+    runtime.send({ type: "back" });
+
+    expect(runtime.getSnapshot().screen).toMatchObject({
+      kind: "assets",
+      extremeAccess: {
+        illiquid_investments_cents: 75_000,
+        retirement_tax_deferred_cents: 0,
+        retirement_tax_free_cents: 150_000,
+      },
+    });
+  });
+
+  it("normalizes hostile values safely across all seven fields", () => {
+    const runtime = completedRuntime();
+    runtime.send({
+      type: "set_plan_adjustment",
+      patch: {
+        expense_reduction_cents: Symbol("expense"),
+        added_cash_cents: Symbol("cash"),
+        added_monthly_income_cents: Symbol("income"),
+        expected_unconfirmed_funds_cents: Symbol("expected"),
+        usable_illiquid_investments_cents: Symbol("illiquid"),
+        usable_retirement_tax_deferred_cents: Symbol("deferred"),
+        usable_retirement_tax_free_cents: Symbol("free"),
+        unknown_field: 999,
+      } as unknown as Partial<RunwayAdjustments>,
+    });
+
+    expect(adjustmentFrom(runtime)).toEqual({
+      expense_reduction_cents: 0,
+      added_cash_cents: 0,
+      added_monthly_income_cents: 0,
+      expected_unconfirmed_funds_cents: 0,
+      usable_illiquid_investments_cents: 0,
+      usable_retirement_tax_deferred_cents: 0,
+      usable_retirement_tax_free_cents: 0,
+    });
+  });
+
+  it("treats a throwing field getter as an unusable present value", () => {
+    const runtime = completedRuntime();
+    const patch = { added_monthly_income_cents: 234_567 } as Record<
+      string,
+      unknown
+    >;
+    Object.defineProperty(patch, "added_cash_cents", {
+      enumerable: true,
+      get() {
+        throw new Error("unusable patch value");
+      },
+    });
+
+    expect(() =>
+      runtime.send({
+        type: "set_plan_adjustment",
+        patch: patch as Partial<RunwayAdjustments>,
+      }),
+    ).not.toThrow();
+
+    expect(adjustmentFrom(runtime)).toMatchObject({
+      added_cash_cents: 0,
+      added_monthly_income_cents: 234_567,
+    });
+  });
+
+  it("treats an unusable object-like patch as an empty partial patch", () => {
+    const runtime = completedRuntime();
+    runtime.send({
+      type: "set_plan_adjustment",
+      patch: { added_cash_cents: 123_456 },
+    });
+    const { proxy, revoke } = Proxy.revocable({}, {});
+    revoke();
+
+    expect(() =>
+      runtime.send({
+        type: "set_plan_adjustment",
+        patch: proxy as Partial<RunwayAdjustments>,
+      }),
+    ).not.toThrow();
+
+    expect(adjustmentFrom(runtime).added_cash_cents).toBe(123_456);
+  });
+
+  it("preserves unpatched fields while ignoring unknown fields", () => {
+    const runtime = completedRuntime();
+    runtime.send({
+      type: "set_plan_adjustment",
+      patch: {
+        added_cash_cents: 123_456,
+        added_monthly_income_cents: 234_567,
+      },
+    });
+    runtime.send({
+      type: "set_plan_adjustment",
+      patch: { unknown_field: 999 } as unknown as Partial<RunwayAdjustments>,
+    });
+
+    expect(adjustmentFrom(runtime)).toMatchObject({
+      added_cash_cents: 123_456,
+      added_monthly_income_cents: 234_567,
+    });
+  });
+
+  it("treats a non-object intent patch as an empty partial patch", () => {
+    const runtime = completedRuntime();
+    runtime.send({
+      type: "set_plan_adjustment",
+      patch: { added_cash_cents: 123_456 },
+    });
+    runtime.send({
+      type: "set_plan_adjustment",
+      patch: null as unknown as Partial<RunwayAdjustments>,
+    });
+
+    expect(adjustmentFrom(runtime).added_cash_cents).toBe(123_456);
+    expect(adjustmentFrom(runtime).added_monthly_income_cents).toBe(0);
   });
 });

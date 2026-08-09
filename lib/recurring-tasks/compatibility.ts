@@ -5,7 +5,12 @@ import type {
   CreateSeriesCommand,
   RecurringTaskFailure,
   RecurringTaskOperationId,
+  EndSeriesResult,
   ReviseSeriesCommand,
+  ReviseSeriesResult,
+  PauseSeriesResult,
+  ResumeSeriesResult,
+  SeriesCommands,
   SeriesProjection,
   SeriesStateCommand,
   SeriesVersion,
@@ -192,6 +197,98 @@ export interface SeriesStateCompatibilityInput {
   version: SeriesVersion;
   effectiveDate?: string;
   coverage?: { from: string; to: string };
+}
+
+/** The authenticated Series command methods used by compatibility execution. */
+export type SeriesCompatibilityCommandPort = Pick<
+  SeriesCommands,
+  "reviseSeries" | "pauseSeries" | "resumeSeries" | "endSeries"
+>;
+
+/** A delivery-neutral, already-selected Series mutation intent. */
+export type SeriesCompatibilityIntent =
+  | {
+      type: "revise";
+      command: ReviseSeriesCommand;
+    }
+  | {
+      type: "pause";
+      command: SeriesStateCompatibilityInput;
+      referenceDate: string;
+    }
+  | {
+      type: "resume";
+      command: SeriesStateCompatibilityInput;
+      referenceDate: string;
+    }
+  | {
+      type: "end";
+      command: SeriesStateCompatibilityInput;
+      referenceDate: string;
+    };
+
+export type SeriesCompatibilityResult =
+  | ReviseSeriesResult
+  | PauseSeriesResult
+  | ResumeSeriesResult
+  | EndSeriesResult;
+
+/** Execute one selected Series mutation intent through the authenticated port. */
+export async function executeSeriesCompatibilityIntent(
+  commands: SeriesCompatibilityCommandPort,
+  intent: SeriesCompatibilityIntent,
+): Promise<SeriesCompatibilityResult> {
+  if (intent.type === "revise") {
+    return commands.reviseSeries(intent.command);
+  }
+  if (intent.type === "pause") {
+    return commands.pauseSeries(
+      toSeriesStateExecutionCommand(
+        intent.command,
+        intent.command.effectiveDate ?? intent.referenceDate,
+      ),
+    );
+  }
+  if (intent.type === "resume") {
+    const effectiveDate = intent.command.effectiveDate ?? intent.referenceDate;
+    return commands.resumeSeries(
+      toSeriesStateExecutionCommand(intent.command, effectiveDate, {
+        from: effectiveDate,
+        to: addLocalDays(effectiveDate, INITIAL_COVERAGE_DAYS),
+      }),
+    );
+  }
+  if (intent.type === "end") {
+    return commands.endSeries(
+      toSeriesStateExecutionCommand(
+        intent.command,
+        intent.command.effectiveDate ?? intent.referenceDate,
+      ),
+    );
+  }
+  throw new Error("Unsupported compatibility intent");
+}
+
+/** Identify either successful lifecycle completion or an idempotent replay. */
+export function isSeriesCompatibilitySuccess(
+  outcome: SeriesCompatibilityResult,
+): outcome is Extract<SeriesCompatibilityResult, { series: SeriesProjection }> {
+  return "series" in outcome
+    && (outcome.status === "complete" || outcome.status === "already-applied");
+}
+
+function toSeriesStateExecutionCommand(
+  input: SeriesStateCompatibilityInput,
+  effectiveDate: string,
+  coverage?: SeriesStateCommand["coverage"],
+): SeriesStateCommand {
+  return {
+    operationId: input.operationId,
+    seriesId: input.seriesId,
+    version: input.version,
+    effectiveDate,
+    ...(coverage === undefined ? {} : { coverage }),
+  };
 }
 
 /** Resolve a transport date once at the compatibility boundary. */

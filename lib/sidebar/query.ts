@@ -3,17 +3,12 @@ import type {
   CoverageCompleteness,
   CoverageComplete,
   LocalDateRange,
-  CoverageUnavailable,
 } from "@/lib/recurring-tasks";
+import type { CoverageRead } from "@/lib/recurring-tasks/coverage-read";
 
 export interface SidebarCounts {
   habits_incomplete: number;
   tasks_due: number;
-}
-
-export interface SidebarCountsCoverageRequest {
-  principal: AuthenticatedRecurringTaskPrincipal;
-  range: LocalDateRange;
 }
 
 export interface SidebarCountsReadRequest {
@@ -22,11 +17,7 @@ export interface SidebarCountsReadRequest {
 }
 
 export interface SidebarCountsQueryDependencies {
-  coverage: {
-    ensure(
-      request: SidebarCountsCoverageRequest,
-    ): Promise<CoverageCompleteness>;
-  };
+  coverage: CoverageRead;
   counts: {
     read(request: SidebarCountsReadRequest): Promise<SidebarCounts>;
   };
@@ -78,19 +69,6 @@ export function sidebarCoverageWarning(
   };
 }
 
-export function unavailableSidebarCoverage(
-  range: LocalDateRange,
-  reason = "Coverage could not be ensured",
-): CoverageUnavailable {
-  return {
-    status: "unavailable",
-    type: "unavailable",
-    requestedRange: range,
-    failedSeriesIds: [],
-    reason,
-  };
-}
-
 export function createSidebarCountsQuery(
   principal: AuthenticatedRecurringTaskPrincipal,
   dependencies: SidebarCountsQueryDependencies,
@@ -100,16 +78,7 @@ export function createSidebarCountsQuery(
   return {
     async read({ date }) {
       const range = { from: date, to: date };
-      let completeness: CoverageCompleteness;
-
-      try {
-        completeness = await dependencies.coverage.ensure({
-          principal,
-          range,
-        });
-      } catch {
-        completeness = unavailableSidebarCoverage(range);
-      }
+      const completeness = await dependencies.coverage.ensure(range);
 
       if (completeness.status !== "complete") {
         return {

@@ -5,7 +5,7 @@ import {
   type CalendarQueryDependencies,
 } from "@/lib/calendar/query";
 import type { CalendarOverlayReadCapabilities } from "@/lib/calendar/overlay-feed";
-import type { Task } from "@/lib/db/types";
+import type { Habit, Task } from "@/lib/db/types";
 
 const principal = {
   type: "user" as const,
@@ -20,6 +20,12 @@ const task = {
   due_time: null,
   is_completed: false,
 } as Task;
+
+const habit = {
+  id: "habit-1",
+  name: "Read",
+  frequency: { type: "daily" },
+} as Habit;
 
 function overlayCapabilities(
   overrides: Partial<CalendarOverlayReadCapabilities> = {},
@@ -38,7 +44,7 @@ function overlayCapabilities(
 describe("authenticated calendar query", () => {
   it("ensures the requested Coverage before reading materialized Task Occurrences", async () => {
     const events: string[] = [];
-    const coverage = vi.fn(async ({ range }: { range: { from: string; to: string } }) => {
+    const coverage = vi.fn(async (range: { from: string; to: string }) => {
       events.push(`coverage:${range.from}:${range.to}`);
       return {
         status: "complete" as const,
@@ -75,8 +81,10 @@ describe("authenticated calendar query", () => {
     });
   });
 
-  it("preserves partial Coverage as a degraded task layer and never reports complete", async () => {
+  it("suppresses partial Task data while preserving an independently successful Habit layer", async () => {
     const read = vi.fn().mockResolvedValue([task]);
+    const activeHabits = vi.fn().mockResolvedValue([habit]);
+    const completionLogs = vi.fn().mockResolvedValue([]);
     const completeness = {
       status: "partial" as const,
       type: "partial" as const,
@@ -85,7 +93,13 @@ describe("authenticated calendar query", () => {
     };
     const result = await createCalendarQuery(principal, {
       coverage: { ensure: vi.fn().mockResolvedValue(completeness) },
-      overlay: overlayCapabilities({ read: { read } }),
+      overlay: overlayCapabilities({
+        read: { read },
+        habits: {
+          activeHabits: { read: activeHabits },
+          completionLogs: { read: completionLogs },
+        },
+      }),
     }).read({
       range: completeness.requestedRange,
       layers: ["tasks", "habits"],
@@ -94,7 +108,10 @@ describe("authenticated calendar query", () => {
     expect(read).not.toHaveBeenCalled();
     expect(result).toEqual({
       status: "degraded",
-      items: [],
+      items: expect.arrayContaining([expect.objectContaining({
+        id: "habits:habit-1:2026-04-01",
+        layer: "habits",
+      })]),
       unavailable: [{
         layer: "tasks",
         code: "recurring_coverage_unavailable",
@@ -105,10 +122,18 @@ describe("authenticated calendar query", () => {
     expect(result.status).not.toBe("complete");
   });
 
-  it("maps an unavailable Coverage exception to a failed task projection", async () => {
+  it("classifies unavailable Coverage as a failed task projection", async () => {
     const read = vi.fn();
     const result = await createCalendarQuery(principal, {
-      coverage: { ensure: vi.fn().mockRejectedValue(new Error("coverage unavailable")) },
+      coverage: {
+        ensure: vi.fn().mockResolvedValue({
+          status: "unavailable",
+          type: "unavailable",
+          requestedRange: { from: "2026-04-01", to: "2026-04-07" },
+          failedSeriesIds: [],
+          reason: "Coverage could not be ensured.",
+        }),
+      },
       overlay: overlayCapabilities({ read: { read } }),
     }).read({
       range: { from: "2026-04-01", to: "2026-04-07" },
@@ -122,7 +147,7 @@ describe("authenticated calendar query", () => {
       type: "unavailable",
       requestedRange: { from: "2026-04-01", to: "2026-04-07" },
       failedSeriesIds: [],
-      reason: "Coverage could not be ensured",
+      reason: "Coverage could not be ensured.",
     });
     expect(result.unavailable).toEqual([{
       layer: "tasks",
@@ -155,8 +180,67 @@ describe("authenticated calendar query", () => {
       layers: ["tasks"],
     });
     expect(ensure).toHaveBeenCalledWith({
-      principal,
-      range: { from: "2026-01-01", to: "2026-02-11" },
+      from: "2026-01-01",
+      to: "2026-02-11",
+    }, expect.any(Function));
+  });
+
+  it("does not request recurring-task Coverage when the task Calendar Layer is not selected", async () => {
+    const ensure = vi.fn();
+
+    const result = await createCalendarQuery(principal, {
+      coverage: { ensure },
+      overlay: overlayCapabilities(),
+    }).read({
+      range: { from: "2026-04-01", to: "2026-04-07" },
+      layers: ["habits"],
     });
+
+    expect(ensure).not.toHaveBeenCalled();
+    expect(result.completeness).toBeNull();
+    expect(result.status).toBe("complete");
+  });
+
+  it("reports an unexpected Coverage cause once through the shared observer without changing classification", async () => {
+    const cause = new Error("private Coverage failure");
+    const reportFailure = vi.fn(() => {
+      throw new Error("reporter unavailable");
+    });
+    const ensure = vi.fn(async (
+      range: { from: string; to: string },
+      observe: (cause: unknown) => void,
+    ) => {
+      observe(cause);
+      return {
+        status: "unavailable" as const,
+        type: "unavailable" as const,
+        requestedRange: range,
+        failedSeriesIds: [],
+        reason: "Coverage could not be ensured.",
+      };
+    });
+
+    const result = await createCalendarQuery(principal, {
+      coverage: { ensure },
+      overlay: overlayCapabilities(),
+    }).read(
+      {
+        range: { from: "2026-04-01", to: "2026-04-07" },
+        layers: ["tasks"],
+      },
+      { reportFailure },
+    );
+
+    expect(reportFailure).toHaveBeenCalledTimes(1);
+    expect(reportFailure).toHaveBeenCalledWith({
+      layer: "tasks",
+      request: {
+        userId: principal.userId,
+        range: { from: "2026-04-01", to: "2026-04-07" },
+      },
+      cause,
+    });
+    expect(result.status).toBe("failed");
+    expect(result.completeness).toMatchObject({ status: "unavailable" });
   });
 });

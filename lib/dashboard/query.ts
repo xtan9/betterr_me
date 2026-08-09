@@ -3,9 +3,8 @@ import type {
   AuthenticatedRecurringTaskPrincipal,
   CoverageCompleteness,
   CoverageComplete,
-  LocalDateRange,
-  CoverageUnavailable,
 } from "@/lib/recurring-tasks";
+import type { CoverageRead } from "@/lib/recurring-tasks/coverage-read";
 import { addLocalDays } from "@/lib/recurring-tasks/scheduling";
 
 import type {
@@ -25,21 +24,12 @@ export interface DashboardQueryReadOptions {
   onIncomplete?: DashboardQueryCoveragePolicy;
 }
 
-export interface DashboardQueryCoverageRequest {
-  principal: AuthenticatedRecurringTaskPrincipal;
-  range: LocalDateRange;
-}
-
 export interface DashboardQueryReadRequest {
   date: string;
 }
 
 export interface DashboardQueryDependencies {
-  coverage: {
-    ensure(
-      request: DashboardQueryCoverageRequest,
-    ): Promise<CoverageCompleteness>;
-  };
+  coverage: CoverageRead;
   snapshot: Pick<DashboardSnapshot, "load">;
 }
 
@@ -79,19 +69,6 @@ export interface DashboardQuery {
 
 export { DASHBOARD_COVERAGE_WARNING_CODE, dashboardCoverageWarning };
 
-export function unavailableDashboardCoverage(
-  range: LocalDateRange,
-  reason = "Coverage could not be ensured",
-): CoverageUnavailable {
-  return {
-    status: "unavailable",
-    type: "unavailable",
-    requestedRange: range,
-    failedSeriesIds: [],
-    reason,
-  };
-}
-
 export function createDashboardQuery(
   principal: AuthenticatedRecurringTaskPrincipal,
   dependencies: DashboardQueryDependencies,
@@ -101,16 +78,7 @@ export function createDashboardQuery(
   return {
     async read({ date }, options = {}) {
       const range = { from: date, to: addLocalDays(date, 1) };
-      let completeness: CoverageCompleteness;
-
-      try {
-        completeness = await dependencies.coverage.ensure({
-          principal,
-          range,
-        });
-      } catch {
-        completeness = unavailableDashboardCoverage(range);
-      }
+      const completeness = await dependencies.coverage.ensure(range);
 
       if (
         completeness.status !== "complete"

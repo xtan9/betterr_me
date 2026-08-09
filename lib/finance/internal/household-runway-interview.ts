@@ -1,6 +1,5 @@
 import {
   availableScenarios as calculateAvailableScenarios,
-  applyExpenseReduction,
   createDefaultRunwayAnswers,
   estimateMonthlyTakeHome,
   expenseCategoryTotals,
@@ -46,12 +45,21 @@ import type {
 } from "@/lib/finance/household-runway-analytics";
 import {
   householdRunwayAnswersSchema,
-  MAX_CUSHION_AMOUNT_CENTS,
 } from "@/lib/validations/finance-cushion";
 import {
   createHouseholdRunwayPlan,
   type HouseholdRunwayPlan,
 } from "@/lib/finance/household-runway-plan";
+import {
+  applyHouseholdRunwayPlanAdjustment,
+  emptyHouseholdRunwayPlanAdjustment,
+  householdRunwayPlanAdjustmentFields,
+  isHouseholdRunwayPlanAdjustmentActive,
+  normalizeStoredHouseholdRunwayPlanAdjustment,
+  projectHouseholdRunwayPlanAdjustment,
+  type HouseholdRunwayAdjustmentProjection,
+  type HouseholdRunwayPlanAdjustmentField,
+} from "@/lib/finance/internal/household-runway-plan-adjustment";
 export type { HouseholdRunwayPlan } from "@/lib/finance/household-runway-plan";
 
 /**
@@ -115,18 +123,6 @@ export const HOUSEHOLD_RUNWAY_ASSET_KEYS = [
 
 export type HouseholdRunwayAssetKey =
   (typeof HOUSEHOLD_RUNWAY_ASSET_KEYS)[number];
-
-export const EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT: RunwayAdjustments = {
-  expense_reduction_cents: 0,
-  added_cash_cents: 0,
-  added_monthly_income_cents: 0,
-  expected_unconfirmed_funds_cents: 0,
-  usable_illiquid_investments_cents: 0,
-  usable_retirement_tax_deferred_cents: 0,
-  usable_retirement_tax_free_cents: 0,
-};
-
-export type HouseholdRunwayPlanAdjustmentField = keyof RunwayAdjustments;
 
 export type HouseholdRunwayInterviewOperationError =
   | "authentication_required"
@@ -274,24 +270,6 @@ export interface HouseholdRunwayInterviewCapabilities {
   planPersistence?: "available" | "unavailable";
   /** The authenticated adapter identifies the origin of the first commit. */
   snapshotTrigger?: RunwaySnapshotSummary["trigger"];
-}
-
-function emptyPlanAdjustment(): RunwayAdjustments {
-  return { ...EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT };
-}
-
-function normalizePlanAdjustment(
-  input: Partial<RunwayAdjustments> | null | undefined,
-): RunwayAdjustments {
-  const result = emptyPlanAdjustment();
-  for (const field of Object.keys(result) as HouseholdRunwayPlanAdjustmentField[]) {
-    result[field] = normalizedCents(input?.[field]);
-  }
-  return result;
-}
-
-function hasPlanAdjustment(adjustment: RunwayAdjustments) {
-  return Object.values(adjustment).some((value) => value > 0);
 }
 
 function defaultInterviewOperations(): HouseholdRunwayInterviewOperations {
@@ -1892,7 +1870,9 @@ function normalizeDraft(
     validationIssues: { ...(input?.validationIssues ?? {}) },
     selectedScenario,
     availableScenarios: scenarios,
-    planAdjustment: normalizePlanAdjustment(input?.planAdjustment),
+    planAdjustment: normalizeStoredHouseholdRunwayPlanAdjustment(
+      input?.planAdjustment,
+    ),
     pendingCurrencyChange: input?.pendingCurrencyChange
       ? {
           currency: input.pendingCurrencyChange.currency,
@@ -2015,31 +1995,6 @@ interface HouseholdRunwayFocusedResultSimulation {
     excludedAssetsCents: number;
   };
   series: HouseholdRunwayResultSeries;
-}
-
-interface HouseholdRunwayAdjustmentFieldProjection {
-  valueCents: number;
-  minimumCents: 0;
-  maximumCents: number;
-}
-
-type HouseholdRunwayAdjustmentEffectProjection =
-  | { kind: "none" }
-  | { kind: "monthsChanged"; deltaMonths: number }
-  | { kind: "becameSustainable" };
-
-interface HouseholdRunwayAdjustmentProjection {
-  active: boolean;
-  fields: {
-    expenseReduction: HouseholdRunwayAdjustmentFieldProjection;
-    addedCash: HouseholdRunwayAdjustmentFieldProjection;
-    addedMonthlyIncome: HouseholdRunwayAdjustmentFieldProjection;
-    expectedUnconfirmedFunds: HouseholdRunwayAdjustmentFieldProjection;
-    usableIlliquidInvestments: HouseholdRunwayAdjustmentFieldProjection;
-    usableRetirementTaxDeferred: HouseholdRunwayAdjustmentFieldProjection;
-    usableRetirementTaxFree: HouseholdRunwayAdjustmentFieldProjection;
-  };
-  effect: HouseholdRunwayAdjustmentEffectProjection;
 }
 
 type HouseholdRunwayAdviceFact =
@@ -2260,90 +2215,6 @@ function resultComparisonFor(
     : { outcome: { kind: "depletes", monthsCovered: outcome.monthsCovered } };
 }
 
-function adjustmentFieldFor(
-  valueCents: number,
-  maximumCents: number,
-): HouseholdRunwayAdjustmentFieldProjection {
-  return {
-    valueCents,
-    minimumCents: 0,
-    maximumCents,
-  };
-}
-
-function adjustmentEffectFor(
-  active: boolean,
-  baseline: RunwaySimulation,
-  preview: RunwaySimulation,
-): HouseholdRunwayAdjustmentEffectProjection {
-  if (!active) return { kind: "none" };
-
-  const baselineOutcome = resultOutcomeFor(baseline);
-  const previewOutcome = resultOutcomeFor(preview);
-  if (!baselineOutcome || !previewOutcome) return { kind: "none" };
-
-  if (baselineOutcome.kind === "sustainable" && previewOutcome.kind === "sustainable") {
-    return { kind: "none" };
-  }
-  if (baselineOutcome.kind === "depletes" && previewOutcome.kind === "sustainable") {
-    return { kind: "becameSustainable" };
-  }
-  if (baselineOutcome.kind === "depletes" && previewOutcome.kind === "depletes") {
-    return {
-      kind: "monthsChanged",
-      deltaMonths: previewOutcome.monthsCovered - baselineOutcome.monthsCovered,
-    };
-  }
-
-  // Plan Adjustments are normalized to non-negative values, so they cannot
-  // make a sustainable baseline depleting. Keep the public union truthful if
-  // an internal calculation ever violates that invariant.
-  return { kind: "none" };
-}
-
-function adjustmentProjectionFor(
-  adjustment: RunwayAdjustments,
-  answers: HouseholdRunwayAnswers,
-  baseline: RunwaySimulation,
-  preview: RunwaySimulation,
-): HouseholdRunwayAdjustmentProjection {
-  const active = hasPlanAdjustment(adjustment);
-  return {
-    active,
-    fields: {
-      expenseReduction: adjustmentFieldFor(
-        adjustment.expense_reduction_cents,
-        baseline.interruption_expenses_cents,
-      ),
-      addedCash: adjustmentFieldFor(
-        adjustment.added_cash_cents,
-        MAX_CUSHION_AMOUNT_CENTS,
-      ),
-      addedMonthlyIncome: adjustmentFieldFor(
-        adjustment.added_monthly_income_cents,
-        MAX_CUSHION_AMOUNT_CENTS,
-      ),
-      expectedUnconfirmedFunds: adjustmentFieldFor(
-        adjustment.expected_unconfirmed_funds_cents,
-        MAX_CUSHION_AMOUNT_CENTS,
-      ),
-      usableIlliquidInvestments: adjustmentFieldFor(
-        adjustment.usable_illiquid_investments_cents,
-        answers.assets.illiquid_investments.cents,
-      ),
-      usableRetirementTaxDeferred: adjustmentFieldFor(
-        adjustment.usable_retirement_tax_deferred_cents,
-        answers.assets.retirement_tax_deferred.cents,
-      ),
-      usableRetirementTaxFree: adjustmentFieldFor(
-        adjustment.usable_retirement_tax_free_cents,
-        answers.assets.retirement_tax_free.cents,
-      ),
-    },
-    effect: adjustmentEffectFor(active, baseline, preview),
-  };
-}
-
 function adviceFor(
   assessment: HouseholdRunwayScenarioAssessment,
 ): readonly HouseholdRunwayAdviceFact[] {
@@ -2445,12 +2316,12 @@ function focusedResultProjectionForDraft(
       availableCashCents: answers.available_cash.cents,
       liquidInvestmentsCents: answers.assets.liquid_investments.cents,
     },
-    adjustment: adjustmentProjectionFor(
-      draft.planAdjustment,
-      answers,
+    adjustment: projectHouseholdRunwayPlanAdjustment({
+      adjustment: draft.planAdjustment,
+      planInputs: answers,
       baseline,
       preview,
-    ),
+    }),
     advice: adviceFor(selectedAssessment),
     precision: { notices: precisionNoticesFor(answers, preview) },
   };
@@ -3604,86 +3475,6 @@ function setReduction(
   );
 }
 
-function planAdjustmentFields(
-  patch: Partial<RunwayAdjustments>,
-): HouseholdRunwayPlanAdjustmentField[] {
-  return (Object.keys(EMPTY_HOUSEHOLD_RUNWAY_PLAN_ADJUSTMENT) as HouseholdRunwayPlanAdjustmentField[]).filter(
-    (field) => patch[field] !== undefined,
-  );
-}
-
-function applyPlanAdjustmentToAnswers(
-  state: HouseholdRunwayInterviewState,
-  command: Extract<
-    HouseholdRunwayInterviewCommand,
-    { type: "apply_plan_adjustment" }
-  >,
-): HouseholdRunwayInterviewAnswers | null {
-  const planInputs = state.planInputs;
-  if (!planInputs) return null;
-
-  let next: HouseholdRunwayAnswers = planInputs;
-  const adjustment = state.draft.planAdjustment;
-  if (adjustment.expense_reduction_cents > 0) {
-    next = applyExpenseReduction(next, adjustment.expense_reduction_cents);
-  }
-  if (adjustment.added_cash_cents > 0) {
-    next = {
-      ...next,
-      available_cash: {
-        cents: next.available_cash.cents + adjustment.added_cash_cents,
-        confidence: "confirmed",
-      },
-    };
-  }
-  if (adjustment.added_monthly_income_cents > 0) {
-    next = {
-      ...next,
-      other_income_sources: [
-        ...next.other_income_sources,
-        {
-          id: `plan-adjustment-${command.commandId}`.slice(0, 100),
-          type: "other",
-          label: "Applied Plan Adjustment",
-          monthly_cents: adjustment.added_monthly_income_cents,
-          confidence: "confirmed",
-        },
-      ],
-    };
-  }
-  if (
-    adjustment.usable_illiquid_investments_cents > 0 ||
-    adjustment.usable_retirement_tax_deferred_cents > 0 ||
-    adjustment.usable_retirement_tax_free_cents > 0
-  ) {
-    next = {
-      ...next,
-      extreme_access: {
-        illiquid_investments_cents: Math.min(
-          next.assets.illiquid_investments.cents,
-          adjustment.usable_illiquid_investments_cents,
-        ),
-        retirement_tax_deferred_cents: Math.min(
-          next.assets.retirement_tax_deferred.cents,
-          adjustment.usable_retirement_tax_deferred_cents,
-        ),
-        retirement_tax_free_cents: Math.min(
-          next.assets.retirement_tax_free.cents,
-          adjustment.usable_retirement_tax_free_cents,
-        ),
-      },
-    };
-  }
-
-  // Expected unconfirmed funds have no committed Plan input until their
-  // amount and arrival are confirmed. Applying a Plan Adjustment therefore
-  // clears that preview without turning it into a hidden durable fact.
-  return normalizeAnswers(
-    { ...next, updated_at: command.occurredAt },
-    state.draft.location,
-  );
-}
-
 function setPlanAdjustment(
   state: HouseholdRunwayInterviewState,
   command: Extract<
@@ -3694,11 +3485,11 @@ function setPlanAdjustment(
   if (state.status !== "reviewing" && state.status !== "completed") {
     return ignored(state, command, "plan_adjustment_unavailable");
   }
-  const fields = planAdjustmentFields(command.patch);
+  const fields = householdRunwayPlanAdjustmentFields(command.patch);
   const draft = normalizeDraft({
     ...state.draft,
     revision: state.draft.revision + 1,
-    planAdjustment: normalizePlanAdjustment({
+    planAdjustment: normalizeStoredHouseholdRunwayPlanAdjustment({
       ...state.draft.planAdjustment,
       ...command.patch,
     }),
@@ -3730,7 +3521,7 @@ function resetPlanAdjustment(
   const draft = normalizeDraft({
     ...state.draft,
     revision: state.draft.revision + 1,
-    planAdjustment: emptyPlanAdjustment(),
+    planAdjustment: emptyHouseholdRunwayPlanAdjustment(),
   });
   return transition(
     state,
@@ -3756,13 +3547,22 @@ function applyPlanAdjustment(
   if (state.status !== "reviewing" && state.status !== "completed") {
     return ignored(state, command, "plan_adjustment_unavailable");
   }
-  const answers = applyPlanAdjustmentToAnswers(state, command);
-  if (!answers) return ignored(state, command, "plan_adjustment_unavailable");
+  const planInputs = state.planInputs;
+  if (!planInputs) return ignored(state, command, "plan_adjustment_unavailable");
+  const answers = normalizeAnswers(
+    applyHouseholdRunwayPlanAdjustment({
+      answers: planInputs,
+      adjustment: state.draft.planAdjustment,
+      occurredAt: command.occurredAt,
+      incomeSourceId: `plan-adjustment-${command.commandId}`.slice(0, 100),
+    }),
+    state.draft.location,
+  );
   const draft = normalizeDraft({
     ...state.draft,
     revision: state.draft.revision + 1,
     answers,
-    planAdjustment: emptyPlanAdjustment(),
+    planAdjustment: emptyHouseholdRunwayPlanAdjustment(),
   });
   return transition(
     state,
@@ -4130,7 +3930,7 @@ function beginCompletedPlanEdit(
       review: null,
       result: null,
     },
-    planAdjustment: emptyPlanAdjustment(),
+    planAdjustment: emptyHouseholdRunwayPlanAdjustment(),
   });
   return transition(
     state,
@@ -4317,7 +4117,7 @@ export function householdRunwayDraftMatchesPlanContent(
   if (stableSerialize(normalized.planInputs) !== stableSerialize(plan.inputs)) {
     return false;
   }
-  if (hasPlanAdjustment(draft.planAdjustment)) return false;
+  if (isHouseholdRunwayPlanAdjustmentActive(draft.planAdjustment)) return false;
   return status === "completed" && stage === "result";
 }
 
@@ -4706,7 +4506,7 @@ function requestPlanPersistence(
   ) {
     return ignored(state, command, "invalid_stage");
   }
-  if (hasPlanAdjustment(state.draft.planAdjustment)) {
+  if (isHouseholdRunwayPlanAdjustmentActive(state.draft.planAdjustment)) {
     const issue: HouseholdRunwayValidationIssue = {
       code: "plan_adjustment_pending",
       stage: "result",
@@ -4895,7 +4695,7 @@ function completePlanPersistence(
   const draft = normalizeDraft({
     ...state.draft,
     answers: committedPlan.inputs,
-    planAdjustment: emptyPlanAdjustment(),
+    planAdjustment: emptyHouseholdRunwayPlanAdjustment(),
   });
   return transition(
     state,

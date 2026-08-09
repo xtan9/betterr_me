@@ -20,16 +20,15 @@ import {
   createAuthenticatedRecurringTaskCapabilities,
   type SeriesVersion,
 } from "@/lib/recurring-tasks";
-import { addLocalDays } from "@/lib/recurring-tasks/scheduling";
 import {
+  executeSeriesCompatibilityIntent,
   initialSeriesCoverage,
+  isSeriesCompatibilitySuccess,
   recurringTaskFailureMessage,
   toCreateSeriesCommand,
   toLifecycleRecurrenceDates,
   toReviseSeriesCommand,
-  toSeriesStateCommand,
   toRecurringTaskResponse,
-  resolveSeriesEffectiveDate,
 } from "@/lib/recurring-tasks/compatibility";
 import {
   hasTaskUpdateValues,
@@ -479,25 +478,29 @@ export function taskTools(): ToolDefinition[] {
         "Update a recurring Series Default or schedule. An effective date creates a following-scope revision.",
       parameters: recurringTaskUpdateParameters,
       execute: async (params, ctx: ToolContext) => {
-        const outcome = await recurringTaskCapabilities(ctx).seriesCommands.reviseSeries(
-          toReviseSeriesCommand({
-            operationId: params.operationId,
-            seriesId: params.recurringTaskId,
-            version: params.version as SeriesVersion,
-            effectiveDate: params.effectiveDate,
-            title: params.title,
-            description: params.description,
-            priority: params.priority as 0 | 1 | 2 | 3 | undefined,
-            categoryId: params.categoryId,
-            dueTime: params.dueTime,
-            recurrenceRule: params.recurrenceRule as RecurrenceRule | undefined,
-            endType: params.endType,
-            endDate: params.endDate,
-            endCount: params.endCount,
-            scope: params.scope,
-          }),
+        const outcome = await executeSeriesCompatibilityIntent(
+          recurringTaskCapabilities(ctx).seriesCommands,
+          {
+            type: "revise",
+            command: toReviseSeriesCommand({
+              operationId: params.operationId,
+              seriesId: params.recurringTaskId,
+              version: params.version as SeriesVersion,
+              effectiveDate: params.effectiveDate,
+              title: params.title,
+              description: params.description,
+              priority: params.priority as 0 | 1 | 2 | 3 | undefined,
+              categoryId: params.categoryId,
+              dueTime: params.dueTime,
+              recurrenceRule: params.recurrenceRule as RecurrenceRule | undefined,
+              endType: params.endType,
+              endDate: params.endDate,
+              endCount: params.endCount,
+              scope: params.scope,
+            }),
+          },
         );
-        if (outcome.type === "revised") {
+        if (isSeriesCompatibilitySuccess(outcome)) {
           return toRecurringTaskResponse(outcome.series, ctx.userId);
         }
         return { error: recurringTaskFailureMessage(outcome) };
@@ -509,19 +512,22 @@ export function taskTools(): ToolDefinition[] {
         "Pause a recurring task to stop generating new instances. The operation ID is reused for safe retries and version is the opaque Series version from the latest read.",
       parameters: recurringTaskStateCommandParameters,
       execute: async (params, ctx: ToolContext) => {
-        const effectiveDate = resolveSeriesEffectiveDate(
-          params.effectiveDate,
-          ctx.date,
+        const outcome = await executeSeriesCompatibilityIntent(
+          recurringTaskCapabilities(ctx).seriesCommands,
+          {
+            type: "pause",
+            command: {
+              operationId: params.operationId,
+              seriesId: params.recurringTaskId,
+              version: params.version as SeriesVersion,
+              ...(params.effectiveDate === undefined
+                ? {}
+                : { effectiveDate: params.effectiveDate }),
+            },
+            referenceDate: ctx.date,
+          },
         );
-        const outcome = await recurringTaskCapabilities(ctx).seriesCommands.pauseSeries(
-          toSeriesStateCommand({
-            operationId: params.operationId,
-            seriesId: params.recurringTaskId,
-            version: params.version as SeriesVersion,
-            effectiveDate,
-          }),
-        );
-        if (isSeriesCommandSuccess(outcome)) {
+        if (isSeriesCompatibilitySuccess(outcome)) {
           return toRecurringTaskResponse(outcome.series, ctx.userId);
         }
         return { error: recurringTaskFailureMessage(outcome) };
@@ -533,22 +539,22 @@ export function taskTools(): ToolDefinition[] {
         "Resume a paused recurring task and continue generating instances. The operation ID is reused for safe retries and version is the opaque Series version from the latest read.",
       parameters: recurringTaskStateCommandParameters,
       execute: async (params, ctx: ToolContext) => {
-        const effectiveDate = resolveSeriesEffectiveDate(
-          params.effectiveDate,
-          ctx.date,
+        const outcome = await executeSeriesCompatibilityIntent(
+          recurringTaskCapabilities(ctx).seriesCommands,
+          {
+            type: "resume",
+            command: {
+              operationId: params.operationId,
+              seriesId: params.recurringTaskId,
+              version: params.version as SeriesVersion,
+              ...(params.effectiveDate === undefined
+                ? {}
+                : { effectiveDate: params.effectiveDate }),
+            },
+            referenceDate: ctx.date,
+          },
         );
-        const outcome = await recurringTaskCapabilities(ctx).seriesCommands.resumeSeries(
-          toSeriesStateCommand({
-            operationId: params.operationId,
-            seriesId: params.recurringTaskId,
-            version: params.version as SeriesVersion,
-            effectiveDate,
-            coverage: effectiveDate
-              ? { from: effectiveDate, to: addLocalDays(effectiveDate, 7) }
-              : undefined,
-          }),
-        );
-        if (isSeriesCommandSuccess(outcome)) {
+        if (isSeriesCompatibilitySuccess(outcome)) {
           return toRecurringTaskResponse(outcome.series, ctx.userId);
         }
         return { error: recurringTaskFailureMessage(outcome) };
@@ -560,19 +566,22 @@ export function taskTools(): ToolDefinition[] {
         "End a recurring task while preserving its lineage and completed history. This legacy delete-shaped tool translates to the canonical endSeries command. Always confirm with the user first.",
       parameters: recurringTaskStateCommandParameters,
       execute: async (params, ctx: ToolContext) => {
-        const effectiveDate = resolveSeriesEffectiveDate(
-          params.effectiveDate,
-          ctx.date,
+        const outcome = await executeSeriesCompatibilityIntent(
+          recurringTaskCapabilities(ctx).seriesCommands,
+          {
+            type: "end",
+            command: {
+              operationId: params.operationId,
+              seriesId: params.recurringTaskId,
+              version: params.version as SeriesVersion,
+              ...(params.effectiveDate === undefined
+                ? {}
+                : { effectiveDate: params.effectiveDate }),
+            },
+            referenceDate: ctx.date,
+          },
         );
-        const outcome = await recurringTaskCapabilities(ctx).seriesCommands.endSeries(
-          toSeriesStateCommand({
-            operationId: params.operationId,
-            seriesId: params.recurringTaskId,
-            version: params.version as SeriesVersion,
-            effectiveDate,
-          }),
-        );
-        if (isSeriesCommandSuccess(outcome)) return { success: true };
+        if (isSeriesCompatibilitySuccess(outcome)) return { success: true };
         return { error: recurringTaskFailureMessage(outcome) };
       },
     },
@@ -595,14 +604,6 @@ const recurringTaskStateCommandParameters = z.object({
     .optional()
     .describe("Effective local date; defaults to the tool context date"),
 });
-
-function isSeriesCommandSuccess(
-  outcome: Awaited<ReturnType<ReturnType<typeof recurringTaskCapabilities>['seriesCommands']['pauseSeries']>>
-    | Awaited<ReturnType<ReturnType<typeof recurringTaskCapabilities>['seriesCommands']['resumeSeries']>>
-    | Awaited<ReturnType<ReturnType<typeof recurringTaskCapabilities>['seriesCommands']['endSeries']>>,
-): outcome is Extract<typeof outcome, { type: 'paused' | 'resumed' | 'ended' }> {
-  return outcome.type === 'paused' || outcome.type === 'resumed' || outcome.type === 'ended';
-}
 
 function recurringTaskCapabilities(ctx: ToolContext) {
   return createAuthenticatedRecurringTaskCapabilities({
