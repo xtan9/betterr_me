@@ -1,6 +1,6 @@
 # Household Runway Plan Adjustment policy module
 
-Status: proposed; design only
+Status: implementation complete for issue #967
 
 This document resolves Candidate 1 from the 2026-08-08 architecture review.
 It proposes concentrating Household Runway Plan Adjustment policy in one

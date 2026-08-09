@@ -233,12 +233,10 @@ describe("canonical public-client evidence boundary", () => {
     expect(evaluatePublicClientFacts({
       facts: Object.freeze(firstBoundary.facts),
       target,
-      sampledAtMillis,
       dependencies,
     })).toEqual(evaluatePublicClientFacts({
       facts: Object.freeze(secondBoundary.facts),
       target,
-      sampledAtMillis,
       dependencies,
     }));
   });
@@ -256,7 +254,6 @@ describe("canonical public-client evidence boundary", () => {
     const evaluation = evaluatePublicClientFacts({
       facts: Object.freeze(boundary.facts),
       target,
-      sampledAtMillis,
       dependencies: Object.freeze({ "resource-discovery": "pass", "provider-discovery": "pass" }),
       includeRequests: false,
     });
@@ -295,7 +292,6 @@ describe("canonical public-client evidence boundary", () => {
         expectedAuthorizationServer: "http://127.0.0.1:54321/auth/v1",
         loopbackHosts: Object.freeze(["127.0.0.1", "::1"]),
       }),
-      sampledAtMillis,
       dependencies: Object.freeze({ "resource-discovery": "pass", "provider-discovery": "pass" }),
     });
     expect(passing.conclusions.find(({ key }) => key === `registration-negative-validation-${family}`)).toMatchObject({ status: "pass" });
@@ -317,7 +313,6 @@ describe("canonical public-client evidence boundary", () => {
         expectedAuthorizationServer: "http://127.0.0.1:54321/auth/v1",
         loopbackHosts: Object.freeze(["127.0.0.1", "::1"]),
       }),
-      sampledAtMillis,
       dependencies: Object.freeze({ "resource-discovery": "pass", "provider-discovery": "pass" }),
     });
     expect(malformed.conclusions.find(({ key }) => key === `registration-negative-validation-${family}`)).toMatchObject({ status: "not-proven" });
@@ -329,7 +324,6 @@ describe("canonical public-client evidence boundary", () => {
     const evaluation = evaluatePublicClientFacts({
       facts: Object.freeze(boundary.facts),
       target: semanticTarget,
-      sampledAtMillis,
       dependencies: Object.freeze({ "resource-discovery": "pass" }),
     });
 
@@ -348,7 +342,6 @@ describe("canonical public-client evidence boundary", () => {
     const evaluation = evaluatePublicClientFacts({
       facts: Object.freeze(boundary.facts),
       target: semanticTarget,
-      sampledAtMillis,
       dependencies: { resourceDiscovery: "pass", providerDiscovery: "pass" },
     });
 
@@ -377,7 +370,6 @@ describe("canonical public-client evidence boundary", () => {
       return evaluatePublicClientFacts({
         facts: Object.freeze(boundary.facts),
         target: semanticTarget,
-        sampledAtMillis,
         dependencies: Object.freeze({ "resource-discovery": "pass", "provider-discovery": "pass" }),
         conflictingIdentities: Object.freeze(boundary.conflictingIdentities),
       });
@@ -425,7 +417,6 @@ describe("canonical public-client evidence boundary", () => {
     const conflict = evaluatePublicClientFacts({
       facts: Object.freeze(conflictBoundary.facts),
       target: semanticTarget,
-      sampledAtMillis,
       dependencies: Object.freeze({ "resource-discovery": "pass", "provider-discovery": "pass" }),
     });
     expect(conflict.conclusions.find(({ key }) => key === `public-client-registration-${family}`)).toMatchObject({
@@ -460,7 +451,6 @@ describe("canonical public-client evidence boundary", () => {
     const security = evaluatePublicClientFacts({
       facts: Object.freeze(securityBoundary.facts),
       target: semanticTarget,
-      sampledAtMillis,
       dependencies: Object.freeze({ "resource-discovery": "pass", "provider-discovery": "pass" }),
     });
     expect(security.conclusions.find(({ key }) => key === `loopback-${family}`)).toMatchObject({ status: "fail" });
@@ -470,7 +460,6 @@ describe("canonical public-client evidence boundary", () => {
   it("rejects malformed batch facts, targets, and dependency conclusions with one stable boundary error", () => {
     const base = {
       target: semanticTarget,
-      sampledAtMillis,
       dependencies: Object.freeze({ "resource-discovery": "pass", "provider-discovery": "pass" }),
     };
     expect(() => evaluatePublicClientFacts({ ...base, facts: Object.freeze([undefined]) } as never))
@@ -587,7 +576,6 @@ describe("canonical public-client evidence boundary", () => {
     const evaluation = evaluatePublicClientFacts({
       facts: Object.freeze(boundary.facts),
       target: semanticTarget,
-      sampledAtMillis,
       dependencies: Object.freeze({ "resource-discovery": "pass", "provider-discovery": "pass" }),
     });
     const status = (key: string) => evaluation.conclusions.find((conclusion) => conclusion.key === `${key}-${family}`)?.status;
@@ -610,7 +598,6 @@ describe("canonical public-client evidence boundary", () => {
     const prematureEvaluation = evaluatePublicClientFacts({
       facts: Object.freeze(premature.facts),
       target: semanticTarget,
-      sampledAtMillis,
       dependencies: Object.freeze({ "resource-discovery": "pass", "provider-discovery": "pass" }),
     });
     expect(prematureEvaluation.conclusions.find(({ key }) => key === `authorization-consent-${family}`)).toMatchObject({ status: "fail" });
@@ -741,7 +728,6 @@ describe("canonical public-client evidence boundary", () => {
     const evaluation = evaluatePublicClientFacts({
       facts,
       target: semanticTarget,
-      sampledAtMillis,
       dependencies: {
         "resource-discovery": "pass",
         "provider-discovery": "pass",
@@ -760,211 +746,131 @@ describe("canonical public-client evidence boundary", () => {
     });
   });
 
-  it("evaluates family-neutral compatibility token, MCP, grant, revocation, and cleanup facts", () => {
-    const sampledAtSeconds = Math.floor(sampledAtMillis / 1000);
-    const clientId = "compatibility-client";
-    const grantId = "compatibility-grant";
-    const registration: PublicClientNormalizedFact = {
-      identity: "compatibility|registration|primary",
-      kind: "registration",
-      role: "primary",
-      data: {
-        clientId,
-        response: {
-          complete: true,
-          status: 201,
-          body: {
-            client_id: clientId,
-            redirect_uris: ["http://127.0.0.1/oauth/callback"],
-            grant_types: ["authorization_code"],
-            response_types: ["code"],
-            token_endpoint_auth_method: "none",
+  it("preserves each delegated token's sampled time across an expiry boundary", () => {
+    const firstSampledAtSeconds = Math.floor(sampledAtMillis / 1000);
+    const secondSampledAtSeconds = firstSampledAtSeconds + 10;
+    const registration = (
+      family: "ipv4" | "ipv6",
+    ): PublicClientNormalizedFact => {
+      const clientId = `client-${family}`;
+      const redirectHost = family === "ipv4" ? "127.0.0.1" : "[::1]";
+      return {
+        identity: `registration|primary|${family}|primary`,
+        kind: "registration",
+        role: "primary",
+        family,
+        data: {
+          clientId,
+          response: {
+            complete: true,
+            status: 201,
+            body: {
+              client_id: clientId,
+              redirect_uris: [`http://${redirectHost}/oauth/callback`],
+              grant_types: ["authorization_code"],
+              response_types: ["code"],
+              token_endpoint_auth_method: "none",
+            },
+            credentialPresence: "absent",
           },
-          credentialPresence: "absent",
         },
-      },
+      };
     };
-    const token: PublicClientNormalizedFact = {
-      identity: "compatibility|delegated-token|validation",
-      kind: "delegated-token",
-      role: "validation",
-      data: {
-        tokenObserved: true,
-        tokenMalformed: false,
-        jwksObserved: true,
-        jwksMalformed: false,
-        header: { alg: "RS256", kid: "compatibility-key" },
-        claims: {
-          iss: semanticTarget.expectedAuthorizationServer,
-          sub: "compatibility-user",
-          aud: semanticTarget.canonicalResource,
-          client_id: clientId,
-          resource: semanticTarget.canonicalResource,
-          grant_id: grantId,
-          iat: sampledAtSeconds,
-          exp: sampledAtSeconds + 3600,
+    const delegatedToken = (
+      family: "ipv4" | "ipv6",
+      sampledAtSeconds: number,
+      expiresAtSeconds: number,
+    ): PublicClientNormalizedFact => {
+      const clientId = `client-${family}`;
+      return {
+        identity: `delegated-token|validation|${family}`,
+        kind: "delegated-token",
+        role: "validation",
+        family,
+        data: {
+          tokenObserved: true,
+          tokenMalformed: false,
+          jwksObserved: true,
+          jwksMalformed: false,
+          header: { alg: "RS256", kid: `key-${family}` },
+          claims: {
+            iss: semanticTarget.expectedAuthorizationServer,
+            sub: `user-${family}`,
+            aud: semanticTarget.canonicalResource,
+            client_id: clientId,
+            resource: semanticTarget.canonicalResource,
+            iat: sampledAtSeconds,
+            exp: expiresAtSeconds,
+          },
+          keySelected: true,
+          signatureValid: true,
+          sampledAtSeconds,
         },
-        keySelected: true,
-        signatureValid: true,
-        sampledAtSeconds,
-      },
-      request: {
         request: {
-          method: "POST",
-          url: `${semanticTarget.expectedAuthorizationServer}/token`,
-          requestBodyFields: [],
-          authorizationHeaderPresent: false,
-          requestClientId: clientId,
-          requestGrantType: "authorization_code",
-          requestResource: semanticTarget.canonicalResource,
-          status: 200,
+          request: {
+            method: "POST",
+            url: `${semanticTarget.expectedAuthorizationServer}/token`,
+            requestBodyFields: [],
+            authorizationHeaderPresent: false,
+            requestClientId: clientId,
+            requestGrantType: "authorization_code",
+            requestResource: semanticTarget.canonicalResource,
+            status: 200,
+          },
+          responseCredentialPresence: "absent",
         },
-        responseCredentialPresence: "absent",
-      },
-    };
-    const mcp: PublicClientNormalizedFact = {
-      identity: "compatibility|mcp-operation|authenticated",
-      kind: "mcp-operation",
-      role: "authenticated",
-      data: {
-        operationUrl: semanticTarget.canonicalResource,
-        operationResource: semanticTarget.canonicalResource,
-        connected: true,
-        listToolsCompleted: true,
-        callToolCompleted: true,
-        resultIsError: false,
-        response: { complete: true, status: 200, body: {}, credentialPresence: "absent" },
-      },
-      request: {
-        request: {
-          method: "POST",
-          url: semanticTarget.canonicalResource,
-          requestBodyFields: [],
-          authorizationHeaderPresent: true,
-          requestResource: semanticTarget.canonicalResource,
-          status: 200,
-        },
-        responseCredentialPresence: "absent",
-      },
-    };
-    const identify: PublicClientNormalizedFact = {
-      identity: "compatibility|grant|identify",
-      kind: "grant",
-      role: "identify",
-      data: {
-        listRequestObserved: true,
-        listResponse: { complete: true, status: 200, body: {}, credentialPresence: "absent" },
-        listedClientIds: [clientId],
-        listedGrantIds: [grantId],
-        grantId,
-        grantClientId: clientId,
-        grantPresent: true,
-        revokeRequestObserved: false,
-        revokeResponse: { complete: false, body: {}, credentialPresence: "unknown" },
-      },
-    };
-    const revoke: PublicClientNormalizedFact = {
-      identity: "compatibility|grant|revoke",
-      kind: "grant",
-      role: "revoke",
-      data: {
-        grantId,
-        grantClientId: clientId,
-        revokeRequestObserved: true,
-        revokeResponse: { complete: true, status: 204, body: {}, credentialPresence: "absent" },
-        listResponse: { complete: false, body: {}, credentialPresence: "unknown" },
-      },
-    };
-    const cleanup: PublicClientNormalizedFact = {
-      identity: "compatibility|cleanup|final",
-      kind: "cleanup",
-      role: "final",
-      data: {
-        listRequestObserved: true,
-        remainingClientIds: [],
-        remainingGrantIds: [],
-        grantPresent: false,
-        requestStatus: 200,
-      },
+      };
     };
 
     const evaluation = evaluatePublicClientFacts({
-      facts: [registration, identify, token, mcp, revoke, cleanup],
+      facts: [
+        registration("ipv4"),
+        delegatedToken(
+          "ipv4",
+          firstSampledAtSeconds,
+          firstSampledAtSeconds + 5,
+        ),
+        registration("ipv6"),
+        delegatedToken(
+          "ipv6",
+          secondSampledAtSeconds,
+          secondSampledAtSeconds + 5,
+        ),
+      ],
       target: semanticTarget,
-      sampledAtMillis,
       dependencies: {
+        "resource-discovery": "pass",
         "provider-discovery": "pass",
-        "loopback-pkce": "pass",
-        "refresh-rotation": "pass",
+        "loopback-ipv4": "pass",
+        "loopback-request-ipv4": "pass",
+        "loopback-pkce-ipv4": "pass",
+        "loopback-ipv6": "pass",
+        "loopback-request-ipv6": "pass",
+        "loopback-pkce-ipv6": "pass",
       },
       includeRequests: false,
     });
 
-    expect(evaluation.conclusions.find(({ key }) => key === "delegated-token-validation")).toMatchObject({ status: "pass" });
-    expect(evaluation.conclusions.find(({ key }) => key === "authenticated-mcp-operation")).toMatchObject({ status: "pass" });
-    expect(evaluation.conclusions.find(({ key }) => key === "grant-identification-revocation")).toMatchObject({
-      status: "pass",
-      evidence: { grantIdentified: true, grantRevoked: true },
-    });
-    expect(evaluation.conclusions.find(({ key }) => key === "cleanup")).toMatchObject({
-      status: "pass",
-      evidence: { grantIdentified: true, grantRevoked: true, grantStatus: "absent" },
-    });
+    expect(evaluation.conclusions.find(
+      ({ key }) => key === "delegated-token-validation-ipv4",
+    )).toMatchObject({ status: "pass" });
+    expect(evaluation.conclusions.find(
+      ({ key }) => key === "delegated-token-validation-ipv6",
+    )).toMatchObject({ status: "pass" });
+  });
 
-    const retainedGrant = evaluatePublicClientFacts({
-      facts: [registration, identify, token, mcp, revoke, {
-        ...cleanup,
-        data: { ...cleanup.data, remainingGrantIds: [grantId] },
-      }],
+  it("rejects familyless compatibility facts at the canonical semantic boundary", () => {
+    const familylessCompatibilityFact: PublicClientNormalizedFact = {
+      identity: "compatibility|registration|primary",
+      kind: "registration",
+      role: "primary",
+      data: { response: { complete: true, status: 201, body: {}, credentialPresence: "absent" } },
+    };
+
+    expect(() => evaluatePublicClientFacts({
+      facts: [familylessCompatibilityFact],
       target: semanticTarget,
-      sampledAtMillis,
-      dependencies: {
-        "provider-discovery": "pass",
-        "loopback-pkce": "pass",
-        "refresh-rotation": "pass",
-      },
-      includeRequests: false,
-    });
-    expect(retainedGrant.conclusions.find(({ key }) => key === "cleanup")).toMatchObject({
-      status: "fail",
-      evidence: { grantStatus: "present" },
-    });
-
-    const expiredToken = {
-      ...token,
-      data: {
-        ...token.data,
-        claims: { ...(token.data.claims as Record<string, unknown>), exp: sampledAtSeconds },
-      },
-    } satisfies PublicClientNormalizedFact;
-    const boundaryToken = evaluatePublicClientFacts({
-      facts: [registration, expiredToken],
-      target: semanticTarget,
-      sampledAtMillis,
-      dependencies: { "provider-discovery": "pass", "loopback-pkce": "pass" },
-      includeRequests: false,
-    });
-    expect(boundaryToken.conclusions.find(({ key }) => key === "delegated-token-validation")).toMatchObject({ status: "fail" });
-
-    const conflict = evaluatePublicClientFacts({
-      facts: [registration, identify, token, mcp, revoke, cleanup],
-      target: semanticTarget,
-      sampledAtMillis,
-      dependencies: {
-        "provider-discovery": "pass",
-        "loopback-pkce": "pass",
-        "refresh-rotation": "pass",
-      },
-      conflictingIdentities: ["compatibility|grant|identify", "compatibility|cleanup|final"],
-      includeRequests: false,
-    });
-    expect(conflict.conclusions.find(({ key }) => key === "grant-identification-revocation")).toMatchObject({
-      status: "fail",
-      error: { kind: "conflicting-observation" },
-    });
-    expect(conflict.conclusions.find(({ key }) => key === "cleanup")).toMatchObject({
-      status: "fail",
-      error: { kind: "conflicting-observation" },
-    });
+      dependencies: { "provider-discovery": "pass" },
+    })).toThrow(PublicClientEvidenceBoundaryError);
   });
 });

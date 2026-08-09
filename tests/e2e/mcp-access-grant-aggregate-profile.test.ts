@@ -266,7 +266,7 @@ function negativeFacts(): AggregateCompatibilityFact[] {
   ];
 }
 
-async function delegatedTokenFact(): Promise<Extract<AggregateCompatibilityFact, { kind: "delegated-token"; role: "validation" }>> {
+async function delegatedTokenFact(overrides: { readonly resource?: string; readonly includeRequest?: boolean } = {}): Promise<Extract<AggregateCompatibilityFact, { kind: "delegated-token"; role: "validation" }>> {
   const { privateKey, publicKey } = await generateKeyPair("RS256");
   const jwk = await exportJWK(publicKey);
   jwk.kid = "aggregate-key";
@@ -279,7 +279,7 @@ async function delegatedTokenFact(): Promise<Extract<AggregateCompatibilityFact,
     sub: "aggregate-user",
     aud: target.canonicalResource,
     client_id: clientId,
-    resource: target.canonicalResource,
+    resource: overrides.resource ?? target.canonicalResource,
     grant_id: grantId,
   })
     .setProtectedHeader({ alg: "RS256", kid: "aggregate-key", typ: "JWT" })
@@ -292,18 +292,18 @@ async function delegatedTokenFact(): Promise<Extract<AggregateCompatibilityFact,
     role: "validation",
     token,
     jwks: JSON.stringify({ keys: [jwk] }),
-    request: request(`${target.expectedAuthorizationServer}/token`, {
+    ...(overrides.includeRequest === false ? {} : { request: request(`${target.expectedAuthorizationServer}/token`, {
       bodyFields: ["client_id", "grant_type", "resource"],
       requestClientId: clientId,
       requestGrantType: "authorization_code",
       requestResource: target.canonicalResource,
       status: 200,
       response: surface({ access_token: "response-secret" }, 200),
-    }),
+    }) }),
   };
 }
 
-function authenticatedOperationFact(): AggregateCompatibilityFact {
+function authenticatedOperationFact(): Extract<AggregateCompatibilityFact, { kind: "mcp-operation" }> {
   return {
     kind: "mcp-operation",
     role: "authenticated",
@@ -1057,6 +1057,64 @@ describe("aggregate MCP compatibility evidence profile", () => {
     expect(unavailable.report.gates.find(({ id }) => id === "delegated-token-validation")).toMatchObject({ status: "not-proven" });
   });
 
+  it("fails closed for a mismatched token resource claim without request evidence", async () => {
+    const mismatched = await delegatedTokenFact({
+      resource: "https://unrelated.example/resource",
+      includeRequest: false,
+    });
+    const result = await runAggregateCompatibilityEvidence(options([]), async ({ compatibility }) => {
+      for (const fact of [...configurationAndDiscoveryFacts(), ...compatibilityCoreFacts(), mismatched]) await compatibility.record(fact);
+    });
+
+    expect(result.report.gates.find(({ id }) => id === "delegated-token-validation")).toMatchObject({ status: "fail" });
+  });
+
+  it("propagates token and MCP conflicts through dependent compatibility gates", async () => {
+    const validToken = await delegatedTokenFact();
+    const tail = await compatibilityTailFacts();
+    const result = await runAggregateCompatibilityEvidence(options([]), async ({ compatibility }) => {
+      for (const fact of [...configurationAndDiscoveryFacts(), ...compatibilityCoreFacts(), ...negativeFacts(), validToken, authenticatedOperationFact()]) await compatibility.record(fact);
+      await compatibility.record({ ...validToken, token: "conflicting-token" });
+      await compatibility.record({ ...authenticatedOperationFact(), observation: { operationUrl: target.canonicalResource } });
+      for (const fact of tail) await compatibility.record(fact);
+    });
+
+    expect(result.report.gates.find(({ id }) => id === "delegated-token-validation")).toMatchObject({ status: "fail" });
+    expect(result.report.gates.find(({ id }) => id === "delegated-token-negative-boundary")).toMatchObject({ status: "not-proven" });
+    expect(result.report.gates.find(({ id }) => id === "authenticated-mcp-operation")).toMatchObject({ status: "fail" });
+    expect(result.report.gates.find(({ id }) => id === "refresh-rotation")).toMatchObject({ status: "not-proven" });
+  });
+
+  it("does not promote a token grant claim into aggregate grant history", async () => {
+    const tail = await compatibilityTailFacts();
+    const result = await runAggregateCompatibilityEvidence(options([]), async ({ compatibility }) => {
+      for (const fact of [...await completeFacts(), ...tail.slice(0, 3)]) await compatibility.record(fact);
+      await compatibility.record({
+        kind: "grant",
+        role: "identify",
+        observation: {
+          listRequestObserved: true,
+          listResponse: surface({ grants: [] }),
+          listedClientIds: [clientId],
+          grantClientId: clientId,
+          grantPresent: true,
+        },
+      });
+      await compatibility.record({
+        kind: "grant",
+        role: "revoke",
+        observation: {
+          revokeRequestObserved: true,
+          grantId,
+          grantClientId: clientId,
+          revokeResponse: surface({}, 204),
+        },
+      });
+    });
+
+    expect(result.report.gates.find(({ id }) => id === "grant-identification-revocation")).toMatchObject({ status: "not-proven" });
+  });
+
   it("classifies a complete MCP rejection from its response boundary and credential presence", async () => {
     const prelude = [...configurationAndDiscoveryFacts(), ...compatibilityCoreFacts(), await delegatedTokenFact()];
     const result = await runAggregateCompatibilityEvidence(options([]), async ({ compatibility }) => {
@@ -1089,6 +1147,26 @@ describe("aggregate MCP compatibility evidence profile", () => {
     });
     expect(credentialed.report.gates.find(({ id }) => id === "authenticated-mcp-operation")).toMatchObject({ status: "not-proven" });
     expect(credentialed.artifact.contents).not.toContain("must-not-pass");
+
+    const conflictingResponses = await runAggregateCompatibilityEvidence(options([]), async ({ compatibility }) => {
+      for (const fact of prelude) await compatibility.record(fact);
+      await compatibility.record({
+        kind: "mcp-operation",
+        role: "authenticated",
+        observation: {
+          operationUrl: target.canonicalResource,
+          operationResource: target.canonicalResource,
+          response: surface({ error: "invalid_token" }, 401),
+        },
+        request: request(target.canonicalResource, {
+          authorizationHeaderPresent: true,
+          status: 401,
+          response: surface({ access_token: "must-not-fail" }, 401),
+        }),
+      });
+    });
+    expect(conflictingResponses.report.gates.find(({ id }) => id === "authenticated-mcp-operation")).toMatchObject({ status: "not-proven" });
+    expect(conflictingResponses.artifact.contents).not.toContain("must-not-fail");
   });
 
   it("keeps the aggregate artifact byte-stable across repeated deterministic runs", async () => {

@@ -21,9 +21,11 @@ type, so the aggregate journey can pass its public-client recorder directly and
 no adapter will cast facts or choose their catalog authority.
 
 The evaluator will accept an ordered immutable fact snapshot, the immutable
-target facts needed for judgment, sampled time for time-sensitive token facts,
-and explicit dependency conclusions supplied by the calling profile. It will
-own the public-client rules that must be identical in both profiles:
+target facts needed for judgment, and explicit dependency conclusions supplied
+by the calling profile. Time-sensitive token facts carry the record-time sample
+captured when each fact is normalized; batch finalization must not overwrite
+those per-fact samples with a later clock value. The evaluator will own the
+public-client rules that must be identical in both profiles:
 
 - hostile-input copying, validation, size limits, minimization, normalization,
   identity, fingerprinting, and conflict detection;
