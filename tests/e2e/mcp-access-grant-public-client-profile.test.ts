@@ -203,6 +203,16 @@ function sharedFacts(): PublicClientFact[] {
   ];
 }
 
+function familyPrerequisiteFacts(
+  family: "ipv4" | "ipv6",
+  kinds: readonly PublicClientFact["kind"][],
+): PublicClientFact[] {
+  return [
+    ...sharedFacts(),
+    ...familyFacts(family).filter((fact) => kinds.includes(fact.kind) && (fact.kind !== "registration" || fact.role === "primary")),
+  ];
+}
+
 function options(
   writes: PublicClientArtifact[],
   clock: () => string = (() => {
@@ -332,6 +342,64 @@ describe("public-client Candidate 2 evidence profile", () => {
     );
   });
 
+  it("does not pass a standalone leaf when a cataloged prerequisite is missing", async () => {
+    const writes: PublicClientArtifact[] = [];
+    const pkceFact = familyFacts("ipv4").find(({ kind }) => kind === "pkce");
+    if (!pkceFact) throw new Error("Missing PKCE fixture");
+
+    const result = await runPublicClientEvidence(options(writes), async (recorder) => {
+      await recorder.record(pkceFact);
+    });
+
+    expect(result.report.gates.find(({ id }) => id === "loopback-pkce-ipv4")).toMatchObject({
+      status: "not-proven",
+      evidence: { errorKind: "missing-observation", errorCode: "dependency-not-proven" },
+    });
+  });
+
+  it("does not pass standalone leaves through failed or conflicting cataloged prerequisites", async () => {
+    const registrationFact = familyFacts("ipv4")[0];
+    const shared = sharedFacts();
+    const failedShared = shared.map((fact) => fact.kind === "resource-discovery"
+      ? {
+          ...fact,
+          response: surface({
+            resource: "https://unrelated.example/mcp",
+            authorization_server: target.expectedAuthorizationServer,
+          }),
+        }
+      : fact);
+
+    const failed = await runPublicClientEvidence(options([]), async (recorder) => {
+      for (const fact of [...failedShared, registrationFact]) await recorder.record(fact);
+    });
+    expect(failed.report.gates.find(({ id }) => id === "provider-discovery")).toMatchObject({ status: "not-proven" });
+    expect(failed.report.gates.find(({ id }) => id === "public-client-registration-ipv4")).toMatchObject({
+      status: "not-proven",
+      evidence: { errorKind: "missing-observation", errorCode: "dependency-not-proven" },
+    });
+
+    const providerFact = shared.find(({ kind }) => kind === "provider-discovery") as Extract<PublicClientFact, { kind: "provider-discovery" }> | undefined;
+    if (!providerFact) throw new Error("Missing provider discovery fixture");
+    const conflictingProvider = {
+      ...providerFact,
+      response: surface({ issuer: "https://conflicting.example.test" }),
+    } satisfies Extract<PublicClientFact, { kind: "provider-discovery" }>;
+    const conflicting = await runPublicClientEvidence(options([]), async (recorder) => {
+      for (const fact of shared) await recorder.record(fact);
+      await recorder.record(conflictingProvider);
+      await recorder.record(registrationFact);
+    });
+    expect(conflicting.report.gates.find(({ id }) => id === "provider-discovery")).toMatchObject({
+      status: "fail",
+      evidence: { errorKind: "conflicting-observation" },
+    });
+    expect(conflicting.report.gates.find(({ id }) => id === "public-client-registration-ipv4")).toMatchObject({
+      status: "not-proven",
+      evidence: { errorKind: "missing-observation", errorCode: "dependency-not-proven" },
+    });
+  });
+
   it("fails closed for malformed cryptographic material and stays not-proven when JWKS is unavailable", async () => {
     const malformedWrites: PublicClientArtifact[] = [];
     const malformed = await runPublicClientEvidence(options(malformedWrites), async (recorder) => {
@@ -347,7 +415,7 @@ describe("public-client Candidate 2 evidence profile", () => {
     expect(malformed.report.gates.find(({ id }) => id === "delegated-token-validation-ipv4")).toMatchObject({ status: "fail" });
     expect(malformed.artifact.contents).not.toContain("not-a-compact-jwt");
     expect(createHash("sha256").update(malformed.artifact.contents).digest("hex")).toBe(
-      "797b14b30d1d05055f8355105550e3d203bc9c07aedc34a94e49c0e2b748be0d",
+      "18740908b82f296f5e6cbedafee4494bfec7ac3c560732a5fa5b3c52c2b9fd82",
     );
 
     const unavailableWrites: PublicClientArtifact[] = [];
@@ -362,7 +430,7 @@ describe("public-client Candidate 2 evidence profile", () => {
     });
     expect(unavailable.report.gates.find(({ id }) => id === "delegated-token-validation-ipv6")).toMatchObject({ status: "not-proven" });
     expect(createHash("sha256").update(unavailable.artifact.contents).digest("hex")).toBe(
-      "209749e422a1a1bbed8a8cd4b1461334c1e21478301b2a70a9145d4580ac1fd7",
+      "ec7b8a8a4a0c0989d4e695855f20d234b4cbb1fd4294a7c9958649c26ed93425",
     );
   });
 
@@ -382,7 +450,7 @@ describe("public-client Candidate 2 evidence profile", () => {
     expect(result.report.gates.find(({ id }) => id === "delegated-token-validation-ipv4")).toMatchObject({ status: "fail" });
     expect(result.artifact.contents).not.toContain(tamperedToken);
     expect(createHash("sha256").update(result.artifact.contents).digest("hex")).toBe(
-      "5902482d2e929f71eb099380bf45c7354e678f6fb656e06be38a42644a00fdcc",
+      "c1f939a6d6d677cd5f108f889b201a13efba457943b5a731291d66b235595128",
     );
   });
 
@@ -444,7 +512,7 @@ describe("public-client Candidate 2 evidence profile", () => {
     };
     const tokenFacts = await completedDelegatedTokenFacts("ipv4", 10);
     const result = await runPublicClientEvidence(options(writes, sampledClock), async (recorder) => {
-      await recorder.record(familyFacts("ipv4")[0]);
+      for (const fact of familyPrerequisiteFacts("ipv4", ["registration", "loopback", "pkce"])) await recorder.record(fact);
       await recorder.record(tokenFacts[0]);
     });
 
@@ -572,6 +640,7 @@ describe("public-client Candidate 2 evidence profile", () => {
 
     const stateWrites: PublicClientArtifact[] = [];
     const stateResult = await runPublicClientEvidence(options(stateWrites), async (recorder) => {
+      for (const fact of familyPrerequisiteFacts("ipv4", ["registration", "consent"])) await recorder.record(fact);
       await recorder.record({
         kind: "authorization",
         role: "denial",
