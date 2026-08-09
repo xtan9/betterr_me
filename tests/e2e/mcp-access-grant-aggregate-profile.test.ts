@@ -783,6 +783,120 @@ describe("aggregate MCP compatibility evidence profile", () => {
     })).rejects.toThrow("Aggregate compatibility evidence journey failed.");
   });
 
+  it("does not let conflicting compatibility discovery pass nested family leaves", async () => {
+    const discovery = configurationAndDiscoveryFacts();
+    const provider = discovery[3] as Extract<AggregateCompatibilityFact, { kind: "provider-discovery" }>;
+    const conflictingProvider: Extract<AggregateCompatibilityFact, { kind: "provider-discovery" }> = {
+      ...provider,
+      response: surface({
+        issuer: "https://conflicting.example.test/auth",
+        authorization_endpoint: `${target.expectedAuthorizationServer}/authorize`,
+        registration_endpoint: `${target.expectedAuthorizationServer}/clients`,
+        token_endpoint: `${target.expectedAuthorizationServer}/token`,
+        jwks_uri: `${target.expectedAuthorizationServer}/jwks`,
+        grant_types_supported: ["authorization_code"],
+        response_types_supported: ["code"],
+        token_endpoint_auth_methods_supported: ["none"],
+        code_challenge_methods_supported: ["S256"],
+      }),
+    };
+    const result = await runAggregateCompatibilityEvidence(options([]), async ({ compatibility, publicClient }) => {
+      for (const fact of discovery) await compatibility.record(fact);
+      await compatibility.record(conflictingProvider);
+      for (const fact of await nestedPublicFamilyFacts("ipv4")) await publicClient.record(fact);
+    });
+
+    expect(result.report.gates.find(({ id }) => id === "provider-discovery")).toMatchObject({
+      status: "fail",
+      evidence: { errorKind: "conflicting-observation" },
+    });
+    expect(result.report.gates.find(({ id }) => id === "public-client-registration-ipv4")).toMatchObject({
+      status: "not-proven",
+      evidence: { errorKind: "missing-observation", errorCode: "dependency-not-proven" },
+    });
+    expect(result.report.gates.find(({ id }) => id === "public-client-registration-both")).toMatchObject({ status: "not-proven" });
+  });
+
+  it("does not let conflicting compatibility discovery pass direct dependent leaves", async () => {
+    const discovery = configurationAndDiscoveryFacts();
+    const provider = discovery[3] as Extract<AggregateCompatibilityFact, { kind: "provider-discovery" }>;
+    const conflictingProvider: Extract<AggregateCompatibilityFact, { kind: "provider-discovery" }> = {
+      ...provider,
+      response: surface({
+        issuer: "https://conflicting.example.test/auth",
+        authorization_endpoint: `${target.expectedAuthorizationServer}/authorize`,
+        registration_endpoint: `${target.expectedAuthorizationServer}/clients`,
+        token_endpoint: `${target.expectedAuthorizationServer}/token`,
+        jwks_uri: `${target.expectedAuthorizationServer}/jwks`,
+        grant_types_supported: ["authorization_code"],
+        response_types_supported: ["code"],
+        token_endpoint_auth_methods_supported: ["none"],
+        code_challenge_methods_supported: ["S256"],
+      }),
+    };
+    const result = await runAggregateCompatibilityEvidence(options([]), async ({ compatibility }) => {
+      for (const fact of discovery) await compatibility.record(fact);
+      await compatibility.record(conflictingProvider);
+      await compatibility.record(compatibilityCoreFacts()[0]);
+    });
+
+    expect(result.report.gates.find(({ id }) => id === "provider-discovery")).toMatchObject({ status: "fail" });
+    expect(result.report.gates.find(({ id }) => id === "public-client-registration")).toMatchObject({
+      status: "not-proven",
+      evidence: { errorKind: "missing-observation", errorCode: "dependency-not-proven" },
+    });
+  });
+
+  it("does not let conflicting resource discovery pass provider or nested family leaves", async () => {
+    const discovery = configurationAndDiscoveryFacts();
+    const resource = discovery[2] as Extract<AggregateCompatibilityFact, { kind: "resource-discovery" }>;
+    const conflictingResource: Extract<AggregateCompatibilityFact, { kind: "resource-discovery" }> = {
+      ...resource,
+      response: surface({
+        resource: "https://conflicting.example.test/mcp",
+        authorization_server: target.expectedAuthorizationServer,
+      }),
+    };
+    const result = await runAggregateCompatibilityEvidence(options([]), async ({ compatibility, publicClient }) => {
+      for (const fact of discovery) await compatibility.record(fact);
+      await compatibility.record(conflictingResource);
+      for (const fact of await nestedPublicFamilyFacts("ipv4")) await publicClient.record(fact);
+    });
+
+    expect(result.report.gates.find(({ id }) => id === "resource-discovery")).toMatchObject({
+      status: "fail",
+      evidence: { errorKind: "conflicting-observation" },
+    });
+    expect(result.report.gates.find(({ id }) => id === "provider-discovery")).toMatchObject({ status: "not-proven" });
+    expect(result.report.gates.find(({ id }) => id === "public-client-registration-ipv4")).toMatchObject({ status: "not-proven" });
+  });
+
+  it("leaves nested public family conflicts to the shared evaluator", async () => {
+    const nested = await nestedPublicFamilyFacts("ipv4");
+    const registration = nested[0];
+    const conflictingRegistration = {
+      ...registration,
+      response: surface({
+        client_id: "conflicting-nested-client",
+        redirect_uris: [registeredRedirectUri],
+        grant_types: ["authorization_code"],
+        response_types: ["code"],
+        token_endpoint_auth_method: "none",
+      }, 201),
+    } as PublicClientJourneyFact;
+    const result = await runAggregateCompatibilityEvidence(options([]), async ({ compatibility, publicClient }) => {
+      for (const fact of configurationAndDiscoveryFacts()) await compatibility.record(fact);
+      for (const fact of nested) await publicClient.record(fact);
+      await publicClient.record(conflictingRegistration);
+    });
+
+    expect(result.report.gates.find(({ id }) => id === "public-client-registration-ipv4")).toMatchObject({
+      status: "fail",
+      evidence: { errorKind: "conflicting-observation" },
+    });
+    expect(result.report.gates.find(({ id }) => id === "public-client-registration-both")).toMatchObject({ status: "fail" });
+  });
+
   it("keeps dependency failures and the later producer tail not-proven in profile order", async () => {
     const facts = configurationAndDiscoveryFacts();
     const resourceFact = facts[2] as Extract<AggregateCompatibilityFact, { kind: "resource-discovery" }>;

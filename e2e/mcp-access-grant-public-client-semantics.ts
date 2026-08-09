@@ -1049,11 +1049,7 @@ export interface PublicClientSemanticConclusion {
   readonly error?: EvidenceError;
 }
 
-export interface PublicClientSemanticDependencies {
-  readonly resourceDiscovery?: GateStatus;
-  readonly providerDiscovery?: GateStatus;
-  readonly [key: string]: GateStatus | undefined;
-}
+export type PublicClientSemanticDependencies = Readonly<Record<string, GateStatus | undefined>>;
 
 export interface PublicClientSemanticEvaluation {
   readonly conclusions: readonly PublicClientSemanticConclusion[];
@@ -1065,12 +1061,6 @@ export interface PublicClientSemanticBatchInput {
   readonly target: Readonly<CompatibilityReportTarget>;
   readonly sampledAtMillis: number;
   readonly dependencies: Readonly<PublicClientSemanticDependencies>;
-  readonly conflictingIdentities?: readonly string[];
-  readonly includeRequests?: boolean;
-}
-
-export interface PublicClientSemanticEvaluationOptions {
-  readonly dependencies?: PublicClientSemanticDependencies;
   readonly conflictingIdentities?: readonly string[];
   readonly includeRequests?: boolean;
 }
@@ -1583,59 +1573,23 @@ function sampledSemanticFacts(
     : fact));
 }
 
-function canonicalDependencyKey(key: string): string {
-  if (key === "resourceDiscovery") return "resource-discovery";
-  if (key === "providerDiscovery") return "provider-discovery";
-  return key;
-}
-
 export function evaluatePublicClientFacts(
   input: PublicClientSemanticBatchInput,
-): PublicClientSemanticEvaluation;
-export function evaluatePublicClientFacts(
-  facts: readonly PublicClientNormalizedFact[],
-  target: CompatibilityReportTarget,
-  options?: PublicClientSemanticEvaluationOptions,
-): PublicClientSemanticEvaluation;
-export function evaluatePublicClientFacts(
-  inputOrFacts: PublicClientSemanticBatchInput | readonly PublicClientNormalizedFact[],
-  targetArgument?: CompatibilityReportTarget,
-  optionsArgument: PublicClientSemanticEvaluationOptions = {},
 ): PublicClientSemanticEvaluation {
-  const batchInput = isSemanticBatchInput(inputOrFacts) ? inputOrFacts : undefined;
-  const orderedFacts: readonly PublicClientNormalizedFact[] = batchInput === undefined
-    ? inputOrFacts as readonly PublicClientNormalizedFact[]
-    : batchInput.facts;
-  const facts = batchInput
-    ? sampledSemanticFacts(Object.freeze([...orderedFacts]), batchInput.sampledAtMillis)
-    : orderedFacts;
-  const target = batchInput ? snapshotSemanticTarget(batchInput.target) : targetArgument;
-  if (target === undefined || !isSemanticTarget(target)) throw new PublicClientEvidenceBoundaryError();
-  const options = batchInput
-    ? {
-      dependencies: batchInput.dependencies,
-      conflictingIdentities: batchInput.conflictingIdentities,
-      includeRequests: batchInput.includeRequests,
-    }
-    : optionsArgument;
-  if (!isRecord(options) || !hasOnlyOwnDataProperties(options) ||
-    (options.dependencies !== undefined && !isSemanticDependencies(options.dependencies)) ||
-    (options.conflictingIdentities !== undefined && (!isDenseArray(options.conflictingIdentities, MAX_SEMANTIC_BATCH_FACTS) || options.conflictingIdentities.some((identity) => typeof identity !== "string" || identity.length === 0))) ||
-    (options.includeRequests !== undefined && typeof options.includeRequests !== "boolean")) {
+  if (!isSemanticBatchInput(input)) {
     throw new PublicClientEvidenceBoundaryError();
   }
-  if (!isDenseArray(orderedFacts, MAX_SEMANTIC_BATCH_FACTS) || !orderedFacts.every(isNormalizedSemanticFact)) {
-    throw new PublicClientEvidenceBoundaryError();
-  }
-  const externalDependencies = options.dependencies;
-  const hasExplicitDependencies = batchInput !== undefined || externalDependencies !== undefined;
+  const orderedFacts = input.facts;
+  const facts = sampledSemanticFacts(Object.freeze([...orderedFacts]), input.sampledAtMillis);
+  const target = snapshotSemanticTarget(input.target);
+  const externalDependencies = input.dependencies;
   const shared = new Map<string, PublicClientSemanticConclusion>();
   const family = new Map<string, Map<PublicClientFamily, PublicClientSemanticConclusion>>();
   const negative = new Map<PublicClientFamily, Map<PublicClientNegativeRegistrationCase, PublicClientSemanticConclusion>>();
   const history: PublicSessionHistory = new Map();
-  const conflicts = new Set(options.conflictingIdentities ?? []);
+  const conflicts = new Set(input.conflictingIdentities ?? []);
   const seen = new Map<string, string>();
-  const canonicalFacts = facts.filter((fact) => fact.kind !== "resource-discovery" && fact.kind !== "provider-discovery" || !hasExplicitDependencies);
+  const canonicalFacts = facts.filter((fact) => fact.kind !== "resource-discovery" && fact.kind !== "provider-discovery");
 
   for (const fact of canonicalFacts) {
     const fingerprint = publicClientFactFingerprint(fact);
@@ -1655,13 +1609,6 @@ export function evaluatePublicClientFacts(
       shared.set(derived.key, conflicts.has(fact.identity) ? semanticGate(derived.key, "fail", { observedBoundary: "conflict" }, { kind: "conflicting-observation" }) : derived);
     }
     updateAcceptedHistory(history, fact, target);
-  }
-
-  if (!hasExplicitDependencies) {
-    for (const fact of facts.filter((candidate) => candidate.kind === "resource-discovery" || candidate.kind === "provider-discovery")) {
-      const derived = derivePublicConclusion(fact, target, history);
-      if (derived) shared.set(derived.key, conflicts.has(fact.identity) ? semanticGate(derived.key, "fail", { observedBoundary: "conflict" }, { kind: "conflicting-observation" }) : derived);
-    }
   }
 
   const directGrant = directGrantConclusion(facts, history);
@@ -1689,8 +1636,8 @@ export function evaluatePublicClientFacts(
 
   const raw = new Map<string, PublicClientSemanticConclusion>();
   for (const [key, conclusion] of shared) raw.set(key, conclusion);
-  for (const [key, status] of Object.entries(externalDependencies ?? {})) {
-    raw.set(canonicalDependencyKey(key), semanticGate(canonicalDependencyKey(key), status));
+  for (const [key, status] of Object.entries(externalDependencies)) {
+    raw.set(key, semanticGate(key, status));
   }
   for (const base of FAMILY_GATE_BASES) {
     const byFamily = family.get(base) ?? new Map<PublicClientFamily, PublicClientSemanticConclusion>();
@@ -1740,6 +1687,6 @@ export function evaluatePublicClientFacts(
     }
     conclusions.push(aggregateSemanticConclusion(base, statuses));
   }
-  const requests = options.includeRequests === false ? [] : facts.flatMap((fact) => fact.request ? [fact.request.request] : []);
+  const requests = input.includeRequests === false ? [] : facts.flatMap((fact) => fact.request ? [fact.request.request] : []);
   return { conclusions, requests };
 }
