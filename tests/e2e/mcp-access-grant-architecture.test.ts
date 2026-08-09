@@ -109,6 +109,9 @@ describe("MCP access-grant evidence architecture", () => {
     expect(contract).toMatch(/kind: "resource-discovery"/);
     expect(contract).toMatch(/kind: "provider-discovery"/);
     expect(contract).toMatch(/family: PublicClientFamily/);
+    expect(contract).toMatch(/export interface PublicClientSemanticBatchInput/);
+    expect(contract).toMatch(/readonly sampledAtMillis: number/);
+    expect(contract).toMatch(/readonly dependencies: Readonly<PublicClientSemanticDependencies>/);
     expect(contract).not.toMatch(/kind: "(?:configuration|versions)"/);
     expect(contract).not.toMatch(/@playwright\/test|@modelcontextprotocol|@supabase\/supabase-js/);
     expect(contract).not.toMatch(/node:(?:child_process|fs|http|net|timers|worker_threads)/);
@@ -129,6 +132,11 @@ describe("MCP access-grant evidence architecture", () => {
     expect(aggregateAdapter).toMatch(/record: recorders\.publicClient\.record/);
     expect(aggregateAdapter).not.toMatch(/aggregatePublicFact|as unknown as/);
     expect([publicProfile, aggregateProfile, aggregateAdapter].join("\n")).not.toMatch(/(?:AggregatePublicClientFact|aggregatePublicFact|localPublicClientFact)/);
+    expect(publicProfile).toMatch(/evaluatePublicClientFacts\(\s*\{/);
+    expect(aggregateProfile).toMatch(/evaluatePublicClientFacts\(\s*\{/);
+    for (const profile of [publicProfile, aggregateProfile]) {
+      expect(profile).not.toMatch(/(?:function )?(?:publicRegistrationStatus|derivePublicConclusion|classifyConsentPresentation|classifyAuthorizationOutcome)\b/);
+    }
   });
 
   it("keeps the canonical target and explicit capability construction at the session boundary", () => {
