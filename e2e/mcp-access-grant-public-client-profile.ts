@@ -536,7 +536,6 @@ function sharedPublicInternalObservations(
   facts: readonly NormalizedFact[],
   target: CompatibilityReportTarget,
   includeFactRequests: boolean,
-  sampledAtMillis: number,
 ): EvidenceObservation[] {
   const profileGates = new Map<string, DerivedGate>();
   const profilePayloads = new Map<string, string>();
@@ -562,7 +561,6 @@ function sharedPublicInternalObservations(
   const evaluation = evaluatePublicClientFacts({
     facts: Object.freeze(publicFacts),
     target,
-    sampledAtMillis,
     dependencies,
     includeRequests: includeFactRequests,
   });
@@ -600,7 +598,6 @@ function finalizeRun(
   options: PublicClientEvidenceOptions,
   startedAt: string,
   finishedAt: string,
-  sampledAtMillis: number,
   artifactWriteSucceeded?: boolean,
 ) {
   if (facts.length > MAX_RETAINED_FACTS) throw new PublicClientEvidenceBoundaryError();
@@ -622,7 +619,7 @@ function finalizeRun(
     versions: options.versions,
   });
   const requestSource = options.requestSource;
-  const observations = sharedPublicInternalObservations(facts, options.target, requestSource === undefined, sampledAtMillis);
+  const observations = sharedPublicInternalObservations(facts, options.target, requestSource === undefined);
   if (requestSource !== undefined) {
     observations.push(...requestSource.snapshot().map((request) => ({ kind: "request" as const, request })));
   }
@@ -764,8 +761,8 @@ export async function runPublicClientEvidence(
   let finalized: ReturnType<typeof finalizeRun>;
   let failure: ReturnType<typeof finalizeRun>;
   try {
-    finalized = finalizeRun(facts, options, start.value, finish.value, lastClock, true);
-    failure = finalizeRun(facts, options, start.value, finish.value, lastClock, false);
+    finalized = finalizeRun(facts, options, start.value, finish.value, true);
+    failure = finalizeRun(facts, options, start.value, finish.value, false);
   } catch (error) {
     discard();
     throw stableFailure(error);

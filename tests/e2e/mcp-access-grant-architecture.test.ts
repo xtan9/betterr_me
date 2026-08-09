@@ -104,17 +104,21 @@ describe("MCP access-grant evidence architecture", () => {
     const publicProfile = source("e2e/mcp-access-grant-public-client-profile.ts");
     const aggregateProfile = source("e2e/mcp-access-grant-aggregate-profile.ts");
     const aggregateAdapter = source("e2e/mcp-access-grant-compatibility.ts");
+    const decision = source("docs/adr/0015-concentrate-public-client-evidence-semantics.md");
 
     expect(contract).toMatch(/export type PublicClientJourneyFact\s*=/);
     expect(contract).toMatch(/kind: "resource-discovery"/);
     expect(contract).toMatch(/kind: "provider-discovery"/);
     expect(contract).toMatch(/family: PublicClientFamily/);
     expect(contract).toMatch(/export interface PublicClientSemanticBatchInput/);
-    expect(contract).toMatch(/readonly sampledAtMillis: number/);
     expect(contract).toMatch(/readonly dependencies: Readonly<PublicClientSemanticDependencies>/);
+    expect(contract).toMatch(/export function evaluatePublicClientDelegatedTokenEvidence/);
+    expect(contract).toMatch(/export async function normalizePublicClientDelegatedTokenEvidence/);
     expect(contract.match(/export function evaluatePublicClientFacts\(/g)).toHaveLength(1);
     expect(contract).not.toMatch(/PublicClientSemanticEvaluationOptions/);
     expect(contract).not.toMatch(/canonicalDependencyKey/);
+    expect(contract).not.toMatch(/normalizePublicClientSemanticFact|allowDirect|DIRECT_SEMANTIC_KINDS/);
+    expect(contract).not.toMatch(/(?:fact\.data|normalizeDelegatedToken\([^\r\n]+)\s+as\s+unknown\s+as\s+(?:PublicClientDelegatedTokenEvidence|Record<string, unknown>)/);
     expect(contract).not.toMatch(/kind: "(?:configuration|versions)"/);
     expect(contract).not.toMatch(/@playwright\/test|@modelcontextprotocol|@supabase\/supabase-js/);
     expect(contract).not.toMatch(/node:(?:child_process|fs|http|net|timers|worker_threads)/);
@@ -137,12 +141,20 @@ describe("MCP access-grant evidence architecture", () => {
     expect([publicProfile, aggregateProfile, aggregateAdapter].join("\n")).not.toMatch(/(?:AggregatePublicClientFact|aggregatePublicFact|localPublicClientFact)/);
     expect(aggregateProfile).not.toMatch(/AggregatePublicClient(?:Family|Consent|Authorization|Loopback|Pkce|DelegatedToken|Mcp|Grant|Cleanup)/);
     expect(aggregateProfile).not.toMatch(/to(?:Aggregate|Canonical)Public(?:Normalized)?Fact|currentFact\s+as\s+PublicClientJourneyFact/);
+    expect(aggregateProfile).not.toMatch(/toSharedCompatibilityFact|normalizePublicClientSemanticFact/);
+    expect(aggregateProfile).not.toMatch(/fact\.data\s+as\s+unknown\s+as\s+PublicClientDelegatedTokenEvidence/);
     expect(aggregateProfile).not.toMatch(/publicFamilyGateId/);
     expect(publicProfile).not.toMatch(/to(?:Public|Canonical)NormalizedFact/);
     expect(publicProfile).not.toMatch(/FAMILY_GATE_BASES/);
     expect(aggregateProfile).toMatch(/tagPublicClientSource/);
     expect(publicProfile).toMatch(/evaluatePublicClientFacts\(\s*\{/);
     expect(aggregateProfile).toMatch(/evaluatePublicClientFacts\(\s*\{/);
+    expect(aggregateProfile).toMatch(/evaluatePublicClientDelegatedTokenEvidence\(data,/);
+    const aggregateTokenJudgment = aggregateProfile.match(/function delegatedValidationGate[\s\S]*?\n}\n\nfunction compatibilityTokenHistory/)?.[0] ?? "";
+    expect(aggregateTokenJudgment).toMatch(/gate\("delegated-token-validation", judgment\.status,/);
+    expect(aggregateTokenJudgment).not.toMatch(/gate\("delegated-token-validation",\s*"(?:fail|not-proven)"/);
+    expect(decision).toMatch(/token facts carry the record-time sample/);
+    expect(decision).toMatch(/must not overwrite\s+those per-fact samples/);
     for (const profile of [publicProfile, aggregateProfile]) {
       expect(profile).not.toMatch(/(?:function )?(?:publicRegistrationStatus|derivePublicConclusion|classifyConsentPresentation|classifyAuthorizationOutcome)\b/);
     }

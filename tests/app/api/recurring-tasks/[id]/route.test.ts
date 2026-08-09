@@ -74,6 +74,7 @@ vi.mock("@/lib/recurring-tasks/compatibility", async () => {
 });
 
 import { createClient } from "@/lib/supabase/server";
+import { mockSupabaseClient } from "../../../../setup";
 
 const mutationHeaders = (operationId: string) => ({
   "Idempotency-Key": operationId,
@@ -81,47 +82,48 @@ const mutationHeaders = (operationId: string) => ({
 });
 
 describe("HTTP Series reference dates", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("uses the authenticated profile timezone and injected clock", async () => {
-    const maybeSingle = vi.fn().mockResolvedValue({
-      data: { timezone: "America/Los_Angeles" },
-      error: null,
+    mockSupabaseClient.setMockResponse({
+      timezone: "America/Los_Angeles",
     });
-    const supabase = {
-      from: vi.fn(() => ({
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({ maybeSingle })),
-        })),
-      })),
-    };
 
     const referenceDate = await resolveHttpReferenceDate(
-      supabase as any,
+      mockSupabaseClient as any,
       "user-123",
       () => new Date("2026-08-08T06:00:00.000Z"),
     );
 
     expect(referenceDate).toBe("2026-08-07");
-    expect(maybeSingle).toHaveBeenCalledTimes(1);
+    expect(mockSupabaseClient.queryLog).toEqual([
+      { table: "profiles", method: "from", args: ["profiles"] },
+      { table: "profiles", method: "select", args: ["timezone"] },
+      { table: "profiles", method: "eq", args: ["id", "user-123"] },
+      { table: "profiles", method: "maybeSingle", args: [] },
+    ]);
   });
 
-  it("propagates profile lookup failures", async () => {
+  it("propagates returned profile lookup errors", async () => {
     const cause = new Error("profile unavailable");
-    const maybeSingle = vi.fn().mockRejectedValue(cause);
-    const supabase = {
-      from: vi.fn(() => ({
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({ maybeSingle })),
-        })),
-      })),
-    };
+    mockSupabaseClient.setMockResponse(null, cause);
 
     await expect(
       resolveHttpReferenceDate(
-        supabase as any,
+        mockSupabaseClient as any,
         "user-123",
         () => new Date("2026-08-08T06:00:00.000Z"),
       ),
     ).rejects.toBe(cause);
+
+    expect(mockSupabaseClient.queryLog).toEqual([
+      { table: "profiles", method: "from", args: ["profiles"] },
+      { table: "profiles", method: "select", args: ["timezone"] },
+      { table: "profiles", method: "eq", args: ["id", "user-123"] },
+      { table: "profiles", method: "maybeSingle", args: [] },
+    ]);
   });
 });
 
