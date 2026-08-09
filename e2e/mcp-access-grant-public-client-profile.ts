@@ -38,6 +38,39 @@ import {
 } from "./mcp-access-grant-policy";
 import { s256CodeChallenge, type LoopbackHost } from "./mcp-access-grant-journey";
 import { compactVerify, decodeJwt, decodeProtectedHeader, importJWK, type JWK } from "jose";
+import type {
+  PublicClientAuthorizationOutcomeObservation,
+  PublicClientCleanupObservation,
+  PublicClientConsentObservation,
+  PublicClientDelegatedTokenObservation,
+  PublicClientDiscoveryObservation,
+  PublicClientFamily,
+  PublicClientGrantObservation,
+  PublicClientJourneyFact,
+  PublicClientJsonValue,
+  PublicClientMcpOperationObservation,
+  PublicClientNegativeRegistrationCase,
+  PublicClientPkceObservation,
+  PublicClientRequestInput,
+  PublicClientResponseSurface,
+} from "./mcp-access-grant-public-client-semantics";
+export type {
+  PublicClientApprovalObservation,
+  PublicClientAuthorizationOutcomeObservation,
+  PublicClientCleanupObservation,
+  PublicClientConsentObservation,
+  PublicClientDelegatedTokenObservation,
+  PublicClientDiscoveryObservation,
+  PublicClientFamily,
+  PublicClientGrantObservation,
+  PublicClientJourneyFact,
+  PublicClientJsonValue,
+  PublicClientMcpOperationObservation,
+  PublicClientNegativeRegistrationCase,
+  PublicClientPkceObservation,
+  PublicClientRequestInput,
+  PublicClientResponseSurface,
+} from "./mcp-access-grant-public-client-semantics";
 
 /**
  * The standalone Candidate 2 public-client operation.
@@ -48,191 +81,15 @@ import { compactVerify, decodeJwt, decodeProtectedHeader, importJWK, type JWK } 
  * after the callback has settled.
  */
 
-export type PublicClientFamily = "ipv4" | "ipv6";
 export type PublicClientCredentialPresence = "present" | "absent" | "unknown";
-
-type JsonPrimitive = string | number | boolean | null;
-export type PublicClientJsonValue =
-  | JsonPrimitive
-  | readonly PublicClientJsonValue[]
-  | { readonly [key: string]: PublicClientJsonValue };
-
-export interface PublicClientResponseSurface {
-  readonly complete: boolean;
-  readonly status?: number;
-  readonly body?: PublicClientJsonValue;
-  readonly headers?: { readonly [key: string]: PublicClientJsonValue };
-  readonly location?: string;
-  readonly browserUrl?: string;
-  readonly callbackUrl?: string;
-}
-
-export interface PublicClientRequestInput {
-  readonly method: string;
-  readonly url: string;
-  readonly bodyFields?: readonly string[];
-  readonly authorizationHeaderPresent?: boolean;
-  readonly requestClientId?: string;
-  readonly requestGrantType?: string;
-  readonly requestRedirectUri?: string;
-  readonly requestResource?: string;
-  readonly requestCodeChallengeMethod?: string;
-  readonly requestCodeChallengePresent?: boolean;
-  readonly requestCodePresent?: boolean;
-  readonly requestCodeVerifierPresent?: boolean;
-  readonly requestCodeVerifierHash?: string;
-  readonly status?: number;
-  readonly response?: PublicClientResponseSurface;
-}
-
-export interface PublicClientDiscoveryObservation {
-  readonly response?: PublicClientResponseSurface;
-  readonly advertisedResource?: string;
-  readonly advertisedAuthorizationServer?: string;
-  readonly issuer?: string;
-  readonly authorizationEndpoint?: string;
-  readonly registrationEndpoint?: string;
-  readonly tokenEndpoint?: string;
-  readonly jwksUri?: string;
-  readonly grantTypesSupported?: readonly string[];
-  readonly responseTypesSupported?: readonly string[];
-  readonly tokenEndpointAuthMethodsSupported?: readonly string[];
-  readonly codeChallengeMethodsSupported?: readonly string[];
-}
 
 export interface PublicClientConfigurationObservation {
   readonly loopbackHosts?: readonly string[];
   readonly providerCredentialsAvailable?: boolean;
 }
 
-export interface PublicClientConsentObservation {
-  readonly clientNameVisible?: boolean;
-  readonly clientUriVisible?: boolean;
-  readonly logoVisible?: boolean;
-  readonly softwareIdVisible?: boolean;
-  readonly softwareVersionVisible?: boolean;
-  readonly untrustedDisclaimerVisible?: boolean;
-  readonly endorsementText?: string;
-  readonly endorsementLanguageVisible?: boolean;
-}
-
-export interface PublicClientApprovalObservation {
-  readonly affirmativeControlVisible?: boolean;
-  readonly denialControlVisible?: boolean;
-  readonly callbackBeforeDecision?: boolean;
-  readonly decision?: "affirmative" | "denial" | "abandonment";
-}
-
-export interface PublicClientAuthorizationOutcomeObservation {
-  readonly callbackComplete?: boolean;
-  readonly callbackReceived?: boolean;
-  readonly callbackUrl?: string;
-  readonly browserUrl?: string;
-  readonly expectedState?: string;
-  readonly callbackState?: string;
-  readonly authorizationError?: boolean;
-  readonly tokenRequestObserved?: boolean;
-  readonly tokenResponse?: PublicClientResponseSurface;
-}
-
-export interface PublicClientLoopbackObservation {
-  readonly registeredRedirectUri: string;
-  readonly callbackUrl?: string;
-  readonly callbackReceived?: boolean;
-  readonly requestCallbackUrl?: string;
-  readonly requestResource?: string;
-  readonly portSelectedAtRequest?: boolean;
-}
-
-export interface PublicClientPkceObservation {
-  readonly verifier?: string;
-  readonly challenge?: string;
-  readonly method?: string;
-  readonly requestResource?: string;
-  readonly authorizationRequest?: PublicClientRequestInput;
-}
-
-export interface PublicClientCleanupObservation {
-  readonly listRequestObserved?: boolean;
-  readonly remainingClientIds?: readonly string[];
-  readonly remainingGrantIds?: readonly string[];
-  readonly grantPresent?: boolean;
-  readonly requestStatus?: number;
-  readonly request?: PublicClientRequestInput;
-  readonly response?: PublicClientResponseSurface;
-}
-
-export interface PublicClientDelegatedTokenObservation {
-  readonly token?: string;
-  readonly jwks?: string | PublicClientJsonValue;
-}
-
-export interface PublicClientMcpSdkObservation {
-  readonly connected?: boolean;
-  readonly listToolsCompleted?: boolean;
-  readonly listToolsObserved?: boolean;
-  readonly callToolCompleted?: boolean;
-  readonly callToolObserved?: boolean;
-  readonly resultIsError?: boolean;
-  readonly toolName?: string;
-}
-
-export interface PublicClientMcpOperationObservation {
-  readonly operationUrl?: string;
-  readonly operationResource?: string;
-  readonly connected?: boolean;
-  readonly listToolsCompleted?: boolean;
-  readonly callToolCompleted?: boolean;
-  readonly resultIsError?: boolean;
-  readonly sdk?: PublicClientMcpSdkObservation;
-  readonly response?: PublicClientResponseSurface;
-  readonly request?: PublicClientRequestInput;
-}
-
-export interface PublicClientGrantObservation {
-  readonly listRequestObserved?: boolean;
-  readonly grantListObserved?: boolean;
-  readonly listResponse?: PublicClientResponseSurface;
-  readonly listResponseStatus?: number;
-  readonly listedClientIds?: readonly string[];
-  readonly listedGrantIds?: readonly string[];
-  readonly grantId?: string;
-  readonly grantClientId?: string;
-  readonly clientId?: string;
-  readonly grantPresent?: boolean;
-  readonly revokeRequestObserved?: boolean;
-  readonly revokeObserved?: boolean;
-  readonly revokeResponse?: PublicClientResponseSurface;
-  readonly revokeResponseStatus?: number;
-  readonly request?: PublicClientRequestInput;
-}
-
-export type PublicClientFact =
-  | {
-      readonly kind: "resource-discovery";
-      readonly role: "primary";
-      readonly response?: PublicClientResponseSurface;
-      readonly advertisedResource?: string;
-      readonly advertisedAuthorizationServer?: string;
-      readonly observation?: PublicClientDiscoveryObservation;
-      readonly request?: PublicClientRequestInput;
-    }
-  | {
-      readonly kind: "provider-discovery";
-      readonly role: "primary";
-      readonly response?: PublicClientResponseSurface;
-      readonly issuer?: string;
-      readonly authorizationEndpoint?: string;
-      readonly registrationEndpoint?: string;
-      readonly tokenEndpoint?: string;
-      readonly jwksUri?: string;
-      readonly grantTypesSupported?: readonly string[];
-      readonly responseTypesSupported?: readonly string[];
-      readonly tokenEndpointAuthMethodsSupported?: readonly string[];
-      readonly codeChallengeMethodsSupported?: readonly string[];
-      readonly observation?: PublicClientDiscoveryObservation;
-      readonly request?: PublicClientRequestInput;
-    }
+export type PublicClientProfileFact =
+  | PublicClientJourneyFact
   | {
       readonly kind: "configuration";
       readonly role: "snapshot";
@@ -242,78 +99,12 @@ export type PublicClientFact =
       readonly kind: "versions";
       readonly role: "snapshot";
       readonly values?: Readonly<Record<string, string>>;
-    }
-  | {
-      readonly kind: "registration";
-      readonly role: "primary" | "negative";
-      readonly family: PublicClientFamily;
-      readonly caseId?: PublicClientNegativeRegistrationCase;
-      readonly response?: PublicClientResponseSurface;
-      readonly request?: PublicClientRequestInput;
-    }
-  | {
-      readonly kind: "consent";
-      readonly role: "metadata";
-      readonly family: PublicClientFamily;
-      readonly observation?: PublicClientConsentObservation;
-    }
-  | {
-      readonly kind: "authorization";
-      readonly role: "approval" | "denial" | "abandonment";
-      readonly family: PublicClientFamily;
-      readonly observation?: PublicClientApprovalObservation | PublicClientAuthorizationOutcomeObservation;
-      readonly request?: PublicClientRequestInput;
-    }
-  | {
-      readonly kind: "loopback";
-      readonly role: "callback" | "request";
-      readonly family: PublicClientFamily;
-      readonly observation?: PublicClientLoopbackObservation;
-      readonly request?: PublicClientRequestInput;
-    }
-  | {
-      readonly kind: "pkce";
-      readonly role: "exchange";
-      readonly family: PublicClientFamily;
-      readonly observation?: PublicClientPkceObservation;
-      readonly request?: PublicClientRequestInput;
-    }
-  | {
-      readonly kind: "delegated-token";
-      readonly role: "validation";
-      readonly family: PublicClientFamily;
-      readonly token?: string;
-      readonly jwks?: string | PublicClientJsonValue;
-      readonly observation?: PublicClientDelegatedTokenObservation;
-      readonly request?: PublicClientRequestInput;
-    }
-  | {
-      readonly kind: "mcp-operation";
-      readonly role: "authenticated";
-      readonly family: PublicClientFamily;
-      readonly observation?: PublicClientMcpOperationObservation;
-      readonly request?: PublicClientRequestInput;
-    }
-  | {
-      readonly kind: "grant";
-      readonly role: "cleanup";
-      readonly family: PublicClientFamily;
-      readonly observation?: PublicClientGrantObservation;
-      readonly request?: PublicClientRequestInput;
-    }
-  | {
-      readonly kind: "cleanup";
-      readonly role: "family";
-      readonly family: PublicClientFamily;
-      readonly observation?: PublicClientCleanupObservation;
     };
 
-export type PublicClientNegativeRegistrationCase =
-  | "unsupported-client-auth-method"
-  | "unsupported-grant-type"
-  | "unsupported-response-type"
-  | "malformed-metadata"
-  | "unsafe-redirect-metadata";
+export interface PublicClientEvidenceRecorder {
+  readonly record: (fact: PublicClientJourneyFact) => Promise<void>;
+  readonly recordProfileFact: (fact: PublicClientProfileFact) => Promise<void>;
+}
 
 export interface PublicClientArtifact {
   readonly filename: typeof MCP_ACCESS_GRANT_ARTIFACT_NAME;
@@ -363,7 +154,7 @@ interface NormalizedRequest {
 
 interface NormalizedFact {
   readonly identity: string;
-  readonly kind: PublicClientFact["kind"];
+  readonly kind: PublicClientProfileFact["kind"];
   readonly role: string;
   readonly family?: PublicClientFamily;
   readonly caseId?: PublicClientNegativeRegistrationCase;
@@ -436,10 +227,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-function snapshotFactInput(value: unknown): PublicClientFact {
+function snapshotFactInput(value: unknown): PublicClientProfileFact {
   const snapshot = copyFactInput(value, 0, new WeakSet<object>());
   if (!isRecord(snapshot)) throw new PublicClientEvidenceBoundaryError();
-  return snapshot as PublicClientFact;
+  return snapshot as PublicClientProfileFact;
 }
 
 function copyFactInput(value: unknown, depth: number, parents: WeakSet<object>): unknown {
@@ -1031,12 +822,12 @@ function normalizeLoopbackUrl(value: unknown): NormalizedLoopbackUrl | undefined
 }
 
 async function normalizeFact(
-  value: PublicClientFact,
+  value: PublicClientProfileFact,
   sampledAtMillis: number,
 ): Promise<NormalizedFact> {
   validateTopLevelFact(value);
   const raw = value as unknown as Record<string, unknown>;
-  const kind = raw.kind as PublicClientFact["kind"];
+  const kind = raw.kind as PublicClientProfileFact["kind"];
   const role = typeof raw.role === "string" ? raw.role : "";
   const family = normalizedFamily(raw.family);
   if (PUBLIC_FAMILY_KINDS.has(kind) && !family) throw new PublicClientEvidenceBoundaryError();
@@ -2171,7 +1962,7 @@ function stableFailure(error?: unknown): PublicClientEvidenceBoundaryError {
  */
 export async function runPublicClientEvidence(
   optionsInput: PublicClientEvidenceOptions,
-  journey: (recorder: { readonly record: (fact: PublicClientFact) => Promise<void> }) => void | Promise<void>,
+  journey: (recorder: PublicClientEvidenceRecorder) => void | Promise<void>,
 ): Promise<PublicClientEvidenceResult> {
   if (typeof journey !== "function") throw stableFailure();
   let options: PublicClientEvidenceOptions;
@@ -2205,13 +1996,13 @@ export async function runPublicClientEvidence(
     while (pending.size > 0) await Promise.allSettled([...pending]);
   };
 
-  const record = (fact: PublicClientFact): Promise<void> => {
+  const recordProfileFact = (fact: PublicClientProfileFact): Promise<void> => {
     if (closed) {
       const failure = Promise.reject(stableFailure());
       void failure.catch(() => undefined);
       return failure;
     }
-    let capturedFact: PublicClientFact;
+    let capturedFact: PublicClientProfileFact;
     try {
       capturedFact = snapshotFactInput(fact);
     } catch (error) {
@@ -2249,7 +2040,10 @@ export async function runPublicClientEvidence(
     return accepted;
   };
 
-  const recorder = Object.freeze({ record });
+  const recorder: PublicClientEvidenceRecorder = Object.freeze({
+    record: (fact: PublicClientJourneyFact) => recordProfileFact(fact),
+    recordProfileFact,
+  });
   try {
     await journey(recorder);
   } catch (error) {

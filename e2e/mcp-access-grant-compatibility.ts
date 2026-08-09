@@ -39,10 +39,8 @@ import {
   type AggregateCompatibilityJsonValue,
   type AggregateCompatibilityRequest,
   type AggregateCompatibilityResponseSurface,
-  type AggregatePublicClientFact,
 } from "./mcp-access-grant-aggregate-profile";
 import { runPublicClientJourney } from "./mcp-access-grant-public-client";
-import type { PublicClientJourneyFact } from "./mcp-access-grant-public-client";
 import type {
   McpAccessGrantTarget,
   McpAccessGrantTargetConfiguration,
@@ -557,13 +555,6 @@ async function runCompatibilityJourney(options: CompatibilityJourneyOptions): Pr
   }
 }
 
-function aggregatePublicFact(fact: PublicClientJourneyFact): AggregatePublicClientFact {
-  if (fact.kind === "resource-discovery" || fact.kind === "provider-discovery") {
-    return { ...fact, role: "shadow" } as unknown as AggregatePublicClientFact;
-  }
-  return fact as unknown as AggregatePublicClientFact;
-}
-
 export async function runMcpAccessGrantCompatibility(
   target: McpAccessGrantTarget,
   page: Page,
@@ -580,7 +571,7 @@ export async function runMcpAccessGrantCompatibility(
       page,
       request: session.capabilities.request,
       sdkVersion: options.versions["@modelcontextprotocol/sdk"] ?? "unavailable",
-      record: (fact) => recorders.publicClient.record(aggregatePublicFact(fact)),
+      record: recorders.publicClient.record,
     });
     await runCompatibilityJourney({ target: session.target, page, request: session.capabilities.request, sdkVersion: options.versions["@modelcontextprotocol/sdk"] ?? "unavailable", record: recorders.compatibility.record });
   });
