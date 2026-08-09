@@ -42,6 +42,13 @@ import type {
   PublicClientFamily,
   PublicClientJourneyFact,
   PublicClientNegativeRegistrationCase,
+  PublicClientNormalizedFact,
+  PublicClientSemanticConclusion,
+} from "./mcp-access-grant-public-client-semantics";
+import {
+  PublicClientEvidenceBoundary,
+  capturePublicClientJourneyFact,
+  evaluatePublicClientFacts,
 } from "./mcp-access-grant-public-client-semantics";
 export type {
   PublicClientApprovalObservation,
@@ -220,6 +227,28 @@ function snapshotFactInput(value: unknown): PublicClientProfileFact {
   const snapshot = copyFactInput(value, 0, new WeakSet<object>());
   if (!isRecord(snapshot)) throw new PublicClientEvidenceBoundaryError();
   return snapshot as PublicClientProfileFact;
+}
+
+function isPublicClientJourneyFactInput(value: unknown): value is PublicClientJourneyFact {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const descriptor = Object.getOwnPropertyDescriptor(value, "kind");
+  if (descriptor === undefined) return true;
+  if (!Object.prototype.hasOwnProperty.call(descriptor, "value")) return true;
+  const profileFact = descriptor.value === "configuration" || descriptor.value === "versions";
+  const prototype = Object.getPrototypeOf(value);
+  return !profileFact || (prototype !== Object.prototype && prototype !== null);
+}
+
+function toPublicNormalizedFact(value: PublicClientNormalizedFact): NormalizedFact {
+  return {
+    identity: value.identity,
+    kind: value.kind,
+    role: value.role,
+    ...(value.family === undefined ? {} : { family: value.family }),
+    ...(value.caseId === undefined ? {} : { caseId: value.caseId }),
+    data: value.data,
+    ...(value.request === undefined ? {} : { request: value.request }),
+  };
 }
 
 function copyFactInput(value: unknown, depth: number, parents: WeakSet<object>): unknown {
@@ -1236,7 +1265,7 @@ function registrationClientId(fact: NormalizedFact): string | undefined {
   return typeof clientId === "string" && clientId.length > 0 ? clientId : undefined;
 }
 
-function updateAcceptedHistory(
+function _updateAcceptedHistory(
   history: PublicSessionHistory,
   fact: NormalizedFact,
 ): void {
@@ -1366,7 +1395,7 @@ function mcpOperationGate(
   });
 }
 
-function cleanupGate(
+function _cleanupGate(
   family: PublicClientFamily,
   facts: readonly NormalizedFact[],
   history: PublicSessionHistory,
@@ -1625,7 +1654,7 @@ function deriveFactGate(
   return undefined;
 }
 
-function aggregateGate(base: typeof FAMILY_GATE_BASES[number], statuses: ReadonlyMap<PublicClientFamily, GateStatus | undefined>): DerivedGate {
+function _aggregateGate(base: typeof FAMILY_GATE_BASES[number], statuses: ReadonlyMap<PublicClientFamily, GateStatus | undefined>): DerivedGate {
   const children = MCP_ACCESS_GRANT_FAMILIES.map((family) => statuses.get(family));
   const status = statusFromFamilyValues(children);
   return gate(`${base}-both`, status, {
@@ -1633,7 +1662,7 @@ function aggregateGate(base: typeof FAMILY_GATE_BASES[number], statuses: Readonl
   }, children.every((child) => child === undefined) ? { kind: "missing-observation" } : undefined);
 }
 
-function applyDependency(
+function _applyDependency(
   derived: DerivedGate,
   dependency: DerivedGate,
 ): DerivedGate {
@@ -1769,54 +1798,52 @@ function makeArtifact(contents: string): PublicClientArtifact {
   return deepFreeze({ filename: MCP_ACCESS_GRANT_ARTIFACT_NAME, contents });
 }
 
-function internalObservations(
+function toCanonicalPublicFact(fact: NormalizedFact): PublicClientNormalizedFact {
+  return {
+    identity: fact.identity,
+    kind: fact.kind as PublicClientJourneyFact["kind"],
+    role: fact.role,
+    ...(fact.family === undefined ? {} : { family: fact.family }),
+    ...(fact.caseId === undefined ? {} : { caseId: fact.caseId }),
+    data: fact.data,
+    ...(fact.request === undefined ? {} : { request: fact.request }),
+  };
+}
+
+function fromSharedPublicConclusion(conclusion: PublicClientSemanticConclusion): DerivedGate {
+  return {
+    gateId: conclusion.key,
+    status: conclusion.status,
+    evidence: conclusion.evidence,
+    error: conclusion.error,
+  };
+}
+
+function sharedPublicInternalObservations(
   facts: readonly NormalizedFact[],
   target: CompatibilityReportTarget,
   includeFactRequests: boolean,
 ): EvidenceObservation[] {
-  const observations: EvidenceObservation[] = [];
-  const shared = new Map<string, DerivedGate>();
-  const family = new Map<string, Map<PublicClientFamily, DerivedGate>>();
-  const negative = new Map<string, Map<PublicClientFamily, Map<PublicClientNegativeRegistrationCase, DerivedGate>>>();
-  const conflictingGateIds = new Set<string>();
-  const seen = new Map<string, { readonly payload: string; readonly gateId: string }>();
-  const history: PublicSessionHistory = new Map();
-
+  const profileGates = new Map<string, DerivedGate>();
+  const profilePayloads = new Map<string, string>();
   for (const fact of facts) {
-    const derived = deriveFactGate(fact, target, history);
-    const cleanupFact = fact.kind === "grant" || fact.kind === "cleanup";
-    const semanticGateId = cleanupFact && fact.family ? `consent-cleanup-${fact.family}` : derived?.gateId;
-    const serialized = factFingerprint(fact);
-    const previous = seen.get(fact.identity);
-    if (previous !== undefined && semanticGateId !== undefined) {
-      if (previous.payload !== serialized) {
-        conflictingGateIds.add(previous.gateId);
-        conflictingGateIds.add(semanticGateId);
-      }
-    } else if (semanticGateId !== undefined) {
-      seen.set(fact.identity, { payload: serialized, gateId: semanticGateId });
+    if (fact.kind !== "configuration" && fact.kind !== "versions") continue;
+    const derived = deriveFactGate(fact, target, new Map());
+    if (!derived) continue;
+    const payload = factFingerprint(fact);
+    const previous = profilePayloads.get(fact.identity);
+    if (previous !== undefined && previous !== payload) {
+      profileGates.set(derived.gateId, gate(derived.gateId, "fail", { observedBoundary: "conflict" }, { kind: "conflicting-observation" }));
+    } else {
+      profilePayloads.set(fact.identity, payload);
+      profileGates.set(derived.gateId, derived);
     }
-    if (derived && fact.kind === "registration" && fact.role === "negative" && fact.family && fact.caseId) {
-      const byFamily = negative.get("registration-negative-validation") ?? new Map();
-      const byCase = byFamily.get(fact.family) ?? new Map();
-      byCase.set(fact.caseId, derived);
-      byFamily.set(fact.family, byCase);
-      negative.set("registration-negative-validation", byFamily);
-    } else if (derived && fact.family) {
-      const byFamily = family.get(derived.gateId.replace(/-(?:ipv4|ipv6)$/, "")) ?? new Map();
-      byFamily.set(fact.family, derived);
-      family.set(derived.gateId.replace(/-(?:ipv4|ipv6)$/, ""), byFamily);
-    } else if (derived) {
-      shared.set(derived.gateId, derived);
-    }
-    updateAcceptedHistory(history, fact);
   }
-
-  const cleanupByFamily = new Map<PublicClientFamily, DerivedGate | undefined>();
-  for (const currentFamily of MCP_ACCESS_GRANT_FAMILIES) {
-    cleanupByFamily.set(currentFamily, cleanupGate(currentFamily, facts, history));
-  }
-
+  const publicFacts = facts
+    .filter((fact) => fact.kind !== "configuration" && fact.kind !== "versions")
+    .map(toCanonicalPublicFact);
+  const evaluation = evaluatePublicClientFacts(publicFacts, target, { includeRequests: includeFactRequests });
+  const conclusions = new Map(evaluation.conclusions.map((conclusion) => [conclusion.key, fromSharedPublicConclusion(conclusion)]));
   const normalizedGate = (derived: DerivedGate): EvidenceObservation => ({
     kind: "gate",
     gateId: derived.gateId,
@@ -1825,76 +1852,21 @@ function internalObservations(
     ...(derived.evidence !== undefined ? { evidence: omitUndefined(derived.evidence) } : {}),
     error: derived.error,
   });
-
-  const rawGates = new Map<string, DerivedGate>();
-  for (const [gateId, derived] of shared) {
-    rawGates.set(gateId, conflictingGateIds.has(gateId)
-      ? gate(gateId, "fail", { observedBoundary: "conflict" }, { kind: "conflicting-observation" })
-      : derived);
-  }
-
-  for (const base of FAMILY_GATE_BASES) {
-    const byFamily = family.get(base) ?? new Map<PublicClientFamily, DerivedGate>();
-    const negativeByFamily = negative.get(base) ?? new Map<PublicClientFamily, Map<PublicClientNegativeRegistrationCase, DerivedGate>>();
-    for (const currentFamily of MCP_ACCESS_GRANT_FAMILIES) {
-      const identity = `${base}-${currentFamily}`;
-      let derived: DerivedGate | undefined;
-      if (base === "registration-negative-validation") {
-        const cases = negativeByFamily.get(currentFamily);
-        const statuses = NEGATIVE_CASES.map((caseId) => cases?.get(caseId)?.status);
-        const status = cases && cases.size > 0 ? statusFromFamilyValues(statuses) : undefined;
-        const evidence = cases
-          ? { cases: NEGATIVE_CASES.map((caseId) => ({ case: caseId, status: cases.get(caseId)?.status ?? "not-proven" })) }
-          : undefined;
-        derived = gate(identity, status, evidence, status === undefined ? { kind: "missing-observation" } : undefined);
-      } else {
-        derived = base === "consent-cleanup"
-          ? cleanupByFamily.get(currentFamily)
-          : byFamily.get(currentFamily);
-      }
-      rawGates.set(identity, conflictingGateIds.has(identity)
-        ? gate(identity, "fail", { observedBoundary: "conflict" }, { kind: "conflicting-observation" })
-        : derived ?? gate(identity, undefined, undefined, { kind: "missing-observation" }));
-    }
-  }
-
-  const resolvedGates = new Map<string, DerivedGate>();
-  const resolving = new Set<string>();
-  const resolveGate = (gateId: string): DerivedGate => {
-    const resolved = resolvedGates.get(gateId);
-    if (resolved) return resolved;
-    if (resolving.has(gateId)) throw new PublicClientEvidenceBoundaryError();
-    resolving.add(gateId);
-    const derived = rawGates.get(gateId) ?? gate(gateId, undefined, undefined, { kind: "missing-observation" });
-    const withDependencies = (MCP_ACCESS_GRANT_CATALOGS.dependencies[gateId] ?? []).reduce(
-      (current, dependencyId) => applyDependency(current, resolveGate(dependencyId)),
-      derived,
-    );
-    resolving.delete(gateId);
-    resolvedGates.set(gateId, withDependencies);
-    return withDependencies;
-  };
-
+  const observations: EvidenceObservation[] = [];
   for (const gateId of ["resource-discovery", "provider-discovery", "reproducible-configuration", "versions"]) {
-    if (shared.has(gateId)) observations.push(normalizedGate(resolveGate(gateId)));
+    const derived = conclusions.get(gateId) ?? profileGates.get(gateId);
+    if (derived) observations.push(normalizedGate(derived));
   }
-
   for (const base of FAMILY_GATE_BASES) {
-    const statuses = new Map<PublicClientFamily, GateStatus | undefined>();
-    for (const currentFamily of MCP_ACCESS_GRANT_FAMILIES) {
-      const derived = resolveGate(`${base}-${currentFamily}`);
-      observations.push(normalizedGate(derived));
-      statuses.set(currentFamily, derived.status);
+    for (const family of ["ipv4", "ipv6"] as const) {
+      const derived = conclusions.get(`${base}-${family}`);
+      if (derived) observations.push(normalizedGate(derived));
     }
-    const aggregate = aggregateGate(base, statuses);
-    rawGates.set(`${base}-both`, aggregate);
-    observations.push(normalizedGate(resolveGate(`${base}-both`)));
+    const aggregate = conclusions.get(`${base}-both`);
+    if (aggregate) observations.push(normalizedGate(aggregate));
   }
-
   if (includeFactRequests) {
-    for (const fact of facts) {
-      if (fact.request) observations.push({ kind: "request", request: fact.request.request });
-    }
+    observations.push(...evaluation.requests.map((request) => ({ kind: "request" as const, request })));
   }
   return observations;
 }
@@ -1925,7 +1897,7 @@ function finalizeRun(
     versions: options.versions,
   });
   const requestSource = options.requestSource;
-  const observations = internalObservations(facts, options.target, requestSource === undefined);
+  const observations = sharedPublicInternalObservations(facts, options.target, requestSource === undefined);
   if (requestSource !== undefined) {
     observations.push(...requestSource.snapshot().map((request) => ({ kind: "request" as const, request })));
   }
@@ -1970,6 +1942,7 @@ export async function runPublicClientEvidence(
 
   const facts: NormalizedFact[] = [];
   const identityPayloads = new Map<string, Set<string>>();
+  const publicBoundary = new PublicClientEvidenceBoundary();
   const pending = new Set<Promise<void>>();
   let closed = false;
   let poisoned = false;
@@ -1993,7 +1966,9 @@ export async function runPublicClientEvidence(
     }
     let capturedFact: PublicClientProfileFact;
     try {
-      capturedFact = snapshotFactInput(fact);
+      capturedFact = isPublicClientJourneyFactInput(fact)
+        ? capturePublicClientJourneyFact(fact)
+        : snapshotFactInput(fact);
     } catch (error) {
       poisoned = true;
       const failure = Promise.reject(stableFailure(error));
@@ -2008,6 +1983,12 @@ export async function runPublicClientEvidence(
           ? sampleIso(options.clock, lastClock)
           : { value: "", millis: lastClock };
         lastClock = clock.millis;
+        if (isPublicClientJourneyFactInput(currentFact)) {
+          if (facts.length >= MAX_RETAINED_FACTS) throw new PublicClientEvidenceBoundaryError();
+          const admission = await publicBoundary.acceptSnapshot(currentFact, clock.millis);
+          if (admission.disposition === "accepted") facts.push(toPublicNormalizedFact(admission.fact));
+          return;
+        }
         const normalized = await normalizeFact(currentFact, clock.millis);
         const payload = factFingerprint(normalized);
         const payloads = identityPayloads.get(normalized.identity) ?? new Set<string>();
