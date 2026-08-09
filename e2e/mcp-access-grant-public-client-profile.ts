@@ -39,20 +39,9 @@ import {
 import { s256CodeChallenge, type LoopbackHost } from "./mcp-access-grant-journey";
 import { compactVerify, decodeJwt, decodeProtectedHeader, importJWK, type JWK } from "jose";
 import type {
-  PublicClientAuthorizationOutcomeObservation,
-  PublicClientCleanupObservation,
-  PublicClientConsentObservation,
-  PublicClientDelegatedTokenObservation,
-  PublicClientDiscoveryObservation,
   PublicClientFamily,
-  PublicClientGrantObservation,
   PublicClientJourneyFact,
-  PublicClientJsonValue,
-  PublicClientMcpOperationObservation,
   PublicClientNegativeRegistrationCase,
-  PublicClientPkceObservation,
-  PublicClientRequestInput,
-  PublicClientResponseSurface,
 } from "./mcp-access-grant-public-client-semantics";
 export type {
   PublicClientApprovalObservation,
