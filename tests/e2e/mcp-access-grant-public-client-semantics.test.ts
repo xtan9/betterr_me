@@ -229,9 +229,18 @@ describe("canonical public-client evidence boundary", () => {
       await secondBoundary.accept(JSON.parse(JSON.stringify(fact)) as unknown, sampledAtMillis);
     }
 
-    expect(evaluatePublicClientFacts(firstBoundary.facts, target)).toEqual(
-      evaluatePublicClientFacts(secondBoundary.facts, target),
-    );
+    const dependencies = Object.freeze({ "resource-discovery": "pass" as const, "provider-discovery": "pass" as const });
+    expect(evaluatePublicClientFacts({
+      facts: Object.freeze(firstBoundary.facts),
+      target,
+      sampledAtMillis,
+      dependencies,
+    })).toEqual(evaluatePublicClientFacts({
+      facts: Object.freeze(secondBoundary.facts),
+      target,
+      sampledAtMillis,
+      dependencies,
+    }));
   });
 
   it("evaluates an ordered immutable batch with explicit dependencies and sampled time", async () => {
@@ -248,7 +257,7 @@ describe("canonical public-client evidence boundary", () => {
       facts: Object.freeze(boundary.facts),
       target,
       sampledAtMillis,
-      dependencies: Object.freeze({ resourceDiscovery: "pass", providerDiscovery: "pass" }),
+      dependencies: Object.freeze({ "resource-discovery": "pass", "provider-discovery": "pass" }),
       includeRequests: false,
     });
 
@@ -287,7 +296,7 @@ describe("canonical public-client evidence boundary", () => {
         loopbackHosts: Object.freeze(["127.0.0.1", "::1"]),
       }),
       sampledAtMillis,
-      dependencies: Object.freeze({ resourceDiscovery: "pass", providerDiscovery: "pass" }),
+      dependencies: Object.freeze({ "resource-discovery": "pass", "provider-discovery": "pass" }),
     });
     expect(passing.conclusions.find(({ key }) => key === `registration-negative-validation-${family}`)).toMatchObject({ status: "pass" });
 
@@ -309,7 +318,7 @@ describe("canonical public-client evidence boundary", () => {
         loopbackHosts: Object.freeze(["127.0.0.1", "::1"]),
       }),
       sampledAtMillis,
-      dependencies: Object.freeze({ resourceDiscovery: "pass", providerDiscovery: "pass" }),
+      dependencies: Object.freeze({ "resource-discovery": "pass", "provider-discovery": "pass" }),
     });
     expect(malformed.conclusions.find(({ key }) => key === `registration-negative-validation-${family}`)).toMatchObject({ status: "not-proven" });
   });
@@ -321,7 +330,7 @@ describe("canonical public-client evidence boundary", () => {
       facts: Object.freeze(boundary.facts),
       target: semanticTarget,
       sampledAtMillis,
-      dependencies: Object.freeze({ resourceDiscovery: "pass" }),
+      dependencies: Object.freeze({ "resource-discovery": "pass" }),
     });
 
     expect(evaluation.conclusions.find(({ key }) => key === `public-client-registration-${family}`)).toMatchObject({
@@ -331,6 +340,73 @@ describe("canonical public-client evidence boundary", () => {
     expect(evaluation.conclusions.find(({ key }) => key === `loopback-${family}`)).toMatchObject({
       error: { kind: "missing-observation" },
     });
+  });
+
+  it("does not treat legacy discovery aliases as authoritative dependencies", async () => {
+    const boundary = new PublicClientEvidenceBoundary();
+    await boundary.accept(registrationFact(), sampledAtMillis);
+    const evaluation = evaluatePublicClientFacts({
+      facts: Object.freeze(boundary.facts),
+      target: semanticTarget,
+      sampledAtMillis,
+      dependencies: { resourceDiscovery: "pass", providerDiscovery: "pass" },
+    });
+
+    expect(evaluation.conclusions.find(({ key }) => key === "public-client-registration-ipv4")).toMatchObject({
+      status: "not-proven",
+      error: { kind: "missing-observation", code: "dependency-not-proven" },
+    });
+  });
+
+  it("orders family leaves and applies fail, not-proven, then pass precedence deterministically", async () => {
+    const evaluateFamilies = async (families: readonly ("ipv4" | "ipv6")[], conflictIpv4 = false) => {
+      const boundary = new PublicClientEvidenceBoundary();
+      for (const family of families) await boundary.accept(registrationFact(family), sampledAtMillis);
+      if (conflictIpv4) {
+        await boundary.accept({
+          ...registrationFact("ipv4"),
+          response: {
+            ...(registrationFact("ipv4").response as Record<string, unknown>),
+            body: {
+              ...(registrationFact("ipv4").response as Record<string, unknown>).body as Record<string, unknown>,
+              client_id: "conflicting-client-ipv4",
+            },
+          },
+        }, sampledAtMillis);
+      }
+      return evaluatePublicClientFacts({
+        facts: Object.freeze(boundary.facts),
+        target: semanticTarget,
+        sampledAtMillis,
+        dependencies: Object.freeze({ "resource-discovery": "pass", "provider-discovery": "pass" }),
+        conflictingIdentities: Object.freeze(boundary.conflictingIdentities),
+      });
+    };
+    const bases = [
+      "public-client-registration",
+      "registration-negative-validation",
+      "untrusted-client-metadata",
+      "authorization-consent",
+      "consent-denial",
+      "consent-abandonment",
+      "consent-cleanup",
+      "loopback",
+      "loopback-request",
+      "loopback-pkce",
+      "delegated-token-validation",
+      "authenticated-mcp-operation",
+    ];
+    const expectedFamilyKeys = bases.flatMap((base) => [`${base}-ipv4`, `${base}-ipv6`, `${base}-both`]);
+    const partial = await evaluateFamilies(["ipv4"]);
+    const complete = await evaluateFamilies(["ipv4", "ipv6"]);
+    const conflicting = await evaluateFamilies(["ipv4", "ipv6"], true);
+
+    expect(partial.conclusions.filter(({ key }) => /-(?:ipv4|ipv6|both)$/.test(key)).map(({ key }) => key)).toEqual(expectedFamilyKeys);
+    expect(partial.conclusions.find(({ key }) => key === "public-client-registration-ipv4")).toMatchObject({ status: "pass" });
+    expect(partial.conclusions.find(({ key }) => key === "public-client-registration-both")).toMatchObject({ status: "not-proven" });
+    expect(complete.conclusions.find(({ key }) => key === "public-client-registration-both")).toMatchObject({ status: "pass" });
+    expect(conflicting.conclusions.find(({ key }) => key === "public-client-registration-ipv4")).toMatchObject({ status: "fail" });
+    expect(conflicting.conclusions.find(({ key }) => key === "public-client-registration-both")).toMatchObject({ status: "fail" });
   });
 
   it.each(["ipv4", "ipv6"] as const)("reports conflicts and loopback/PKCE security failures for %s", async (family) => {
@@ -350,7 +426,7 @@ describe("canonical public-client evidence boundary", () => {
       facts: Object.freeze(conflictBoundary.facts),
       target: semanticTarget,
       sampledAtMillis,
-      dependencies: Object.freeze({ resourceDiscovery: "pass", providerDiscovery: "pass" }),
+      dependencies: Object.freeze({ "resource-discovery": "pass", "provider-discovery": "pass" }),
     });
     expect(conflict.conclusions.find(({ key }) => key === `public-client-registration-${family}`)).toMatchObject({
       status: "fail",
@@ -385,7 +461,7 @@ describe("canonical public-client evidence boundary", () => {
       facts: Object.freeze(securityBoundary.facts),
       target: semanticTarget,
       sampledAtMillis,
-      dependencies: Object.freeze({ resourceDiscovery: "pass", providerDiscovery: "pass" }),
+      dependencies: Object.freeze({ "resource-discovery": "pass", "provider-discovery": "pass" }),
     });
     expect(security.conclusions.find(({ key }) => key === `loopback-${family}`)).toMatchObject({ status: "fail" });
     expect(security.conclusions.find(({ key }) => key === `loopback-pkce-${family}`)).toMatchObject({ status: "fail" });
@@ -395,7 +471,7 @@ describe("canonical public-client evidence boundary", () => {
     const base = {
       target: semanticTarget,
       sampledAtMillis,
-      dependencies: Object.freeze({ resourceDiscovery: "pass", providerDiscovery: "pass" }),
+      dependencies: Object.freeze({ "resource-discovery": "pass", "provider-discovery": "pass" }),
     };
     expect(() => evaluatePublicClientFacts({ ...base, facts: Object.freeze([undefined]) } as never))
       .toThrow(PublicClientEvidenceBoundaryError);
@@ -407,8 +483,10 @@ describe("canonical public-client evidence boundary", () => {
     expect(() => evaluatePublicClientFacts({
       ...base,
       facts: Object.freeze([]),
-      dependencies: Object.freeze({ providerDiscovery: "unexpected" }),
+      dependencies: Object.freeze({ "provider-discovery": "unexpected" }),
     } as never)).toThrow(PublicClientEvidenceBoundaryError);
+    expect(() => Reflect.apply(evaluatePublicClientFacts, undefined, [Object.freeze([]), semanticTarget]))
+      .toThrow(PublicClientEvidenceBoundaryError);
   });
 
   it.each(["ipv4", "ipv6"] as const)("shares consent, authorization, loopback, and S256 semantics for %s", async (family) => {
@@ -510,7 +588,7 @@ describe("canonical public-client evidence boundary", () => {
       facts: Object.freeze(boundary.facts),
       target: semanticTarget,
       sampledAtMillis,
-      dependencies: Object.freeze({ resourceDiscovery: "pass", providerDiscovery: "pass" }),
+      dependencies: Object.freeze({ "resource-discovery": "pass", "provider-discovery": "pass" }),
     });
     const status = (key: string) => evaluation.conclusions.find((conclusion) => conclusion.key === `${key}-${family}`)?.status;
     expect(status("public-client-registration")).toBe("pass");
@@ -533,7 +611,7 @@ describe("canonical public-client evidence boundary", () => {
       facts: Object.freeze(premature.facts),
       target: semanticTarget,
       sampledAtMillis,
-      dependencies: Object.freeze({ resourceDiscovery: "pass", providerDiscovery: "pass" }),
+      dependencies: Object.freeze({ "resource-discovery": "pass", "provider-discovery": "pass" }),
     });
     expect(prematureEvaluation.conclusions.find(({ key }) => key === `authorization-consent-${family}`)).toMatchObject({ status: "fail" });
   });
@@ -665,8 +743,8 @@ describe("canonical public-client evidence boundary", () => {
       target: semanticTarget,
       sampledAtMillis,
       dependencies: {
-        resourceDiscovery: "pass",
-        providerDiscovery: "pass",
+        "resource-discovery": "pass",
+        "provider-discovery": "pass",
         "loopback-ipv4": "pass",
         "loopback-request-ipv4": "pass",
         "loopback-pkce-ipv4": "pass",
@@ -815,7 +893,7 @@ describe("canonical public-client evidence boundary", () => {
       target: semanticTarget,
       sampledAtMillis,
       dependencies: {
-        providerDiscovery: "pass",
+        "provider-discovery": "pass",
         "loopback-pkce": "pass",
         "refresh-rotation": "pass",
       },
@@ -841,7 +919,7 @@ describe("canonical public-client evidence boundary", () => {
       target: semanticTarget,
       sampledAtMillis,
       dependencies: {
-        providerDiscovery: "pass",
+        "provider-discovery": "pass",
         "loopback-pkce": "pass",
         "refresh-rotation": "pass",
       },
@@ -863,7 +941,7 @@ describe("canonical public-client evidence boundary", () => {
       facts: [registration, expiredToken],
       target: semanticTarget,
       sampledAtMillis,
-      dependencies: { providerDiscovery: "pass", "loopback-pkce": "pass" },
+      dependencies: { "provider-discovery": "pass", "loopback-pkce": "pass" },
       includeRequests: false,
     });
     expect(boundaryToken.conclusions.find(({ key }) => key === "delegated-token-validation")).toMatchObject({ status: "fail" });
@@ -873,7 +951,7 @@ describe("canonical public-client evidence boundary", () => {
       target: semanticTarget,
       sampledAtMillis,
       dependencies: {
-        providerDiscovery: "pass",
+        "provider-discovery": "pass",
         "loopback-pkce": "pass",
         "refresh-rotation": "pass",
       },

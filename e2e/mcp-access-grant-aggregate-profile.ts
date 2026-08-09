@@ -151,113 +151,6 @@ export interface AggregateCompatibilityMcpObservation {
   readonly resultIsError?: boolean;
 }
 
-export type AggregatePublicClientFamily = "ipv4" | "ipv6";
-
-export type AggregatePublicClientNegativeRegistrationCase =
-  | "unsupported-client-auth-method"
-  | "unsupported-grant-type"
-  | "unsupported-response-type"
-  | "malformed-metadata"
-  | "unsafe-redirect-metadata";
-
-export interface AggregatePublicClientConsentObservation {
-  readonly clientNameVisible?: boolean;
-  readonly clientUriVisible?: boolean;
-  readonly logoVisible?: boolean;
-  readonly softwareIdVisible?: boolean;
-  readonly softwareVersionVisible?: boolean;
-  readonly untrustedDisclaimerVisible?: boolean;
-  readonly endorsementText?: string;
-  readonly endorsementLanguageVisible?: boolean;
-}
-
-export interface AggregatePublicClientAuthorizationObservation {
-  readonly affirmativeControlVisible?: boolean;
-  readonly denialControlVisible?: boolean;
-  readonly callbackBeforeDecision?: boolean;
-  readonly decision?: "affirmative" | "denial" | "abandonment";
-  readonly callbackComplete?: boolean;
-  readonly callbackReceived?: boolean;
-  readonly callbackUrl?: string;
-  readonly browserUrl?: string;
-  readonly expectedState?: string;
-  readonly callbackState?: string;
-  readonly authorizationError?: boolean;
-  readonly tokenRequestObserved?: boolean;
-  readonly tokenResponse?: AggregateCompatibilityResponseSurface;
-}
-
-export interface AggregatePublicClientLoopbackObservation {
-  readonly registeredRedirectUri: string;
-  readonly callbackUrl?: string;
-  readonly callbackReceived?: boolean;
-  readonly requestCallbackUrl?: string;
-  readonly requestResource?: string;
-  readonly portSelectedAtRequest?: boolean;
-}
-
-export interface AggregatePublicClientPkceObservation {
-  readonly verifier?: string;
-  readonly challenge?: string;
-  readonly method?: string;
-  readonly requestResource?: string;
-}
-
-export interface AggregatePublicClientDelegatedTokenObservation {
-  readonly token?: string;
-  readonly jwks?: string | AggregateCompatibilityJsonValue;
-}
-
-export interface AggregatePublicClientMcpSdkObservation {
-  readonly connected?: boolean;
-  readonly listToolsCompleted?: boolean;
-  readonly listToolsObserved?: boolean;
-  readonly callToolCompleted?: boolean;
-  readonly callToolObserved?: boolean;
-  readonly resultIsError?: boolean;
-  readonly toolName?: string;
-}
-
-export interface AggregatePublicClientMcpOperationObservation {
-  readonly operationUrl?: string;
-  readonly operationResource?: string;
-  readonly connected?: boolean;
-  readonly listToolsCompleted?: boolean;
-  readonly callToolCompleted?: boolean;
-  readonly resultIsError?: boolean;
-  readonly sdk?: AggregatePublicClientMcpSdkObservation;
-  readonly response?: AggregateCompatibilityResponseSurface;
-  readonly request?: AggregateCompatibilityRequest;
-}
-
-export interface AggregatePublicClientGrantObservation {
-  readonly listRequestObserved?: boolean;
-  readonly grantListObserved?: boolean;
-  readonly listResponse?: AggregateCompatibilityResponseSurface;
-  readonly listResponseStatus?: number;
-  readonly listedClientIds?: readonly string[];
-  readonly listedGrantIds?: readonly string[];
-  readonly grantId?: string;
-  readonly grantClientId?: string;
-  readonly clientId?: string;
-  readonly grantPresent?: boolean;
-  readonly revokeRequestObserved?: boolean;
-  readonly revokeObserved?: boolean;
-  readonly revokeResponse?: AggregateCompatibilityResponseSurface;
-  readonly revokeResponseStatus?: number;
-  readonly request?: AggregateCompatibilityRequest;
-}
-
-export interface AggregatePublicClientCleanupObservation {
-  readonly listRequestObserved?: boolean;
-  readonly remainingClientIds?: readonly string[];
-  readonly remainingGrantIds?: readonly string[];
-  readonly grantPresent?: boolean;
-  readonly requestStatus?: number;
-  readonly request?: AggregateCompatibilityRequest;
-  readonly response?: AggregateCompatibilityResponseSurface;
-}
-
 export interface AggregateCompatibilityCredentialSnapshot {
   readonly accessToken?: string;
   readonly refreshToken?: string;
@@ -531,16 +424,20 @@ interface NormalizedRequest {
   readonly requestCodeChallenge?: string;
 }
 
-interface NormalizedFact {
-  readonly source: "compatibility" | "public-client";
+interface CompatibilityNormalizedFact {
+  readonly source: "compatibility";
   readonly identity: string;
   readonly kind: CatalogFactKind;
   readonly role: string;
-  readonly family?: AggregatePublicClientFamily;
+  readonly family?: CatalogFamily;
   readonly caseId?: string;
   readonly data: Record<string, unknown>;
   readonly request?: NormalizedRequest;
 }
+
+type NormalizedFact =
+  | (PublicClientNormalizedFact & { readonly source: "public-client" })
+  | CompatibilityNormalizedFact;
 
 interface AggregateHistory {
   clientId?: string;
@@ -626,27 +523,23 @@ function snapshotFactInput(value: unknown): AggregateCompatibilityFact | PublicC
   return snapshot as AggregateCompatibilityFact | PublicClientJourneyFact;
 }
 
-function toAggregatePublicNormalizedFact(value: PublicClientNormalizedFact): NormalizedFact {
+function tagPublicClientSource(value: PublicClientNormalizedFact): NormalizedFact {
   const role = value.kind === "resource-discovery" || value.kind === "provider-discovery" ? "shadow" : value.role;
   return {
+    ...value,
     source: "public-client",
     identity: `public-client|${value.kind}|${role}${value.kind === "resource-discovery" || value.kind === "provider-discovery" ? "" : value.identity.slice(value.kind.length)}`,
-    kind: value.kind,
     role,
-    ...(value.family === undefined ? {} : { family: value.family }),
-    ...(value.caseId === undefined ? {} : { caseId: value.caseId }),
-    data: value.data,
-    ...(value.request === undefined ? {} : { request: value.request }),
   };
 }
 
-function toCanonicalAggregatePublicFact(fact: NormalizedFact): PublicClientNormalizedFact {
-  const discovery = fact.kind === "resource-discovery" || fact.kind === "provider-discovery";
+function toSharedCompatibilityFact(fact: CompatibilityNormalizedFact): PublicClientNormalizedFact {
+  const family = fact.family === "ipv4" || fact.family === "ipv6" ? fact.family : undefined;
   return {
-    identity: discovery ? `${fact.kind}|primary` : fact.identity.replace(/^public-client\|/, ""),
+    identity: fact.identity,
     kind: fact.kind as PublicClientJourneyFact["kind"],
-    role: discovery ? "primary" : fact.role,
-    ...(fact.family === undefined ? {} : { family: fact.family }),
+    role: fact.role,
+    ...(family === undefined ? {} : { family }),
     ...(fact.caseId === undefined ? {} : { caseId: fact.caseId as PublicClientNormalizedFact["caseId"] }),
     data: fact.data,
     ...(fact.request === undefined ? {} : { request: fact.request }),
@@ -692,7 +585,7 @@ function sharedAggregateSemanticFacts(facts: readonly NormalizedFact[]): readonl
       fact.source === "compatibility" && (fact.kind === "registration" ||
         fact.kind === "delegated-token" && fact.role === "validation" ||
         fact.kind === "mcp-operation" || fact.kind === "grant" || fact.kind === "cleanup"))
-    .map(toCanonicalAggregatePublicFact);
+    .map((fact) => fact.source === "public-client" ? fact : toSharedCompatibilityFact(fact));
 }
 
 function sharedAggregateConclusion(
@@ -1921,21 +1814,6 @@ function gateForFact(fact: NormalizedFact): string | undefined {
   return undefined;
 }
 
-function publicFamilyGateId(fact: NormalizedFact): string | undefined {
-  if (fact.source !== "public-client" || fact.family === undefined) return undefined;
-  if (fact.kind === "registration") return `${fact.role === "negative" ? "registration-negative-validation" : "public-client-registration"}-${fact.family}`;
-  if (fact.kind === "consent") return `untrusted-client-metadata-${fact.family}`;
-  if (fact.kind === "authorization") {
-    return `${fact.role === "approval" ? "authorization-consent" : fact.role === "denial" ? "consent-denial" : "consent-abandonment"}-${fact.family}`;
-  }
-  if (fact.kind === "loopback") return `${fact.role === "callback" ? "loopback" : "loopback-request"}-${fact.family}`;
-  if (fact.kind === "pkce") return `loopback-pkce-${fact.family}`;
-  if (fact.kind === "delegated-token") return `delegated-token-validation-${fact.family}`;
-  if (fact.kind === "mcp-operation") return `authenticated-mcp-operation-${fact.family}`;
-  if (fact.kind === "grant" || fact.kind === "cleanup") return `consent-cleanup-${fact.family}`;
-  return undefined;
-}
-
 function internalObservations(
   facts: readonly NormalizedFact[],
   target: CompatibilityReportTarget,
@@ -1952,20 +1830,28 @@ function internalObservations(
     const payload = factFingerprint(fact);
     const prior = seen.get(fact.identity);
     if (prior !== undefined && prior !== payload) {
-      const gateId = publicFamilyGateId(fact) ?? gateForFact(fact);
+      const gateId = fact.source === "compatibility" ? gateForFact(fact) : undefined;
       if (gateId) conflicts.add(gateId);
-      if (fact.source === "compatibility" || fact.family !== undefined) sharedConflicts.add(fact.identity.replace(/^public-client\|/, ""));
+      if (fact.source === "compatibility" || fact.family !== undefined) sharedConflicts.add(fact.identity);
     } else if (prior === undefined) {
       seen.set(fact.identity, payload);
     }
   }
 
   const history: AggregateHistory = {};
+  const conflictAwareDependency = (gateId: string, derived: DerivedGate | undefined): DerivedGate | undefined =>
+    conflicts.has(gateId)
+      ? gate(gateId, "fail", { observedBoundary: "conflict" }, { kind: "conflicting-observation" })
+      : derived;
   const resourceFact = compatibilityFacts.find((fact) => fact.kind === "resource-discovery");
-  const resource = resourceFact ? resourceDiscoveryGate(resourceFact, target) : undefined;
+  const resource = resourceFact
+    ? conflicts.has("resource-discovery")
+      ? gate("resource-discovery", "fail", { observedBoundary: "conflict" }, { kind: "conflicting-observation" })
+      : resourceDiscoveryGate(resourceFact, target)
+    : undefined;
   if (resource) observations.set(resource.gateId, resource);
   const providerFact = compatibilityFacts.find((fact) => fact.kind === "provider-discovery");
-  const provider = providerFact && resource?.status === "pass"
+  const provider = providerFact && conflictAwareDependency("resource-discovery", resource)?.status === "pass"
     ? providerDiscoveryGate(providerFact, target, history)
     : providerFact ? gate("provider-discovery", "not-proven", undefined, { kind: "missing-observation", code: "dependency-not-proven" }) : undefined;
   if (provider) observations.set(provider.gateId, provider);
@@ -1975,36 +1861,38 @@ function internalObservations(
   if (versionsFact) observations.set("versions", versionsGate(versionsFact));
 
   const registrationFact = compatibilityFacts.find((fact) => fact.kind === "registration");
-  const registration = registrationFact && provider?.status === "pass"
+  const registration = registrationFact && conflictAwareDependency("provider-discovery", provider)?.status === "pass"
     ? registrationGate(registrationFact, target, history)
     : registrationFact ? gate("public-client-registration", "not-proven", undefined, { kind: "missing-observation", code: "dependency-not-proven" }) : undefined;
   if (registration) observations.set(registration.gateId, registration);
   const authorizationFact = compatibilityFacts.find((fact) => fact.kind === "authorization");
-  const authorization = authorizationFact && registration?.status === "pass"
+  const authorization = authorizationFact && conflictAwareDependency("public-client-registration", registration)?.status === "pass"
     ? authorizationGate(authorizationFact, history, target)
     : authorizationFact ? gate("authorization-consent", "not-proven", undefined, { kind: "missing-observation", code: "dependency-not-proven" }) : undefined;
   if (authorization) observations.set(authorization.gateId, authorization);
   const loopbackFacts = compatibilityFacts.filter((fact) => fact.kind === "loopback" || (fact.kind === "pkce" && fact.role === "positive"));
-  const loopback = loopbackFacts.length && authorization?.status === "pass"
+  const loopback = loopbackFacts.length && conflictAwareDependency("authorization-consent", authorization)?.status === "pass"
     ? loopbackPkceGate(compatibilityFacts, target, history)
     : loopbackFacts.length ? gate("loopback-pkce", "not-proven", undefined, { kind: "missing-observation", code: "dependency-not-proven" }) : undefined;
   if (loopback) observations.set(loopback.gateId, loopback);
 
   const pkceNegativeFacts = compatibilityFacts.filter((fact) => fact.kind === "pkce" && fact.role === "negative");
   const resourceNegativeFacts = compatibilityFacts.filter((fact) => fact.kind === "resource-binding");
-  const pkceNegative = pkceNegativeFacts.length && loopback?.status === "pass"
+  const pkceNegative = pkceNegativeFacts.length && conflictAwareDependency("loopback-pkce", loopback)?.status === "pass"
     ? negativeGate("pkce-negative-proof", pkceNegativeFacts, PKCE_NEGATIVE_CASES, false)
     : pkceNegativeFacts.length ? gate("pkce-negative-proof", "not-proven", undefined, { kind: "missing-observation", code: "dependency-not-proven" }) : undefined;
   if (pkceNegative) observations.set(pkceNegative.gateId, pkceNegative);
-  const resourceNegative = resourceNegativeFacts.length && loopback?.status === "pass"
+  const resourceNegative = resourceNegativeFacts.length && conflictAwareDependency("loopback-pkce", loopback)?.status === "pass"
     ? negativeGate("resource-binding-negative", resourceNegativeFacts, RESOURCE_NEGATIVE_CASES, false)
     : resourceNegativeFacts.length ? gate("resource-binding-negative", "not-proven", undefined, { kind: "missing-observation", code: "dependency-not-proven" }) : undefined;
   if (resourceNegative) observations.set(resourceNegative.gateId, resourceNegative);
 
   const semanticFacts = sharedAggregateSemanticFacts(facts);
+  const authoritativeDependencyStatus = (gateId: string, derived: DerivedGate | undefined): GateStatus | undefined =>
+    conflictAwareDependency(gateId, derived)?.status;
   const semanticDependencies = () => Object.fromEntries([
-    ["resourceDiscovery", resource?.status],
-    ["providerDiscovery", provider?.status],
+    ["resource-discovery", authoritativeDependencyStatus("resource-discovery", resource)],
+    ["provider-discovery", authoritativeDependencyStatus("provider-discovery", provider)],
     ["loopback-pkce", loopback?.status],
   ].filter(([, status]) => status !== undefined));
   const evaluateSharedSemantics = (additionalDependencies: Readonly<Record<string, GateStatus | undefined>> = {}) => semanticFacts.length === 0
@@ -2038,7 +1926,7 @@ function internalObservations(
   if (refreshFacts.length > 0) {
     const rotation = applyDependency(compatibilityRefreshRotationGate(refreshFacts), operation);
     observations.set("refresh-rotation", rotation);
-    observations.set("refresh-replay-containment", applyDependency(compatibilityRefreshReplayGate(refreshFacts), rotation));
+    observations.set("refresh-replay-containment", applyDependency(compatibilityRefreshReplayGate(refreshFacts), conflictAwareDependency("refresh-rotation", rotation)));
   }
 
   const grantFacts = compatibilityFacts.filter((fact) => fact.kind === "grant");
@@ -2307,15 +2195,14 @@ export async function runAggregateCompatibilityEvidence(
     const accepted = recordChain.then(async () => {
       try {
         const currentFact = capturedFact;
-        capturedFact = undefined as never;
         const sampled = factNeedsClockSample(currentFact)
           ? sampleClock(options.clock, lastClock)
           : { value: "", millis: lastClock };
         lastClock = sampled.millis;
         if (source === "public-client") {
           if (facts.length >= MAX_RETAINED_FACTS) throw new AggregateCompatibilityEvidenceBoundaryError();
-          const admission = await publicBoundary.acceptSnapshot(currentFact as PublicClientJourneyFact, sampled.millis);
-          if (admission.disposition === "accepted") facts.push(toAggregatePublicNormalizedFact(admission.fact));
+          const admission = await publicBoundary.accept(currentFact, sampled.millis);
+          if (admission.disposition === "accepted") facts.push(tagPublicClientSource(admission.fact));
           return;
         }
         const normalized = await normalizeFact(currentFact, source, sampled.millis);

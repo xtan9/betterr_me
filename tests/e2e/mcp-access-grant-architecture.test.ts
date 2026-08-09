@@ -112,6 +112,9 @@ describe("MCP access-grant evidence architecture", () => {
     expect(contract).toMatch(/export interface PublicClientSemanticBatchInput/);
     expect(contract).toMatch(/readonly sampledAtMillis: number/);
     expect(contract).toMatch(/readonly dependencies: Readonly<PublicClientSemanticDependencies>/);
+    expect(contract.match(/export function evaluatePublicClientFacts\(/g)).toHaveLength(1);
+    expect(contract).not.toMatch(/PublicClientSemanticEvaluationOptions/);
+    expect(contract).not.toMatch(/canonicalDependencyKey/);
     expect(contract).not.toMatch(/kind: "(?:configuration|versions)"/);
     expect(contract).not.toMatch(/@playwright\/test|@modelcontextprotocol|@supabase\/supabase-js/);
     expect(contract).not.toMatch(/node:(?:child_process|fs|http|net|timers|worker_threads)/);
@@ -132,6 +135,12 @@ describe("MCP access-grant evidence architecture", () => {
     expect(aggregateAdapter).toMatch(/record: recorders\.publicClient\.record/);
     expect(aggregateAdapter).not.toMatch(/aggregatePublicFact|as unknown as/);
     expect([publicProfile, aggregateProfile, aggregateAdapter].join("\n")).not.toMatch(/(?:AggregatePublicClientFact|aggregatePublicFact|localPublicClientFact)/);
+    expect(aggregateProfile).not.toMatch(/AggregatePublicClient(?:Family|Consent|Authorization|Loopback|Pkce|DelegatedToken|Mcp|Grant|Cleanup)/);
+    expect(aggregateProfile).not.toMatch(/to(?:Aggregate|Canonical)Public(?:Normalized)?Fact|currentFact\s+as\s+PublicClientJourneyFact/);
+    expect(aggregateProfile).not.toMatch(/publicFamilyGateId/);
+    expect(publicProfile).not.toMatch(/to(?:Public|Canonical)NormalizedFact/);
+    expect(publicProfile).not.toMatch(/FAMILY_GATE_BASES/);
+    expect(aggregateProfile).toMatch(/tagPublicClientSource/);
     expect(publicProfile).toMatch(/evaluatePublicClientFacts\(\s*\{/);
     expect(aggregateProfile).toMatch(/evaluatePublicClientFacts\(\s*\{/);
     for (const profile of [publicProfile, aggregateProfile]) {

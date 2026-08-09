@@ -19,9 +19,7 @@ import {
   type MinimizedRequestObservation,
 } from "./mcp-access-grant-evidence";
 import type {
-  PublicClientFamily,
   PublicClientJourneyFact,
-  PublicClientNegativeRegistrationCase,
   PublicClientNormalizedFact,
   PublicClientSemanticConclusion,
 } from "./mcp-access-grant-public-client-semantics";
@@ -113,15 +111,17 @@ export interface PublicClientEvidenceResult {
 
 type NormalizedRequest = PublicClientNormalizedFact["request"];
 
-interface NormalizedFact {
+interface ProfileNormalizedFact {
   readonly identity: string;
-  readonly kind: PublicClientProfileFact["kind"];
+  readonly kind: "configuration" | "versions";
   readonly role: string;
-  readonly family?: PublicClientFamily;
-  readonly caseId?: PublicClientNegativeRegistrationCase;
+  readonly family?: undefined;
+  readonly caseId?: undefined;
   readonly data: Record<string, unknown>;
   readonly request?: NormalizedRequest;
 }
+
+type NormalizedFact = PublicClientNormalizedFact | ProfileNormalizedFact;
 
 interface DerivedGate {
   readonly gateId: string;
@@ -144,21 +144,6 @@ const CONCLUSION_KEYS = new Set([
   "authorized", "rejected", "passed", "failed", "valid", "success", "signatureValid", "algorithmAllowed",
   "identity", "factIdentity", "catalogIdentity", "authority", "semanticRole",
 ]);
-const FAMILY_GATE_BASES = [
-  "public-client-registration",
-  "registration-negative-validation",
-  "untrusted-client-metadata",
-  "authorization-consent",
-  "consent-denial",
-  "consent-abandonment",
-  "consent-cleanup",
-  "loopback",
-  "loopback-request",
-  "loopback-pkce",
-  "delegated-token-validation",
-  "authenticated-mcp-operation",
-] as const;
-
 class PublicClientEvidenceBoundaryError extends Error {
   constructor() {
     super("Public-client evidence journey failed.");
@@ -186,18 +171,6 @@ function isPublicClientJourneyFactInput(value: unknown): value is PublicClientJo
   const profileFact = descriptor.value === "configuration" || descriptor.value === "versions";
   const prototype = Object.getPrototypeOf(value);
   return !profileFact || (prototype !== Object.prototype && prototype !== null);
-}
-
-function toPublicNormalizedFact(value: PublicClientNormalizedFact): NormalizedFact {
-  return {
-    identity: value.identity,
-    kind: value.kind,
-    role: value.role,
-    ...(value.family === undefined ? {} : { family: value.family }),
-    ...(value.caseId === undefined ? {} : { caseId: value.caseId }),
-    data: value.data,
-    ...(value.request === undefined ? {} : { request: value.request }),
-  };
 }
 
 function copyFactInput(value: unknown, depth: number, parents: WeakSet<object>): unknown {
@@ -546,16 +519,8 @@ function makeArtifact(contents: string): PublicClientArtifact {
   return deepFreeze({ filename: MCP_ACCESS_GRANT_ARTIFACT_NAME, contents });
 }
 
-function toCanonicalPublicFact(fact: NormalizedFact): PublicClientNormalizedFact {
-  return {
-    identity: fact.identity,
-    kind: fact.kind as PublicClientJourneyFact["kind"],
-    role: fact.role,
-    ...(fact.family === undefined ? {} : { family: fact.family }),
-    ...(fact.caseId === undefined ? {} : { caseId: fact.caseId }),
-    data: fact.data,
-    ...(fact.request === undefined ? {} : { request: fact.request }),
-  };
+function isPublicNormalizedFact(fact: NormalizedFact): fact is PublicClientNormalizedFact {
+  return fact.kind !== "configuration" && fact.kind !== "versions";
 }
 
 function fromSharedPublicConclusion(conclusion: PublicClientSemanticConclusion): DerivedGate {
@@ -588,12 +553,10 @@ function sharedPublicInternalObservations(
       profileGates.set(derived.gateId, derived);
     }
   }
-  const publicFacts = facts
-    .filter((fact) => fact.kind !== "configuration" && fact.kind !== "versions")
-    .map(toCanonicalPublicFact);
+  const publicFacts = facts.filter(isPublicNormalizedFact);
   const dependencies = Object.fromEntries(
     ["resource-discovery", "provider-discovery"]
-      .map((key) => [key === "resource-discovery" ? "resourceDiscovery" : "providerDiscovery", profileGates.get(key)?.status] as const)
+      .map((key) => [key, profileGates.get(key)?.status] as const)
       .filter(([, status]) => status !== undefined),
   );
   const evaluation = evaluatePublicClientFacts({
@@ -621,13 +584,10 @@ function sharedPublicInternalObservations(
       : profileGate ?? sharedConclusion;
     if (derived) observations.push(normalizedGate(derived));
   }
-  for (const base of FAMILY_GATE_BASES) {
-    for (const family of ["ipv4", "ipv6"] as const) {
-      const derived = conclusions.get(`${base}-${family}`);
-      if (derived) observations.push(normalizedGate(derived));
-    }
-    const aggregate = conclusions.get(`${base}-both`);
-    if (aggregate) observations.push(normalizedGate(aggregate));
+  for (const gateId of PUBLIC_CLIENT_PROFILE.expandedGateIds) {
+    if (!/(?:-ipv4|-ipv6|-both)$/.test(gateId)) continue;
+    const derived = conclusions.get(gateId);
+    if (derived) observations.push(normalizedGate(derived));
   }
   if (includeFactRequests) {
     observations.push(...evaluation.requests.map((request) => ({ kind: "request" as const, request })));
@@ -743,7 +703,6 @@ export async function runPublicClientEvidence(
     const accepted = recordChain.then(async () => {
       try {
         const currentFact = capturedFact;
-        capturedFact = undefined as never;
         const clock = factNeedsClockSample(currentFact)
           ? sampleIso(options.clock, lastClock)
           : { value: "", millis: lastClock };
@@ -751,7 +710,7 @@ export async function runPublicClientEvidence(
         if (isPublicClientJourneyFactInput(currentFact)) {
           if (facts.length >= MAX_RETAINED_FACTS) throw new PublicClientEvidenceBoundaryError();
           const admission = await publicBoundary.acceptSnapshot(currentFact, clock.millis);
-          if (admission.disposition === "accepted") facts.push(toPublicNormalizedFact(admission.fact));
+          if (admission.disposition === "accepted") facts.push(admission.fact);
           return;
         }
         const normalized = normalizeProfileFact(currentFact);
