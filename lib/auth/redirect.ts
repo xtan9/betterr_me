@@ -12,6 +12,7 @@ const ALLOWED_REDIRECT_PATHS = [
   "/tasks",
   "/finance/cushion",
   "/dashboard/settings",
+  "/auth/update-password",
 ];
 
 const ALLOWED_REDIRECT_PREFIXES = ["/habits/", "/tasks/"];

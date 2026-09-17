@@ -52,6 +52,19 @@ describe('GET /auth/callback', () => {
     expect(response.headers.get('location')).toBe('http://localhost:3000/dashboard');
   });
 
+  it('should redirect password recovery sessions to the update-password page', async () => {
+    mockExchangeCodeForSession.mockResolvedValue({ error: null });
+
+    const request = new Request(
+      'http://localhost:3000/auth/callback?code=test-code&next=/auth/update-password'
+    );
+    const response = await GET(request);
+
+    expect(response.headers.get('location')).toBe(
+      'http://localhost:3000/auth/update-password'
+    );
+  });
+
   it('should ignore absolute URLs in "next" parameter', async () => {
     mockExchangeCodeForSession.mockResolvedValue({ error: null });
 
