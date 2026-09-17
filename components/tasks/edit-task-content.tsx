@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader, PageHeaderSkeleton } from "@/components/layouts/page-header";
 import { PageBreadcrumbs } from "@/components/layouts/page-breadcrumbs";
-import { TaskForm } from "@/components/tasks/task-form";
+import { TaskForm, type RecurrenceConfig } from "@/components/tasks/task-form";
 import type { TaskFormValues } from "@/lib/validations/task";
 import type { Task } from "@/lib/db/types";
 
@@ -70,13 +70,15 @@ export function EditTaskContent({ taskId }: EditTaskContentProps) {
   const t = useTranslations("tasks");
   const tForm = useTranslations("tasks.form");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [conflict, setConflict] = useState(false);
+  const [formGeneration, setFormGeneration] = useState(0);
 
   const { data: task, error, isLoading, mutate } = useSWR<Task>(
     `/api/tasks/${taskId}`,
     fetcher
   );
 
-  const handleSubmit = async (data: TaskFormValues) => {
+  const handleSubmit = async (data: TaskFormValues, _recurrence?: RecurrenceConfig, expectedTaskVersion?: string) => {
     setIsSubmitting(true);
     try {
       const url = scope
@@ -85,7 +87,7 @@ export function EditTaskContent({ taskId }: EditTaskContentProps) {
 
       const response = await fetch(url, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(expectedTaskVersion ? { "X-Task-Version": expectedTaskVersion } : {}) },
         body: JSON.stringify({
           ...data,
           description: data.description || null,
@@ -94,6 +96,10 @@ export function EditTaskContent({ taskId }: EditTaskContentProps) {
       });
 
       if (!response.ok) {
+        if (response.status === 409) {
+          setConflict(true);
+          return;
+        }
         const errorData = await response.json().catch(() => null);
         throw new Error(errorData?.error || "Failed to update task");
       }
@@ -157,7 +163,18 @@ export function EditTaskContent({ taskId }: EditTaskContentProps) {
       </div>
       <Card className="max-w-2xl">
         <CardContent className="pt-card-padding">
+          {conflict && <div role="alert" className="mb-4 space-y-2">
+            <p>{t("edit.conflict")}</p>
+            <Button type="button" variant="outline" onClick={async () => {
+              try {
+                await mutate(undefined, { revalidate: true, throwOnError: true });
+                setFormGeneration(value => value + 1);
+                setConflict(false);
+              } catch { toast.error(t("edit.error")); }
+            }}>{t("edit.reload")}</Button>
+          </div>}
           <TaskForm
+            key={formGeneration}
             id="task-form"
             mode="edit"
             initialData={task}

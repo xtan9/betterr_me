@@ -29,6 +29,9 @@ export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'done';
 export type TaskSection = 'personal' | 'work';
 
 export interface Task {
+  version?: string;
+  estimate_minutes?: number | null;
+  archived_at?: string | null;
   id: string; // UUID
   user_id: string; // UUID
   title: string;

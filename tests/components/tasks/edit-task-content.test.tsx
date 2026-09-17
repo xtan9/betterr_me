@@ -104,6 +104,7 @@ import { EditTaskContent } from '@/components/tasks/edit-task-content';
 
 const mockTask = {
   id: 'task-1',
+  version: '68200000-0000-0000-0000-000000000009',
   user_id: 'user-1',
   title: 'Buy groceries',
   description: 'Milk, eggs, bread',
@@ -135,6 +136,15 @@ describe('EditTaskContent', () => {
       mutate: mockMutate,
       isValidating: false,
     } as any);
+  });
+
+  it('sends the version loaded with the form to reject newer mobile edits', async () => {
+    vi.mocked(global.fetch).mockResolvedValue({ ok: true, json: async () => ({ task: mockTask }) } as Response);
+    render(<EditTaskContent taskId="task-1" />);
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/tasks/task-1', expect.objectContaining({
+      headers: expect.objectContaining({ 'X-Task-Version': mockTask.version }),
+    })));
   });
 
   it('renders loading skeleton while fetching', () => {
@@ -256,7 +266,7 @@ describe('EditTaskContent', () => {
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith('/api/tasks/task-1', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Task-Version': mockTask.version },
         body: expect.any(String),
       });
     });

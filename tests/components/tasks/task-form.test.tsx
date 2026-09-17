@@ -210,6 +210,7 @@ describe('TaskForm', () => {
             section: 'personal',
             project_id: null,
           }),
+          undefined,
           undefined
         );
       });
@@ -239,6 +240,7 @@ describe('TaskForm', () => {
             section: 'personal',
             project_id: null,
           }),
+          undefined,
           undefined
         );
       });
@@ -264,6 +266,7 @@ describe('TaskForm', () => {
           expect.objectContaining({
             title: 'Buy supplies',
           }),
+          undefined,
           undefined
         );
       });
@@ -284,6 +287,7 @@ describe('TaskForm', () => {
       await waitFor(() => {
         expect(mockOnSubmit).toHaveBeenCalledWith(
           expect.objectContaining({ description: null }),
+          undefined,
           undefined
         );
       });

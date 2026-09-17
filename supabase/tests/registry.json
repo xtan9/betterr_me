@@ -1,5 +1,11 @@
 [
   {
+    "path": "mobile_task_capture.sql",
+    "domain": "tasks",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
     "path": "current_profile_preferences.sql",
     "domain": "profile",
     "role": "constrained",
