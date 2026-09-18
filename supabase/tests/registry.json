@@ -1,5 +1,11 @@
 [
   {
+    "path": "mobile_projects.sql",
+    "domain": "tasks",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
     "path": "mobile_calendar_capture.sql",
     "domain": "calendar",
     "role": "constrained",
