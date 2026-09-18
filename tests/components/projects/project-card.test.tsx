@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { axe } from "vitest-axe";
 import * as matchers from "vitest-axe/matchers";
 import { ProjectCard } from "@/components/projects/project-card";
+import { SectionBlock } from "@/components/tasks/section-block";
 import type { Project, Task } from "@/lib/db/types";
 
 expect.extend(matchers);
@@ -63,6 +64,15 @@ function makeTask(overrides: Partial<Task> = {}): Task {
 describe("ProjectCard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("shows a shared child in its project when its preserved task section differs", () => {
+    const tasks = [makeTask({ title: "Imported personal child", section: "personal" })];
+    render(<SectionBlock section="work" tasks={tasks} allTasks={tasks} projects={[makeProject()]} categories={[]}
+      activeTab="pending" onToggle={vi.fn()} onTaskClick={vi.fn()} onCreateTask={vi.fn()}
+      onEditProject={vi.fn()} onArchiveProject={vi.fn()} onDeleteProject={vi.fn()} />);
+    expect(screen.getByText("Imported personal child")).toBeInTheDocument();
+    expect(screen.getByText(/0\/1/)).toBeInTheDocument();
   });
 
   it("renders project name and empty-state when there are no tasks", () => {
