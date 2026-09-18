@@ -160,7 +160,13 @@ declare
   replay jsonb;
 begin
   if p_request ? 'expectedTaskVersion' then
-    if owner_id is null or owner_id::text is distinct from p_request->>'userId' then
+    -- Match the legacy command's authenticated/API-key ownership contract.
+    if coalesce(auth.role(), '') = 'service_role' then
+      owner_id := coalesce(nullif(p_request->>'userId', '')::uuid, owner_id);
+    elsif owner_id is null or nullif(p_request->>'userId', '')::uuid is distinct from owner_id then
+      return jsonb_build_object('status','not-found','type','not-found');
+    end if;
+    if owner_id is null then
       return jsonb_build_object('status','not-found','type','not-found');
     end if;
     -- Use the same advisory lock as the legacy edit to serialize retry lookup.
