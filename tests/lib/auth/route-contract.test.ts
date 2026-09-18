@@ -12,6 +12,7 @@ const apiRoot = join(process.cwd(), "app", "api");
  * Keep this list narrow and reviewed whenever a route is added.
  */
 const deliberateAuthExceptions: Record<string, string> = {
+  "mobile/next-action/route.ts": "verified native Supabase user JWT through authenticateNativeRequest; read-only owner RLS context",
   "cron/dispatch-reminders/route.ts": "CRON_SECRET service credential",
   "cron/prewarm-recurring-tasks/route.ts": "CRON_SECRET service credential",
   "email/unsubscribe/route.ts": "signed public unsubscribe token",
@@ -75,3 +76,4 @@ describe("API authentication route contract", () => {
     }
   });
 });
+
