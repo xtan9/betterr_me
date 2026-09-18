@@ -73,7 +73,7 @@ export type TaskInsert = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'comple
 };
 
 export type TaskUpdate = Partial<
-  Omit<Task, "id" | "user_id" | "created_at" | "updated_at">
+  Omit<Task, "id" | "user_id" | "created_at" | "updated_at" | "version">
 >;
 
 // =============================================================================

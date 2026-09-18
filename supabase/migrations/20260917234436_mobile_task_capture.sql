@@ -60,7 +60,7 @@ begin
     return jsonb_build_object('status','invalid-transition');
   end if;
   if p_changes ? 'title' and (jsonb_typeof(p_changes->'title') <> 'string'
-    or length(btrim(p_changes->>'title')) = 0 or length(p_changes->>'title') > 500) then
+    or length(btrim(p_changes->>'title')) = 0 or length(p_changes->>'title') > 100) then
     return jsonb_build_object('status','invalid-transition');
   end if;
   if p_changes ? 'estimate_minutes' and p_changes->'estimate_minutes' <> 'null'::jsonb
@@ -179,3 +179,232 @@ end $$;
 revoke all on function public.task_command_edit_unversioned_atomic(jsonb) from public,anon,authenticated;
 revoke all on function public.task_command_edit_atomic(jsonb) from public,anon,authenticated;
 notify pgrst, 'reload schema';
+
+-- Keep recurring web edits under the same row-version contract, after replay.
+create or replace function public.recurring_task_scoped_command_checked(
+  p_operation text,
+  p_request jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $function$
+declare
+  v_requested_user_id uuid := nullif(p_request->>'userId', '')::uuid;
+  v_authenticated_user_id uuid := auth.uid();
+  v_user_id uuid;
+  v_series_id uuid := nullif(p_request->>'seriesId', '')::uuid;
+  v_occurrence_id uuid := nullif(p_request->>'occurrenceId', '')::uuid;
+  v_task_id uuid := nullif(p_request->>'taskId', '')::uuid;
+  v_expected_revision_id uuid := nullif(p_request->>'expectedRevisionId', '')::uuid;
+  v_series public.recurring_task_series%rowtype;
+  v_occurrence public.recurring_task_occurrences%rowtype;
+  v_task public.tasks%rowtype;
+  v_operation_key text := coalesce(
+    nullif(p_request->>'idempotencyKey', ''),
+    nullif(p_request->>'operationKey', '')
+  );
+  v_command_operation text := coalesce(
+    nullif(p_request->>'taskCommandOperation', ''),
+    case when p_operation = 'end-series' then 'skip' else 'edit' end
+  );
+  v_fingerprint text;
+  v_existing_idempotency public.recurring_task_idempotency%rowtype;
+  v_outcome jsonb;
+  v_expected_revision_token integer;
+begin
+  if p_operation not in ('edit-occurrence', 'revise-series', 'end-series') then
+    return jsonb_build_object(
+      'status', 'invalid-transition',
+      'type', 'invalid-transition',
+      'reason', 'Unsupported scoped Task Command'
+    );
+  end if;
+  if coalesce(auth.role(), '') = 'service_role' then
+    v_user_id := coalesce(v_requested_user_id, v_authenticated_user_id);
+  else
+    if v_authenticated_user_id is null
+       or v_requested_user_id is distinct from v_authenticated_user_id then
+      return jsonb_build_object('status', 'not-found', 'type', 'not-found');
+    end if;
+    v_user_id := v_authenticated_user_id;
+  end if;
+  if v_user_id is null then
+    return jsonb_build_object('status', 'not-found', 'type', 'not-found');
+  end if;
+  if v_operation_key is null then
+    return jsonb_build_object(
+      'status', 'invalid-transition',
+      'type', 'invalid-transition',
+      'reason', 'Task Command operation ID is required'
+    );
+  end if;
+  if p_operation = 'edit-occurrence'
+     and p_request ? 'scope'
+     and p_request->>'scope' is distinct from 'this' then
+    return jsonb_build_object(
+      'status', 'invalid-transition',
+      'type', 'invalid-transition',
+      'reason', 'Occurrence edits only support the this scope'
+    );
+  end if;
+  if p_operation in ('revise-series', 'end-series')
+     and p_request->>'scope' not in ('following', 'all') then
+    return jsonb_build_object(
+      'status', 'invalid-transition',
+      'type', 'invalid-transition',
+      'reason', 'Series effects require the following or all scope'
+    );
+  end if;
+
+  select * into v_series
+  from public.recurring_task_series as series
+  where series.id = v_series_id
+    and series.user_id = v_user_id
+  for update;
+  if not found then
+    return jsonb_build_object('status', 'not-found', 'type', 'not-found');
+  end if;
+
+  v_fingerprint := public.recurring_task_lifecycle_fingerprint(
+    p_operation,
+    p_request
+  );
+  perform pg_advisory_xact_lock(
+    hashtextextended(v_user_id::text || ':' || v_operation_key, 0)
+  );
+  select * into v_existing_idempotency
+  from public.recurring_task_idempotency as record
+  where record.user_id = v_user_id
+    and record.operation_key = v_operation_key
+  for update;
+  if found then
+    if v_existing_idempotency.fingerprint <> v_fingerprint then
+      return jsonb_build_object(
+        'status', 'conflict',
+        'type', 'conflict',
+        'reason', 'Idempotency key was reused for a different request'
+      );
+    end if;
+    return jsonb_set(
+      jsonb_set(
+        v_existing_idempotency.outcome,
+        '{status}',
+        '"already-applied"'::jsonb
+      ),
+      '{type}',
+      '"already-applied"'::jsonb
+    );
+  end if;
+
+  if p_request ? 'expectedRevisionToken' then
+    begin
+      v_expected_revision_token := nullif(
+        btrim(coalesce(p_request->>'expectedRevisionToken', '')),
+        ''
+      )::integer;
+    exception when others then
+      return jsonb_build_object(
+        'status', 'invalid-transition',
+        'type', 'invalid-transition',
+        'reason', 'Expected Revision Token must be an integer'
+      );
+    end;
+    if v_expected_revision_token is null then
+      return jsonb_build_object(
+        'status', 'invalid-transition',
+        'type', 'invalid-transition',
+        'reason', 'Expected Revision Token must be an integer'
+      );
+    end if;
+    if v_expected_revision_token <> v_series.revision_token then
+      return jsonb_build_object(
+        'status', 'conflict',
+        'type', 'conflict',
+        'expectedRevisionToken', v_expected_revision_token,
+        'actualRevisionToken', v_series.revision_token
+      );
+    end if;
+  end if;
+
+  select * into v_occurrence
+  from public.recurring_task_occurrences as occurrence
+  where occurrence.id = v_occurrence_id
+    and occurrence.series_id = v_series_id
+  for update;
+  if not found then
+    return jsonb_build_object('status', 'not-found', 'type', 'not-found');
+  end if;
+  select * into v_task
+  from public.tasks as task
+  where task.id = v_task_id
+    and task.user_id = v_user_id
+  for update;
+  if not found
+     or v_occurrence.task_id is distinct from v_task.id
+     or v_task.recurring_series_id is distinct from v_series_id
+     or v_task.recurring_occurrence_id is distinct from v_occurrence_id then
+    return jsonb_build_object('status', 'not-found', 'type', 'not-found');
+  end if;
+  if p_request ? 'expectedTaskVersion'
+     and v_task.version::text is distinct from p_request->>'expectedTaskVersion' then
+    return jsonb_build_object('status', 'conflict', 'type', 'conflict',
+      'reason', 'Task changed. Reload before saving.');
+  end if;
+  if p_request ? 'scheduledDate'
+     and v_occurrence.scheduled_date is distinct from
+         (p_request->>'scheduledDate')::date then
+    return jsonb_build_object('status', 'not-found', 'type', 'not-found');
+  end if;
+  if p_request ? 'expectedRevisionId'
+     and v_occurrence.revision_id is distinct from v_expected_revision_id then
+    return jsonb_build_object(
+      'status', 'conflict',
+      'type', 'conflict',
+      'reason', 'Task occurrence revision changed concurrently'
+    );
+  end if;
+
+  if p_operation = 'edit-occurrence' then
+    v_outcome := public.recurring_task_edit_occurrence_atomic(p_request);
+  else
+    v_outcome := public.recurring_task_lifecycle_with_observability(
+      p_operation,
+      p_request
+    );
+  end if;
+
+  if p_operation = 'end-series'
+     and p_request->>'scope' = 'all'
+     and v_outcome->>'status' in ('complete', 'already-applied') then
+    update public.recurring_task_occurrences
+    set state = 'withdrawn',
+        updated_at = now()
+    where series_id = v_series_id
+      and state in ('open', 'extra');
+    update public.tasks as task
+    set recurrence_occurrence_state = 'withdrawn',
+        updated_at = now()
+    where task.user_id = v_user_id
+      and task.recurring_series_id = v_series_id
+      and task.recurrence_occurrence_state in ('open', 'extra');
+    v_outcome := public.recurring_task_series_snapshot(v_series_id, 'complete');
+  end if;
+
+  if v_outcome->>'status' in ('complete', 'already-applied') then
+    insert into public.recurring_task_idempotency(
+      user_id, operation_key, fingerprint, series_id, outcome,
+      task_command_task_id, task_command_operation
+    ) values (
+      v_user_id, v_operation_key, v_fingerprint, v_series_id, v_outcome,
+      v_task_id, v_command_operation
+    )
+    on conflict (user_id, operation_key) do update
+      set outcome = excluded.outcome,
+          task_command_task_id = excluded.task_command_task_id,
+          task_command_operation = excluded.task_command_operation;
+  end if;
+  return v_outcome;
+end;
+$function$;

@@ -350,6 +350,7 @@ export class TaskCommands {
         );
       }
       const request: ReviseSeriesRequest = {
+        ...(intent.expectedTaskVersion === undefined ? {} : { expectedTaskVersion: intent.expectedTaskVersion }),
         userId: intent.userId,
         taskId: task.id,
         occurrenceId,
@@ -390,6 +391,7 @@ export class TaskCommands {
       );
     }
     const request: OccurrenceUpdateRequest = {
+      ...(intent.expectedTaskVersion === undefined ? {} : { expectedTaskVersion: intent.expectedTaskVersion }),
       userId: intent.userId,
       taskId: task.id,
       seriesId,
