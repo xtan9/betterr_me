@@ -11,6 +11,7 @@ export async function updateSession(request: NextRequest) {
   // not cookies, and the middleware can interfere with the Authorization header.
   const path = request.nextUrl.pathname;
   if (
+    path === "/api/mobile/assistant" ||
     path.startsWith("/mcp") ||
     path.startsWith("/.well-known") ||
     path.startsWith("/api/oauth")

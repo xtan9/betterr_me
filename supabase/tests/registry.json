@@ -1,4 +1,5 @@
 [
+  {"path":"mobile_ai_capture.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
   {
     "path": "mobile_confirmed_bookings.sql",
     "domain": "tasks",
