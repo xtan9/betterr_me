@@ -134,10 +134,11 @@ begin
     return jsonb_set(receipt.outcome,'{status}','"already-applied"');
   end if;
 
-  -- Lock the destination before lifecycle/task locks, after replay lookup.
+  -- Serialize destination archive/edit without blocking foreign-key KEY SHARE
+  -- locks held by existing lifecycle writes. Replay must precede these locks.
   if p_changes ? 'project_id' and p_changes->'project_id'<>'null'::jsonb then
     select * into destination from public.projects
-    where id=(p_changes->>'project_id')::uuid and user_id=owner_id for update;
+    where id=(p_changes->>'project_id')::uuid and user_id=owner_id for no key update;
     if not found then return jsonb_build_object('status','not-found'); end if;
     if destination.version::text is distinct from p_changes->>'expected_project_version' then
       return jsonb_build_object('status','conflict');
