@@ -87,8 +87,8 @@ begin
   insert into public.work_sessions(user_id,event_id,task_id,planned_event,ended_at)
     values(owner_id,event.id,event.task_id,before_event,ended) returning * into session;
   insert into public.planner_changes(user_id,kind,before_state,after_state)
-    values(owner_id,'stop',jsonb_build_object('events',jsonb_build_array(before_event),'sessions','[]'::jsonb),
-      jsonb_build_object('events',jsonb_build_array(to_jsonb(event)),'sessions',jsonb_build_array(to_jsonb(session)))) returning id into change_id;
+    values(owner_id,'stop',jsonb_build_object('task',to_jsonb(task),'events',jsonb_build_array(before_event),'sessions','[]'::jsonb),
+      jsonb_build_object('task',to_jsonb(task),'events',jsonb_build_array(to_jsonb(event)),'sessions',jsonb_build_array(to_jsonb(session)))) returning id into change_id;
   outcome := jsonb_build_object('status','complete','changeId',change_id);
   insert into public.planner_command_receipts values(owner_id,request_id,p_request,outcome);
   return outcome;
