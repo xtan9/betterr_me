@@ -1,5 +1,11 @@
 [
   {
+    "path": "mobile_action_queue.sql",
+    "domain": "tasks",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
     "path": "mobile_projects.sql",
     "domain": "tasks",
     "role": "constrained",
