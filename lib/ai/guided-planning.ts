@@ -2,7 +2,8 @@ import {randomUUID} from 'node:crypto';
 import {z} from 'zod';
 import {buildCapturePreview,captureOutput,type CaptureContext} from './native-capture';
 import {occupiedIntervals,wallInstant,type PlannerEvent} from '@/lib/calendar/planner-intervals';
-import {addLocalDays,isValidLocalDate} from '@/lib/recurring-tasks/scheduling';
+import {addLocalDays,isValidLocalDate,getOccurrencesInRange} from '@/lib/recurring-tasks/scheduling';
+import type {RecurrenceRule} from '@/lib/db/types';
 const clock=z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 export const planningRequest=z.object({requestId:z.string().uuid(),consent:z.literal(true),locale:z.enum(['en','zh']),date:z.string().refine(isValidLocalDate),timezone:z.string().min(1).max(100),commitments:z.string().max(2000),needs:z.string().max(2000),goals:z.string().max(2000),travelMinutes:z.number().int().min(1).max(1440).nullable()}).strict();
 export const planningOutput=z.object({message:z.string().max(4000),questions:z.array(z.string().max(500)).max(10),assumptions:z.array(z.string().max(500)).max(10),capture:captureOutput,events:z.array(z.object({kind:z.enum(['event-create','event-edit','event-remove']),targetId:z.string().uuid().nullable(),title:z.string().min(1).max(100),startTime:clock,endTime:z.union([clock,z.literal('24:00')]),taskId:z.string().uuid().nullable(),taskItemIndex:z.number().int().min(0).max(9).nullable(),protected:z.boolean(),category:z.enum(['work','sleep','preparation','travel','meal','care','rest','other'])}).strict()).max(20),priorityTaskIds:z.array(z.string().uuid()).max(20).nullable()}).strict();
@@ -32,7 +33,7 @@ export function buildSchedulePreview(value:unknown,input:z.infer<typeof planning
   return {id:randomUUID(),kind:action.kind,...(before?{targetId:before.id,expectedVersion:before.version,before}:{}),...(taskItem?{taskItemId:taskItem.id}:{}),category:action.category,changes:action.kind==='event-remove'?{}:{title:action.title,start_date:input.date,end_date:endDate,start_time:action.startTime,end_time:endTime,timezone:input.timezone,task_id:action.taskId,is_protected:action.protected}};
  });
  const proposed=events.filter(event=>event.kind!=='event-remove').map(event=>({...event.changes,id:event.id,is_recurring:false,is_exception:false,recurrence_rule:null,session_ended_at:null}) as PlannerEvent);
- for(const item of capture.items)if(item.kind==='routine-create')proposed.push({id:item.id,title:item.changes.title,start_date:input.date,end_date:input.date,start_time:item.changes.startTime,end_time:item.changes.endTime,timezone:input.timezone,is_recurring:false} as PlannerEvent);
+ for(const item of capture.items)if(item.kind==='routine-create'&&getOccurrencesInRange(item.changes.rule as RecurrenceRule,input.date,input.date,input.date).length)proposed.push({id:item.id,title:item.changes.title,start_date:input.date,end_date:input.date,start_time:item.changes.startTime,end_time:item.changes.endTime,timezone:input.timezone,is_recurring:false} as PlannerEvent);
  const occupied=occupiedIntervals([...context.events.filter(event=>!changed.has(event.id)),...proposed],start,end,input.timezone),newIds=new Set(proposed.map(event=>event.id));
  for(let i=0;i<occupied.length;i++)for(let j=i+1;j<occupied.length&&occupied[j].start<occupied[i].end;j++)if(newIds.has(occupied[i].id)||newIds.has(occupied[j].id))throw new Error('Proposed overlap');
  const freeTime:{start:string;end:string}[]=[];let cursor=start;
