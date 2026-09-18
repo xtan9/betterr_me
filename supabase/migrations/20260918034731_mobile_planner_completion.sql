@@ -9,7 +9,7 @@ begin
     new.status := case when new.is_completed then 'done' else 'todo' end;
   end if;
   if new.is_completed is distinct from old.is_completed then
-    new.completed_at := case when new.is_completed then coalesce(new.completed_at,clock_timestamp()) else null end;
+    new.completed_at := case when new.is_completed then coalesce(new.completed_at,statement_timestamp()) else null end;
   end if;
   return new;
 end $$;
@@ -68,7 +68,7 @@ begin
   select * into task from public.tasks where id=p_task_id and user_id=auth.uid();
   if not found then return jsonb_build_object('status','not-found'); end if;
   if task.recurring_series_id is not null or task.recurring_occurrence_id is not null then return jsonb_build_object('status','unsupported'); end if;
-  return jsonb_build_object('status','complete','task',to_jsonb(task),'plan',planner_private.completion_plan(task.user_id,task.id,clock_timestamp()));
+  return jsonb_build_object('status','complete','task',to_jsonb(task),'plan',planner_private.completion_plan(task.user_id,task.id,date_trunc('second',statement_timestamp())));
 end $$;
 revoke all on function planner_private.completion_preview(uuid) from public,anon;
 grant execute on function planner_private.completion_preview(uuid) to authenticated;
@@ -81,7 +81,7 @@ create function planner_private.complete_linked_work() returns trigger
 language plpgsql security definer set search_path=pg_catalog,public as $$
 declare
   item jsonb; event public.calendar_events; session public.work_sessions;
-  ended timestamptz := date_trunc('second',clock_timestamp());
+  ended timestamptz := date_trunc('second',statement_timestamp());
   zone text; before_events jsonb := '[]'; after_events jsonb := '[]';
   reminders jsonb := '[]'; event_reminders jsonb; sessions jsonb := '[]'; released jsonb := '[]'; token uuid;
 begin
@@ -121,12 +121,15 @@ for each row when (new.is_completed and not old.is_completed) execute function p
 -- acquire a new eligible future reservation while its completion is in flight.
 create function planner_private.guard_completed_task_reservation() returns trigger
 language plpgsql security definer set search_path=pg_catalog,public as $$
-declare completed boolean;
+declare completed boolean; zone text;
 begin
-  if new.task_id is not null and new.app_owned and not new.is_protected and new.session_ended_at is null then
+  if new.task_id is not null and new.app_owned and not new.is_protected and new.session_ended_at is null
+    and not new.is_recurring and not new.is_exception and new.recurring_event_id is null and new.original_date is null
+    and new.recurrence_rule is null and new.end_type is null and new.end_count is null and new.end_date_recurrence is null then
     select is_completed into completed from public.tasks where id=new.task_id and user_id=new.user_id for share;
     if not found then raise exception using errcode='23503',message='Task not found'; end if;
-    if completed and new.start_time is not null and (new.end_date+new.end_time) at time zone coalesce(new.timezone,'UTC')>clock_timestamp() then
+    select coalesce(new.timezone,p.timezone,'UTC') into zone from public.profiles p where id=new.user_id;
+    if completed and new.start_time is not null and (new.end_date+new.end_time) at time zone zone>date_trunc('second',statement_timestamp()) then
       raise exception using errcode='PT409',message='Completed tasks cannot acquire flexible reservations';
     end if;
   end if;
@@ -197,7 +200,7 @@ begin
     if not found then return jsonb_build_object('status','not-found'); end if;
     if project.version is distinct from (p_request->>'expectedVersion')::uuid then return jsonb_build_object('status','conflict'); end if;
     if project.completed_at is not null then return jsonb_build_object('status','invalid'); end if;
-    update public.projects set completed_at=clock_timestamp() where id=project.id returning * into project;
+    update public.projects set completed_at=statement_timestamp() where id=project.id returning * into project;
     select id into change_id from public.planner_changes where user_id=owner_id and kind='complete-project' and after_state->'project'->>'version'=project.version::text;
   else
     select * into task from public.tasks where user_id=owner_id and id=(p_request->>'taskId')::uuid for update;
@@ -208,9 +211,9 @@ begin
     if p_request->>'operation'='complete' then
       if task.is_completed then return jsonb_build_object('status','invalid'); end if;
       perform 1 from public.calendar_events where user_id=owner_id and task_id=task.id order by id for update;
-      plan := planner_private.completion_plan(owner_id,task.id,date_trunc('second',clock_timestamp()));
+      plan := planner_private.completion_plan(owner_id,task.id,date_trunc('second',statement_timestamp()));
       if p_request->'plan' is distinct from plan then return jsonb_build_object('status','conflict'); end if;
-      update public.tasks set is_completed=true,status='done',completed_at=clock_timestamp() where id=task.id returning * into task;
+      update public.tasks set is_completed=true,status='done',completed_at=statement_timestamp() where id=task.id returning * into task;
       select id into change_id from public.planner_changes where user_id=owner_id and kind='complete' and after_state->'task'->>'version'=task.version::text;
     else
       if not task.is_completed then return jsonb_build_object('status','invalid'); end if;
