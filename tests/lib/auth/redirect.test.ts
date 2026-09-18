@@ -54,6 +54,12 @@ describe("getSafeRedirectPath", () => {
       );
     });
 
+    it("allows the password recovery destination", () => {
+      expect(getSafeRedirectPath("/auth/update-password")).toBe(
+        "/auth/update-password",
+      );
+    });
+
     it("allows the public Household Runway return path", () => {
       expect(getSafeRedirectPath("/finance/cushion")).toBe(
         "/finance/cushion",
