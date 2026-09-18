@@ -151,6 +151,54 @@ $$;
 revoke all on function planner_private.local_boundary(timestamp,text,boolean) from public,anon;
 grant execute on function planner_private.local_boundary(timestamp,text,boolean) to authenticated;
 
+-- Intersect the local window with each UTC-offset segment. In a repeated hour,
+-- its two occurrences can be disjoint; an enclosing start/end range is unsafe.
+create function planner_private.local_window(wall_start timestamp, wall_end timestamp, zone text) returns tstzmultirange
+language plpgsql stable security invoker set search_path = pg_catalog as $$
+declare
+  cursor_at timestamptz := planner_private.local_boundary(wall_start,zone,false);
+  finish_at timestamptz := planner_private.local_boundary(wall_end,zone,true);
+  segment_end timestamptz;
+  low_at timestamptz;
+  high_at timestamptz;
+  middle_at timestamptz;
+  displacement interval;
+  starts timestamptz;
+  ends timestamptz;
+  result tstzmultirange := '{}';
+begin
+  -- Preserve the documented forward shift for nonexistent spring boundaries.
+  wall_start := cursor_at at time zone zone;
+  wall_end := finish_at at time zone zone;
+  while cursor_at < finish_at loop
+    displacement := (cursor_at at time zone zone)-(cursor_at at time zone 'UTC');
+    segment_end := least(cursor_at+interval '1 hour',finish_at);
+    if (segment_end at time zone zone)-(segment_end at time zone 'UTC') <> displacement then
+      -- IANA offset transitions are separated by more than an hour and have
+      -- whole-second precision, including historical non-hour offset changes.
+      low_at := cursor_at;
+      high_at := segment_end;
+      while high_at-low_at > interval '1 second' loop
+        middle_at := date_trunc('second',low_at+(high_at-low_at)/2);
+        if (middle_at at time zone zone)-(middle_at at time zone 'UTC') = displacement then
+          low_at := middle_at;
+        else
+          high_at := middle_at;
+        end if;
+      end loop;
+      segment_end := high_at;
+    end if;
+    starts := greatest(cursor_at,(wall_start at time zone 'UTC')-displacement);
+    ends := least(segment_end,(wall_end at time zone 'UTC')-displacement);
+    if starts < ends then result := result+tstzmultirange(tstzrange(starts,ends,'[)')); end if;
+    cursor_at := segment_end;
+  end loop;
+  return result;
+end;
+$$;
+revoke all on function planner_private.local_window(timestamp,timestamp,text) from public,anon;
+grant execute on function planner_private.local_window(timestamp,timestamp,text) to authenticated;
+
 create function public.action_queue_snapshot(p_at timestamptz default now(),p_gap_minutes integer default null) returns jsonb
 language plpgsql stable security invoker set search_path = pg_catalog, public as $$
 declare
@@ -160,9 +208,13 @@ declare
   reasons text[];
   blocked_ids uuid[];
   allowed tstzmultirange;
+  batch_allowed tstzmultirange;
   local_day date;
+  last_day date;
+  continuous_until timestamptz;
   available boolean;
   fits_window boolean;
+  full_week boolean;
 begin
   if p_at is null or not isfinite(p_at) or p_gap_minutes < 0 then raise exception 'Invalid evaluation time or gap'; end if;
   for task in select t.* from public.tasks t where t.user_id=auth.uid() order by t.id loop
@@ -180,18 +232,36 @@ begin
     available := true;
     fits_window := true;
     if coalesce(jsonb_array_length(rules.windows),0)>0 then
-      local_day := (p_at at time zone rules.timezone)::date;
-      -- Adjacent/overlapping windows coalesce, including midnight and DST.
-      select range_agg(tstzrange(starts,greatest(starts,ends),'[)')) into allowed from (
-        select planner_private.local_boundary(day::date + (w->>'start')::time,rules.timezone,false) as starts,
-          planner_private.local_boundary(day::date + (w->>'end')::time,rules.timezone,true) as ends
-        from generate_series(local_day-1, local_day+8,interval '1 day') day
-        cross join jsonb_array_elements(rules.windows) w
-        where extract(dow from day)::integer=(w->>'day')::integer
-      ) intervals;
-      available := coalesce(allowed @> p_at,false);
-      fits_window := task.estimate_minutes is not null and coalesce(allowed @>
-        tstzrange(p_at,p_at+make_interval(mins=>task.estimate_minutes),'[)'),false);
+      -- Recognize continuous coverage before expanding dates. An accepted
+      -- integer estimate can span millennia; 24/7 hours still permit it.
+      select range_agg(int4range((w->>'day')::integer*1440+extract(epoch from (w->>'start')::time)::integer/60,
+        (w->>'day')::integer*1440+extract(epoch from (w->>'end')::time)::integer/60,'[)'))
+        @> int4range(0,10080,'[)') into full_week from jsonb_array_elements(rules.windows) w;
+      if full_week then
+        fits_window := task.estimate_minutes is not null;
+      else
+        local_day := (p_at at time zone rules.timezone)::date-1;
+        last_day := local_day+8;
+        allowed := '{}';
+        loop
+          -- Expand in batches only while coverage reaches the frontier. Stop
+          -- at the first real gap, not at an arbitrary date or estimate limit.
+          select range_agg(planner_private.local_window((local_day+day) + (w->>'start')::time,
+            (local_day+day) + (w->>'end')::time,rules.timezone)) into batch_allowed
+          from generate_series(0,last_day-local_day) day
+          cross join jsonb_array_elements(rules.windows) w
+          where extract(dow from local_day+day)::integer=(w->>'day')::integer;
+          allowed := allowed+coalesce(batch_allowed,'{}'::tstzmultirange);
+          available := allowed @> p_at;
+          fits_window := task.estimate_minutes is not null and allowed @>
+            tstzrange(p_at,p_at+make_interval(mins=>task.estimate_minutes),'[)');
+          exit when not available or task.estimate_minutes is null or fits_window;
+          select upper(span) into continuous_until from unnest(allowed) span where span @> p_at;
+          exit when continuous_until < planner_private.local_boundary((last_day+1)::timestamp,rules.timezone,false);
+          local_day := last_day+1;
+          last_day := last_day+7;
+        end loop;
+      end if;
       if not available then reasons := array_append(reasons,'unavailable');
       elsif not fits_window and task.estimate_minutes is not null then reasons := array_append(reasons,'window-too-short'); end if;
     end if;

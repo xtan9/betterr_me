@@ -27,6 +27,16 @@ The separate reviewer found the same scroll issue; re-review confirmed the fix a
 
 Review totals after fixes: standards 0 unresolved; spec 0 unresolved code findings, with release verification still pending.
 
+## Availability review follow-up
+
+The later [PR #1002 review](https://github.com/xtan9/betterr_me/pull/1002#issuecomment-5723970586) reproduced two backend defects not covered by the original tests: a short window in a repeated hour bridged disallowed local times, and a fixed date horizon incorrectly rejected long tasks. Both are corrected in the unmerged migration. Repeated windows are intersected with constant-offset segments. Continuous weekly coverage is recognized directly; partial coverage expands until the task fits or a real gap appears.
+
+The constrained `mobile_action_queue.sql` regression first failed and then passed for New York's repeated hour, a 10-day estimate under continuous weekly coverage, and a spring-forward transition that removes one weekly gap. Coverage also includes exclusive endpoints, both repeated occurrences, the maximum supported integer estimate, the next real weekly gap, Lord Howe's half-hour transition, and a different database session timezone. The existing real Auth/PostgREST queue integration suite still passes. Independent standards and spec re-reviews report no unresolved findings; an independent second-by-second check also found no membership mismatches for New York, Lord Howe, and Paris's historical second-resolution shift.
+
+The corrected full migration directory replays successfully from a clean disposable database, followed by the expanded fixture under `sql_fixture_test`. Registry and constrained-fixture policy validation, typecheck, and lint pass (lint retains four existing warnings). The full application suite reports 5,775 passes and two failures: the MCP access-grant architecture assertion also fails on unchanged main, and the Current Profile architecture timeout passes on an isolated rerun (20/20). These unrelated failures were not changed. The PR description now includes the required delivery classification and capability map, which passes the repository validator.
+
+The [companion browser review](https://github.com/xtan9/betterr_me_mobile/pull/24#issuecomment-5723876988) subsequently passed a local authenticated mobile-viewport smoke test after its merge-conflict resolution, superseding the earlier blocked browser attempt. It does not certify the hosted or physical-iPhone gates, or replace the deterministic availability regressions here.
+
 ## Reproduce and release
 
 Initialize a disposable local Supabase stack with the companion web migrations including `20260918010045_mobile_action_queue.sql`. Set `TASK_TEST_URL`, `TASK_TEST_ANON_KEY` and `TASK_TEST_SERVICE_ROLE_KEY` only in the test process, then run `node scripts/verify-action-queue.mjs`. It refuses non-loopback URLs and creates disposable users. The older shared-task regression may retain its recurring fixture account due to existing lifecycle deletion guards; remove the isolated stack after verification. Never use privileged keys in Expo public configuration.
