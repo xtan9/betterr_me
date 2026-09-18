@@ -1,5 +1,11 @@
 [
   {
+    "path": "mobile_planner_completion.sql",
+    "domain": "tasks",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
     "path": "mobile_planner_stop.sql",
     "domain": "tasks",
     "role": "constrained",
