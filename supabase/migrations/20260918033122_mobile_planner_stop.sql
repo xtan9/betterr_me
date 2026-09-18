@@ -1,4 +1,15 @@
 -- Explicit execution endings, never inferred actual work. See mobile-planner-stop.md.
+alter table public.calendar_events add column session_ended_at timestamptz;
+create function public.clear_rescheduled_session_end() returns trigger
+language plpgsql set search_path=pg_catalog,public as $$
+begin
+  if new.session_ended_at is not distinct from old.session_ended_at and
+    row(new.start_date,new.start_time,new.end_date,new.end_time,new.timezone) is distinct from
+    row(old.start_date,old.start_time,old.end_date,old.end_time,old.timezone) then new.session_ended_at := null; end if;
+  return new;
+end $$;
+create trigger clear_rescheduled_session_end before update on public.calendar_events
+for each row execute function public.clear_rescheduled_session_end();
 create table public.work_sessions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles(id) on delete cascade,
@@ -83,7 +94,7 @@ begin
   before_event := to_jsonb(event);
   perform public.update_calendar_event_with_reminders(owner_id,event.id,
     jsonb_build_object('end_date',(ended at time zone zone)::date,'end_time',(ended at time zone zone)::time),null);
-  select * into event from public.calendar_events where id=event.id and user_id=owner_id;
+  update public.calendar_events set session_ended_at=ended where id=event.id and user_id=owner_id returning * into event;
   insert into public.work_sessions(user_id,event_id,task_id,planned_event,ended_at)
     values(owner_id,event.id,event.task_id,before_event,ended) returning * into session;
   insert into public.planner_changes(user_id,kind,before_state,after_state)

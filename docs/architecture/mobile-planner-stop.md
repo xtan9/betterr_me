@@ -8,4 +8,6 @@ planner_command accepts a stop request with operationId, eventId and exact expec
 
 Snapshots include original event data, resulting event version, session version and task identity/version. Future Undo must validate all affected versions and restore the linked operation atomically; no expiry is introduced. Uncertain failures keep the exact immutable request for retry. Known conflicts require reload. Sessions survive reload through private shared reads, including after calendar changes.
 
+Calendar session_ended_at preserves the exact end instant during the repeated autumn hour; Today/Calendar use it over ambiguous civil end time. Explicit rescheduling clears that marker while retained work_sessions preserve history. Ordinary title/link edits retain it.
+
 Rollback clients first and retain additive tables/history. Do not deploy hosted migrations during local verification. Test the approved authenticated command/readback seam on an isolated real service: replay, private reads, stale versions, preserved task/later blocks, failure atomicity and restart. Deterministic Today tests establish the founder's 11:50-to-12:30 forty-minute gap. Browser smoke validates explanation/cancel/stop/history; physical-iPhone and hosted-account evidence remain release gates. This intermediate slice is not a releasable manual MVP.
