@@ -43,7 +43,7 @@ export interface RecurrenceConfig {
 interface TaskFormProps {
   mode: "create" | "edit";
   initialData?: Task;
-  onSubmit: (data: TaskFormValues, recurrence?: RecurrenceConfig) => Promise<void>;
+  onSubmit: (data: TaskFormValues, recurrence?: RecurrenceConfig, expectedTaskVersion?: string) => Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
   hideChrome?: boolean;
@@ -77,6 +77,9 @@ export function TaskForm({
   const priorityT = useTranslations("tasks.priorities");
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
+  // Keep concurrency tied to the values initially loaded into this form,
+  // even when SWR refreshes the parent task while the user is typing.
+  const [expectedTaskVersion] = useState(initialData?.version);
 
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(taskFormSchema),
@@ -128,7 +131,8 @@ export function TaskForm({
         ...data,
         description: data.description || null,
       },
-      recurrence.rule ? recurrence : undefined
+      recurrence.rule ? recurrence : undefined,
+      expectedTaskVersion,
     );
   };
 

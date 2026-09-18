@@ -249,9 +249,13 @@ export async function DELETE(
 
 function expectedSeriesVersion(
   request: Pick<NextRequest, 'headers'>,
-): { expectedVersion?: string } {
+): { expectedVersion?: string; expectedTaskVersion?: string } {
   const supplied = request.headers.get('If-Match')
     ?? request.headers.get('X-Series-Version');
   const value = supplied?.trim().replace(/^"|"$/g, '');
-  return value ? { expectedVersion: value } : {};
+  const taskVersion = request.headers.get('X-Task-Version')?.trim();
+  return {
+    ...(value ? { expectedVersion: value } : {}),
+    ...(taskVersion ? { expectedTaskVersion: taskVersion } : {}),
+  };
 }

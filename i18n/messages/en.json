@@ -621,6 +621,8 @@
     "edit": {
       "title": "Edit Task",
       "success": "Task updated successfully",
+      "conflict": "This task changed elsewhere. Your draft is kept. Reload the current task before saving again.",
+      "reload": "Discard draft and reload task",
       "error": "Failed to update task"
     },
     "delete": {

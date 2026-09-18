@@ -29,6 +29,7 @@ export type TaskCommandScope = "this" | "following" | "all";
 export type TaskCommandUpdates = TaskUpdateValues;
 
 export interface TaskCommandIntent {
+  expectedTaskVersion?: string;
   type: TaskCommandType;
   userId: string;
   taskId: string;
@@ -63,6 +64,7 @@ export interface LegacyTaskToggleIntent {
 }
 
 export interface TaskCommandOrdinaryRequest {
+  expectedTaskVersion?: string;
   type: TaskCommandType;
   userId: string;
   taskId: string;
@@ -348,6 +350,7 @@ export class TaskCommands {
         );
       }
       const request: ReviseSeriesRequest = {
+        ...(intent.expectedTaskVersion === undefined ? {} : { expectedTaskVersion: intent.expectedTaskVersion }),
         userId: intent.userId,
         taskId: task.id,
         occurrenceId,
@@ -388,6 +391,7 @@ export class TaskCommands {
       );
     }
     const request: OccurrenceUpdateRequest = {
+      ...(intent.expectedTaskVersion === undefined ? {} : { expectedTaskVersion: intent.expectedTaskVersion }),
       userId: intent.userId,
       taskId: task.id,
       seriesId,
@@ -593,6 +597,7 @@ class SupabaseTaskCommandOrdinaryPersistence {
         userId: request.userId,
         taskId: request.taskId,
         idempotencyKey: request.operationId,
+        ...(request.expectedTaskVersion === undefined ? {} : { expectedTaskVersion: request.expectedTaskVersion }),
         ...(request.scope === undefined ? {} : { scope: request.scope }),
         ...(request.updates === undefined ? {} : { updates: request.updates }),
         ...(request.effectiveDate === undefined
@@ -616,6 +621,7 @@ class SupabaseTaskCommandOrdinaryPersistence {
         userId: request.userId,
         taskId: request.taskId,
         idempotencyKey: request.operationId,
+        ...(request.expectedTaskVersion === undefined ? {} : { expectedTaskVersion: request.expectedTaskVersion }),
         ...(request.scope === undefined ? {} : { scope: request.scope }),
         ...(request.updates === undefined ? {} : { updates: request.updates }),
         ...(request.effectiveDate === undefined
@@ -687,6 +693,7 @@ function toCommandRequest(
     userId: intent.userId,
     taskId: intent.taskId,
     operationId: intent.operationId,
+    ...(intent.expectedTaskVersion === undefined ? {} : { expectedTaskVersion: intent.expectedTaskVersion }),
     ...(intent.scope === undefined ? {} : { scope: intent.scope }),
     ...(intent.updates === undefined ? {} : { updates: intent.updates }),
     ...(intent.effectiveDate === undefined

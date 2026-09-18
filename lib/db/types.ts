@@ -29,6 +29,9 @@ export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'done';
 export type TaskSection = 'personal' | 'work';
 
 export interface Task {
+  version?: string;
+  estimate_minutes?: number | null;
+  archived_at?: string | null;
   id: string; // UUID
   user_id: string; // UUID
   title: string;
@@ -70,7 +73,7 @@ export type TaskInsert = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'comple
 };
 
 export type TaskUpdate = Partial<
-  Omit<Task, "id" | "user_id" | "created_at" | "updated_at">
+  Omit<Task, "id" | "user_id" | "created_at" | "updated_at" | "version">
 >;
 
 // =============================================================================

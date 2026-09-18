@@ -252,6 +252,7 @@ export interface LifecycleClockOptions {
 export type LifecycleSource = "interactive" | "prewarm";
 
 export interface LifecycleContext {
+  expectedTaskVersion?: string;
   userId: string;
   timeZone?: string;
   timezone?: string;
