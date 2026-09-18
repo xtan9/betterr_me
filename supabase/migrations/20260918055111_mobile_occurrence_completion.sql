@@ -167,6 +167,9 @@ create function planner_private.withdraw_routine_reservation() returns trigger
 language plpgsql security definer set search_path=pg_catalog,public as $$
 declare event_id uuid;
 begin
+  -- Auth/profile deletion already cascades events and reminders. That internal
+  -- cascade has no end-user JWT and must not call an authenticated command.
+  if not exists(select 1 from public.profiles where id=old.user_id) then return old; end if;
   for event_id in select id from public.calendar_events where user_id=old.user_id
     and routine_occurrence_id=old.recurring_occurrence_id and task_id=old.id order by id for update loop
     perform public.delete_calendar_event_with_reminders(old.user_id,event_id);
@@ -215,3 +218,15 @@ end $$;
 revoke all on function planner_private.check_routine_event_link() from public,anon,authenticated;
 create trigger planner_check_routine_event_link before insert or update on public.calendar_events
 for each row execute function planner_private.check_routine_event_link();
+
+-- Owner deletion is a cascade, not a user bypass of the task lifecycle.
+-- Read profile existence with the function owner's visibility, never caller RLS.
+do $cascade$
+declare definition text;
+begin
+ select pg_get_functiondef('public.recurring_task_task_write_guard()'::regprocedure) into definition;
+ definition:=replace(definition,'BEGIN','BEGIN
+  IF TG_OP = ''DELETE'' AND NOT EXISTS(SELECT 1 FROM public.profiles WHERE id=OLD.user_id) THEN RETURN OLD; END IF;');
+ execute definition;
+end $cascade$;
+alter function public.recurring_task_task_write_guard() security definer;
