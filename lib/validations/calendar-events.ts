@@ -100,6 +100,7 @@ export type CalendarEventCreateValues = z.infer<
 // the server merges partial updates with the existing record.
 export const calendarEventUpdateSchema = z
   .object({
+    expected_version: z.string().uuid().optional(),
     title: z.string().trim().min(1).max(200).optional(),
     description: z.string().max(2000).optional().nullable(),
     start_date: z

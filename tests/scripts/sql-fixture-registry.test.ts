@@ -95,6 +95,7 @@ describe("SQL fixture registry", () => {
         (entry: { path: string }) => entry.path,
       ),
     ).toEqual([
+      "mobile_calendar_capture.sql",
       "calendar_event_reminder_lifecycle.sql",
       "calendar_event_reminder_delete_lifecycle.sql",
       "calendar_event_reminder_update_lifecycle.sql",
