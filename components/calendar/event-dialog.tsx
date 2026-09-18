@@ -152,6 +152,7 @@ export function EventDialog({
 
       try {
         const payload: Record<string, unknown> = {
+          ...(isEditing && event?.version ? { expected_version: event.version } : {}),
           title: values.title.trim(),
           start_date: values.start_date,
           end_date: values.end_date || values.start_date,
