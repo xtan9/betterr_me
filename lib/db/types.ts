@@ -682,6 +682,7 @@ export type ApiKeyPublic = Omit<ApiKey, 'key_hash'>;
 // =============================================================================
 
 export interface CalendarEvent {
+  version?: string;
   id: string;
   user_id: string;
   title: string;

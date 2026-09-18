@@ -82,6 +82,7 @@ export async function PATCH(
     // Build update object — only include fields that were provided
     const updates: Record<string, unknown> = {};
     const data = validation.data;
+    if (data.expected_version !== undefined) updates.expected_version = data.expected_version;
 
     if (data.title !== undefined) {
       updates.title = data.title.trim();
@@ -142,6 +143,9 @@ export async function PATCH(
 
     return NextResponse.json(outcome);
   } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'PT409') {
+      return NextResponse.json({ error: 'Calendar event changed; reload before saving' }, { status: 409 });
+    }
     if (
       error &&
       typeof error === 'object' &&
