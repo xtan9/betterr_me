@@ -12,6 +12,7 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
   if (
     path === "/api/mobile/assistant" ||
+    path === "/api/mobile/next-action" ||
     path.startsWith("/mcp") ||
     path.startsWith("/.well-known") ||
     path.startsWith("/api/oauth")
@@ -95,3 +96,4 @@ export async function updateSession(request: NextRequest) {
 
   return supabaseResponse;
 }
+

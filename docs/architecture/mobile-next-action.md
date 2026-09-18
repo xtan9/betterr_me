@@ -1,0 +1,11 @@
+# Issue 14: grounded next-action recommendations
+
+Implements approved issue #14 / iOS MVP AC08, AC09, AC17, AC18 and AC22. The user deferred Apple membership/TestFlight work. Live gateway and device delivery evidence remain separate gates. Tests use the approved authenticated route, owner persistence and native UI/browser seams.
+
+The Assistant offers a read-only recommendation for an explicitly confirmed available interval. An empty calendar gap alone is never consent or evidence of availability. Reuse the existing gateway, native bearer identity, AI consent and rate limits. Fetch fresh owner daily priorities, queue/actionability, deadlines, estimates, calendar commitments and time zone for each request; do not import web memory/history/tools. Never create task occurrences, reservations, session starts or queue changes during recommendation.
+
+Rank actionable priorities in saved order, then the saved broader queue, then other eligible work using deadlines. Preserve saved order. Validate fit against the complete requested interval, dependency/waiting/window facts and all occupied intervals. Do not split an indivisible estimate; an unknown estimate cannot be claimed to fit. Explain skipped tasks using server-derived reasons. The model can explain grounded facts and user context; it cannot override the eligible selection or invoke commands. Surface incomplete calendar/recurrence context rather than assuming free time.
+
+Display the selected saved task, estimate, deadline, evaluation time and explicit interval, plus skipped reasons and AI explanation. A suggestion is transient and refreshed on demand; acceptance or material adjustment must go through exact versioned proposal commands, never this route. The user can continue manual controls or use the existing capture preview for a requested task edit. No schema migration is needed if the existing read commands suffice.
+
+Verify two-hour task versus 80-minute interval, ordered priorities, waiting/dependencies/availability, occupied intervals, missing estimates, completion/released reservations, unchanged persistence and queue ordering, AI-off/service failure, Chinese copy and stale-to-fresh refresh. Roll back client before endpoint; no plan-data rollback is required for the read-only recommendation feature.
