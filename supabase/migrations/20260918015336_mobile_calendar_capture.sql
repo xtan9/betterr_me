@@ -7,7 +7,7 @@ alter table public.calendar_events
   add column version uuid not null default gen_random_uuid();
 create unique index if not exists tasks_id_owner_calendar_key on public.tasks(id,user_id);
 alter table public.calendar_events add constraint calendar_task_owner_fk
-  foreign key(task_id,user_id) references public.tasks(id,user_id);
+  foreign key(task_id,user_id) references public.tasks(id,user_id) on delete set null (task_id);
 
 create function public.advance_calendar_version() returns trigger
 language plpgsql set search_path = pg_catalog, public as $$
