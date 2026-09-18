@@ -44,9 +44,6 @@ export function SectionBlock({
   const standaloneTasks = sectionTasks.filter((t) => !t.project_id);
   const sectionProjects = projects.filter((p) => p.section === section);
 
-  // All tasks in this section (unfiltered — for project progress)
-  const allSectionTasks = allTasks.filter((t) => t.section === section);
-
   const isEmpty =
     standaloneTasks.length === 0 && sectionProjects.length === 0;
 
@@ -95,7 +92,9 @@ export function SectionBlock({
               )}
               <div className="grid gap-card-gap md:grid-cols-2 lg:grid-cols-3">
                 {sectionProjects.map((project) => {
-                  const projectTasks = allSectionTasks.filter(
+                  // Membership follows the shared project identity. A mobile
+                  // move preserves the child's independent section metadata.
+                  const projectTasks = allTasks.filter(
                     (t) => t.project_id === project.id
                   );
                   return (
