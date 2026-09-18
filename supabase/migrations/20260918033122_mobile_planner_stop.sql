@@ -79,6 +79,7 @@ begin
   select * into event from public.calendar_events where user_id=owner_id and id=(p_request->>'eventId')::uuid for update;
   if not found then return jsonb_build_object('status','not-found'); end if;
   if event.version is distinct from (p_request->>'expectedVersion')::uuid then return jsonb_build_object('status','conflict'); end if;
+  if event.session_ended_at is not null then return jsonb_build_object('status','conflict'); end if;
   if event.task_id is null or event.is_protected or not event.app_owned or event.start_time is null
     or event.is_recurring or event.is_exception or event.recurring_event_id is not null or event.original_date is not null
     or event.recurrence_rule is not null or event.end_type is not null or event.end_count is not null or event.end_date_recurrence is not null then
