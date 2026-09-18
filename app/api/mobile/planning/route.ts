@@ -24,7 +24,8 @@ export async function POST(request:Request){
   if(!process.env.LLM_API_KEY)return respond({error:'unavailable'},503);
   const rate=await checkChatRateLimit(client,userId);if(!rate.allowed)return respond({error:rate.reason==='exceeded'?'limited':'unavailable'},rate.reason==='exceeded'?429:503);
   const snapshot=await client.rpc('planner_schedule_context',{p_date:input.date});
-  if(snapshot.error||!snapshot.data?.version||snapshot.data.coverageComplete===false)return respond({error:'unavailable'},503);
+  if(snapshot.error||!snapshot.data?.version)return respond({error:'unavailable'},503);
+  if(snapshot.data.coverageComplete===false)return respond({error:'coverage'},422);
   const context=snapshot.data as PlanningContext;
   // Never silently truncate commitments: refuse oversized contexts rather than plan through omitted time.
   if(context.tasks.length>200||context.events.length>1000)return respond({error:'unavailable'},503);
