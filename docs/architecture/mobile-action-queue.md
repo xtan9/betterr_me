@@ -1,0 +1,23 @@
+# Issue 3: action queue and availability
+
+Approved scope: issue #3, the iOS MVP specification and CONTEXT.md. Depends on the merged task-capture implementation; hosted and physical-device gates from issue #2 remain open.
+
+## Mapping and contracts
+
+Web main `2ef89b04` has task status (backlog/todo/in_progress/done), section and sort_order, but no action queue, dependencies, waiting or availability. Preserve all these legacy fields. Queue membership is an ordered reference, never a task copy or calendar reservation. Add owner-scoped action_queue_state (UUID version and ordered task IDs), task_action_rules (task ID, owner, UUID version, waiting, timezone, windows and dependency IDs), and immutable command receipts. No existing records are backfilled or reordered. Missing rule rows mean not waiting, no dependencies and unrestricted hours; missing queue means empty with a null version.
+
+Availability uses explicit IANA timezone and weekly local-hour windows: weekday 0=Sunday through 6=Saturday, start inclusive and end exclusive. Multiple windows are allowed. Overnight hours are represented with two windows, one on each day; 24:00 is allowed only as an end. No windows means unrestricted hours. These are permitted hours, not calendar events, deadlines, or a claim of personal availability. The editor explains this model. PostgreSQL evaluates local dates and timezone offsets; estimates remain whole, unchanged durations.
+
+Authenticated action_queue_command accepts either an entire explicit queue order with its version or a task rule edit with both the task and rule versions. It validates every referenced task against auth.uid(), rejects self/cyclic dependencies, serializes a user's planning edits, and stores a request fingerprint and outcome for safe replay. New rules do not modify recurrence projections or legacy task status. Completed, archived and terminal recurring tasks remain visible with reasons. Dependencies require completion; archiving alone does not satisfy one. Missing referenced tasks remain blocked until the reference is removed. Direct client writes to the new tables are denied; private security-definer implementation authenticates and checks ownership, with public invoker RPC wrappers. Read policies restrict every added table to its owner.
+
+The shared action_queue_snapshot RPC returns consistent task/rule/queue state and time-specific facts for all owned tasks, reusable by later recommendations. Reasons include waiting, unresolved dependency, outside allowed hours, completed/archived/terminal occurrence, insufficient uninterrupted allowed time, unknown estimate and insufficient gap. No recommendation or automatic ordering is introduced. A two-hour task retains 120 minutes and cannot fit an 80-minute gap. Snapshot facts include the evaluation timestamp; native refresh occurs on entry, foreground and each minute. Unknown estimates never imply fit. Windows touching/overlapping on a day are evaluated as one continuous interval.
+
+Native UI offers queue/all-task views, add/remove, visible move-up/down buttons, waiting/resume and rule editing, with English/Chinese copy. Pending commands keep their immutable request for retry; conflicting edits preserve drafts and require explicit reload. Tab changes retain drafts and per-tab scroll positions. Account-keyed state prevents leaking a prior account's screen.
+
+## Migration and rollback
+
+Schema source stays in the companion web repository, branch codex/mobile-action-queue. Deploy its additive migration before this native release. Existing web clients preserve these separate records; no web UI expansion is required. Updated clients and future recommendations use the same RPCs. Roll back client code first and retain the added tables/receipts; dropping them would lose chosen order, rules and retry history. No production migration is authorized merely for local verification.
+
+## Verification
+
+Use TDD at the already-approved authenticated command/persistence boundary and selected native screen boundary. Verify restart reads, no calendar writes, preservation of rich task fields, queue and task-rule conflicts, replay with identical/changed payloads, invalid windows/cycles, two-account reference attacks and read isolation. Use deterministic instants for weekday, interval boundary, DST and estimate-fit cases. Run native typecheck, lint, full suite and iOS bundle export, then independent code review against main. Record hosted-service and physical-iPhone checks separately; local compilation and browser tests do not certify them. Keep issue #3 open and the PR unmerged while required release verification is pending.
