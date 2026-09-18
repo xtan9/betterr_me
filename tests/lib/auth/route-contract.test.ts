@@ -18,6 +18,7 @@ const deliberateAuthExceptions: Record<string, string> = {
   "finance/cushion/events/route.ts": "public anonymous analytics event",
   "oauth/register/route.ts": "public OAuth dynamic client registration",
   "oauth/token/route.ts": "public OAuth token exchange",
+  "mobile/assistant/route.ts": "verified native Supabase user JWT only; public RLS client via authenticateNativeRequest, no cookie/MCP/API-key fallback",
 };
 
 function routeFiles(directory: string): string[] {
