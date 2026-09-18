@@ -13,6 +13,7 @@ const apiRoot = join(process.cwd(), "app", "api");
  */
 const deliberateAuthExceptions: Record<string, string> = {
   "mobile/next-action/route.ts": "verified native Supabase user JWT through authenticateNativeRequest; read-only owner RLS context",
+  "mobile/planning/route.ts": "verified native Supabase user JWT through authenticateNativeRequest; immutable owner RLS proposal",
   "cron/dispatch-reminders/route.ts": "CRON_SECRET service credential",
   "cron/prewarm-recurring-tasks/route.ts": "CRON_SECRET service credential",
   "email/unsubscribe/route.ts": "signed public unsubscribe token",

@@ -1,6 +1,6 @@
 import type {CalendarEvent} from '@/lib/db/types';
 import {addLocalDays,daysBetween,getOccurrencesInRange,isValidLocalDate,getLocalDateInTimeZone} from '@/lib/recurring-tasks/scheduling';
-export type PlannerEvent=CalendarEvent&{timezone?:string|null;session_ended_at?:string|null;routine_occurrence_id?:string|null};
+export type PlannerEvent=Pick<CalendarEvent,'id'|'title'|'start_date'|'end_date'|'start_time'|'end_time'|'is_recurring'>&Partial<Omit<CalendarEvent,'id'|'title'|'start_date'|'end_date'|'start_time'|'end_time'|'is_recurring'>>&{timezone?:string|null;session_ended_at?:string|null;routine_occurrence_id?:string|null;app_owned?:boolean;is_protected?:boolean};
 /** Same wall-clock policy as calendar commands: reject gaps, choose the later fold. */
 export function wallInstant(date:string,time:string,timezone:string):number{
  if(!isValidLocalDate(date)||!/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(time))throw new Error('Invalid wall time');
