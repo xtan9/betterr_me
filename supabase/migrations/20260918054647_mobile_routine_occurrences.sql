@@ -176,4 +176,3 @@ create function public.planner_routine_command(p_request jsonb) returns jsonb
 language sql security invoker set search_path=pg_catalog as $$ select planner_private.routine_command(p_request) $$;
 revoke all on function public.planner_routine_command(jsonb) from public,anon;
 grant execute on function public.planner_routine_command(jsonb) to authenticated;
-

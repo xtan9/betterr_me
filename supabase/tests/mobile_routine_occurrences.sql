@@ -38,5 +38,3 @@ begin
  if row->'occurrence'->>'state' is distinct from 'open' or row->'event'->>'id' is null or (row->'task'->>'is_completed')::boolean then raise exception 'restore missed exact occurrence';end if;
 end $$;
 rollback;
-
-

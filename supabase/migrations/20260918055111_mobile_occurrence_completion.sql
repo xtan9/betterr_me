@@ -186,3 +186,32 @@ begin
  execute definition;
 end $stop$;
 
+
+create function planner_private.withdraw_changed_occurrence() returns trigger
+language plpgsql security definer set search_path=pg_catalog,public as $$
+declare event_id uuid; owner_id uuid;
+begin
+  select user_id into owner_id from public.recurring_task_series where id=new.series_id;
+  for event_id in select id from public.calendar_events where user_id=owner_id and routine_occurrence_id=new.id order by id for update loop
+    perform public.delete_calendar_event_with_reminders(owner_id,event_id);
+  end loop;
+  return new;
+end $$;
+revoke all on function planner_private.withdraw_changed_occurrence() from public,anon,authenticated;
+create trigger planner_withdraw_changed_occurrence after update of state on public.recurring_task_occurrences
+for each row when (new.state in ('withdrawn','skipped') and old.state is distinct from new.state)
+execute function planner_private.withdraw_changed_occurrence();
+
+-- Direct legacy calendar writes must obey the same owner and exact-task relation.
+create function planner_private.check_routine_event_link() returns trigger
+language plpgsql security definer set search_path=pg_catalog,public as $$
+begin
+ if new.routine_occurrence_id is not null and not exists(
+   select 1 from public.recurring_task_occurrences o join public.recurring_task_series s on s.id=o.series_id
+   where o.id=new.routine_occurrence_id and s.user_id=new.user_id and o.task_id=new.task_id
+ ) then raise exception using errcode='23503',message='Invalid routine occurrence relationship'; end if;
+ return new;
+end $$;
+revoke all on function planner_private.check_routine_event_link() from public,anon,authenticated;
+create trigger planner_check_routine_event_link before insert or update on public.calendar_events
+for each row execute function planner_private.check_routine_event_link();
