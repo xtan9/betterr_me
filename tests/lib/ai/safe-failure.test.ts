@@ -1,3 +1,4 @@
+import { RetryError } from "ai";
 import { describe, expect, it } from "vitest";
 import { safeAiFailure } from "@/lib/ai/safe-failure";
 
@@ -39,5 +40,23 @@ describe("safeAiFailure", () => {
     });
 
     expect(safeAiFailure(failure)).toEqual({ name: "UnknownFailure" });
+  });
+
+  it("keeps bounded metadata from an exhausted AI SDK retry", () => {
+    const failure = new RetryError({
+      message: "private retry details",
+      reason: "maxRetriesExceeded",
+      errors: [{
+        name: "AI_APICallError",
+        code: "model_not_found",
+        statusCode: 404,
+        message: "private provider response",
+      }],
+    });
+
+    const context = safeAiFailure(failure);
+
+    expect(context).toEqual({ name: "AI_RetryError", code: "model_not_found", statusCode: 404 });
+    expect(JSON.stringify(context)).not.toContain("private");
   });
 });

@@ -4,6 +4,7 @@ const SAFE_NAMES = new Set([
   "AI_InvalidResponseDataError",
   "AI_JSONParseError",
   "AI_NoObjectGeneratedError",
+  "AI_RetryError",
   "Error",
   "TypeError",
   "ZodError",
@@ -41,8 +42,10 @@ export function safeAiFailure(error: unknown): Record<string, string | number> {
   if (!error || typeof error !== "object") return { name: "UnknownFailure" };
 
   const rawName = read(error, "name");
-  const rawCode = read(error, "code");
-  const rawStatusCode = read(error, "statusCode") ?? read(error, "status");
+  const lastError = rawName === "AI_RetryError" ? read(error, "lastError") : undefined;
+  const diagnostic = lastError && typeof lastError === "object" ? lastError : error;
+  const rawCode = read(diagnostic, "code");
+  const rawStatusCode = read(diagnostic, "statusCode") ?? read(diagnostic, "status");
   const context: Record<string, string | number> = {
     name: typeof rawName === "string" && SAFE_NAMES.has(rawName) ? rawName : "UnknownFailure",
   };
