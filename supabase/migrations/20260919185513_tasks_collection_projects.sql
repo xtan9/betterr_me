@@ -49,7 +49,7 @@ begin
     select * into task from public.tasks where id=(p_request->>'taskId')::uuid and user_id=owner_id;
     if task.recurring_series_id is not null then
       select * into series from public.recurring_task_series where id=task.recurring_series_id and user_id=owner_id for update;
-      select * into occurrence from public.recurring_task_occurrences where id=task.recurring_occurrence_id and user_id=owner_id for update;
+      select * into occurrence from public.recurring_task_occurrences where id=task.recurring_occurrence_id and series_id=series.id for update;
     end if;
     select * into task from public.tasks where id=(p_request->>'taskId')::uuid and user_id=owner_id for update;
     select * into parent from public.projects where id=task.project_id and user_id=owner_id for no key update;
@@ -61,7 +61,7 @@ begin
         update public.planner_changes set before_state=before_state||jsonb_build_object('project',to_jsonb(parent)),after_state=after_state||jsonb_build_object('project',to_jsonb(after_parent)) where id=change_id and user_id=owner_id;
       end if;
       if occurrence.id is not null then
-        select * into after_occurrence from public.recurring_task_occurrences where id=occurrence.id and user_id=owner_id;
+        select * into after_occurrence from public.recurring_task_occurrences where id=occurrence.id and series_id=series.id;
         update public.planner_changes set before_state=before_state||jsonb_build_object('occurrence',to_jsonb(occurrence)),after_state=after_state||jsonb_build_object('occurrence',to_jsonb(after_occurrence),'seriesId',series.id,'seriesToken',series.revision_token) where id=change_id and user_id=owner_id;
       end if;
     end if;
@@ -83,14 +83,15 @@ begin
     if change.after_state ? 'occurrence' then
       select * into series from public.recurring_task_series where id=(change.after_state->>'seriesId')::uuid and user_id=owner_id for update;
       if not found or series.revision_token::text is distinct from change.after_state->>'seriesToken' then return jsonb_build_object('status','conflict'); end if;
-      select * into occurrence from public.recurring_task_occurrences where id=(change.after_state->'occurrence'->>'id')::uuid and user_id=owner_id for update;
+      select * into occurrence from public.recurring_task_occurrences where id=(change.after_state->'occurrence'->>'id')::uuid and series_id=series.id for update;
       if not found or occurrence.version::text is distinct from change.after_state->'occurrence'->>'version' then return jsonb_build_object('status','conflict'); end if;
     end if;
     if change.kind='reopen' then
       select * into task from public.tasks where id=(change.after_state->'task'->>'id')::uuid and user_id=owner_id for update;
       if not found or task.version::text is distinct from change.after_state->'task'->>'version' then return jsonb_build_object('status','conflict'); end if;
       -- Re-completion must not release work added after the reopen.
-      if exists(select 1 from public.calendar_events where user_id=owner_id and task_id=task.id and app_owned and not is_protected) then return jsonb_build_object('status','conflict'); end if;
+      if task.recurring_series_id is not null and not (change.after_state ? 'occurrence') then return jsonb_build_object('status','unsupported'); end if;
+      if jsonb_array_length(planner_private.completion_plan(owner_id,task.id,date_trunc('second',statement_timestamp())))>0 then return jsonb_build_object('status','conflict'); end if;
     end if;
     if change.after_state ? 'project' then
       select * into parent from public.projects where id=(change.after_state->'project'->>'id')::uuid and user_id=owner_id for update;
@@ -101,8 +102,23 @@ begin
       update public.recurring_task_occurrences set state=change.before_state->'occurrence'->>'state',completed_at=(change.before_state->'occurrence'->>'completed_at')::timestamptz,
         due_date=(change.before_state->'occurrence'->>'due_date')::date,details=change.before_state->'occurrence'->'details',overrides=change.before_state->'occurrence'->'overrides' where id=occurrence.id;
     end if;
-    if change.kind='reopen' then perform planner_private.restore_snapshot('tasks',change.before_state->'task',owner_id); end if;
-    if change.after_state ? 'project' then perform planner_private.restore_snapshot('projects',change.before_state->'project',owner_id); end if;
+    if change.kind='reopen' then
+      perform planner_private.restore_snapshot('tasks',change.before_state->'task',owner_id);
+      select * into after_task from public.tasks where id=task.id and user_id=owner_id;
+      -- Restoration is not another user completion. Remove only the synthetic
+      -- trigger history for this freshly generated version, inside this transaction.
+      delete from public.planner_changes where user_id=owner_id and kind='complete' and after_state->'task'->>'version'=after_task.version::text;
+      -- The ordinary completion normalizer stamps unknown legacy dates. Undo must
+      -- instead restore the exact stored value, including an explicitly unknown date.
+      if change.before_state->'task'->>'completed_at' is null then
+        update public.tasks set completed_at=null where id=task.id and user_id=owner_id;
+      end if;
+    end if;
+    if change.after_state ? 'project' then
+      perform planner_private.restore_snapshot('projects',change.before_state->'project',owner_id);
+      select * into after_parent from public.projects where id=parent.id and user_id=owner_id;
+      delete from public.planner_changes where user_id=owner_id and kind='complete-project' and after_state->'project'->>'version'=after_parent.version::text;
+    end if;
     update public.planner_changes set undone_at=statement_timestamp() where id=change.id;
     change_id:=change.id;
   end if;
@@ -117,6 +133,9 @@ grant execute on function planner_private.planner_command(jsonb) to authenticate
 create or replace function public.planner_command(p_request jsonb) returns jsonb
 language sql security invoker set search_path=pg_catalog as $$ select planner_private.planner_command(p_request) $$;
 notify pgrst, 'reload schema';
+
+
+
 
 -- A future availability date is independent of a due date or calendar reservation.
 alter table public.task_action_rules add column available_after date;
@@ -158,3 +177,24 @@ end $$;
 revoke all on function public.action_queue_snapshot(timestamptz,integer) from public,anon;
 grant execute on function public.action_queue_snapshot(timestamptz,integer) to authenticated;
 notify pgrst, 'reload schema';
+
+-- Shared web recurrence reopening uses the same complete restoration snapshots.
+do $recurring_reopen$
+declare definition text;
+begin
+  select pg_get_functiondef('planner_private.recurring_linked_command(text,jsonb)'::regprocedure) into definition;
+  if position('elsif prior_task.is_completed and not after_task.is_completed then' in definition)=0 then raise exception 'Unexpected recurring command shape'; end if;
+  definition:=replace(definition,'prior_task public.tasks;', 'parent public.projects; after_parent public.projects; prior_task public.tasks;');
+  definition:=replace(definition,'if p_operation=''edit-occurrence'' then outcome:=',
+    'select * into parent from public.projects where id=prior_task.project_id and user_id=owner_id for no key update;
+  if p_operation=''edit-occurrence'' then outcome:=');
+  definition:=replace(definition,'elsif prior_task.is_completed and not after_task.is_completed then',
+    'elsif prior_task.is_completed and not after_task.is_completed then
+    select * into after_occurrence from public.recurring_task_occurrences where id=occurrence.id and series_id=series.id;
+    select * into after_parent from public.projects where id=parent.id and user_id=owner_id;');
+  definition:=replace(definition,'jsonb_build_object(''task'',to_jsonb(prior_task)),jsonb_build_object(''task'',to_jsonb(after_task))) returning id into change_id;',
+    'jsonb_build_object(''task'',to_jsonb(prior_task),''occurrence'',to_jsonb(occurrence)) || case when parent.completed_at is not null then jsonb_build_object(''project'',to_jsonb(parent)) else ''{}''::jsonb end,
+      jsonb_build_object(''task'',to_jsonb(after_task),''occurrence'',to_jsonb(after_occurrence),''seriesId'',series.id,''seriesToken'',series.revision_token) || case when parent.completed_at is not null then jsonb_build_object(''project'',to_jsonb(after_parent)) else ''{}''::jsonb end) returning id into change_id;');
+  execute definition;
+end $recurring_reopen$;
+
