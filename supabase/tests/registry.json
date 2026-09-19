@@ -1,4 +1,5 @@
 [
+  {"path":"mobile_tasks_collection.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
   {"path":"mobile_guided_planning.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
   {"path":"mobile_ai_capture.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
   {
