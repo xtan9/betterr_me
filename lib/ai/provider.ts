@@ -13,6 +13,13 @@ const openai = createOpenAI({
 
 export const llmProvider = openai;
 
+// The Codex-compatible gateway supports JSON Schema output, but rejects strict
+// schemas that contain optional properties. Route-level Zod parsing still
+// validates every generated payload before a proposal can be stored.
+export const structuredOutputProviderOptions = {
+  openai: { strictJsonSchema: false },
+} as const;
+
 export const webSearchTool = openai.tools.webSearch({
   searchContextSize: "medium",
 });

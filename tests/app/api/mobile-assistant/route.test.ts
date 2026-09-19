@@ -18,6 +18,7 @@ describe('native assistant authenticated proposal route',()=>{
   expect(body.proposal.body.items[0]).toMatchObject({kind:'task-create',changes:{title:'Buy milk'}});
   expect(mocks.rpc.mock.calls.map(call=>call[0])).toEqual(['check_ai_chat_rate_limit','planner_ai_store_proposal']);
   expect(mocks.generate.mock.calls[0][0]).not.toHaveProperty('tools');
+  expect(mocks.generate.mock.calls[0][0].providerOptions).toEqual({openai:{strictJsonSchema:false}});
  expect(mocks.createClient).toHaveBeenCalledWith('http://127.0.0.1:55721','local-test-anon',expect.objectContaining({global:{headers:{Authorization:'Bearer user-token'}},auth:{persistSession:false,autoRefreshToken:false}}));
  });
  it.each(['gpt-5.3-codex-spark','gpt-5.4-mini'])('ignores obsolete environment model %s and uses the supported gateway model',async(obsoleteModel)=>{
