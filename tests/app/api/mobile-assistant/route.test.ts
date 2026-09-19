@@ -20,10 +20,10 @@ describe('native assistant authenticated proposal route',()=>{
   expect(mocks.generate.mock.calls[0][0]).not.toHaveProperty('tools');
  expect(mocks.createClient).toHaveBeenCalledWith('http://127.0.0.1:55721','local-test-anon',expect.objectContaining({global:{headers:{Authorization:'Bearer user-token'}},auth:{persistSession:false,autoRefreshToken:false}}));
  });
- it('ignores the stale Spark environment value and uses the supported gateway model',async()=>{
-  vi.stubEnv('LLM_MODEL','gpt-5.3-codex-spark');
+ it.each(['gpt-5.3-codex-spark','gpt-5.4-mini'])('ignores obsolete environment model %s and uses the supported gateway model',async(obsoleteModel)=>{
+  vi.stubEnv('LLM_MODEL',obsoleteModel);
   expect((await POST(request())).status).toBe(200);
-  expect(mocks.generate.mock.calls[0][0].model.modelId).toBe('gpt-5.4-mini');
+  expect(mocks.generate.mock.calls[0][0].model.modelId).toBe('gpt-5.5');
  });
  it('requires consent and a verified native identity',async()=>{
   expect((await POST(request({consent:false}))).status).toBe(400);

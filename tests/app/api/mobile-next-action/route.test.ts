@@ -15,10 +15,10 @@ beforeEach(()=>{
 it('prefers saved actionable priorities and explains oversized and waiting skips without writes',async()=>{
  const response=await POST(request());expect(response.status).toBe(200);const body=await response.json();expect(body.selected.id).toBe('priority');expect(body.skipped).toEqual(expect.arrayContaining([expect.objectContaining({id:'oversized',reasons:expect.arrayContaining(['gap-too-short'])}),expect.objectContaining({id:'waiting',reasons:expect.arrayContaining(['waiting'])})]));expect(mocks.rpc.mock.calls.every(([name])=>['check_ai_chat_rate_limit','action_queue_snapshot','priority_snapshot'].includes(name))).toBe(true);expect(mocks.generate.mock.calls[0][0]).not.toHaveProperty('tools');
 });
-it('ignores the stale Spark environment value and uses the supported gateway model',async()=>{
- vi.stubEnv('LLM_MODEL','gpt-5.3-codex-spark');
+it.each(['gpt-5.3-codex-spark','gpt-5.4-mini'])('ignores obsolete environment model %s and uses the supported gateway model',async(obsoleteModel)=>{
+ vi.stubEnv('LLM_MODEL',obsoleteModel);
  expect((await POST(request())).status).toBe(200);
- expect(mocks.generate.mock.calls[0][0].model.modelId).toBe('gpt-5.4-mini');
+ expect(mocks.generate.mock.calls[0][0].model.modelId).toBe('gpt-5.5');
 });
 it('does not interpret unconfirmed empty calendar time as availability',async()=>{expect((await POST(request({available:false}))).status).toBe(400);expect(mocks.generate).not.toHaveBeenCalled();});
 
