@@ -117,7 +117,7 @@ log.warn("POST /api/chat: invalid JSON body", { error: String(error) });
 |----------|----------|---------|-------------|
 | `LLM_API_KEY` | Yes | — | API key for OpenAI-compatible proxy |
 | `LLM_BASE_URL` | No | `https://llm.betterr.me/v1` | LLM proxy base URL |
-| `LLM_MODEL` | No | `gpt-5.4-mini` | Default model for chat |
+| `LLM_MODEL` | No | `gpt-5.5` | Default model for chat |
 | `LLM_MAX_TOKENS` | No | `2048` | Max output tokens (values above 2048 are capped) |
 
 ## Testing

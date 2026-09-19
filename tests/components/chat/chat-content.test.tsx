@@ -411,7 +411,7 @@ describe("ChatContent", () => {
             turnId: "1",
             userMessage: "hello",
             assistantMessage: "hi there",
-            assistantModel: "gpt-5.4-mini",
+            assistantModel: "gpt-5.5",
           }),
         }),
       );
@@ -562,7 +562,7 @@ describe("ChatContent", () => {
             turnId: "1",
             userMessage: "hi",
             assistantMessage: "hello there",
-            assistantModel: "gpt-5.4-mini",
+            assistantModel: "gpt-5.5",
           }),
         }),
       );
@@ -715,7 +715,7 @@ describe("ChatContent", () => {
     );
   });
 
-  it("persists GPT-5.4 Mini for the submitted turn", async () => {
+  it("persists GPT-5.5 for the submitted turn", async () => {
     const msgs = [
       makeMessage("model-turn-id", "user", "hi"),
       makeMessage("2", "assistant", "hello there"),
@@ -771,7 +771,7 @@ describe("ChatContent", () => {
       );
       expect(turnCall).toBeTruthy();
       expect(JSON.parse((turnCall![1] as RequestInit).body as string)).toEqual(
-        expect.objectContaining({ assistantModel: "gpt-5.4-mini" }),
+        expect.objectContaining({ assistantModel: "gpt-5.5" }),
       );
     });
   });
