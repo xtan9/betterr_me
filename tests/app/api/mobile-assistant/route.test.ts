@@ -6,7 +6,7 @@ import {POST} from '@/app/api/mobile/assistant/route';
 const owner='61300000-0000-0000-0000-000000000001';
 const request=(extra:Record<string,unknown>={},token='user-token')=>new Request('https://betterr.me/api/mobile/assistant',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({requestId:'61300000-0000-0000-0000-000000000002',consent:true,locale:'en',messages:[{role:'user',content:'Add buy milk'}],...extra})});
 beforeEach(()=>{
- vi.clearAllMocks();vi.stubEnv('LLM_API_KEY','local-test-key');vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL','http://127.0.0.1:55721');vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY','local-test-anon');
+ vi.clearAllMocks();vi.stubEnv('LLM_API_KEY','local-test-key');vi.stubEnv('LLM_MODEL','');vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL','http://127.0.0.1:55721');vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY','local-test-anon');
  mocks.getUser.mockResolvedValue({data:{user:{id:owner}},error:null});
  mocks.from.mockImplementation((table:string)=>{const payload=table==='profiles'?{timezone:'UTC'}:table==='planner_ai_proposals'?null:[];const query={select:()=>query,eq:()=>query,is:()=>query,order:()=>query,limit:()=>query,single:async()=>({data:payload,error:null}),maybeSingle:async()=>({data:payload,error:null}),then:(resolve:(value:unknown)=>unknown)=>Promise.resolve({data:payload,error:null}).then(resolve)};return query;});
  mocks.rpc.mockImplementation(async(name:string,args:Record<string,unknown>)=>name==='check_ai_chat_rate_limit'?{data:[{allowed:true,minute_remaining:9,day_remaining:99}],error:null}:{data:{status:'complete',proposal:{id:args.p_id,body:args.p_body,version:'preview-version',state:'pending'}},error:null});
@@ -18,7 +18,12 @@ describe('native assistant authenticated proposal route',()=>{
   expect(body.proposal.body.items[0]).toMatchObject({kind:'task-create',changes:{title:'Buy milk'}});
   expect(mocks.rpc.mock.calls.map(call=>call[0])).toEqual(['check_ai_chat_rate_limit','planner_ai_store_proposal']);
   expect(mocks.generate.mock.calls[0][0]).not.toHaveProperty('tools');
-  expect(mocks.createClient).toHaveBeenCalledWith('http://127.0.0.1:55721','local-test-anon',expect.objectContaining({global:{headers:{Authorization:'Bearer user-token'}},auth:{persistSession:false,autoRefreshToken:false}}));
+ expect(mocks.createClient).toHaveBeenCalledWith('http://127.0.0.1:55721','local-test-anon',expect.objectContaining({global:{headers:{Authorization:'Bearer user-token'}},auth:{persistSession:false,autoRefreshToken:false}}));
+ });
+ it('ignores the stale Spark environment value and uses the supported gateway model',async()=>{
+  vi.stubEnv('LLM_MODEL','gpt-5.3-codex-spark');
+  expect((await POST(request())).status).toBe(200);
+  expect(mocks.generate.mock.calls[0][0].model.modelId).toBe('gpt-5.4-mini');
  });
  it('requires consent and a verified native identity',async()=>{
   expect((await POST(request({consent:false}))).status).toBe(400);
