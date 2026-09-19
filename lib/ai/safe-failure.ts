@@ -26,9 +26,44 @@ const SAFE_CODES = new Set([
   "unsupported_model",
 ]);
 
+const SAFE_PROVIDER_TYPES = new Set([
+  "api_error",
+  "authentication_error",
+  "bad_request_error",
+  "invalid_request_error",
+  "rate_limit_error",
+  "server_error",
+]);
+
+const SAFE_PROVIDER_PARAMS = new Set([
+  "input",
+  "max_output_tokens",
+  "max_tokens",
+  "messages",
+  "model",
+  "response_format",
+  "stream",
+  "tools",
+]);
+
 function read(error: object, property: string): unknown {
   try {
     return Reflect.get(error, property);
+  } catch {
+    return undefined;
+  }
+}
+
+function readProviderError(diagnostic: object): Record<string, unknown> | undefined {
+  const responseBody = read(diagnostic, "responseBody");
+  if (typeof responseBody !== "string" || responseBody.length > 8192) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(responseBody);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+    const providerError = read(parsed, "error");
+    return providerError && typeof providerError === "object" && !Array.isArray(providerError)
+      ? providerError as Record<string, unknown>
+      : parsed as Record<string, unknown>;
   } catch {
     return undefined;
   }
@@ -46,10 +81,17 @@ export function safeAiFailure(error: unknown): Record<string, string | number> {
   const diagnostic = lastError && typeof lastError === "object" ? lastError : error;
   const rawCode = read(diagnostic, "code");
   const rawStatusCode = read(diagnostic, "statusCode") ?? read(diagnostic, "status");
+  const providerError = readProviderError(diagnostic);
+  const providerCode = providerError ? read(providerError, "code") : undefined;
+  const providerType = providerError ? read(providerError, "type") : undefined;
+  const providerParam = providerError ? read(providerError, "param") : undefined;
   const context: Record<string, string | number> = {
     name: typeof rawName === "string" && SAFE_NAMES.has(rawName) ? rawName : "UnknownFailure",
   };
   if (typeof rawCode === "string" && SAFE_CODES.has(rawCode)) context.code = rawCode;
+  if (typeof providerCode === "string" && SAFE_CODES.has(providerCode)) context.providerCode = providerCode;
+  if (typeof providerType === "string" && SAFE_PROVIDER_TYPES.has(providerType)) context.providerType = providerType;
+  if (typeof providerParam === "string" && SAFE_PROVIDER_PARAMS.has(providerParam)) context.providerParam = providerParam;
   if (typeof rawStatusCode === "number" && Number.isInteger(rawStatusCode) && rawStatusCode >= 100 && rawStatusCode <= 599) {
     context.statusCode = rawStatusCode;
   }

@@ -20,6 +20,51 @@ describe("safeAiFailure", () => {
     expect(safeAiFailure("private prompt")).toEqual({ name: "UnknownFailure" });
   });
 
+  it("extracts only allowlisted provider metadata from a JSON error body", () => {
+    const context = safeAiFailure({
+      name: "AI_APICallError",
+      statusCode: 400,
+      responseBody: JSON.stringify({
+        error: {
+          code: "unsupported_model",
+          type: "invalid_request_error",
+          param: "model",
+          message: "private appointment and prompt details",
+        },
+      }),
+    });
+
+    expect(context).toEqual({
+      name: "AI_APICallError",
+      statusCode: 400,
+      providerCode: "unsupported_model",
+      providerType: "invalid_request_error",
+      providerParam: "model",
+    });
+    expect(JSON.stringify(context)).not.toContain("private");
+  });
+
+  it("rejects arbitrary provider metadata and oversized response bodies", () => {
+    const arbitrary = safeAiFailure({
+      name: "AI_APICallError",
+      responseBody: JSON.stringify({
+        error: {
+          code: "private-code",
+          type: "private-type",
+          param: "private-param",
+          message: "private appointment details",
+        },
+      }),
+    });
+    const oversized = safeAiFailure({
+      name: "AI_APICallError",
+      responseBody: JSON.stringify({ error: { code: "model_not_found" }, padding: "x".repeat(8192) }),
+    });
+
+    expect(arbitrary).toEqual({ name: "AI_APICallError" });
+    expect(oversized).toEqual({ name: "AI_APICallError" });
+  });
+
   it("rejects arbitrary text and invalid status values in every inspected field", () => {
     const context = safeAiFailure({
       name: "private appointment details",
