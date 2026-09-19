@@ -196,7 +196,7 @@ describe('POST /api/chat', () => {
 
     expect(mockStreamText).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: "mock-model:gpt-5.3-codex-spark",
+        model: "mock-model:gpt-5.4-mini",
         tools: expect.any(Object),
         stopWhen: expect.anything(),
         messages: expect.any(Array),
