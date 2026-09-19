@@ -18,4 +18,26 @@ describe("safeAiFailure", () => {
   it("handles non-object failures without echoing them", () => {
     expect(safeAiFailure("private prompt")).toEqual({ name: "UnknownFailure" });
   });
+
+  it("rejects arbitrary text and invalid status values in every inspected field", () => {
+    const context = safeAiFailure({
+      name: "private appointment details",
+      code: "private appointment details",
+      statusCode: "private appointment details",
+      status: 999,
+    });
+
+    expect(context).toEqual({ name: "UnknownFailure" });
+    expect(JSON.stringify(context)).not.toContain("private");
+  });
+
+  it("never throws when diagnostic properties have throwing getters", () => {
+    const failure = new Proxy({}, {
+      get() {
+        throw new Error("private getter details");
+      },
+    });
+
+    expect(safeAiFailure(failure)).toEqual({ name: "UnknownFailure" });
+  });
 });

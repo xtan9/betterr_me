@@ -1,12 +1,36 @@
-type FailureWithMetadata = {
-  name?: unknown;
-  code?: unknown;
-  status?: unknown;
-  statusCode?: unknown;
-};
+const SAFE_NAMES = new Set([
+  "AbortError",
+  "AI_APICallError",
+  "AI_InvalidResponseDataError",
+  "AI_JSONParseError",
+  "AI_NoObjectGeneratedError",
+  "Error",
+  "TypeError",
+  "ZodError",
+]);
 
-function safeScalar(value: unknown): string | number | undefined {
-  return typeof value === "string" || typeof value === "number" ? value : undefined;
+const SAFE_CODES = new Set([
+  "authentication_error",
+  "connection_error",
+  "content_filter",
+  "context_length_exceeded",
+  "insufficient_quota",
+  "invalid_api_key",
+  "invalid_model",
+  "invalid_response",
+  "model_not_found",
+  "permission_denied",
+  "rate_limit_exceeded",
+  "timeout",
+  "unsupported_model",
+]);
+
+function read(error: object, property: string): unknown {
+  try {
+    return Reflect.get(error, property);
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -16,13 +40,15 @@ function safeScalar(value: unknown): string | number | undefined {
 export function safeAiFailure(error: unknown): Record<string, string | number> {
   if (!error || typeof error !== "object") return { name: "UnknownFailure" };
 
-  const failure = error as FailureWithMetadata;
+  const rawName = read(error, "name");
+  const rawCode = read(error, "code");
+  const rawStatusCode = read(error, "statusCode") ?? read(error, "status");
   const context: Record<string, string | number> = {
-    name: typeof failure.name === "string" && failure.name ? failure.name : "UnknownFailure",
+    name: typeof rawName === "string" && SAFE_NAMES.has(rawName) ? rawName : "UnknownFailure",
   };
-  const code = safeScalar(failure.code);
-  const statusCode = safeScalar(failure.statusCode) ?? safeScalar(failure.status);
-  if (code !== undefined) context.code = code;
-  if (statusCode !== undefined) context.statusCode = statusCode;
+  if (typeof rawCode === "string" && SAFE_CODES.has(rawCode)) context.code = rawCode;
+  if (typeof rawStatusCode === "number" && Number.isInteger(rawStatusCode) && rawStatusCode >= 100 && rawStatusCode <= 599) {
+    context.statusCode = rawStatusCode;
+  }
   return context;
 }
