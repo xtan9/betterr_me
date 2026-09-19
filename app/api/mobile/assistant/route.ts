@@ -7,6 +7,8 @@ import {llmProvider} from '@/lib/ai/provider';
 import {DEFAULT_MODEL_ID,AVAILABLE_MODELS} from '@/lib/ai/models';
 import {checkChatRateLimit} from '@/lib/ai/rate-limit';
 import {buildCapturePreview,captureOutput,type CaptureContext} from '@/lib/ai/native-capture';
+import {safeAiFailure} from '@/lib/ai/safe-failure';
+import {log} from '@/lib/logger';
 export const maxDuration=60;
 const requestSchema=z.object({requestId:z.string().uuid(),consent:z.literal(true),locale:z.enum(['en','zh']),messages:z.array(z.object({role:z.enum(['user','assistant']),content:z.string().min(1).max(8000)}).strict()).min(1).max(40)}).strict();
 const headers={'Cache-Control':'no-store','Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS'};
@@ -42,9 +44,10 @@ export async function POST(request:Request){
   const stored=await client.rpc('planner_ai_store_proposal',{p_id:input.requestId,p_fingerprint:fingerprint,p_body:body});
   if(stored.error||stored.data?.status!=='complete')return respond({error:stored.data?.status==='conflict'?'conflict':'unavailable'},stored.data?.status==='conflict'?409:502);
   return respond({proposal:stored.data.proposal});
- }catch{
+ }catch(error){
   // Provider errors may embed prompts or appointment text. Return only a category.
   if(request.signal.aborted)return new Response(null,{status:499,headers});
+  log.error('[mobile-assistant] Request failed',undefined,{failure:safeAiFailure(error)});
   return respond({error:'unavailable'},502);
  }
 }

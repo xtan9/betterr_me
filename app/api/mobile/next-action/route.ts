@@ -5,6 +5,8 @@ import {llmProvider} from '@/lib/ai/provider';
 import {AVAILABLE_MODELS,DEFAULT_MODEL_ID} from '@/lib/ai/models';
 import {checkChatRateLimit} from '@/lib/ai/rate-limit';
 import {nextActionFacts} from '@/lib/ai/next-action';
+import {safeAiFailure} from '@/lib/ai/safe-failure';
+import {log} from '@/lib/logger';
 export const maxDuration=60;
 const schema=z.object({consent:z.literal(true),available:z.literal(true),locale:z.enum(['en','zh']),start:z.string().datetime({offset:true}),end:z.string().datetime({offset:true}),context:z.string().max(2000)}).strict();
 const headers={'Cache-Control':'no-store','Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS'};
@@ -33,6 +35,6 @@ export async function POST(request:Request){
   if(JSON.stringify(comparable(current))!==JSON.stringify(comparable(facts)))return respond({error:'conflict'},409);
   if(request.signal.aborted)return new Response(null,{status:499,headers});
   return respond({...current,explanation:text});
- }catch{return respond({error:'unavailable'},503);}
+ }catch(error){log.error('[mobile-next-action] Request failed',undefined,{failure:safeAiFailure(error)});return respond({error:'unavailable'},503);}
 }
 
