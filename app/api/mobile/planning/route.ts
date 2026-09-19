@@ -5,6 +5,8 @@ import {llmProvider} from '@/lib/ai/provider';
 import {DEFAULT_MODEL_ID,AVAILABLE_MODELS} from '@/lib/ai/models';
 import {checkChatRateLimit} from '@/lib/ai/rate-limit';
 import {planningRequest,planningOutput,buildSchedulePreview,type PlanningContext} from '@/lib/ai/guided-planning';
+import {safeAiFailure} from '@/lib/ai/safe-failure';
+import {log} from '@/lib/logger';
 export const maxDuration=60;
 const headers={'Cache-Control':'no-store','Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS'};
 const respond=(body:unknown,status=200)=>Response.json(body,{status,headers});
@@ -40,5 +42,9 @@ export async function POST(request:Request){
   const stored=await client.rpc('planner_schedule_store_proposal',{p_id:input.requestId,p_fingerprint:fingerprint,p_body:body});
   if(stored.error||stored.data?.status!=='complete')return respond({error:stored.data?.status==='conflict'?'conflict':'unavailable'},stored.data?.status==='conflict'?409:502);
   return respond({proposal:stored.data.proposal});
- }catch{return request.signal.aborted?new Response(null,{status:499,headers}):respond({error:'unavailable'},502);}
+ }catch(error){
+  if(request.signal.aborted)return new Response(null,{status:499,headers});
+  log.error('[mobile-planning] Request failed',undefined,{failure:safeAiFailure(error)});
+  return respond({error:'unavailable'},502);
+ }
 }
