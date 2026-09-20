@@ -43,13 +43,14 @@ begin
 end $$;
 do $$
 declare cid uuid:=gen_random_uuid(); turn_id uuid:=gen_random_uuid(); result jsonb; plan jsonb; body jsonb; proposal jsonb; seq bigint; called boolean;
- output jsonb:='{"message":"Draft for two days","intent":"planning","planning":{"status":"drafted","horizon":{"startDate":"2030-01-01","endDate":"2030-01-02","timezone":"UTC"},"readiness":{"horizon":"known"},"facts":{"workBoundaries":"Family after 15:00"},"assumptions":[]},"missing":[],"ui":{"quickReplies":[]},"capture":{"message":"Draft for two days","items":[]},"memoryUpdates":[]}';
+ output jsonb:='{"message":"Draft for two days","intent":"planning","planning":{"status":"drafted","horizon":{"startDate":"2030-01-01","endDate":"2030-01-02","timezone":"UTC"},"readiness":{"horizon":"known"},"facts":{"workBoundaries":"Family after 15:00"},"assumptions":[],"travelMinutes":15},"missing":[],"ui":{"quickReplies":[]},"capture":{"message":"Draft for two days","items":[]},"memoryUpdates":[]}';
 begin
  select last_value,is_called into seq,called from public.assistant_messages_sequence_seq;
  set local role authenticated;
  perform public.assistant_begin_turn(turn_id,cid,true,repeat('a',64),'[{"role":"user","content":"Plan January 1 and 2"}]');
  result:=public.assistant_finish_turn(turn_id,repeat('a',64),output);plan:=result->'response'->'planning';
  if result->>'status'<>'complete' or plan->>'version' is null or plan->'horizon' is distinct from output->'planning'->'horizon' then raise exception 'Missing versioned session handle %',result;end if;
+ if (select travel_minutes from public.planning_sessions where id=(plan->>'sessionId')::uuid) is distinct from 15 then raise exception 'Confirmed travel missing';end if;
  body:=jsonb_build_object('date','2030-01-01','timezone','UTC','horizon',plan->'horizon','planningSession',jsonb_build_object('id',plan->>'sessionId','version',plan->>'version'),
  'contextVersion',public.planner_horizon_context('2030-01-01','2030-01-02')->>'version','message','Exact preview','questions','[]'::jsonb,'assumptions','[]'::jsonb,'freeTime','[]'::jsonb,'capture',jsonb_build_object('items','[]'::jsonb),'priorities',null,
  'events',jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'kind','event-create','changes',jsonb_build_object('title','Focus','start_date','2030-01-02','end_date','2030-01-02','start_time','10:00','end_time','10:30','timezone','UTC','is_protected',false))));
@@ -65,6 +66,9 @@ begin
  if result->>'status'<>'complete' or (select status from public.planning_sessions where id=(plan->>'sessionId')::uuid)<>'applied' then raise exception 'Session acceptance did not complete %',result;end if;
  result:=public.planner_schedule_command(jsonb_build_object('operation','undo','operationId',gen_random_uuid(),'changeId',result->>'changeId','expectedVersion',result->>'changeVersion'));
  if result->>'status'<>'complete' or exists(select 1 from public.calendar_events) then raise exception 'Session undo failed %',result;end if;
+ if result->'planning'->>'status'<>'drafted' or result->'planning'->>'version' is null then raise exception 'Undo did not restore usable planning session';end if;
+ body:=jsonb_set(body,'{planningSession,version}',result->'planning'->'version');body:=jsonb_set(body,'{contextVersion}',public.planner_horizon_context('2030-01-01','2030-01-02')->'version');
+ if public.planner_schedule_store_proposal(gen_random_uuid(),'after-undo',body)->>'status'<>'complete' then raise exception 'Cannot preview again after Undo';end if;
  reset role;
  perform setval('public.assistant_messages_sequence_seq',seq,called);
 end $$;

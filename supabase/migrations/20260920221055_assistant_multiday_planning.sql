@@ -1,3 +1,5 @@
+alter table public.planning_sessions add column travel_minutes integer check(travel_minutes between 1 and 1440);
+
 -- A horizon is one snapshot and one accepted transaction, never a chain of day accepts.
 create function public.planner_horizon_context(p_start date,p_end date) returns jsonb
 language plpgsql stable security invoker set search_path=pg_catalog,public as $$
@@ -118,6 +120,10 @@ begin
   if not found or change.kind<>'ai-plan' then return jsonb_build_object('status','not-found');end if;
   if change.version is distinct from (p_request->>'expectedVersion')::uuid or change.undone_at is not null or token is distinct from (change.after_state->>'stateVersion')::uuid then return jsonb_build_object('status','conflict');end if;
   before_data:=change.before_state;after_data:=change.after_state;
+  if after_data ? 'planningSession' then
+   select * into planning from public.planning_sessions where id=(after_data->'planningSession'->>'id')::uuid and user_id=owner_id for update;
+   if not found or planning.version is distinct from (after_data->'planningSession'->>'version')::uuid then return jsonb_build_object('status','conflict');end if;
+  end if;
   for item in select value from jsonb_array_elements(after_data->'events') where value->>'kind'='event-create' loop
    select * into event from public.calendar_events where id=(item->'event'->>'id')::uuid and user_id=owner_id;
    result:=public.calendar_capture_command('remove',gen_random_uuid(),event.id,event.version,'{}');
@@ -148,6 +154,10 @@ begin
   for item in select value from jsonb_array_elements(before_data->'reminders') loop perform planner_private.insert_snapshot('reminders',item,owner_id);end loop;
   update public.planner_changes set undone_at=statement_timestamp() where id=change.id and user_id=owner_id;
   outcome:=jsonb_build_object('status','complete','changeId',change.id);
+  if after_data ? 'planningSession' then
+   update public.planning_sessions set status='drafted',version=gen_random_uuid(),updated_at=now() where id=planning.id and user_id=owner_id returning * into planning;
+   outcome:=outcome||jsonb_build_object('planning',jsonb_build_object('sessionId',planning.id,'version',planning.version,'status',planning.status,'horizon',jsonb_build_object('startDate',planning.start_date,'endDate',planning.end_date,'timezone',planning.timezone),'missing','[]'::jsonb,'assumptions',planning.assumptions));
+  end if;
  else
   select * into proposal from public.planner_ai_proposals where id=(p_request->>'proposalId')::uuid and user_id=owner_id and proposal_type='schedule' for update;
   if not found then return jsonb_build_object('status','not-found');end if;
@@ -196,7 +206,8 @@ begin
    select version into token from public.planner_state_versions where user_id=owner_id;
    after_data:=jsonb_build_object('stateVersion',token,'events',events_result,'captures',captures);
    if proposal.body ? 'planningSession' then
-    update public.planning_sessions set status='applied',version=gen_random_uuid(),updated_at=now() where id=(proposal.body->'planningSession'->>'id')::uuid and user_id=owner_id;
+    update public.planning_sessions set status='applied',version=gen_random_uuid(),updated_at=now() where id=(proposal.body->'planningSession'->>'id')::uuid and user_id=owner_id returning * into planning;
+    after_data:=after_data||jsonb_build_object('planningSession',jsonb_build_object('id',planning.id,'version',planning.version));
    end if;
    insert into public.planner_changes(user_id,kind,before_state,after_state) values(owner_id,'ai-plan',before_data,after_data) returning * into change;
    outcome:=jsonb_build_object('status','complete','proposalId',proposal.id,'changeId',change.id,'changeVersion',change.version);
@@ -220,5 +231,16 @@ do $$ declare source text;begin
  source:=pg_get_functiondef('planner_private.assistant_finish_turn(uuid,text,jsonb)'::regprocedure);
  if position('''sessionId'',session_id,''status''' in source)=0 then raise exception 'Planning response anchor missing';end if;
  source:=replace(source,'''sessionId'',session_id,''status''','''sessionId'',session_id,''version'',(select version from public.planning_sessions where id=session_id and user_id=owner_id),''horizon'',plan->''horizon'',''status''');
+ if position($anchor$('status','horizon','readiness','facts','assumptions')$anchor$ in source)=0 then raise exception 'Travel contract anchor missing';end if;
+ source:=replace(source,$anchor$('status','horizon','readiness','facts','assumptions')$anchor$,$replacement$('status','horizon','readiness','facts','assumptions','travelMinutes')$replacement$);
+ if position($anchor$for field in select jsonb_object_keys(plan->'readiness') loop$anchor$ in source)=0 then raise exception 'Travel contract anchor missing';end if;
+ source:=replace(source,$anchor$for field in select jsonb_object_keys(plan->'readiness') loop$anchor$,$replacement$if plan ? 'travelMinutes' and plan->'travelMinutes'<>'null'::jsonb and (jsonb_typeof(plan->'travelMinutes') is distinct from 'number' or (plan->>'travelMinutes')::numeric not between 1 and 1440 or (plan->>'travelMinutes')::numeric<>trunc((plan->>'travelMinutes')::numeric)) then return jsonb_build_object('status','invalid');end if;
+  for field in select jsonb_object_keys(plan->'readiness') loop$replacement$);
+ if position($anchor$planning_sessions(user_id,conversation_id,status,start_date,end_date,timezone,facts,readiness,assumptions)$anchor$ in source)=0 then raise exception 'Travel contract anchor missing';end if;
+ source:=replace(source,$anchor$planning_sessions(user_id,conversation_id,status,start_date,end_date,timezone,facts,readiness,assumptions)$anchor$,$replacement$planning_sessions(user_id,conversation_id,status,start_date,end_date,timezone,facts,readiness,assumptions,travel_minutes)$replacement$);
+ if position($anchor$plan->'facts',plan->'readiness',plan->'assumptions')$anchor$ in source)=0 then raise exception 'Travel contract anchor missing';end if;
+ source:=replace(source,$anchor$plan->'facts',plan->'readiness',plan->'assumptions')$anchor$,$replacement$plan->'facts',plan->'readiness',plan->'assumptions',(plan->>'travelMinutes')::integer)$replacement$);
+ if position($anchor$assumptions=excluded.assumptions,version=$anchor$ in source)=0 then raise exception 'Travel contract anchor missing';end if;
+ source:=replace(source,$anchor$assumptions=excluded.assumptions,version=$anchor$,$replacement$assumptions=excluded.assumptions,travel_minutes=excluded.travel_minutes,version=$replacement$);
  execute source;
 end $$;

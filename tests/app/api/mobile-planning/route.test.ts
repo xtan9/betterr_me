@@ -61,14 +61,15 @@ it.each([null,{version:eventId,status:'drafted'}])('refuses a foreign or stale s
  const req=request({date:undefined,timezone:undefined,commitments:undefined,needs:undefined,goals:undefined,travelMinutes:undefined,sessionId:owner,sessionVersion:owner});
  expect((await POST(req)).status).toBe(409);expect(m.generate).not.toHaveBeenCalled();
 });
-it('uses saved session facts and binds the immutable preview to that session version',async()=>{
- const session={version:owner,status:'drafted',start_date:horizon.startDate,end_date:horizon.endDate,timezone:'UTC',facts:{workBoundaries:'Family after 15:00'},readiness:{workBoundaries:'known'},assumptions:['Calls remain tasks']};
+it.each([15,null])('uses saved session facts and confirmed travel %s without inventing a duration',async(travelMinutes)=>{
+ const session={version:owner,status:'drafted',start_date:horizon.startDate,end_date:horizon.endDate,timezone:'UTC',facts:{workBoundaries:'Family after 15:00'},readiness:{workBoundaries:'known'},assumptions:['Calls remain tasks'],travel_minutes:travelMinutes};
  const filters:unknown[][]=[];
  m.from.mockImplementation((table:string)=>{const q={select:()=>q,eq:(...args:unknown[])=>{if(table==='planning_sessions')filters.push(args);return q;},maybeSingle:async()=>({error:null,data:table==='planning_sessions'?session:null})};return q;});
  m.rpc.mockImplementation(async(name:string,args:Record<string,unknown>)=>({error:null,data:name==='planner_horizon_context'?{...context,coverageComplete:true}:name==='check_ai_chat_rate_limit'?[{allowed:true,minute_remaining:9,day_remaining:99}]:{status:'complete',proposal:{body:args.p_body}}}));
- m.generate.mockResolvedValue({output:{...output(),events:[{...output().events[0],date:'2030-01-01'}]}});
+ m.generate.mockResolvedValue({output:{...output(),events:[{...output().events[0],date:'2030-01-01',endTime:'12:15',category:'travel'}]}});
  const response=await POST(request({date:undefined,timezone:undefined,commitments:undefined,needs:undefined,goals:undefined,travelMinutes:undefined,sessionId:eventId,sessionVersion:owner}));
- expect(response.status).toBe(200);expect((await response.json()).proposal.body.planningSession).toEqual({id:eventId,version:owner});expect(filters).toContainEqual(['user_id',owner]);
+ expect(response.status).toBe(200);const body=(await response.json()).proposal.body;expect(body.planningSession).toEqual({id:eventId,version:owner});expect(filters).toContainEqual(['user_id',owner]);
+ expect(body.events).toHaveLength(travelMinutes===null?0:1);expect(body.questions).toHaveLength(travelMinutes===null?1:0);
  expect(m.generate.mock.calls[0][0].messages[0].content).toContain('Family after 15:00');
 });
 

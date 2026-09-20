@@ -16,6 +16,12 @@ const output={intent:'planning',message:'Family time after pickup stays protecte
   {dimension:'priorities',state:'known',detail:'Handle admin early without blocking every call. Finish three hours of video work; split remaining focus equally between app and YouTube.'},
  ],questions:[],assumptions:[],draft:null,skipDiscovery:false}};
 describe('planning discovery and draft contract',()=>{
+ it('preserves, corrects and withdraws only explicitly confirmed travel duration',()=>{
+  const first=buildAssistantTurn({...output,planning:{...output.planning,travelMinutes:15}},context,null,'The trip takes 15 minutes. Plan now.','en');
+  const next=buildAssistantTurn(output,context,first.planning,'Skip. Plan now.','en');expect(next.planning?.travelMinutes).toBe(15);
+  const corrected=buildAssistantTurn({...output,planning:{...output.planning,travelMinutes:20}},context,next.planning,'Actually 20 minutes.','en');expect(corrected.planning?.travelMinutes).toBe(20);
+  const unknown=buildAssistantTurn({...output,planning:{...output.planning,travelMinutes:null}},context,next.planning,'That travel time is no longer known.','en');expect(unknown.planning?.travelMinutes).toBeNull();
+ });
  it('validates temporary duration without accepting model timestamps or durable current state',()=>{
   const update={operation:'upsert',kind:'routine',key:'gym',content:'Four days per week',confidence:1,temporality:'temporary',validFor:{amount:1,unit:'months'}};
   expect(memoryUpdate.parse(update)).toEqual(update);
