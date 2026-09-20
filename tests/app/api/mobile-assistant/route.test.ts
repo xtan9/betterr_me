@@ -101,6 +101,14 @@ describe('streaming native replies',()=>{
   const response=await POST(streamedRequest());const body=await response.text();
   expect(body).toContain('"type":"error"');expect(body).not.toContain('"type":"complete"');expect(body).not.toContain('private');
  });
+ it('preserves a permanent stale-turn conflict in the stream instead of requesting infinite retries',async()=>{
+  const output={intent:'conversation',planning:null,memoryUpdates:[],nextActionWindow:null,message:'Reply',actions:[]};
+  mocks.stream.mockReturnValue({partialOutputStream:(async function*(){yield {message:'Reply'};})(),output:Promise.resolve(output)});
+  const original=mocks.rpc.getMockImplementation()!;
+  mocks.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>name==='assistant_finish_turn'?Promise.resolve({data:{status:'conflict'},error:null}):original(name,args));
+  const response=await POST(streamedRequest());const events=(await response.text()).trim().split('\n').map(line=>JSON.parse(line));
+  expect(events.at(-1)).toEqual({type:'error',error:'conflict'});expect(events.some(event=>event.type==='complete')).toBe(false);
+ });
  it('aborts the provider and does not store a proposal when the response is cancelled',async()=>{
   let signal!:AbortSignal;
   mocks.stream.mockImplementation(options=>{

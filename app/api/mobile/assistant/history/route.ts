@@ -15,7 +15,7 @@ export async function GET(request:Request){
   const conversation=await query.order('last_message_at',{ascending:false}).limit(1).maybeSingle();
   if(conversation.error)return respond({error:'unavailable'},503);
   if(!conversation.data)return parsed.data.conversationId?respond({error:'not-found'},404):respond({conversationId:null,messages:[],before:null});
-  let history=client.from('assistant_messages').select('role,content,sequence').eq('user_id',userId).eq('conversation_id',conversation.data.id);
+  let history=client.from('assistant_messages').select('role,content,sequence,request_id').eq('user_id',userId).eq('conversation_id',conversation.data.id);
   if(parsed.data.before)history=history.lt('sequence',parsed.data.before);
   const messages=await history.order('sequence',{ascending:false}).limit(41);
   if(messages.error)return respond({error:'unavailable'},503);
@@ -25,6 +25,6 @@ export async function GET(request:Request){
   if(turn.error)return respond({error:'unavailable'},503);
   const proposal=turn.data?await client.from('planner_ai_proposals').select('*').eq('user_id',userId).eq('id',turn.data.id).maybeSingle():null;
   if(proposal?.error)return respond({error:'unavailable'},503);
-  return respond({conversationId:conversation.data.id,messages:page.map(({role,content})=>({role,content})),before:(messages.data?.length??0)>40?page[0].sequence:null,ui:turn.data?.response?.ui,proposal:proposal?.data??null});
+  return respond({conversationId:conversation.data.id,messages:page.map(({role,content,request_id})=>({role,content,...(request_id?{requestId:request_id}:{})})),before:(messages.data?.length??0)>40?page[0].sequence:null,ui:turn.data?.response?.ui,proposal:proposal?.data??null});
  }catch{return respond({error:'unavailable'},503);}
 }

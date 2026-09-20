@@ -16,6 +16,7 @@ begin
  if result->>'status'<>'complete' then raise exception 'finish failed %',result;end if;
  replay:=public.assistant_finish_turn(request_id,repeat('a',64),output);
  if replay<>result or (select count(*) from public.assistant_messages)<>2 or (select count(*) from public.user_memories)<>1 then raise exception 'finish duplicated data';end if;
+ if (select count(*) from public.assistant_messages m where m.request_id='61400000-0000-0000-0000-000000000011'::uuid)<>2 then raise exception 'message identities missing';end if;
  if exists(select 1 from public.tasks) or exists(select 1 from public.calendar_events) then raise exception 'draft mutated plan';end if;
  if (select count(*) from public.planning_sessions)<>1 then raise exception 'session missing';end if;
  if public.assistant_begin_turn(request_id,conversation,true,repeat('b',64),'[{"role":"user","content":"Changed"}]')->>'status'<>'conflict' then raise exception 'changed retry accepted';end if;

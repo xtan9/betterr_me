@@ -14,6 +14,8 @@ The history endpoint is native JWT only, owner-filtered, paginated, and no-store
 
 Streaming remains negotiated with `Accept: application/x-ndjson`. Only provisional public message text is streamed; the final complete event carries the same persisted typed response as JSON, including the existing proposal field for older streaming clients. Cancellation is propagated through both discovery generation passes and checked before persistence. Mobile keeps the immediate user message, editable next draft, Stop control, interrupted reply and serialized recovery storage from the streaming-chat release.
 
+Persisted user/assistant messages carry their server-assigned request identity for reconciliation. Stopped/interrupted bubbles remain local UI state and are overlaid on hydrated history without entering model context. Sanitized stream errors retain permanent conflict/invalid categories so the client can abandon a stale request instead of retrying it forever.
+
 ## Rollout and privacy
 
 Apply `20260920033758_assistant_orchestrator_memory.sql` before deploying the backend, then release mobile. Deploying the route without the migration fails closed. No production migration is performed by this implementation task. The old client remains compatible with the proposal envelope; a new client that already has a server conversation requires this backend contract.

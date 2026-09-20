@@ -11,7 +11,7 @@ import {assistantOutput,assistantInstructions,buildAssistantTurn,selectMemories,
 import {nextActionFacts} from '@/lib/ai/next-action';
 import {safeAiFailure} from '@/lib/ai/safe-failure';
 import {log} from '@/lib/logger';
-import {captureStreamResponse} from '@/lib/ai/native-capture-stream';
+import {captureStreamResponse,AssistantStreamError} from '@/lib/ai/native-capture-stream';
 export const maxDuration=60;
 const requestSchema=z.object({requestId:z.string().uuid(),conversationId:z.string().uuid().optional(),consent:z.literal(true),locale:z.enum(['en','zh']),messages:z.array(z.object({role:z.enum(['user','assistant']),content:z.string().min(1).max(8000)}).strict()).min(1).max(40)}).strict().refine(value=>value.messages.at(-1)?.role==='user');
 const headers={'Cache-Control':'no-store','Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS'};
@@ -99,7 +99,7 @@ export async function POST(request:Request){
   };
   if(request.headers.get('accept')?.includes('application/x-ndjson'))return captureStreamResponse(request.signal,headers,async(emit,signal)=>{
    const completed=await runTurn(emit,signal);
-   if(completed.status!==200)throw new Error('Assistant persistence failed');
+   if(completed.status!==200)throw new AssistantStreamError(completed.status===409?'conflict':completed.status===400?'invalid':'unavailable');
    return completed.body;
   });
   const completed=await runTurn();return respond(completed.body,completed.status);

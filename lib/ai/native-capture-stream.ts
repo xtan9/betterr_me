@@ -1,5 +1,8 @@
 import {safeAiFailure} from './safe-failure';
 import {log} from '@/lib/logger';
+export class AssistantStreamError extends Error {
+ constructor(public readonly reason:'conflict'|'invalid'|'unavailable'){super(reason);}
+}
 
 /** Only public reply text is provisional. Completion carries the stored response and proposal. */
 export function captureStreamResponse(
@@ -29,7 +32,7 @@ export function captureStreamResponse(
     else write({type:'error',error:'unavailable'});
    }catch(error){
     log.error('[mobile-assistant] Stream failed',undefined,{failure:safeAiFailure(error)});
-    write({type:'error',error:'unavailable'});
+    write({type:'error',error:error instanceof AssistantStreamError?error.reason:'unavailable'});
    }finally{
     cleanup();
     if(!closed){closed=true;controller.close();}

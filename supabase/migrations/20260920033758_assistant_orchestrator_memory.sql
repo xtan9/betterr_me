@@ -6,7 +6,7 @@ create table public.assistant_conversations (
  unique(id,user_id)
 );
 create table public.assistant_messages (
- id uuid primary key default gen_random_uuid(), conversation_id uuid not null, user_id uuid not null,
+ id uuid primary key default gen_random_uuid(), conversation_id uuid not null, user_id uuid not null, request_id uuid,
  sequence bigint generated always as identity unique, role text not null check(role in ('user','assistant')),
  content text not null check(length(content) between 1 and 8000), created_at timestamptz not null default now(),
  foreign key(conversation_id,user_id) references public.assistant_conversations(id,user_id) on delete cascade,
@@ -84,6 +84,7 @@ begin
    if p_new then return jsonb_build_object('status','conflict');end if;
    insert into public.assistant_messages(conversation_id,user_id,role,content) values(c.id,owner_id,'user',p_messages->-1->>'content') returning id into source_id;
   end if;
+  update public.assistant_messages set request_id=p_id where id=source_id and user_id=owner_id;
   v:=gen_random_uuid();
   update public.assistant_conversations set version=v,updated_at=now(),last_message_at=now() where id=c.id;
   insert into public.assistant_turns(id,user_id,conversation_id,source_message_id,request_fingerprint,conversation_version)
@@ -172,7 +173,7 @@ begin
  if proposal->>'status' is distinct from 'complete' then raise exception using errcode='PT409',message='Proposal unavailable';end if;
  result_response:=jsonb_build_object('message',p_output->>'message','conversationId',c.id,'intent',p_output->>'intent','ui',p_output->'ui','proposal',proposal->'proposal');
  if session_id is not null then result_response:=result_response||jsonb_build_object('planning',jsonb_build_object('sessionId',session_id,'status',plan->>'status','missing',p_output->'missing','assumptions',plan->'assumptions'));end if;
- insert into public.assistant_messages(conversation_id,user_id,role,content) values(c.id,owner_id,'assistant',p_output->>'message');
+ insert into public.assistant_messages(conversation_id,user_id,role,content,request_id) values(c.id,owner_id,'assistant',p_output->>'message',p_id);
  update public.assistant_turns set response=result_response where user_id=owner_id and id=p_id;
  update public.assistant_conversations set version=gen_random_uuid(),updated_at=now(),last_message_at=now() where id=c.id;
  return jsonb_build_object('status','complete','response',result_response);
