@@ -1,6 +1,6 @@
 import {readFileSync} from 'node:fs';
 import {describe,it,expect} from 'vitest';
-import {buildAssistantTurn,selectMemories,type Memory} from '@/lib/ai/assistant-orchestrator';
+import {buildAssistantTurn,selectMemories,planningCalendarContext,type Memory} from '@/lib/ai/assistant-orchestrator';
 
 const context={timezone:'America/Los_Angeles',tasks:[],projects:[]};
 const golden=readFileSync('tests/fixtures/assistant/two-week-planning.txt','utf8');
@@ -42,6 +42,23 @@ describe('planning discovery and draft contract',()=>{
   expect(()=>buildAssistantTurn({...output,planning:{...output.planning,horizon:{startDate:'2026-02-31',endDate:'2026-03-02',timezone:'UTC'}}},context,null,golden,'en')).toThrow();
   expect(()=>buildAssistantTurn({...output,actions:[{kind:'task-create',title:'Unapproved task',estimateMinutes:null,dueDate:null,projectId:null,projectKey:null}]},context,null,golden,'en')).toThrow();
   expect(()=>buildAssistantTurn({...output,planning:{...output.planning,facts:[{dimension:'sleep',state:'known',detail:null}]}},context,null,golden,'en')).toThrow();
+ });
+ it('honors explicit relevance corrections while preserving omitted facts',()=>{
+  const first=buildAssistantTurn(output,context,null,golden,'en');
+  const next=buildAssistantTurn({...output,planning:{...output.planning,facts:[{dimension:'caregiving',state:'not_relevant',detail:null}]}},context,first.planning,'No caregiving commitments this time.','en');
+  expect(next.missing).toEqual(['horizon','sleep']);expect(next.planning?.facts.caregiving).toBeUndefined();expect(next.planning?.facts.exercise).toContain('Gym');expect(next.message).not.toContain('3.');
+ });
+ it('does not treat a negated or quoted skip as a command',()=>{
+  for(const latest of ["Don't skip; ask me questions first.",'What does “plan now” mean?']){
+   const turn=buildAssistantTurn(output,context,null,latest,'en');expect(turn.planning?.status).toBe('discovering');
+  }
+ });
+ it('bounds relevant calendar reservations, not unrelated old history, preserving recurring exceptions',()=>{
+  const old=Array.from({length:1100},(_,i)=>({id:`old-${i}`,title:'Old private appointment',start_date:'2020-01-01',end_date:'2020-01-01',start_time:'08:00',end_time:'09:00',is_recurring:false}));
+  const recurring={id:'school',title:'School',start_date:'2020-01-01',end_date:'2020-01-01',start_time:'08:00',end_time:'09:00',is_recurring:true,is_protected:true,recurrence_rule:{frequency:'daily' as const,interval:1}};
+  const exception={...recurring,id:'exception',title:'Changed school time',is_recurring:false,is_exception:true,recurring_event_id:'school',original_date:'2026-09-21',start_date:'2026-09-21',end_date:'2026-09-21',start_time:'10:00',end_time:'11:00'};
+  const calendar=planningCalendarContext([...old,recurring,exception],{startDate:'2026-09-21',endDate:'2026-09-22',timezone:'UTC'});
+  expect(calendar).toEqual([{title:'Changed school time',start:'2026-09-21T10:00:00.000Z',end:'2026-09-21T11:00:00.000Z',protected:true,recurring:true},{title:'School',start:'2026-09-22T08:00:00.000Z',end:'2026-09-22T09:00:00.000Z',protected:true,recurring:true}]);
  });
  it('selects bounded durable context without promoting inference or reviving expired temporary facts',()=>{
   const memories:Memory[]=Array.from({length:30},(_,i)=>({id:String(i),kind:'preference',key:String(i),content:'A preference',confidence:1,temporality:'durable',updated_at:'2026-09-19T00:00:00Z',effective_until:null}));

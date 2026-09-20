@@ -1,6 +1,7 @@
 import {z} from 'zod';
 import {captureOutput,buildCapturePreview,type CaptureContext} from './native-capture';
-import {isValidLocalDate} from '@/lib/recurring-tasks/scheduling';
+import {isValidLocalDate,addLocalDays} from '@/lib/recurring-tasks/scheduling';
+import {occupiedIntervals,wallInstant,type PlannerEvent} from '@/lib/calendar/planner-intervals';
 
 const text=z.string().trim().min(1).max(1000);
 export const dimensions=['horizon','sleep','caregiving','fixedCommitments','workBoundaries','meals','exercise','deadlines','priorities'] as const;
@@ -31,6 +32,18 @@ export const assistantOutput=z.object({
 export type Memory={id:string;kind:string;key:string;content:string;confidence:number;temporality:'durable'|'temporary';updated_at:string;effective_until:string|null};
 export type PlanningState={id?:string;status:'discovering'|'ready'|'drafted';horizon:z.infer<typeof horizonSchema>|null;readiness:Record<string,z.infer<typeof status>>;facts:Record<string,string>;assumptions:string[]};
 
+/** Expand existing recurrence/exception rules before bounding what the model sees. */
+export function planningCalendarContext(events:PlannerEvent[],range:z.infer<typeof horizonSchema>){
+ const start=wallInstant(range.startDate,'00:00',range.timezone),end=wallInstant(addLocalDays(range.endDate,1),'00:00',range.timezone);
+ const intervals=occupiedIntervals(events,start,end,range.timezone);
+ if(intervals.length>1000)throw new Error('Oversized planning context');
+ const byId=new Map(events.map(event=>[event.id,event]));
+ return intervals.map(interval=>{
+  const source=byId.get(interval.id)??byId.get(interval.id.split('_')[0]);
+  return {title:interval.title,start:new Date(interval.start).toISOString(),end:new Date(interval.end).toISOString(),protected:source?.is_protected??false,recurring:Boolean(source?.is_recurring||source?.recurring_event_id)};
+ });
+}
+
 /** Bound context deterministically; temporary and inferred memories remain labelled. */
 export function selectMemories(memories:Memory[],planning:PlanningState|null,now:Date){
  return memories.filter(memory=>!memory.effective_until||Date.parse(memory.effective_until)>now.getTime()).sort((a,b)=>{
@@ -56,15 +69,16 @@ export function buildAssistantTurn(value:unknown,context:CaptureContext,previous
   if(new Set(candidate.facts.map(fact=>fact.dimension)).size!==candidate.facts.length)throw new Error('Duplicate readiness');
   for(const fact of candidate.facts){
    if(fact.state==='known'&&!fact.detail&&fact.dimension!=='horizon')throw new Error('Unknown planning fact');
-   // Omitted/unknown facts do not erase previously supplied context.
-   if(fact.detail){facts[fact.dimension]=fact.detail;readiness[fact.dimension]=fact.state;}
-   else if(!readiness[fact.dimension])readiness[fact.dimension]=fact.state;
+   // An omitted dimension preserves context; an explicit update can retract it.
+   readiness[fact.dimension]=fact.state;
+   if(fact.detail)facts[fact.dimension]=fact.detail;
+   else delete facts[fact.dimension];
   }
   const horizon=candidate.horizon??previous?.horizon??null;
   readiness.horizon=horizon?'known':'missing';
   for(const key of dimensions)readiness[key]??='missing';
   missing=dimensions.filter(key=>['missing','partial'].includes(readiness[key]));
-  const skip=candidate.skipDiscovery||/\b(skip|plan now|just make a draft)\b|跳过|直接.*计划/i.test(latest);
+  const skip=candidate.skipDiscovery||/^(?:skip(?:[.!]?\s*(?:plan now|just make a draft))?|plan now|just make a draft)[.!]?$/i.test(latest.trim())||/^(?:跳过[，。\s]*)?(?:直接做草稿|直接计划)[。！]?$/u.test(latest.trim());
   const assumptions=[...candidate.assumptions];
   if(skip)for(const key of missing)assumptions.push(locale==='zh'?`${questions.zh[key]} 尚未确认，将保持灵活。`:`${key}: not confirmed; keep this flexible.`);
   planning={status:missing.length&&!skip?'discovering':'ready',horizon,readiness,facts,assumptions:[...new Set(assumptions)].slice(0,24)};

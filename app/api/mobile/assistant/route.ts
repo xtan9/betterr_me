@@ -1,4 +1,4 @@
-import {getLocalDateInTimeZone} from '@/lib/recurring-tasks/scheduling';
+import {getLocalDateInTimeZone,addLocalDays} from '@/lib/recurring-tasks/scheduling';
 import {createHash} from 'node:crypto';
 import {generateText,Output} from 'ai';
 import {z} from 'zod';
@@ -7,7 +7,7 @@ import {llmProvider,structuredOutputProviderOptions} from '@/lib/ai/provider';
 import {DEFAULT_MODEL_ID,AVAILABLE_MODELS} from '@/lib/ai/models';
 import {checkChatRateLimit} from '@/lib/ai/rate-limit';
 import {buildCapturePreview,type CaptureContext} from '@/lib/ai/native-capture';
-import {assistantOutput,assistantInstructions,buildAssistantTurn,selectMemories,type Memory,type PlanningState} from '@/lib/ai/assistant-orchestrator';
+import {assistantOutput,assistantInstructions,buildAssistantTurn,selectMemories,planningCalendarContext,type Memory,type PlanningState} from '@/lib/ai/assistant-orchestrator';
 import {nextActionFacts} from '@/lib/ai/next-action';
 import {safeAiFailure} from '@/lib/ai/safe-failure';
 import {log} from '@/lib/logger';
@@ -26,9 +26,13 @@ export async function POST(request:Request){
   const {client,userId}=auth,fingerprint=createHash('sha256').update(JSON.stringify(input)).digest('hex');
   const turn=await client.from('assistant_turns').select('request_fingerprint,response').eq('id',input.requestId).eq('user_id',userId).maybeSingle();
   if(turn.error)return respond({error:'unavailable'},503);
-  if(turn.data){if(turn.data.request_fingerprint!==fingerprint)return respond({error:'conflict'},409);if(turn.data.response)return respond(turn.data.response);}
+  if(turn.data&&turn.data.request_fingerprint!==fingerprint)return respond({error:'conflict'},409);
   const saved=await client.from('planner_ai_proposals').select('*').eq('id',input.requestId).eq('user_id',userId).maybeSingle();
   if(saved.error)return respond({error:'unavailable'},503);
+  if(turn.data?.response){
+   if(turn.data.response.proposal&&!saved.data)return respond({error:'unavailable'},503);
+   return respond({...turn.data.response,...(saved.data?{proposal:saved.data}:{})});
+  }
   if(saved.data){if(saved.data.request_fingerprint!==fingerprint)return respond({error:'conflict'},409);return respond({proposal:saved.data});}
   if(!process.env.LLM_API_KEY)return respond({error:'unavailable'},503);
   const rate=await checkChatRateLimit(client,userId);if(!rate.allowed)return respond({error:rate.reason==='exceeded'?'limited':'unavailable'},rate.reason==='exceeded'?429:503);
@@ -45,7 +49,7 @@ export async function POST(request:Request){
   if(tasks.error||projects.error||profile.error)return respond({error:'unavailable'},503);
   const context:CaptureContext={tasks:tasks.data??[],projects:projects.data??[],timezone:profile.data?.timezone||'UTC'};
   const [memories,session]=await Promise.all([
-   client.from('user_memories').select('id,kind,key,content,confidence,temporality,updated_at,effective_until').eq('user_id',userId).eq('status','active').order('updated_at',{ascending:false}).limit(200),
+   client.from('user_memories').select('id,kind,key,content,confidence,temporality,updated_at,effective_until').eq('user_id',userId).eq('status','active').or(`effective_until.is.null,effective_until.gt.${new Date().toISOString()}`).order('temporality').order('updated_at',{ascending:false}).limit(200),
    client.from('planning_sessions').select('*').eq('user_id',userId).eq('conversation_id',conversationId).maybeSingle(),
   ]);
   if(memories.error||session.error)return respond({error:'unavailable'},503);
@@ -63,8 +67,9 @@ export async function POST(request:Request){
    // coverageComplete applies to this civil day, never to the whole multi-day horizon.
    const date=classified.planning?.horizon?.startDate??previous?.horizon?.startDate??getLocalDateInTimeZone(new Date(),context.timezone);
    const snapshot=await client.rpc('planner_schedule_context',{p_date:date});
-   if(snapshot.error||!Array.isArray(snapshot.data?.events)||snapshot.data.events.length>1000)return respond({error:'unavailable'},503);
-   result=await generate({coverageDate:date,coverageComplete:snapshot.data.coverageComplete,events:snapshot.data.events.map((event:Record<string,unknown>)=>({title:event.title,startDate:event.start_date,endDate:event.end_date,startTime:event.start_time,endTime:event.end_time,timezone:event.timezone,protected:event.is_protected,recurring:event.is_recurring,recurrenceRule:event.recurrence_rule,recurrenceEndType:event.end_type,recurrenceEndDate:event.end_date_recurrence,recurrenceCount:event.end_count,isException:event.is_exception,recurringEventId:event.recurring_event_id,originalDate:event.original_date}))});
+   if(snapshot.error||!Array.isArray(snapshot.data?.events))return respond({error:'unavailable'},503);
+   const contextRange=classified.planning?.horizon??previous?.horizon??{startDate:date,endDate:addLocalDays(date,13),timezone:context.timezone};
+   result=await generate({contextRange,coverageDate:date,coverageComplete:snapshot.data.coverageComplete,events:planningCalendarContext(snapshot.data.events,contextRange)});
   }
   if(request.signal.aborted)return new Response(null,{status:499,headers});
   const output=buildAssistantTurn(result.output,context,previous,input.messages.at(-1)!.content,input.locale);
