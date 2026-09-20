@@ -46,8 +46,8 @@ const SAFE_PROVIDER_PARAMS = new Set([
   "tools",
 ]);
 
-const SAFE_SCHEMA_FIELDS = new Set(['intent','message','actions','planning','horizon','startDate','endDate','timezone','facts','dimension','state','detail','questions','question','assumptions','draft','skipDiscovery','reopenDiscovery','memoryUpdates','operation','memoryId','replacement','kind','key','content','confidence','temporality','validFor','amount','unit','nextActionWindow','start','end','available']);
-const SAFE_ISSUE_CODES = new Set(['invalid_type','invalid_union','invalid_value','too_small','too_big','invalid_format','unrecognized_keys','custom']);
+const SAFE_SCHEMA_FIELDS = new Set(['intent','message','actions','planning','horizon','startDate','endDate','timezone','facts','dimension','state','detail','questions','question','assumptions','draft','skipDiscovery','reopenDiscovery','memoryUpdates','operation','memoryId','replacement','kind','key','content','confidence','temporality','validFor','amount','unit','nextActionWindow','start','end','available','events','capture','title','startTime','endTime','taskId','taskItemIndex','targetId','protected','category','priorityTaskIds']);
+const SAFE_ISSUE_CODES = new Set(['invalid_type','invalid_union','invalid_value','too_small','too_big','invalid_format','unrecognized_keys','custom','invalid_enum_value','invalid_literal','invalid_string']);
 
 function read(error: object, property: string): unknown {
   try {

@@ -3,6 +3,11 @@ import { describe, expect, it } from "vitest";
 import { safeAiFailure } from "@/lib/ai/safe-failure";
 
 describe("safeAiFailure", () => {
+  it('identifies fixed guided-planning fields and legacy Zod categories without values',()=>{
+    const failure={name:'AI_NoObjectGeneratedError',cause:{name:'AI_TypeValidationError',cause:{issues:[{code:'invalid_enum_value',path:['events',0,'category'],received:'private text',message:'private text'}]}}};
+    expect(safeAiFailure(failure)).toMatchObject({validationPath:'events.*.category',validationCode:'invalid_enum_value'});
+    expect(JSON.stringify(safeAiFailure(failure))).not.toContain('private');
+  });
   it('identifies only allowlisted schema paths and issue categories',()=>{
     const issue={code:'invalid_type',path:['planning','horizon','startDate'],message:'private value'};
     const failure={name:'AI_NoObjectGeneratedError',cause:{name:'AI_TypeValidationError',value:'private output',cause:{issues:[issue]}}};
