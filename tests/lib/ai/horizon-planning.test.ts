@@ -30,3 +30,17 @@ it('never invents travel or emits changes while asking a question',()=>{
  const body=buildHorizonPreview(output([{...event('2026-11-02'),category:'travel'}]),input,context);
  expect(body.events).toEqual([]);expect(body.questions).toHaveLength(1);
 });
+it.each(['event-edit','event-remove'])('allows %s of an event ending at the final midnight, but not beyond it',(kind)=>{
+ const before={id,version:id,title:'Late work',start_date:'2026-11-02',end_date:'2026-11-03',start_time:'23:00',end_time:'00:00',timezone:'America/Los_Angeles',app_owned:true,is_protected:false,is_recurring:false};
+ const actions=output([{...event('2026-11-02','22:00','23:00'),kind,targetId:id}]);
+ expect(buildHorizonPreview(actions,input,{...context,events:[before]}).events[0]).toMatchObject({kind,targetId:id,before});
+ expect(()=>buildHorizonPreview(actions,input,{...context,events:[{...before,end_time:'00:01'}]})).toThrow('Target outside horizon');
+ // The original event may use another zone: compare instants, not civil dates.
+ expect(buildHorizonPreview(actions,input,{...context,events:[{...before,start_date:'2026-11-03',start_time:'07:00',end_time:'08:00',timezone:'UTC'}]}).events).toHaveLength(1);
+});
+it('uses inclusive end dates for all-day target containment',()=>{
+ const before={id,version:id,title:'All day',start_date:'2026-11-02',end_date:'2026-11-02',start_time:null,end_time:null,timezone:'America/Los_Angeles',app_owned:true,is_protected:false,is_recurring:false};
+ const actions=output([{...event('2026-11-02'),kind:'event-remove',targetId:id}]);
+ expect(buildHorizonPreview(actions,input,{...context,events:[before]}).events).toHaveLength(1);
+ for(const outside of [{...before,end_date:'2026-11-03'},{...before,start_date:'2026-11-03',end_date:'2026-11-03'}])expect(()=>buildHorizonPreview(actions,input,{...context,events:[outside]})).toThrow('Target outside horizon');
+});

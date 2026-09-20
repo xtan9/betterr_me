@@ -3,6 +3,7 @@ import {horizonSchema,planningCalendarContext,assertPublicAssistantText} from '.
 import {planningRequest,planningOutput,buildSchedulePreview,type PlanningContext} from './guided-planning';
 import {buildCapturePreview} from './native-capture';
 import {addLocalDays,isValidLocalDate} from '@/lib/recurring-tasks/scheduling';
+import {wallInstant} from '@/lib/calendar/planner-intervals';
 
 export const horizonPlanningRequest=planningRequest.omit({date:true,timezone:true}).extend({horizon:horizonSchema,commitments:z.string().max(12000),needs:z.string().max(6000)}).strict();
 export const sessionPlanningRequest=z.object({requestId:z.string().uuid(),consent:z.literal(true),locale:z.enum(['en','zh']),sessionId:z.string().uuid(),sessionVersion:z.string().uuid()}).strict();
@@ -35,7 +36,11 @@ export function buildHorizonPreview(value:unknown,input:HorizonPlanningInput,con
    if(targets.has(event.targetId))throw new Error('Duplicate event target');
    targets.add(event.targetId);
    const before=context.events.find(item=>item.id===event.targetId);
-   if(!before||before.start_date<input.horizon.startDate||before.end_date>input.horizon.endDate)throw new Error('Target outside horizon');
+   if(!before)throw new Error('Target outside horizon');
+   const zone=before.timezone||input.horizon.timezone;
+   const start=wallInstant(before.start_date,before.start_time??'00:00',zone);
+   const end=wallInstant(before.start_time===null?addLocalDays(before.end_date,1):before.end_date,before.end_time??'00:00',zone);
+   if(start<wallInstant(input.horizon.startDate,'00:00',input.horizon.timezone)||end>wallInstant(addLocalDays(input.horizon.endDate,1),'00:00',input.horizon.timezone))throw new Error('Target outside horizon');
   }
  }
  base.capture=buildCapturePreview(output.capture,{timezone:input.horizon.timezone,tasks:context.tasks,projects:[]});

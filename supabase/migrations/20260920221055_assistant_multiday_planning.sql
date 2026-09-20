@@ -40,7 +40,6 @@ begin
   last_day:=(p_body->'horizon'->>'endDate')::date;
   if last_day is null or last_day<day or last_day-day>90 or p_body->'priorities' is distinct from 'null'::jsonb
    or exists(select 1 from jsonb_array_elements(p_body->'capture'->'items') i where i->>'kind'='routine-create')
-   or exists(select 1 from jsonb_array_elements(p_body->'events') e group by e->'changes'->>'start_date' having count(*)>20)
    then return jsonb_build_object('status','invalid');end if;
   if coalesce((public.planner_horizon_context(day,last_day)->>'coverageComplete')::boolean,false)=false then return jsonb_build_object('status','conflict');end if;
  end if;
@@ -70,7 +69,7 @@ begin
    select * into event from public.calendar_events where id=(item->>'targetId')::uuid and user_id=owner_id;
    if not found or event.version is distinct from (item->>'expectedVersion')::uuid then return jsonb_build_object('status','conflict');end if;
    if event.is_protected or not event.app_owned or event.is_recurring or event.is_exception or event.routine_occurrence_id is not null or event.recurring_event_id is not null or event.session_ended_at is not null then return jsonb_build_object('status','unsupported');end if;
-   if p_body ? 'horizon' and (event.start_date<day or event.end_date>last_day) then return jsonb_build_object('status','invalid');end if;
+   if p_body ? 'horizon' and ((event.start_date+coalesce(event.start_time,time '00:00')) at time zone coalesce(event.timezone,zone)<day::timestamp at time zone zone or (event.end_date+(case when event.start_time is null then 1 else 0 end)+coalesce(event.end_time,time '00:00')) at time zone coalesce(event.timezone,zone)>(last_day+1)::timestamp at time zone zone) then return jsonb_build_object('status','invalid');end if;
    item:=item||jsonb_build_object('before',to_jsonb(event));
   elsif item ? 'targetId' or item ? 'expectedVersion' then return jsonb_build_object('status','invalid');end if;
   if item->>'kind'='event-remove' then if c<>'{}'::jsonb then return jsonb_build_object('status','invalid');end if;
@@ -86,6 +85,11 @@ begin
   end if;
   normalized:=normalized||jsonb_build_array(item);
  end loop;
+ -- Removals have no changes. Their owner-validated immutable before snapshot
+ -- determines the civil day; never trust a caller-supplied before value.
+ if p_body ? 'horizon' and exists(select 1 from jsonb_array_elements(normalized) e group by
+  case when e->>'kind'='event-remove' then ((((e->'before'->>'start_date')::date+coalesce((e->'before'->>'start_time')::time,time '00:00')) at time zone coalesce(e->'before'->>'timezone',zone)) at time zone zone)::date else (e->'changes'->>'start_date')::date end having count(*)>20)
+  then return jsonb_build_object('status','invalid');end if;
  if (select count(*) from jsonb_array_elements(normalized||captures))<>(select count(distinct value->>'id') from jsonb_array_elements(normalized||captures)) then return jsonb_build_object('status','invalid');end if;
  if exists(select value->>'targetId' from jsonb_array_elements(normalized) where value ? 'targetId' group by value->>'targetId' having count(*)>1) then return jsonb_build_object('status','invalid');end if;
  before_priority:=public.priority_snapshot(day);

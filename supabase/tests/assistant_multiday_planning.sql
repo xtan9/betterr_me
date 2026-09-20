@@ -72,4 +72,66 @@ begin
  reset role;
  perform setval('public.assistant_messages_sequence_seq',seq,called);
 end $$;
+do $$
+declare body jsonb; result jsonb; proposal jsonb; midnight_id uuid:=gen_random_uuid(); action text; actions jsonb;
+begin
+ insert into public.calendar_events(id,user_id,title,start_date,end_date,start_time,end_time,timezone,app_owned,is_protected,is_recurring)
+ values(midnight_id,auth.uid(),'Midnight boundary','2030-01-14','2030-01-15','23:00','00:00','UTC',true,false,false);
+ body:=jsonb_build_object('date','2030-01-01','timezone','UTC','horizon',jsonb_build_object('startDate','2030-01-01','endDate','2030-01-14','timezone','UTC'),
+ 'message','Boundary preview','questions','[]'::jsonb,'assumptions','[]'::jsonb,'freeTime','[]'::jsonb,'capture',jsonb_build_object('items','[]'::jsonb),'priorities',null);
+ foreach action in array array['event-edit','event-remove','all-day-remove'] loop
+  if action='all-day-remove' then
+   update public.calendar_events set start_time=null,end_time=null,end_date='2030-01-14' where id=midnight_id;
+   action:='event-remove';
+  end if;
+  select jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'kind',action,'targetId',id,'expectedVersion',version,'changes',
+   case when action='event-remove' then '{}'::jsonb else jsonb_build_object('title',title,'start_date','2030-01-14','end_date','2030-01-14','start_time','22:00','end_time','23:00','timezone','UTC','is_protected',false) end)) into actions from public.calendar_events where id=midnight_id;
+  set local role authenticated;
+  body:=body||jsonb_build_object('contextVersion',public.planner_horizon_context('2030-01-01','2030-01-14')->>'version','events',actions);
+  result:=public.planner_schedule_store_proposal(gen_random_uuid(),'midnight-boundary',body);proposal:=result->'proposal';
+  if result->>'status'<>'complete' then raise exception 'Midnight target rejected %',result;end if;
+  result:=public.planner_schedule_command(jsonb_build_object('operation','accept','operationId',gen_random_uuid(),'proposalId',proposal->>'id','expectedVersion',proposal->>'version'));
+  if result->>'status'<>'complete' then raise exception 'Midnight accept failed %',result;end if;
+  result:=public.planner_schedule_command(jsonb_build_object('operation','undo','operationId',gen_random_uuid(),'changeId',result->>'changeId','expectedVersion',result->>'changeVersion'));
+  if result->>'status'<>'complete' then raise exception 'Midnight undo failed %',result;end if;
+  reset role;
+ end loop;
+ update public.calendar_events set start_time='23:00',end_date='2030-01-15',end_time='00:01' where id=midnight_id;
+ select jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'kind','event-remove','targetId',id,'expectedVersion',version,'changes','{}'::jsonb)) into actions from public.calendar_events where id=midnight_id;
+ set local role authenticated;
+ body:=body||jsonb_build_object('contextVersion',public.planner_horizon_context('2030-01-01','2030-01-14')->>'version','events',actions);
+ if public.planner_schedule_store_proposal(gen_random_uuid(),'outside-midnight',body)->>'status'<>'invalid' then raise exception 'Beyond-midnight target allowed';end if;
+ reset role;
+ update public.calendar_events set start_time=null,end_time=null where id=midnight_id;
+ select jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'kind','event-remove','targetId',id,'expectedVersion',version,'changes','{}'::jsonb)) into actions from public.calendar_events where id=midnight_id;
+ set local role authenticated;
+ body:=body||jsonb_build_object('contextVersion',public.planner_horizon_context('2030-01-01','2030-01-14')->>'version','events',actions);
+ if public.planner_schedule_store_proposal(gen_random_uuid(),'outside-all-day',body)->>'status'<>'invalid' then raise exception 'Beyond-horizon all-day target allowed';end if;
+ reset role;
+ delete from public.calendar_events where id=midnight_id;
+ insert into public.calendar_events(user_id,title,start_date,end_date,start_time,end_time,timezone,app_owned,is_protected,is_recurring)
+ select auth.uid(),'Removal limit',date '2030-01-01'+n/3,date '2030-01-01'+n/3,time '09:00'+(n%3)*interval '1 hour',time '09:30'+(n%3)*interval '1 hour','UTC',true,false,false from generate_series(0,20) n;
+ select jsonb_agg(jsonb_build_object('id',gen_random_uuid(),'kind','event-remove','targetId',id,'expectedVersion',version,'changes','{}'::jsonb,'before',jsonb_build_object('start_date','2030-01-01'))) into actions from public.calendar_events where user_id=auth.uid() and title='Removal limit';
+ set local role authenticated;
+ body:=body||jsonb_build_object('contextVersion',public.planner_horizon_context('2030-01-01','2030-01-14')->>'version','events',actions);
+ result:=public.planner_schedule_store_proposal(gen_random_uuid(),'distributed-removals',body);proposal:=result->'proposal';
+ if result->>'status'<>'complete' then raise exception 'Distributed removals rejected %',result;end if;
+ result:=public.planner_schedule_command(jsonb_build_object('operation','accept','operationId',gen_random_uuid(),'proposalId',proposal->>'id','expectedVersion',proposal->>'version'));
+ if result->>'status'<>'complete' or exists(select 1 from public.calendar_events where title='Removal limit') then raise exception 'Distributed removals failed %',result;end if;
+ result:=public.planner_schedule_command(jsonb_build_object('operation','undo','operationId',gen_random_uuid(),'changeId',result->>'changeId','expectedVersion',result->>'changeVersion'));
+ if result->>'status'<>'complete' or (select count(*) from public.calendar_events where title='Removal limit')<>21 then raise exception 'Distributed removal undo failed %',result;end if;
+ reset role;
+ update public.calendar_events set start_time=null,end_time=null where user_id=auth.uid() and title='Removal limit';
+ select jsonb_agg(jsonb_build_object('id',gen_random_uuid(),'kind','event-remove','targetId',id,'expectedVersion',version,'changes','{}'::jsonb)) into actions from public.calendar_events where user_id=auth.uid() and title='Removal limit';
+ set local role authenticated;
+ body:=body||jsonb_build_object('contextVersion',public.planner_horizon_context('2030-01-01','2030-01-14')->>'version','events',actions);
+ if public.planner_schedule_store_proposal(gen_random_uuid(),'distributed-all-day',body)->>'status'<>'complete' then raise exception 'Distributed all-day removals rejected';end if;
+ reset role;
+ update public.calendar_events set start_date='2030-01-01',end_date='2030-01-01' where user_id=auth.uid() and title='Removal limit';
+ select jsonb_agg(jsonb_build_object('id',gen_random_uuid(),'kind','event-remove','targetId',id,'expectedVersion',version,'changes','{}'::jsonb,'before',jsonb_build_object('start_date',date '2030-01-01'+rn::integer))) into actions from (select *,row_number() over(order by id) rn from public.calendar_events where user_id=auth.uid() and title='Removal limit') targets;
+ set local role authenticated;
+ body:=body||jsonb_build_object('contextVersion',public.planner_horizon_context('2030-01-01','2030-01-14')->>'version','events',actions);
+ if public.planner_schedule_store_proposal(gen_random_uuid(),'same-day-removals',body)->>'status'<>'invalid' then raise exception 'Same-day removal limit bypassed';end if;
+ reset role;
+end $$;
 rollback;
