@@ -3,6 +3,10 @@ import { describe, expect, it } from "vitest";
 import { safeAiFailure } from "@/lib/ai/safe-failure";
 
 describe("safeAiFailure", () => {
+  it("reports structured-output termination without exposing generated text", () => {
+    expect(safeAiFailure({name:'AI_NoObjectGeneratedError',finishReason:'length',text:'private generated text',usage:{outputTokens:6144},cause:{name:'AI_TypeValidationError',message:'private validation text'}})).toEqual({name:'AI_NoObjectGeneratedError',finishReason:'length',outputTokens:6144,causeName:'AI_TypeValidationError'});
+    expect(safeAiFailure({name:'AI_NoObjectGeneratedError',finishReason:'private text',usage:{outputTokens:-1},cause:{name:'private text'}})).toEqual({name:'AI_NoObjectGeneratedError'});
+  });
   it("keeps diagnostic metadata while omitting sensitive provider text", () => {
     const failure = Object.assign(new Error("private appointment details"), {
       code: "model_not_found",

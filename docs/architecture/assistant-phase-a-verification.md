@@ -46,6 +46,19 @@ The optional route persistence test expects a disposable PostgREST server at exa
 
 For live model verification, configure `LLM_API_KEY` (and the existing gateway URL if needed) in the process environment without printing it, set `PHASE_A_LIVE=1`, then run `pnpm exec vitest run tests/lib/ai/assistant-phase-a.live.test.ts`. An explicit live run fails when the credential is missing rather than claiming a pass. Repeat the golden prompt and correction flow on a signed-in device after deploying the migration/backend; verify exact preview and accept/Undo separately using disposable test data.
 
-## Intentionally deferred
+## Live follow-up — 2026-09-20
+
+Production commit `56877562` and its migration deployed successfully. Deployed synthetic-account verification then found two gaps that the isolated route tests did not expose:
+
+- The cookie-session proxy omitted `/api/mobile/assistant/history`. Both GET and browser preflight were redirected to web login, so the mobile Assistant could not finish loading. The exact history path now delegates authentication to its existing bearer-authenticated handler. Unrelated paths remain cookie-protected. Regression coverage: `tests/lib/supabase/native-proxy.test.ts` and `e2e/native-assistant-history.spec.ts`, alongside existing unauthorized/foreign-owner history tests.
+- Successful live golden replies asked dates, sleep and pickup, and reflected family time, but omitted decision-friction acknowledgment. The planning instructions now explicitly reflect a stated need for a clear next action alongside family and calls-as-tasks constraints. The real-model golden assertions remain in place.
+
+The deployed model also intermittently returned `AI_NoObjectGeneratedError`, including on skip. This is not a verified pass. Safe diagnostics now allowlist finish reason, numeric output-token count and validation-error category without exposing generated text or prompts; `tests/lib/ai/safe-failure.test.ts` verifies disclosure boundaries.
+
+`PHASE_A_DEPLOYED_LIVE=1 node scripts/verify-phase-a-live.mjs` is an explicit production synthetic-account probe. Supply the configured public Supabase URL/key and server-only service key securely in the process environment. It creates only new disposable accounts, invokes the actual deployed Assistant/model, checks history, golden discovery, skip, cross-conversation memory, a one-month override and two-owner isolation, never accepts proposals, then revokes sessions and deletes its accounts. It prints only this synthetic test's replies/results. Do not treat an incomplete or failed run as acceptance evidence. Local model-only evaluation additionally needs usable model credentials; Vercel's exported model values were redacted in this environment.
+
+Physical-iPhone verification remains pending. The browser preview reproduced the history failure with a synthetic signed-in account; browser verification does not replace device verification.
+
+## Phase boundary
 
 Phase B: horizon-wide occupancy generation, coherent dated multi-day calendar scheduling, exact multi-day preview/atomic apply, protected/recurring/overlap/DST multi-day validation. Phase A supplies discovery and provisional prose only. Phase C: automatically derived free windows, proactive notifications, Start/Later/Something else. Encryption, embeddings and conversation summarization remain the documented non-goals.

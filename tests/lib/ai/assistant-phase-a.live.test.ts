@@ -6,6 +6,7 @@ import {describe,it,expect} from 'vitest';
 import {assistantInstructions,assistantOutput,buildAssistantTurn} from '@/lib/ai/assistant-orchestrator';
 import {llmProvider,structuredOutputProviderOptions} from '@/lib/ai/provider';
 import {DEFAULT_MODEL_ID} from '@/lib/ai/models';
+import {safeAiFailure} from '@/lib/ai/safe-failure';
 
 describe.skipIf(process.env.PHASE_A_LIVE!=='1')('live Phase A golden planning behavior',()=>{
  it('discovers dates/sleep/pickup, reflects constraints, then drafts on skip',async()=>{
@@ -15,7 +16,7 @@ describe.skipIf(process.env.PHASE_A_LIVE!=='1')('live Phase A golden planning be
   const messages:{role:'user'|'assistant';content:string}[]=[{role:'user',content:golden}];
   async function generate(planning:unknown){
    try{return (await generateText({model:llmProvider(DEFAULT_MODEL_ID),output:Output.object({schema:assistantOutput}),providerOptions:structuredOutputProviderOptions,maxOutputTokens:6144,abortSignal:AbortSignal.timeout(55000),system:`${assistantInstructions}\nReply in English. Current local date: 2026-09-20. Owner context: ${JSON.stringify({capture:context,planning,memories:[],calendar:{events:[],coverageComplete:false}})}`,messages})).output;}
-   catch{throw new Error('Live provider evaluation failed; details withheld');}
+   catch(error){throw new Error(`Live provider evaluation failed: ${JSON.stringify(safeAiFailure(error))}; details withheld`);}
   }
   const first=buildAssistantTurn(await generate(null),context,null,golden,'en');
   expect(first.intent).toBe('planning');expect(first.planning?.status).toBe('discovering');
