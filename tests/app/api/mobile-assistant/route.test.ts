@@ -1,9 +1,10 @@
 import {beforeEach,describe,expect,it,vi} from 'vitest';
-const mocks=vi.hoisted(()=>({createClient:vi.fn(),generate:vi.fn(),getUser:vi.fn(),rpc:vi.fn(),from:vi.fn()}));
-vi.mock('ai',()=>({generateText:mocks.generate,Output:{object:vi.fn()}}));
+const mocks=vi.hoisted(()=>({createClient:vi.fn(),generate:vi.fn(),stream:vi.fn(),getUser:vi.fn(),rpc:vi.fn(),from:vi.fn()}));
+vi.mock('ai',()=>({generateText:mocks.generate,streamText:mocks.stream,Output:{object:vi.fn()}}));
 vi.mock('@supabase/supabase-js',()=>({createClient:(...args:unknown[])=>{mocks.createClient(...args);return {auth:{getUser:mocks.getUser},rpc:mocks.rpc,from:mocks.from};}}));
 import {POST} from '@/app/api/mobile/assistant/route';
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 const owner='61300000-0000-0000-0000-000000000001';
 const request=(extra:Record<string,unknown>={},token='user-token')=>new Request('https://betterr.me/api/mobile/assistant',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({requestId:'61300000-0000-0000-0000-000000000002',consent:true,locale:'en',messages:[{role:'user',content:'Add buy milk'}],...extra})});
 beforeEach(()=>{
@@ -14,23 +15,25 @@ beforeEach(()=>{
   if(name==='check_ai_chat_rate_limit')return {data:[{allowed:true,minute_remaining:9,day_remaining:99}],error:null};
   if(name==='assistant_begin_turn')return {data:{status:'prepared',messages:args.p_messages},error:null};
   if(name==='planner_schedule_context')return {data:{coverageComplete:true,events:[{title:'School pickup',start_date:'2026-09-21',end_date:'2026-09-21',start_time:'15:00',end_time:'15:30',is_protected:true,is_recurring:false}]},error:null};
-  const output=args.p_output as {capture:unknown};
-  return {data:{status:'complete',response:{...output,conversationId:'61300000-0000-0000-0000-000000000002',proposal:{id:args.p_id,body:output.capture,version:'preview-version',state:'pending'}}},error:null};
+  const output=args.p_output as {capture:unknown;message:string;intent:string;ui:unknown;planning:null|{status:string;assumptions:string[]};missing:string[]};
+  return {data:{status:'complete',response:{message:output.message,intent:output.intent,ui:output.ui,...(output.planning?{planning:{sessionId:'session',status:output.planning.status,missing:output.missing,assumptions:output.planning.assumptions}}:{}),conversationId:'61300000-0000-0000-0000-000000000002',proposal:{id:args.p_id,body:output.capture,version:'preview-version',state:'pending'}}},error:null};
  });
  mocks.generate.mockResolvedValue({output:{intent: "capture", planning:null, memoryUpdates:[], nextActionWindow:null, message:'Review this task.',actions:[{kind:'task-create',title:'Buy milk',estimateMinutes:null,dueDate:null,projectId:null,projectKey:null}]}});
 });
 
-it('routes the golden prompt through planning readiness and loads calendar facts without mutation',async()=>{
+it.each([false,true])('routes the golden prompt through planning readiness and loads calendar facts without mutation (stream=%s)',async(stream)=>{
  const output={intent:'planning',message:'Protect family time after pickup; calls can stay tasks with one clear next action.',actions:[],nextActionWindow:null,memoryUpdates:[],planning:{horizon:null,facts:[
   {dimension:'sleep',state:'missing',detail:null},{dimension:'caregiving',state:'partial',detail:'Leave at 8:30 for school; pickup departure still needed.'},
   ...['fixedCommitments','workBoundaries','meals','exercise','deadlines','priorities'].map(dimension=>({dimension,state:'known',detail:'Already supplied in the request.'})),
  ],questions:[],assumptions:[],draft:null,skipDiscovery:false}};
  mocks.generate.mockResolvedValue({output});
- const response=await POST(request({messages:[{role:'user',content:readFileSync('tests/fixtures/assistant/two-week-planning.txt','utf8')}]}));
- expect(response.status).toBe(200);const body=await response.json();
- expect(body.intent).toBe('planning');expect(body.missing).toEqual(['horizon','sleep','caregiving']);
+ mocks.stream.mockImplementation(()=>({partialOutputStream:(async function*(){yield {message:output.message};})(),output:Promise.resolve(output)}));
+ const input=request({messages:[{role:'user',content:readFileSync('tests/fixtures/assistant/two-week-planning.txt','utf8')}]});if(stream)input.headers.set('Accept','application/x-ndjson');
+ const response=await POST(input);
+ expect(response.status).toBe(200);const body=stream?(await response.text()).trim().split('\n').map(line=>JSON.parse(line)).at(-1):await response.json();
+ expect(body.intent).toBe('planning');expect(body.planning.missing).toEqual(['horizon','sleep','caregiving']);
  expect(body.message.match(/\?/g)).toHaveLength(3);expect(body.proposal.body.items).toEqual([]);
- expect(mocks.generate).toHaveBeenCalledTimes(2);expect(mocks.generate.mock.calls[1][0].system).toContain('School pickup');
+ const provider=stream?mocks.stream:mocks.generate;expect(provider).toHaveBeenCalledTimes(2);expect(provider.mock.calls[1][0].system).toContain('School pickup');
  expect(mocks.rpc.mock.calls.map(call=>call[0])).toEqual(['check_ai_chat_rate_limit','assistant_begin_turn','planner_schedule_context','assistant_finish_turn']);
 });
 
@@ -67,6 +70,56 @@ it('replays the immutable reply with the current accepted proposal state',async(
   const query={select:()=>query,eq:()=>query,maybeSingle:async()=>({data,error:null})};return query;
  });
  const body=await (await POST(req)).json();expect(body.message).toBe('Review');expect(body.proposal.state).toBe('accepted');expect(mocks.generate).not.toHaveBeenCalled();
+});
+describe('streaming native replies',()=>{
+ const streamedRequest=()=>{const value=request();value.headers.set('Accept','application/x-ndjson');return value;};
+ it('streams only public message text before generation completes, then sends the durable proposal',async()=>{
+  let release!:()=>void;
+  const waiting=new Promise<void>(resolve=>{release=resolve;});
+  const output={intent:'conversation',planning:null,memoryUpdates:[],nextActionWindow:null,message:'Hello\n\nSecond paragraph',actions:[]};
+  mocks.stream.mockReturnValue({partialOutputStream:(async function*(){yield {message:'Hello',actions:[{kind:'unvalidated'}]};await waiting;yield output;})(),output:Promise.resolve(output)});
+  const response=await POST(streamedRequest());
+  expect(response.headers.get('content-type')).toContain('application/x-ndjson');
+  const reader=response.body!.getReader(),decoder=new TextDecoder();
+  const first=decoder.decode((await reader.read()).value);
+  expect(JSON.parse(first)).toEqual({type:'text',text:'Hello'});
+  expect(mocks.rpc.mock.calls.filter(call=>call[0]==='assistant_finish_turn')).toHaveLength(0);
+  release();let rest='';
+  while(true){const chunk=await reader.read();if(chunk.done)break;rest+=decoder.decode(chunk.value);}
+  const events=rest.trim().split('\n').map(line=>JSON.parse(line));
+  expect(events[0]).toEqual({type:'text',text:output.message});
+  expect(events[1]).toMatchObject({type:'complete',proposal:{body:{message:output.message,items:[]}}});
+  expect(events[1]).toMatchObject({intent:'conversation',conversationId:expect.any(String)});expect(events[1]).not.toHaveProperty('memoryUpdates');expect(events[1]).not.toHaveProperty('capture');
+  expect(mocks.generate).not.toHaveBeenCalled();
+  expect(mocks.rpc.mock.calls.map(call=>call[0])).toEqual(['check_ai_chat_rate_limit','assistant_begin_turn','assistant_finish_turn']);
+ });
+ it.each(['malformed','storage','provider'])('never publishes a complete proposal after %s failure',async(failure)=>{
+  const output={intent:'conversation',planning:null,memoryUpdates:[],nextActionWindow:null,message:'Reply',actions:failure==='malformed'?[{kind:'execute-sql'}]:[]};
+  mocks.stream.mockReturnValue({partialOutputStream:(async function*(){yield {message:'Reply'};if(failure==='provider')throw new Error('private provider text');})(),output:Promise.resolve(output)});
+  const original=mocks.rpc.getMockImplementation()!;
+  if(failure==='storage')mocks.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>name==='assistant_finish_turn'?Promise.resolve({data:null,error:{message:'private database text'}}):original(name,args));
+  const response=await POST(streamedRequest());const body=await response.text();
+  expect(body).toContain('"type":"error"');expect(body).not.toContain('"type":"complete"');expect(body).not.toContain('private');
+ });
+ it('aborts the provider and does not store a proposal when the response is cancelled',async()=>{
+  let signal!:AbortSignal;
+  mocks.stream.mockImplementation(options=>{
+   signal=options.abortSignal;
+   return {partialOutputStream:(async function*(){yield {message:'Partial'};await new Promise<void>(resolve=>signal.addEventListener('abort',()=>resolve(),{once:true}));})(),output:Promise.resolve({message:'Partial',actions:[]})};
+  });
+  const reader=(await POST(streamedRequest())).body!.getReader();await reader.read();await reader.cancel();
+  expect(signal.aborted).toBe(true);
+  await Promise.resolve();
+  expect(mocks.rpc.mock.calls.filter(call=>call[0]==='assistant_finish_turn')).toHaveLength(0);
+ });
+ it('returns the same saved proposal when a streaming client retries without invoking the model',async()=>{
+  const input=streamedRequest(),fingerprint=createHash('sha256').update(await input.clone().text()).digest('hex');
+  const saved={id:'saved',request_fingerprint:fingerprint,body:{message:'Saved reply',items:[]}};
+  mocks.from.mockImplementation(()=>{const query={select:()=>query,eq:()=>query,maybeSingle:async()=>({data:saved,error:null})};return query;});
+  const response=await POST(input);
+  expect(await response.json()).toEqual({proposal:saved});
+  expect(mocks.stream).not.toHaveBeenCalled();expect(mocks.generate).not.toHaveBeenCalled();
+ });
 });
 describe('native assistant authenticated proposal route',()=>{
  it('returns an exact preview without applying plan mutations',async()=>{

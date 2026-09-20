@@ -12,6 +12,8 @@ Planning reads the existing planner snapshot before its final response, retainin
 
 The history endpoint is native JWT only, owner-filtered, paginated, and no-store. Mobile restores server history, carries a conversation ID, and sends just its latest user message thereafter. Local secure storage retains unresolved request and command identities. New conversation leaves durable memories intact. Existing proposal-only responses remain readable during rollout.
 
+Streaming remains negotiated with `Accept: application/x-ndjson`. Only provisional public message text is streamed; the final complete event carries the same persisted typed response as JSON, including the existing proposal field for older streaming clients. Cancellation is propagated through both discovery generation passes and checked before persistence. Mobile keeps the immediate user message, editable next draft, Stop control, interrupted reply and serialized recovery storage from the streaming-chat release.
+
 ## Rollout and privacy
 
 Apply `20260920033758_assistant_orchestrator_memory.sql` before deploying the backend, then release mobile. Deploying the route without the migration fails closed. No production migration is performed by this implementation task. The old client remains compatible with the proposal envelope; a new client that already has a server conversation requires this backend contract.

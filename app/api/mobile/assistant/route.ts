@@ -1,6 +1,6 @@
 import {getLocalDateInTimeZone,addLocalDays} from '@/lib/recurring-tasks/scheduling';
 import {createHash} from 'node:crypto';
-import {generateText,Output} from 'ai';
+import {generateText,streamText,Output} from 'ai';
 import {z} from 'zod';
 import {authenticateNativeRequest} from '@/lib/auth/native-request';
 import {llmProvider,structuredOutputProviderOptions} from '@/lib/ai/provider';
@@ -11,6 +11,7 @@ import {assistantOutput,assistantInstructions,buildAssistantTurn,selectMemories,
 import {nextActionFacts} from '@/lib/ai/next-action';
 import {safeAiFailure} from '@/lib/ai/safe-failure';
 import {log} from '@/lib/logger';
+import {captureStreamResponse} from '@/lib/ai/native-capture-stream';
 export const maxDuration=60;
 const requestSchema=z.object({requestId:z.string().uuid(),conversationId:z.string().uuid().optional(),consent:z.literal(true),locale:z.enum(['en','zh']),messages:z.array(z.object({role:z.enum(['user','assistant']),content:z.string().min(1).max(8000)}).strict()).min(1).max(40)}).strict().refine(value=>value.messages.at(-1)?.role==='user');
 const headers={'Cache-Control':'no-store','Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS'};
@@ -56,10 +57,20 @@ export async function POST(request:Request){
   const previous:PlanningState|null=session.data&&!['applied','cancelled'].includes(session.data.status)?{id:session.data.id,status:session.data.status,horizon:session.data.start_date?{startDate:session.data.start_date,endDate:session.data.end_date,timezone:session.data.timezone}:null,readiness:session.data.readiness,facts:session.data.facts,assumptions:session.data.assumptions}:null;
   const selectedMemories=selectMemories((memories.data??[]) as Memory[],previous,new Date());
   const configured=process.env.LLM_MODEL,modelId=configured&&AVAILABLE_MODELS.some(model=>model.id===configured)?configured:DEFAULT_MODEL_ID;
-  const generate=(calendar:unknown=null)=>generateText({model:llmProvider(modelId),output:Output.object({schema:assistantOutput}),providerOptions:structuredOutputProviderOptions,maxOutputTokens:Math.min(6144,Math.max(1,Number.parseInt(process.env.LLM_MAX_TOKENS||'6144',10)||6144)),abortSignal:request.signal,
+  const runTurn=async(emit?: (text:string)=>void,signal=request.signal)=>{
+  const generate=async(calendar:unknown=null)=>{
+   const options={model:llmProvider(modelId),output:Output.object({schema:assistantOutput}),providerOptions:structuredOutputProviderOptions,maxOutputTokens:Math.min(6144,Math.max(1,Number.parseInt(process.env.LLM_MAX_TOKENS||'6144',10)||6144)),abortSignal:signal,
    system:`${assistantInstructions}\nReply in ${input.locale==='zh'?'Simplified Chinese':'English'}, preserving user-entered names. Current instant: ${new Date().toISOString()}; current local date: ${getLocalDateInTimeZone(new Date(),context.timezone)}. Owner context: ${JSON.stringify({capture:context,memories:selectedMemories,planning:previous,calendar})}`,
    messages:begun.data.messages,
-  });
+   };
+   if(!emit)return generateText(options);
+   const streamed=streamText({...options,onError:()=>{ /* Sanitized by the stream boundary. */ }});
+   for await(const partial of streamed.partialOutputStream){
+    if(signal.aborted)throw new Error('Cancelled');
+    if(typeof partial.message==='string')emit(partial.message);
+   }
+   return {output:await streamed.output};
+  };
   let result=await generate();
   const classified=assistantOutput.parse(result.output);
   if(classified.intent==='planning'||classified.planning){
@@ -67,23 +78,31 @@ export async function POST(request:Request){
    // coverageComplete applies to this civil day, never to the whole multi-day horizon.
    const date=classified.planning?.horizon?.startDate??previous?.horizon?.startDate??getLocalDateInTimeZone(new Date(),context.timezone);
    const snapshot=await client.rpc('planner_schedule_context',{p_date:date});
-   if(snapshot.error||!Array.isArray(snapshot.data?.events))return respond({error:'unavailable'},503);
+   if(snapshot.error||!Array.isArray(snapshot.data?.events))return {body:{error:'unavailable'},status:503};
    const contextRange=classified.planning?.horizon??previous?.horizon??{startDate:date,endDate:addLocalDays(date,13),timezone:context.timezone};
    result=await generate({contextRange,coverageDate:date,coverageComplete:snapshot.data.coverageComplete,events:planningCalendarContext(snapshot.data.events,contextRange)});
   }
-  if(request.signal.aborted)return new Response(null,{status:499,headers});
+  if(signal.aborted)throw new Error('Cancelled');
   const output=buildAssistantTurn(result.output,context,previous,input.messages.at(-1)!.content,input.locale);
   if(output.intent==='next_action'&&output.nextActionWindow){
    const start=Math.max(Date.now(),Date.parse(output.nextActionWindow.start)),end=Date.parse(output.nextActionWindow.end);
-   if(end<=start||end-start>86400000||start>Date.now()+30*86400000)return respond({error:'invalid'},400);
+   if(end<=start||end-start>86400000||start>Date.now()+30*86400000)return {body:{error:'invalid'},status:400};
    const facts=await nextActionFacts(client,userId,start,end);
    output.message=facts.selected?`${input.locale==='zh'?'下一步':'Next'}: ${facts.selected.title}\n${facts.selected.estimate_minutes} ${input.locale==='zh'?'分钟':'minutes'}`:input.locale==='zh'?'这段时间没有合适的可执行任务。':'No actionable task fits this window.';
    output.capture=buildCapturePreview({message:output.message,actions:[]},context);
   }
   const storedOutput={message:output.message,intent:output.intent,planning:output.planning,missing:output.missing,ui:output.ui,capture:output.capture,memoryUpdates:output.memoryUpdates};
+  if(signal.aborted)throw new Error('Cancelled');
   const stored=await client.rpc('assistant_finish_turn',{p_id:input.requestId,p_fingerprint:fingerprint,p_output:storedOutput});
-  if(stored.error||stored.data?.status!=='complete')return respond({error:stored.data?.status==='conflict'?'conflict':'unavailable'},stored.data?.status==='conflict'?409:502);
-  return respond(stored.data.response);
+  if(stored.error||stored.data?.status!=='complete')return {body:{error:stored.data?.status==='conflict'?'conflict':'unavailable'},status:stored.data?.status==='conflict'?409:502};
+  return {body:stored.data.response,status:200};
+  };
+  if(request.headers.get('accept')?.includes('application/x-ndjson'))return captureStreamResponse(request.signal,headers,async(emit,signal)=>{
+   const completed=await runTurn(emit,signal);
+   if(completed.status!==200)throw new Error('Assistant persistence failed');
+   return completed.body;
+  });
+  const completed=await runTurn();return respond(completed.body,completed.status);
  }catch(error){
   // Provider errors may embed prompts or appointment text. Return only a category.
   if(request.signal.aborted)return new Response(null,{status:499,headers});
