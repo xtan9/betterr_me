@@ -232,6 +232,17 @@ it.each([false,true])('regenerates excessive memory updates within the existing 
  expect(mocks.rpc.mock.calls.filter(call=>call[0]==='assistant_finish_turn')).toHaveLength(1);
 });
 
+it.each([false,true])('repairs invalid structured planning flags without weakening the schema (stream=%s)',async(stream)=>{
+ mocks.generate.mockReset();mocks.stream.mockReset();
+ const output={intent:'planning',message:'A provisional plan.',actions:[],memoryUpdates:[],nextActionWindow:null,planning:{horizon:null,facts:[],questions:[],assumptions:[],draft:'Start with one task; keep unknown times flexible.',skipDiscovery:true}};
+ const invalid=assistantOutput.safeParse({...output,planning:{...output.planning,skipDiscovery:null}});expect(invalid.success).toBe(false);
+ const failure={name:'AI_NoObjectGeneratedError',cause:{name:'AI_TypeValidationError',cause:invalid.error}};
+ mocks.generate.mockRejectedValueOnce(failure).mockResolvedValue({output});mocks.stream.mockImplementationOnce(()=>({partialOutputStream:(async function*(){throw failure;})()})).mockImplementation(()=>({partialOutputStream:(async function*(){yield output;})(),output:Promise.resolve(output)}));
+ const req=request({messages:[{role:'user',content:'Skip. Plan now.'}]});if(stream)req.headers.set('Accept','application/x-ndjson');
+ const response=await POST(req);expect(await response.text()).toContain('Start with one task');expect(response.status).toBe(200);
+ const provider=stream?mocks.stream:mocks.generate;expect(provider).toHaveBeenCalledTimes(3);expect(provider.mock.calls[1][0].system).toContain('planning.skipDiscovery');
+});
+
 it.each([false,true])('honors Skip. Plan now. with missing readiness and no model draft (stream=%s)',async(stream)=>{
  const output={intent:'planning',message:'Which dates?',actions:[],memoryUpdates:[],nextActionWindow:null,planning:{horizon:null,facts:[],questions:[],assumptions:[],draft:null,skipDiscovery:false}};
  mocks.generate.mockResolvedValue({output});mocks.stream.mockImplementation(()=>({partialOutputStream:(async function*(){yield output;})(),output:Promise.resolve(output)}));

@@ -67,4 +67,12 @@ Backend PR #1027 added allowlisted schema issue paths/codes. Live failures were 
 
 ## Phase boundary
 
+### Additional deployed findings
+
+The signed-in browser passed golden discovery, a new-conversation recall of all three preferences, and later recall of the temporary four-day gym preference. Owner-authenticated database inspection confirmed the original durable routine remained active and unchanged alongside the matching temporary key expiring one calendar month later. A second authenticated synthetic account could read none of the first account's conversations, messages, memories or planning sessions; foreign conversation history returned 404. Capture created zero tasks before acceptance and exactly the previewed ten-minute task afterward. The existing Next Action fallback selected that task read-only.
+
+A subsequent full probe exposed an invalid `planning.skipDiscovery` type in addition to size errors. The single pre-publication retry now handles model schema-validation errors with fixed, sanitized field/code feedback; domain, proposal and persistence errors remain outside the retry boundary. The schema itself is unchanged. An HTTP 504 also exposed unnecessary second generation after an empty calendar lookup. Empty snapshots now reuse the first validated output, while retaining the lookup and all downstream validation; nonempty snapshots still trigger calendar-aware generation. JSON and streaming regressions cover both paths. The explicit probe records request duration.
+
+The existing manual one-day planner independently rejected two generated outputs. Fixed guided-planning field names and legacy Zod issue categories are now included in safe diagnostics to identify that failure without private values. This is not yet a live Undo pass or a completed production sign-off. Physical-device verification remains pending.
+
 Phase B: horizon-wide occupancy generation, coherent dated multi-day calendar scheduling, exact multi-day preview/atomic apply, protected/recurring/overlap/DST multi-day validation. Phase A supplies discovery and provisional prose only. Phase C: automatically derived free windows, proactive notifications, Start/Later/Something else. Encryption, embeddings and conversation summarization remain the documented non-goals.
