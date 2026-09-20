@@ -55,6 +55,10 @@ const questions={
  en:{horizon:'Which dates should the plan cover?',sleep:'What sleep and wake times would you like?',caregiving:'What pickup or caregiving times should I protect?',fixedCommitments:'Which fixed commitments should I work around?',workBoundaries:'When are you available for focused work?',meals:'What meal times should I allow for?',exercise:'When would you like to exercise?',deadlines:'Which deadlines matter for this plan?',priorities:'What matters most during this period?'},
  zh:{horizon:'计划涵盖哪些日期？',sleep:'你希望几点睡觉和起床？',caregiving:'需要为接送或照顾家人保留哪些时间？',fixedCommitments:'有哪些固定安排需要避开？',workBoundaries:'哪些时间适合专注工作？',meals:'需要预留哪些用餐时间？',exercise:'你希望什么时候运动？',deadlines:'这段时间有哪些截止日期？',priorities:'这段时间最重要的事情是什么？'},
 };
+const assumptionLabels={
+ en:{horizon:'Dates',sleep:'Sleep and wake times',caregiving:'Pickup and caregiving times',fixedCommitments:'Fixed commitments',workBoundaries:'Focused work hours',meals:'Meal times',exercise:'Exercise times',deadlines:'Deadlines',priorities:'Priorities'},
+ zh:{horizon:'日期',sleep:'睡眠和起床时间',caregiving:'接送和照顾家人的时间',fixedCommitments:'固定安排',workBoundaries:'专注工作时间',meals:'用餐时间',exercise:'运动时间',deadlines:'截止日期',priorities:'优先事项'},
+};
 const internalLanguage=/capture step|subsystem|unsupported schedule optimization|endpoint limitation/i;
 export function buildAssistantTurn(value:unknown,context:CaptureContext,previous:PlanningState|null,latest:string,locale:'en'|'zh'){
  const output=assistantOutput.parse(value);
@@ -80,7 +84,7 @@ export function buildAssistantTurn(value:unknown,context:CaptureContext,previous
   missing=dimensions.filter(key=>['missing','partial'].includes(readiness[key]));
   const skip=candidate.skipDiscovery||/^(?:skip(?:[.!]?\s*(?:plan now|just make a draft))?|plan now|just make a draft)[.!]?$/i.test(latest.trim())||/^(?:跳过[，。\s]*)?(?:直接做草稿|直接计划)[。！]?$/u.test(latest.trim());
   const assumptions=[...candidate.assumptions];
-  if(skip)for(const key of missing)assumptions.push(locale==='zh'?`${questions.zh[key]} 尚未确认，将保持灵活。`:`${key}: not confirmed; keep this flexible.`);
+  if(skip)for(const key of missing)assumptions.push(locale==='zh'?`${assumptionLabels.zh[key]}尚未确认，将保持灵活。`:`${assumptionLabels.en[key]}: not confirmed; keep this flexible.`);
   planning={status:missing.length&&!skip?'discovering':'ready',horizon,readiness,facts,assumptions:[...new Set(assumptions)].slice(0,24)};
   if(planning.status==='discovering'){
    const selected=missing.slice(0,3) as (typeof dimensions[number])[];

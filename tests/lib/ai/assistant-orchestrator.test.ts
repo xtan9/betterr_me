@@ -30,7 +30,7 @@ describe('planning discovery and draft contract',()=>{
   const first=buildAssistantTurn(output,context,null,golden,'en');
   const draft=buildAssistantTurn({...output,planning:{...output.planning,facts:[],draft:'Across both weeks, keep afternoons for family. Make one admin call before choosing the next task.'}},context,first.planning,'Skip. Plan now.','en');
   expect(draft.planning?.status).toBe('drafted');expect(draft.planning?.horizon).toBeNull();
-  expect(draft.planning?.assumptions).toEqual(expect.arrayContaining(['horizon: not confirmed; keep this flexible.','sleep: not confirmed; keep this flexible.','caregiving: not confirmed; keep this flexible.']));
+  expect(draft.planning?.assumptions).toEqual(expect.arrayContaining(['Dates: not confirmed; keep this flexible.','Sleep and wake times: not confirmed; keep this flexible.','Pickup and caregiving times: not confirmed; keep this flexible.']));
   expect(draft.message).toContain('no tasks or calendar entries have been changed');expect(draft.capture.items).toEqual([]);expect(draft.ui.quickReplies).toEqual([]);
  });
  it('captures a multi-day horizon and does not re-ask known dates or preferences',()=>{
