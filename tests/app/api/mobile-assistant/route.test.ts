@@ -1,8 +1,9 @@
 import {beforeEach,describe,expect,it,vi} from 'vitest';
-const mocks=vi.hoisted(()=>({createClient:vi.fn(),generate:vi.fn(),getUser:vi.fn(),rpc:vi.fn(),from:vi.fn()}));
-vi.mock('ai',()=>({generateText:mocks.generate,Output:{object:vi.fn()}}));
+const mocks=vi.hoisted(()=>({createClient:vi.fn(),generate:vi.fn(),stream:vi.fn(),getUser:vi.fn(),rpc:vi.fn(),from:vi.fn()}));
+vi.mock('ai',()=>({generateText:mocks.generate,streamText:mocks.stream,Output:{object:vi.fn()}}));
 vi.mock('@supabase/supabase-js',()=>({createClient:(...args:unknown[])=>{mocks.createClient(...args);return {auth:{getUser:mocks.getUser},rpc:mocks.rpc,from:mocks.from};}}));
 import {POST} from '@/app/api/mobile/assistant/route';
+import {createHash} from 'node:crypto';
 const owner='61300000-0000-0000-0000-000000000001';
 const request=(extra:Record<string,unknown>={},token='user-token')=>new Request('https://betterr.me/api/mobile/assistant',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({requestId:'61300000-0000-0000-0000-000000000002',consent:true,locale:'en',messages:[{role:'user',content:'Add buy milk'}],...extra})});
 beforeEach(()=>{
@@ -11,6 +12,54 @@ beforeEach(()=>{
  mocks.from.mockImplementation((table:string)=>{const payload=table==='profiles'?{timezone:'UTC'}:table==='planner_ai_proposals'?null:[];const query={select:()=>query,eq:()=>query,is:()=>query,order:()=>query,limit:()=>query,single:async()=>({data:payload,error:null}),maybeSingle:async()=>({data:payload,error:null}),then:(resolve:(value:unknown)=>unknown)=>Promise.resolve({data:payload,error:null}).then(resolve)};return query;});
  mocks.rpc.mockImplementation(async(name:string,args:Record<string,unknown>)=>name==='check_ai_chat_rate_limit'?{data:[{allowed:true,minute_remaining:9,day_remaining:99}],error:null}:{data:{status:'complete',proposal:{id:args.p_id,body:args.p_body,version:'preview-version',state:'pending'}},error:null});
  mocks.generate.mockResolvedValue({output:{message:'Review this task.',actions:[{kind:'task-create',title:'Buy milk',estimateMinutes:null,dueDate:null,projectId:null,projectKey:null}]}});
+});
+describe('streaming native replies',()=>{
+ const streamedRequest=()=>{const value=request();value.headers.set('Accept','application/x-ndjson');return value;};
+ it('streams only public message text before generation completes, then sends the durable proposal',async()=>{
+  let release!:()=>void;
+  const waiting=new Promise<void>(resolve=>{release=resolve;});
+  const output={message:'Hello\n\nSecond paragraph',actions:[]};
+  mocks.stream.mockReturnValue({partialOutputStream:(async function*(){yield {message:'Hello',actions:[{kind:'unvalidated'}]};await waiting;yield output;})(),output:Promise.resolve(output)});
+  const response=await POST(streamedRequest());
+  expect(response.headers.get('content-type')).toContain('application/x-ndjson');
+  const reader=response.body!.getReader(),decoder=new TextDecoder();
+  const first=decoder.decode((await reader.read()).value);
+  expect(JSON.parse(first)).toEqual({type:'text',text:'Hello'});
+  expect(mocks.rpc.mock.calls.filter(call=>call[0]==='planner_ai_store_proposal')).toHaveLength(0);
+  release();let rest='';
+  while(true){const chunk=await reader.read();if(chunk.done)break;rest+=decoder.decode(chunk.value);}
+  const events=rest.trim().split('\n').map(line=>JSON.parse(line));
+  expect(events[0]).toEqual({type:'text',text:output.message});
+  expect(events[1]).toMatchObject({type:'complete',proposal:{body:{message:output.message,items:[]}}});
+  expect(mocks.generate).not.toHaveBeenCalled();
+  expect(mocks.rpc.mock.calls.map(call=>call[0])).toEqual(['check_ai_chat_rate_limit','planner_ai_store_proposal']);
+ });
+ it.each(['malformed','storage','provider'])('never publishes a complete proposal after %s failure',async(failure)=>{
+  const output=failure==='malformed'?{message:'Reply',actions:[{kind:'execute-sql'}]}:{message:'Reply',actions:[]};
+  mocks.stream.mockReturnValue({partialOutputStream:(async function*(){yield {message:'Reply'};if(failure==='provider')throw new Error('private provider text');})(),output:Promise.resolve(output)});
+  if(failure==='storage')mocks.rpc.mockImplementation(async(name:string)=>name==='check_ai_chat_rate_limit'?{data:[{allowed:true,minute_remaining:9,day_remaining:99}],error:null}:{data:null,error:{message:'private database text'}});
+  const response=await POST(streamedRequest());const body=await response.text();
+  expect(body).toContain('"type":"error"');expect(body).not.toContain('"type":"complete"');expect(body).not.toContain('private');
+ });
+ it('aborts the provider and does not store a proposal when the response is cancelled',async()=>{
+  let signal!:AbortSignal;
+  mocks.stream.mockImplementation(options=>{
+   signal=options.abortSignal;
+   return {partialOutputStream:(async function*(){yield {message:'Partial'};await new Promise<void>(resolve=>signal.addEventListener('abort',()=>resolve(),{once:true}));})(),output:Promise.resolve({message:'Partial',actions:[]})};
+  });
+  const reader=(await POST(streamedRequest())).body!.getReader();await reader.read();await reader.cancel();
+  expect(signal.aborted).toBe(true);
+  await Promise.resolve();
+  expect(mocks.rpc.mock.calls.filter(call=>call[0]==='planner_ai_store_proposal')).toHaveLength(0);
+ });
+ it('returns the same saved proposal when a streaming client retries without invoking the model',async()=>{
+  const input=streamedRequest(),fingerprint=createHash('sha256').update(await input.clone().text()).digest('hex');
+  const saved={id:'saved',request_fingerprint:fingerprint,body:{message:'Saved reply',items:[]}};
+  mocks.from.mockImplementation(()=>{const query={select:()=>query,eq:()=>query,maybeSingle:async()=>({data:saved,error:null})};return query;});
+  const response=await POST(input);
+  expect(await response.json()).toEqual({proposal:saved});
+  expect(mocks.stream).not.toHaveBeenCalled();expect(mocks.generate).not.toHaveBeenCalled();
+ });
 });
 describe('native assistant authenticated proposal route',()=>{
  it('returns an exact preview without applying plan mutations',async()=>{
