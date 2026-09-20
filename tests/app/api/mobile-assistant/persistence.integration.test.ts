@@ -52,6 +52,16 @@ describe.skipIf(!root)('Phase A route + real PostgreSQL persistence (provider an
   expect(corrected).toContain('Gym four days a week');expect(corrected).not.toContain('Gym Monday–Saturday');
   const baseline=await client.from('user_memories').select('status,content').eq('id',durable.data.id).single();expect(baseline.data).toMatchObject({status:'active',content:'Gym Monday–Saturday; it is important.'});
   const history=await GET(new Request(`http://localhost/api/mobile/assistant/history?conversationId=${first.conversationId}`));expect(history.status).toBe(200);expect((await history.json()).messages).toHaveLength(4);
+  // Separate committed transactions make this a real stale-memory race across conversations,
+  // independent of the existing same-conversation version check.
+  const staleId=randomUUID(),newerId=randomUUID();
+  expect((await client.rpc('assistant_begin_turn',{p_id:staleId,p_conversation_id:first.conversationId,p_new:false,p_fingerprint:'a'.repeat(64),p_messages:[{role:'user',content:'Earlier durable change'}]})).data.status).toBe('prepared');
+  expect((await client.rpc('assistant_begin_turn',{p_id:newerId,p_conversation_id:newerId,p_new:true,p_fingerprint:'b'.repeat(64),p_messages:[{role:'user',content:'Newer temporary correction'}]})).data.status).toBe('prepared');
+  const stored={message:'Remembered privately.',intent:'conversation',planning:null,missing:[],ui:{quickReplies:[]},capture:{message:'Remembered privately.',items:[]},memoryUpdates:[{operation:'upsert',kind:'routine',key:'gym',content:'Newer temporary preference',confidence:1,temporality:'temporary'}]};
+  expect((await client.rpc('assistant_finish_turn',{p_id:newerId,p_fingerprint:'b'.repeat(64),p_output:stored})).data.status).toBe('complete');
+  const stale={...stored,memoryUpdates:[{...stored.memoryUpdates[0],content:'Obsolete baseline',temporality:'durable'}]};
+  expect((await client.rpc('assistant_finish_turn',{p_id:staleId,p_fingerprint:'a'.repeat(64),p_output:stale})).data.status).toBe('conflict');
+  expect((await client.from('user_memories').select('status').eq('id',durable.data.id).single()).data?.status).toBe('active');
   for(const table of ['tasks','calendar_events']){const rows=await client.from(table).select('id');expect(rows.error).toBeNull();expect(rows.data).toEqual([]);}
   for(const table of ['assistant_conversations','assistant_messages','user_memories','planning_sessions']){const rows=await otherClient.from(table).select('*');expect(rows.error).toBeNull();expect(rows.data).toEqual([]);}
   mocks.auth.mockResolvedValue({userId:other,client:otherClient});

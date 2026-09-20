@@ -71,6 +71,9 @@ begin
       (case replacement->'validFor'->>'unit' when 'months' then 12 when 'weeks' then 52 else 366 end)
      then raise exception using errcode='22023',message='Invalid memory';end if;
    end if;
+   -- Corrections share one semantic key across durable/temporary layers.
+   if exists(select 1 from public.user_memories where user_id=owner_id and key=replacement->>'key'
+    and status='active' and updated_at>t.created_at) then raise exception using errcode='PT409',message='Memory changed';end if;
    select * into old from public.user_memories where user_id=owner_id and key=replacement->>'key'
     and temporality=replacement->>'temporality' and status='active' for update;
    if found then
