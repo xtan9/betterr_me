@@ -1,4 +1,5 @@
 [
+  {"path":"assistant_multiday_planning.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
   {"path":"assistant_memory_lifecycle.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
   {"path":"assistant_orchestrator_memory.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
   {"path":"mobile_tasks_collection.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},

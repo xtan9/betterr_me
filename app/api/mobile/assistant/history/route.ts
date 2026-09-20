@@ -25,6 +25,6 @@ export async function GET(request:Request){
   if(turn.error)return respond({error:'unavailable'},503);
   const proposal=turn.data?await client.from('planner_ai_proposals').select('*').eq('user_id',userId).eq('id',turn.data.id).maybeSingle():null;
   if(proposal?.error)return respond({error:'unavailable'},503);
-  return respond({conversationId:conversation.data.id,messages:page.map(({role,content,request_id})=>({role,content,...(request_id?{requestId:request_id}:{})})),before:(messages.data?.length??0)>40?page[0].sequence:null,ui:turn.data?.response?.ui,proposal:proposal?.data??null});
+  return respond({conversationId:conversation.data.id,messages:page.map(({role,content,request_id})=>({role,content,...(request_id?{requestId:request_id}:{})})),before:(messages.data?.length??0)>40?page[0].sequence:null,ui:turn.data?.response?.ui,planning:turn.data?.response?.planning,proposal:proposal?.data??null});
  }catch{return respond({error:'unavailable'},503);}
 }
