@@ -3,6 +3,14 @@ import { describe, expect, it } from "vitest";
 import { safeAiFailure } from "@/lib/ai/safe-failure";
 
 describe("safeAiFailure", () => {
+  it('identifies only allowlisted schema paths and issue categories',()=>{
+    const issue={code:'invalid_type',path:['planning','horizon','startDate'],message:'private value'};
+    const failure={name:'AI_NoObjectGeneratedError',cause:{name:'AI_TypeValidationError',value:'private output',cause:{issues:[issue]}}};
+    expect(safeAiFailure(failure)).toMatchObject({validationPath:'planning.horizon.startDate',validationCode:'invalid_type'});
+    issue.path=['memoryUpdates','private memory key'];issue.code='private category';
+    const sanitized=safeAiFailure(failure);
+    expect(sanitized.validationPath).toBe('memoryUpdates.*');expect(sanitized.validationCode).toBeUndefined();expect(JSON.stringify(sanitized)).not.toContain('private');
+  });
   it("reports structured-output termination without exposing generated text", () => {
     expect(safeAiFailure({name:'AI_NoObjectGeneratedError',finishReason:'length',text:'private generated text',usage:{outputTokens:6144},cause:{name:'AI_TypeValidationError',message:'private validation text'}})).toEqual({name:'AI_NoObjectGeneratedError',finishReason:'length',outputTokens:6144,causeName:'AI_TypeValidationError'});
     expect(safeAiFailure({name:'AI_NoObjectGeneratedError',finishReason:'private text',usage:{outputTokens:-1},cause:{name:'private text'}})).toEqual({name:'AI_NoObjectGeneratedError'});

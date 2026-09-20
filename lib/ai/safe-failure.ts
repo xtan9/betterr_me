@@ -46,6 +46,9 @@ const SAFE_PROVIDER_PARAMS = new Set([
   "tools",
 ]);
 
+const SAFE_SCHEMA_FIELDS = new Set(['intent','message','actions','planning','horizon','startDate','endDate','timezone','facts','dimension','state','detail','questions','question','assumptions','draft','skipDiscovery','reopenDiscovery','memoryUpdates','operation','memoryId','replacement','kind','key','content','confidence','temporality','validFor','amount','unit','nextActionWindow','start','end','available']);
+const SAFE_ISSUE_CODES = new Set(['invalid_type','invalid_union','invalid_value','too_small','too_big','invalid_format','unrecognized_keys','custom']);
+
 function read(error: object, property: string): unknown {
   try {
     return Reflect.get(error, property);
@@ -96,6 +99,17 @@ export function safeAiFailure(error: unknown): Record<string, string | number> {
   const cause = read(diagnostic, "cause");
   const causeName = cause && typeof cause === "object" ? read(cause, "name") : undefined;
   if (typeof causeName === "string" && ["AI_TypeValidationError", "AI_JSONParseError", "ZodError"].includes(causeName)) context.causeName = causeName;
+  // Never expose issue messages, received values, arbitrary keys, or model text.
+  try {
+    const validation = cause && typeof cause === 'object' ? read(cause, 'cause') : undefined;
+    const issues = validation && typeof validation === 'object' ? read(validation, 'issues') : undefined;
+    const issue = Array.isArray(issues) ? issues[0] : undefined;
+    if (issue && typeof issue === 'object') {
+      const code = read(issue, 'code'), path = read(issue, 'path');
+      if (typeof code === 'string' && SAFE_ISSUE_CODES.has(code)) context.validationCode = code;
+      if (Array.isArray(path)) context.validationPath = path.slice(0,8).map(part=>typeof part==='string'&&SAFE_SCHEMA_FIELDS.has(part)?part:'*').join('.');
+    }
+  } catch { /* Diagnostics must not change the failure boundary. */ }
   if (typeof rawCode === "string" && SAFE_CODES.has(rawCode)) context.code = rawCode;
   if (typeof providerCode === "string" && SAFE_CODES.has(providerCode)) context.providerCode = providerCode;
   if (typeof providerType === "string" && SAFE_PROVIDER_TYPES.has(providerType)) context.providerType = providerType;
