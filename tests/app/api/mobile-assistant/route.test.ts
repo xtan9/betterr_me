@@ -1,5 +1,7 @@
 import {beforeEach,describe,expect,it,vi} from 'vitest';
-const mocks=vi.hoisted(()=>({createClient:vi.fn(),generate:vi.fn(),stream:vi.fn(),getUser:vi.fn(),rpc:vi.fn(),from:vi.fn()}));
+const mocks=vi.hoisted(()=>({createClient:vi.fn(),generate:vi.fn(),stream:vi.fn(),getUser:vi.fn(),rpc:vi.fn(),from:vi.fn(),nextAction:vi.fn(),logError:vi.fn()}));
+vi.mock('@/lib/ai/next-action',()=>({nextActionFacts:mocks.nextAction}));
+vi.mock('@/lib/logger',()=>({log:{error:mocks.logError}}));
 vi.mock('ai',()=>({generateText:mocks.generate,streamText:mocks.stream,Output:{object:vi.fn()}}));
 vi.mock('@supabase/supabase-js',()=>({createClient:(...args:unknown[])=>{mocks.createClient(...args);return {auth:{getUser:mocks.getUser},rpc:mocks.rpc,from:mocks.from};}}));
 import {POST} from '@/app/api/mobile/assistant/route';
@@ -87,16 +89,28 @@ it('replays the immutable reply with the current accepted proposal state',async(
 });
 describe('streaming native replies',()=>{
  const streamedRequest=()=>{const value=request();value.headers.set('Accept','application/x-ndjson');return value;};
+ it('never streams internal language even when it crosses provider chunks',async()=>{
+  const output={intent:'conversation',planning:null,memoryUpdates:[],nextActionWindow:null,message:'This endpoint is unsupported.',actions:[]};
+  mocks.stream.mockReturnValue({partialOutputStream:(async function*(){yield {intent:'conversation',message:'This endp'};yield output;})(),output:Promise.resolve(output)});
+  const body=await (await POST(streamedRequest())).text();
+  expect(body).not.toContain('This endp');expect(body).not.toContain('endpoint');expect(body).toContain('"type":"error"');
+  expect(mocks.rpc.mock.calls.some(call=>call[0]==='assistant_finish_turn')).toBe(false);
+ });
+ it('does not stream a premature schedule before planning readiness is validated',async()=>{
+  const output={intent:'planning',planning:{horizon:null,facts:[],questions:[],assumptions:[],draft:'Premature final schedule',skipDiscovery:false},memoryUpdates:[],nextActionWindow:null,message:'Keep time flexible.',actions:[]};
+  mocks.stream.mockImplementation(()=>({partialOutputStream:(async function*(){yield {intent:'planning',message:'Premature final schedule.'};yield output;})(),output:Promise.resolve(output)}));
+  const body=await (await POST(streamedRequest())).text();expect(body).not.toContain('Premature final schedule');expect(body).toContain('Which dates');
+ });
  it('streams only public message text before generation completes, then sends the durable proposal',async()=>{
   let release!:()=>void;
   const waiting=new Promise<void>(resolve=>{release=resolve;});
-  const output={intent:'conversation',planning:null,memoryUpdates:[],nextActionWindow:null,message:'Hello\n\nSecond paragraph',actions:[]};
-  mocks.stream.mockReturnValue({partialOutputStream:(async function*(){yield {message:'Hello',actions:[{kind:'unvalidated'}]};await waiting;yield output;})(),output:Promise.resolve(output)});
+  const output={intent:'conversation',planning:null,memoryUpdates:[],nextActionWindow:null,message:'Hello.\n\nSecond paragraph.',actions:[]};
+  mocks.stream.mockReturnValue({partialOutputStream:(async function*(){yield {intent:'conversation',message:'Hello.',actions:[{kind:'unvalidated'}]};await waiting;yield output;})(),output:Promise.resolve(output)});
   const response=await POST(streamedRequest());
   expect(response.headers.get('content-type')).toContain('application/x-ndjson');
   const reader=response.body!.getReader(),decoder=new TextDecoder();
   const first=decoder.decode((await reader.read()).value);
-  expect(JSON.parse(first)).toEqual({type:'text',text:'Hello'});
+  expect(JSON.parse(first)).toEqual({type:'text',text:'Hello.'});
   expect(mocks.rpc.mock.calls.filter(call=>call[0]==='assistant_finish_turn')).toHaveLength(0);
   release();let rest='';
   while(true){const chunk=await reader.read();if(chunk.done)break;rest+=decoder.decode(chunk.value);}
@@ -127,7 +141,7 @@ describe('streaming native replies',()=>{
   let signal!:AbortSignal;
   mocks.stream.mockImplementation(options=>{
    signal=options.abortSignal;
-   return {partialOutputStream:(async function*(){yield {message:'Partial'};await new Promise<void>(resolve=>signal.addEventListener('abort',()=>resolve(),{once:true}));})(),output:Promise.resolve({message:'Partial',actions:[]})};
+   return {partialOutputStream:(async function*(){yield {intent:'conversation',message:'Partial.'};await new Promise<void>(resolve=>signal.addEventListener('abort',()=>resolve(),{once:true}));})(),output:Promise.resolve({message:'Partial.',actions:[]})};
   });
   const reader=(await POST(streamedRequest())).body!.getReader();await reader.read();await reader.cancel();
   expect(signal.aborted).toBe(true);
@@ -142,6 +156,34 @@ describe('streaming native replies',()=>{
   expect(await response.json()).toEqual({proposal:saved});
   expect(mocks.stream).not.toHaveBeenCalled();expect(mocks.generate).not.toHaveBeenCalled();
  });
+});
+
+it.each([false,true])('keeps private provider/database details out of responses and logs (stream=%s)',async(stream)=>{
+ const secret='PRIVATE: family medical appointment and memory';
+ const failure=Object.assign(new Error(secret),{responseBody:JSON.stringify({error:{message:secret,type:secret,code:secret,param:secret}})});
+ mocks.generate.mockRejectedValue(failure);
+ mocks.stream.mockImplementation(()=>({partialOutputStream:(async function*(){throw failure;})(),output:Promise.resolve(null)}));
+ const req=request();if(stream)req.headers.set('Accept','application/x-ndjson');
+ const response=await POST(req);expect(await response.text()).not.toContain(secret);
+ expect(mocks.logError).toHaveBeenCalled();expect(JSON.stringify(mocks.logError.mock.calls)).not.toContain(secret);
+});
+
+it('uses the existing next-action engine only after an explicit availability window',async()=>{
+ const window={start:new Date(Date.now()+60000).toISOString(),end:new Date(Date.now()+1800000).toISOString(),available:true};
+ const output={intent:'next_action',message:'Let us choose one action.',planning:null,actions:[],memoryUpdates:[],nextActionWindow:null};
+ mocks.generate.mockResolvedValue({output});
+ expect((await POST(request({messages:[{role:'user',content:'What should I do next?'}]}))).status).toBe(200);expect(mocks.nextAction).not.toHaveBeenCalled();
+ mocks.generate.mockResolvedValue({output:{...output,nextActionWindow:window}});mocks.nextAction.mockResolvedValue({selected:{title:'Call Matrix',estimate_minutes:10}});
+ const body=await (await POST(request({messages:[{role:'user',content:`I am free from ${window.start} to ${window.end}. What next?`}]}))).json();
+ expect(body.message).toContain('Call Matrix');expect(body.proposal.body.items).toEqual([]);expect(mocks.nextAction).toHaveBeenCalledTimes(1);
+});
+
+it.each([false,true])('honors Skip. Plan now. with missing readiness and no model draft (stream=%s)',async(stream)=>{
+ const output={intent:'planning',message:'Which dates?',actions:[],memoryUpdates:[],nextActionWindow:null,planning:{horizon:null,facts:[],questions:[],assumptions:[],draft:null,skipDiscovery:false}};
+ mocks.generate.mockResolvedValue({output});mocks.stream.mockImplementation(()=>({partialOutputStream:(async function*(){yield output;})(),output:Promise.resolve(output)}));
+ const req=request({messages:[{role:'user',content:'Skip. Plan now.'}]});if(stream)req.headers.set('Accept','application/x-ndjson');
+ const response=await POST(req);const body=stream?(await response.text()).trim().split('\n').map(line=>JSON.parse(line)).at(-1):await response.json();
+ expect(body.planning.status).toBe('drafted');expect(body.message).not.toContain('?');expect(body.message).toContain('Assumption:');expect(body.proposal.body.items).toEqual([]);
 });
 describe('native assistant authenticated proposal route',()=>{
  it('returns an exact preview without applying plan mutations',async()=>{

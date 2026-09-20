@@ -1,6 +1,6 @@
 import {readFileSync} from 'node:fs';
 import {describe,it,expect} from 'vitest';
-import {buildAssistantTurn,selectMemories,planningCalendarContext,type Memory} from '@/lib/ai/assistant-orchestrator';
+import {buildAssistantTurn,selectMemories,planningCalendarContext,memoryUpdate,type Memory} from '@/lib/ai/assistant-orchestrator';
 
 const context={timezone:'America/Los_Angeles',tasks:[],projects:[]};
 const golden=readFileSync('tests/fixtures/assistant/two-week-planning.txt','utf8');
@@ -16,6 +16,38 @@ const output={intent:'planning',message:'Family time after pickup stays protecte
   {dimension:'priorities',state:'known',detail:'Handle admin early without blocking every call. Finish three hours of video work; split remaining focus equally between app and YouTube.'},
  ],questions:[],assumptions:[],draft:null,skipDiscovery:false}};
 describe('planning discovery and draft contract',()=>{
+ it('validates temporary duration without accepting model timestamps or durable current state',()=>{
+  const update={operation:'upsert',kind:'routine',key:'gym',content:'Four days per week',confidence:1,temporality:'temporary',validFor:{amount:1,unit:'months'}};
+  expect(memoryUpdate.parse(update)).toEqual(update);
+  for(const candidate of [{...update,effective_until:'2099-01-01'},{...update,validFor:{amount:13,unit:'months'}},{...update,kind:'current_state',temporality:'durable',validFor:null}])expect(memoryUpdate.safeParse(candidate).success).toBe(false);
+ });
+ it('still drafts on explicit skip when the model omits a draft',()=>{
+  const turn=buildAssistantTurn(output,context,null,'Skip. Plan now.','en');
+  expect(turn.planning?.status).toBe('drafted');expect(turn.message).not.toContain('?');
+  expect(turn.message).toContain('Gym Monday–Saturday');expect(turn.message).toContain('not confirmed');
+  expect(turn.capture.items).toEqual([]);
+ });
+ it('asks only material questions for a narrow plan',()=>{
+  const turn=buildAssistantTurn({...output,planning:{...output.planning,facts:[],questions:[{dimension:'deadlines',question:'When is the report due?'}]}},context,null,'Help me plan this report.','en');
+  expect(turn.message).toContain('When is the report due?');expect(turn.message).not.toContain('sleep and wake');
+ });
+ it('finishes narrow-plan discovery after its material question is answered',()=>{
+  const first=buildAssistantTurn({...output,planning:{...output.planning,horizon:{startDate:'2026-09-21',endDate:'2026-09-21',timezone:context.timezone},facts:[{dimension:'workBoundaries',state:'known',detail:'One hour this morning.'},{dimension:'priorities',state:'known',detail:'Finish the report.'}],questions:[{dimension:'deadlines',question:'When is the report due?'}]}},context,null,'Help me outline the report work.','en');
+  const next=buildAssistantTurn({...output,planning:{...output.planning,facts:[{dimension:'deadlines',state:'known',detail:'Due this afternoon.'}],draft:'Start with the outline, then finish the report before the afternoon deadline.'}},context,first.planning,'This afternoon.','en');
+  expect(next.planning?.status).toBe('drafted');expect(next.missing).toEqual([]);expect(next.message).not.toMatch(/sleep|caregiving|meals|\?/i);
+ });
+ it.each(['endpoint','capture step','subsystem','unsupported schedule optimization','creation intent'])('rejects internal language in every rendered surface: %s',term=>{
+  for(const planning of [{...output.planning,questions:[{dimension:'horizon',question:`Which ${term}?`}]},{...output.planning,draft:'A flexible draft.',skipDiscovery:true,assumptions:[`Use this ${term}.`]}]){
+   expect(()=>buildAssistantTurn({...output,planning},context,null,golden,'en')).toThrow();
+  }
+ });
+ it('uses a temporary override while effective, then returns to the unchanged durable routine',()=>{
+  const durable:Memory={id:'durable',kind:'routine',key:'gym',content:'Gym Monday–Saturday',confidence:1,temporality:'durable',updated_at:'2026-09-01T00:00:00Z',effective_until:null};
+  const temporary:Memory={...durable,id:'temporary',content:'Gym four days a week',temporality:'temporary',effective_from:'2026-09-20T00:00:00Z',effective_until:'2026-10-20T00:00:00Z'};
+  expect(selectMemories([durable,temporary],null,new Date('2026-09-21')).map(m=>m.id)).toEqual(['temporary']);
+  expect(selectMemories([durable,temporary],null,new Date('2026-10-21')).map(m=>m.id)).toEqual(['durable']);
+  expect(selectMemories([durable,temporary],null,new Date('2026-09-19')).map(m=>m.id)).toEqual(['durable']);
+ });
  it('lets an explicit draft request override reopening caused by withdrawn dates',()=>{
   const first=buildAssistantTurn({...output,planning:{...output.planning,horizon:{startDate:'2026-09-21',endDate:'2026-10-04',timezone:context.timezone}}},context,null,golden,'en');
   const next=buildAssistantTurn({...output,planning:{...output.planning,facts:[{dimension:'horizon',state:'missing',detail:null}],skipDiscovery:true,draft:'A flexible draft without fixed dates.'}},context,first.planning,'Forget those dates and make a flexible draft now.','en');
@@ -117,5 +149,7 @@ describe('planning discovery and draft contract',()=>{
   const selected=selectMemories(memories,null,new Date('2026-09-19'));
   expect(selected).toHaveLength(24);expect(selected.some(m=>m.id==='stale')).toBe(false);
   const inference={...memories[1],kind:'inference',confidence:0.6};expect(selectMemories([inference],null,new Date('2026-09-19'))[0].kind).toBe('inference');
+  const current={...memories[0],id:'current',key:'time-off',kind:'current_state',content:'Off work for two weeks',temporality:'temporary' as const,effective_until:'2026-10-01T00:00:00Z'};
+  expect(selectMemories([...memories,current],null,new Date('2026-09-19')).map(memory=>memory.id)).toContain('current');
  });
 });
