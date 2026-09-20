@@ -5,8 +5,11 @@ select public.sql_fixture_create_auth_user('61400000-0000-0000-0000-000000000002
 select set_config('request.jwt.claims','{"sub":"61400000-0000-0000-0000-000000000001","role":"authenticated"}',true);
 do $$
 declare conversation uuid:='61400000-0000-0000-0000-000000000010'; request_id uuid:='61400000-0000-0000-0000-000000000011'; next_id uuid:=gen_random_uuid();
+ sequence_value bigint; sequence_called boolean;
  result jsonb; replay jsonb; memory_id uuid; output jsonb:='{"message":"Which dates?","intent":"planning","planning":{"status":"discovering","horizon":null,"readiness":{"horizon":"missing"},"facts":{},"assumptions":[]},"missing":["horizon"],"ui":{"quickReplies":[]},"capture":{"message":"Which dates?","items":[]},"memoryUpdates":[{"operation":"upsert","kind":"preference","key":"family-time","content":"Family time after pickup","confidence":1,"temporality":"durable"}]}';
 begin
+ -- Sequence advances survive ROLLBACK. Save both fields for this isolated fixture.
+ select last_value,is_called into sequence_value,sequence_called from public.assistant_messages_sequence_seq;
  set local role authenticated;
  result:=public.assistant_begin_turn(request_id,conversation,true,repeat('a',64),'[{"role":"user","content":"Help plan two weeks"}]');
  if result->>'status'<>'prepared' then raise exception 'begin failed %',result;end if;
@@ -60,5 +63,6 @@ begin
   raise exception 'anon begin permitted';
  exception when insufficient_privilege then null;end;
  reset role;
+ perform setval('public.assistant_messages_sequence_seq',sequence_value,sequence_called);
 end $$;
 rollback;
