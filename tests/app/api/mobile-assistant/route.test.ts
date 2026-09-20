@@ -11,6 +11,7 @@ import {assistantOutput} from '@/lib/ai/assistant-orchestrator';
 const owner='61300000-0000-0000-0000-000000000001';
 const request=(extra:Record<string,unknown>={},token='user-token')=>new Request('https://betterr.me/api/mobile/assistant',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({requestId:'61300000-0000-0000-0000-000000000002',consent:true,locale:'en',messages:[{role:'user',content:'Add buy milk'}],...extra})});
 beforeEach(()=>{
+ mocks.generate.mockReset();mocks.stream.mockReset();
  vi.clearAllMocks();vi.stubEnv('LLM_API_KEY','local-test-key');vi.stubEnv('LLM_MODEL','');vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL','http://127.0.0.1:55721');vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY','local-test-anon');
  mocks.getUser.mockResolvedValue({data:{user:{id:owner}},error:null});
  mocks.from.mockImplementation((table:string)=>{const payload=table==='profiles'?{timezone:'UTC'}:['tasks','projects','user_memories'].includes(table)?[]:null;const query={select:()=>query,eq:()=>query,or:()=>query,is:()=>query,order:()=>query,limit:()=>query,single:async()=>({data:payload,error:null}),maybeSingle:async()=>({data:payload,error:null}),then:(resolve:(value:unknown)=>unknown)=>Promise.resolve({data:payload,error:null}).then(resolve)};return query;});
@@ -203,6 +204,21 @@ it.each([false,true])('stops after one oversized-draft retry and saves nothing (
  const response=await POST(req);expect(await response.text()).toContain('unavailable');
  expect(stream?mocks.stream:mocks.generate).toHaveBeenCalledTimes(2);
  expect(mocks.rpc.mock.calls.filter(call=>call[0]==='assistant_finish_turn')).toHaveLength(0);
+});
+
+it.each([false,true])('regenerates excessive memory updates within the existing ten-update limit (stream=%s)',async(stream)=>{
+ mocks.generate.mockReset();mocks.stream.mockReset();
+ const output={intent:'conversation',message:'I will remember your preferences.',actions:[],memoryUpdates:[],nextActionWindow:null,planning:null};
+ const memory={operation:'upsert',kind:'preference',key:'family',content:'Family after pickup',confidence:1,temporality:'durable',validFor:null};
+ const invalid=assistantOutput.safeParse({...output,memoryUpdates:Array.from({length:11},()=>memory)});
+ expect(invalid.success).toBe(false);
+ const failure={name:'AI_NoObjectGeneratedError',cause:{name:'AI_TypeValidationError',cause:invalid.error}};
+ mocks.generate.mockRejectedValueOnce(failure).mockResolvedValue({output});
+ mocks.stream.mockImplementationOnce(()=>({partialOutputStream:(async function*(){throw failure;})()})).mockImplementation(()=>({partialOutputStream:(async function*(){yield output;})(),output:Promise.resolve(output)}));
+ const req=request();if(stream)req.headers.set('Accept','application/x-ndjson');
+ const response=await POST(req);expect(await response.text()).toContain('I will remember');expect(response.status).toBe(200);
+ expect(stream?mocks.stream:mocks.generate).toHaveBeenCalledTimes(2);
+ expect(mocks.rpc.mock.calls.filter(call=>call[0]==='assistant_finish_turn')).toHaveLength(1);
 });
 
 it.each([false,true])('honors Skip. Plan now. with missing readiness and no model draft (stream=%s)',async(stream)=>{
