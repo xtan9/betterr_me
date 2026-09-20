@@ -16,6 +16,57 @@ const output={intent:'planning',message:'Family time after pickup stays protecte
   {dimension:'priorities',state:'known',detail:'Handle admin early without blocking every call. Finish three hours of video work; split remaining focus equally between app and YouTube.'},
  ],questions:[],assumptions:[],draft:null,skipDiscovery:false}};
 describe('planning discovery and draft contract',()=>{
+ it('lets an explicit draft request override reopening caused by withdrawn dates',()=>{
+  const first=buildAssistantTurn({...output,planning:{...output.planning,horizon:{startDate:'2026-09-21',endDate:'2026-10-04',timezone:context.timezone}}},context,null,golden,'en');
+  const next=buildAssistantTurn({...output,planning:{...output.planning,facts:[{dimension:'horizon',state:'missing',detail:null}],skipDiscovery:true,draft:'A flexible draft without fixed dates.'}},context,first.planning,'Forget those dates and make a flexible draft now.','en');
+  expect(next.planning?.horizon).toBeNull();expect(next.planning?.status).toBe('drafted');
+  expect(next.message).toContain('A flexible draft without fixed dates.');
+ });
+ it('allows the user to resolve the last custom assumption',()=>{
+  const draft=buildAssistantTurn({...output,planning:{...output.planning,assumptions:['Keep gym duration flexible.'],draft:'A flexible draft.'}},context,null,'Skip. Plan now.','en');
+  const revised=buildAssistantTurn({...output,planning:{...output.planning,facts:[{dimension:'exercise',state:'known',detail:'Gym takes one hour.'}],assumptions:[],draft:'Allow one hour for gym.'}},context,draft.planning,'Gym takes one hour, use that duration.','en');
+  expect(revised.planning?.status).toBe('drafted');
+  expect(revised.message).not.toContain('Keep gym duration flexible.');
+  expect(revised.message).toContain('Allow one hour for gym.');
+ });
+ it('lets the user reopen discovery after a skipped draft',()=>{
+  const draft=buildAssistantTurn({...output,planning:{...output.planning,draft:'A flexible draft.'}},context,null,'Skip. Plan now.','en');
+  const reopened=buildAssistantTurn({...output,planning:{...output.planning,reopenDiscovery:true}},context,draft.planning,'Ask me the missing questions before revising.','en');
+  expect(reopened.planning?.status).toBe('discovering');
+  expect(reopened.message).toContain('Which dates');
+  expect(reopened.planning?.assumptions).toEqual([]);
+ });
+ it('removes resolved assumptions when refining with newly confirmed dates',()=>{
+  const draft=buildAssistantTurn({...output,planning:{...output.planning,draft:'A flexible draft.'}},context,null,'Skip. Plan now.','en');
+  const revised=buildAssistantTurn({...output,planning:{...output.planning,facts:[],horizon:{startDate:'2026-09-21',endDate:'2026-10-04',timezone:context.timezone},draft:'Use the confirmed two weeks.'}},context,draft.planning,'Use September 21 through October 4.','en');
+  expect(revised.planning?.status).toBe('drafted');
+  expect(revised.message).not.toContain('Dates: not confirmed');
+  expect(revised.message).toContain('Sleep and wake times: not confirmed');
+ });
+ it('reopens date discovery when dates are withdrawn from a complete draft',()=>{
+  const draft=buildAssistantTurn({...output,planning:{...output.planning,horizon:{startDate:'2026-09-21',endDate:'2026-10-04',timezone:context.timezone},facts:output.planning.facts.map(fact=>({...fact,state:'known',detail:'Confirmed'})),draft:'A dated plan.'}},context,null,'Make the plan.','en');
+  const next=buildAssistantTurn({...output,planning:{...output.planning,facts:[{dimension:'horizon',state:'missing',detail:null}]}},context,draft.planning,'Forget those dates. I will confirm new ones later.','en');
+  expect(next.planning?.horizon).toBeNull();expect(next.planning?.status).toBe('discovering');
+  expect(next.missing).toEqual(['horizon']);expect(next.message).toContain('Which dates');
+ });
+ it('continues refining a skipped draft using its existing assumptions',()=>{
+  const draft=buildAssistantTurn({...output,planning:{...output.planning,assumptions:['Keep gym duration flexible.'],draft:'A flexible two-week draft.'}},context,null,'Skip. Plan now.','en');
+  const revised=buildAssistantTurn({...output,planning:{...output.planning,facts:[],assumptions:null,draft:'Move gym sessions to mornings.'}},context,draft.planning,'Move gym sessions to mornings.','en');
+  expect(revised.planning?.status).toBe('drafted');
+  expect(revised.message).toContain('Move gym sessions to mornings.');
+  expect(revised.message).not.toContain('Which dates');
+  expect(revised.planning?.assumptions).toEqual(draft.planning?.assumptions);
+  expect(revised.capture.items).toEqual([]);
+ });
+ it('withdraws confirmed dates and asks for a replacement range',()=>{
+  const first=buildAssistantTurn({...output,planning:{...output.planning,horizon:{startDate:'2026-09-21',endDate:'2026-10-04',timezone:context.timezone}}},context,null,golden,'en');
+  const next=buildAssistantTurn({...output,planning:{...output.planning,facts:[{dimension:'horizon',state:'missing',detail:null}]}},context,first.planning,'Cancel those dates; I do not know when my leave starts.','en');
+  expect(next.planning?.horizon).toBeNull();
+  expect(next.planning?.readiness.horizon).toBe('missing');
+  expect(next.planning?.status).toBe('discovering');
+  expect(next.message).toContain('Which dates');
+  expect(next.capture.items).toEqual([]);
+ });
  it('asks only dates, sleep and pickup for the golden request, without creating schedule changes',()=>{
   const turn=buildAssistantTurn(output,context,null,golden,'en');
   expect(turn.planning?.status).toBe('discovering');

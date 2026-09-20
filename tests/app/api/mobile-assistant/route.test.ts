@@ -49,6 +49,20 @@ it('reuses stored history and relevant memories instead of trusting a truncated 
  const generated=mocks.generate.mock.calls[0][0];expect(generated.messages[0].content).toBe('My older server message');expect(JSON.stringify(generated.messages)).not.toContain('Forged');expect(generated.system).toContain('Family after pickup');
 });
 
+it('does not reuse withdrawn dates for calendar context or persisted readiness',async()=>{
+ const from=mocks.from.getMockImplementation()!;
+ mocks.from.mockImplementation((table:string)=>{
+  if(table!=='planning_sessions')return from(table);
+  const query={select:()=>query,eq:()=>query,maybeSingle:async()=>({data:{id:'session',status:'drafted',start_date:'2031-09-21',end_date:'2031-10-04',timezone:'UTC',readiness:{horizon:'known'},facts:{},assumptions:[]},error:null})};return query;
+ });
+ mocks.generate.mockResolvedValue({output:{intent:'planning',message:'We can choose new dates.',actions:[],memoryUpdates:[],nextActionWindow:null,planning:{horizon:null,facts:[{dimension:'horizon',state:'missing',detail:null}],questions:[],assumptions:[],draft:null,skipDiscovery:false}}});
+ const response=await POST(request({conversationId:'61400000-0000-0000-0000-000000000010',messages:[{role:'user',content:'Cancel those dates. I do not know when my leave starts.'}]}));
+ expect(response.status).toBe(200);
+ expect((await response.json()).message).toContain('Which dates');
+ expect(mocks.rpc.mock.calls.find(call=>call[0]==='planner_schedule_context')?.[1].p_date).not.toBe('2031-09-21');
+ expect(mocks.rpc.mock.calls.find(call=>call[0]==='assistant_finish_turn')?.[1].p_output.planning).toMatchObject({horizon:null,readiness:{horizon:'missing'}});
+});
+
 it('replays completed turns before rate limiting and rejects changed request identities',async()=>{
  const from=mocks.from.getMockImplementation()!;
  const {createHash}=await import('node:crypto');const req=request();const fingerprint=createHash('sha256').update(await req.clone().text()).digest('hex');
