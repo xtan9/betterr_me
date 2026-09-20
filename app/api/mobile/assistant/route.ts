@@ -58,10 +58,10 @@ export async function POST(request:Request){
   const selectedMemories=selectMemories((memories.data??[]) as Memory[],previous,new Date());
   const configured=process.env.LLM_MODEL,modelId=configured&&AVAILABLE_MODELS.some(model=>model.id===configured)?configured:DEFAULT_MODEL_ID;
   const runTurn=async(emit?: (text:string)=>void,signal=request.signal)=>{
-  let sizeRetryUsed=false,published=false;
+  let schemaRetryHint:string|null=null,published=false;
   const generateOnce=async(calendar:unknown)=>{
    const options={model:llmProvider(modelId),output:Output.object({schema:assistantOutput}),providerOptions:structuredOutputProviderOptions,maxOutputTokens:Math.min(6144,Math.max(1,Number.parseInt(process.env.LLM_MAX_TOKENS||'6144',10)||6144)),abortSignal:signal,
-   system:`${assistantInstructions}${sizeRetryUsed?'\nThe previous reply exceeded a size limit. Keep planning.draft under 2400 characters and memoryUpdates at most 10 items. Preserve confirmed constraints and explicit unknowns; do not add facts or calendar actions. Prioritize durable planning preferences and combine related memories rather than listing every detail separately.':''}\nReply in ${input.locale==='zh'?'Simplified Chinese':'English'}, preserving user-entered names. Current instant: ${new Date().toISOString()}; current local date: ${getLocalDateInTimeZone(new Date(),context.timezone)}. Owner context: ${JSON.stringify({capture:context,memories:selectedMemories,planning:previous,calendar})}`,
+   system:`${assistantInstructions}${schemaRetryHint!==null?`\nThe previous reply did not match the output schema (${schemaRetryHint}). Regenerate from the original context, include every required field with its declared type, and use only declared enum values. Keep planning.draft under 2400 characters and memoryUpdates at most 10 items. Preserve confirmed constraints and explicit unknowns; do not add facts or calendar actions. Prioritize durable planning preferences and combine related memories rather than listing every detail separately.`:''}\nReply in ${input.locale==='zh'?'Simplified Chinese':'English'}, preserving user-entered names. Current instant: ${new Date().toISOString()}; current local date: ${getLocalDateInTimeZone(new Date(),context.timezone)}. Owner context: ${JSON.stringify({capture:context,memories:selectedMemories,planning:previous,calendar})}`,
    messages:begun.data.messages,
    };
    if(!emit)return generateText(options);
@@ -79,10 +79,11 @@ export async function POST(request:Request){
   const generate=async(calendar:unknown=null)=>{
    try{return await generateOnce(calendar);}catch(error){
     const failure=safeAiFailure(error);
-    // Retry only observed size failures, once per turn, before publication.
+    // Retry model schema failures once per turn, before publication. Domain,
+    // proposal and persistence failures occur outside this generation boundary.
     // Reuse original context; invalid output is never trusted, truncated or saved.
-    if(sizeRetryUsed||published||signal.aborted||failure.name!=='AI_NoObjectGeneratedError'||failure.causeName!=='AI_TypeValidationError'||failure.validationCode!=='too_big'||!['planning.draft','memoryUpdates'].includes(String(failure.validationPath)))throw error;
-    sizeRetryUsed=true;
+    if(schemaRetryHint!==null||published||signal.aborted||failure.name!=='AI_NoObjectGeneratedError'||failure.causeName!=='AI_TypeValidationError')throw error;
+    schemaRetryHint=`${failure.validationCode??'validation failure'} at ${failure.validationPath??'output'}`;
     return generateOnce(calendar);
    }
   };
@@ -95,8 +96,12 @@ export async function POST(request:Request){
    const date=horizon?.startDate??getLocalDateInTimeZone(new Date(),context.timezone);
    const snapshot=await client.rpc('planner_schedule_context',{p_date:date});
    if(snapshot.error||!Array.isArray(snapshot.data?.events))return {body:{error:'unavailable'},status:503};
-   const contextRange=horizon??{startDate:date,endDate:addLocalDays(date,13),timezone:context.timezone};
-   result=await generate({contextRange,coverageDate:date,coverageComplete:snapshot.data.coverageComplete,events:planningCalendarContext(snapshot.data.events,contextRange)});
+   // An empty snapshot adds no commitments to the already validated discovery
+   // or prose draft. Avoid a second full generation inside the request deadline.
+   if(snapshot.data.events.length){
+    const contextRange=horizon??{startDate:date,endDate:addLocalDays(date,13),timezone:context.timezone};
+    result=await generate({contextRange,coverageDate:date,coverageComplete:snapshot.data.coverageComplete,events:planningCalendarContext(snapshot.data.events,contextRange)});
+   }
   }
   if(signal.aborted)throw new Error('Cancelled');
   const output=buildAssistantTurn(result.output,context,previous,input.messages.at(-1)!.content,input.locale);
