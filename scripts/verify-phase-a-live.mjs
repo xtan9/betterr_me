@@ -52,14 +52,14 @@ try{
  const before=check(await memories(),'Read own memories');
  const routine=before.find(m=>m.status==='active'&&m.temporality==='durable'&&/gym|fitness/i.test(m.content));
  assert(routine,'Durable gym routine persisted');
- assert(before.some(m=>m.status==='active'&&m.temporality==='durable'&&/family/i.test(m.content)&&/pick.?up/i.test(m.content)),'Durable family boundary persisted');
+ assert(before.some(m=>m.status==='active'&&m.temporality==='durable'&&/family/i.test(m.content)&&/pick(?:ing)?[ -]?up/i.test(m.content)),'Durable family boundary persisted');
  assert(before.some(m=>m.status==='active'&&m.temporality==='durable'&&/procrastinat|decision|unordered|next action/i.test(m.content)),'Durable decision-friction preference persisted');
  const second=await send(owner,'Help me plan next week.');
  assert.equal(second.intent,'planning');
  assert(!/how (?:many|often).*gym|(?:is|are).*gym.*important/i.test(second.message),'Re-asked durable exercise preference');
  const recalled=await send(owner,'Before drafting, remind me what you remember about my exercise routine, family boundaries and how I prefer to choose tasks.',second.conversationId);
  assert(/Monday.{0,30}Saturday|six days|6 days/is.test(recalled.message),'Prior gym frequency recalled without supplying its value');
- assert(/family/i.test(recalled.message)&&/pick.?up/i.test(recalled.message),'Family boundary recalled');
+ assert(/family/i.test(recalled.message)&&/pick(?:ing)?[ -]?up/i.test(recalled.message),'Family boundary recalled');
  assert(/next action|unordered|procrastinat|decision/i.test(recalled.message),'Decision-friction preference recalled');
  console.log('PASS deployed new conversation reuses memory');
  await send(owner,'For the next month I only want to go to the gym four days a week.',second.conversationId);

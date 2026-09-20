@@ -59,6 +59,12 @@ The deployed model also intermittently returned `AI_NoObjectGeneratedError`, inc
 
 Physical-iPhone verification remains pending. The browser preview reproduced the history failure with a synthetic signed-in account; browser verification does not replace device verification.
 
+### Live validation follow-up
+
+The history fix was deployed in backend PR #1026. Mobile PR #93 fixes an additional browser-only transport defect: invoking the injected native browser fetch as a repository method supplied the wrong receiver. Its receiver-sensitive regression failed before the fix; all 276 mobile tests, typechecking and lint passed. Both fixes are merged. The signed-in browser now loads history and completes golden discovery with three questions and all three constraint reflections.
+
+Backend PR #1027 added allowlisted schema issue paths/codes. Live failures were identified as `too_big` at `planning.draft` on skip and at `memoryUpdates` on golden discovery, not truncated generation or authentication failures. The 4,000-character draft and ten-update memory validators remain unchanged. Generation instructions now budget a concise prose outline and prioritize at most ten durable/temporary memory updates, with one regeneration per turn for these exact size failures, only before any streamed text is published. Invalid output is never truncated, persisted, or included in the retry context. Failed retries still fail closed. Route regression coverage includes JSON/stream recovery, retry exhaustion with no writes, no retry after publication, excessive memory updates, and one shared retry budget across initial/calendar-aware generation. The probe recognizes both "pickup" and "picking up" when checking the synthetic family-boundary memory; the latter was incorrectly reported as absent despite being stored. Full deployed skip/memory verification remains pending until this fix is deployed and the probe completes.
+
 ## Phase boundary
 
 Phase B: horizon-wide occupancy generation, coherent dated multi-day calendar scheduling, exact multi-day preview/atomic apply, protected/recurring/overlap/DST multi-day validation. Phase A supplies discovery and provisional prose only. Phase C: automatically derived free windows, proactive notifications, Start/Later/Something else. Encryption, embeddings and conversation summarization remain the documented non-goals.
