@@ -31,6 +31,11 @@ describe('planning discovery and draft contract',()=>{
   const turn=buildAssistantTurn({...output,planning:{...output.planning,facts:[],questions:[{dimension:'deadlines',question:'When is the report due?'}]}},context,null,'Help me plan this report.','en');
   expect(turn.message).toContain('When is the report due?');expect(turn.message).not.toContain('sleep and wake');
  });
+ it('finishes narrow-plan discovery after its material question is answered',()=>{
+  const first=buildAssistantTurn({...output,planning:{...output.planning,horizon:{startDate:'2026-09-21',endDate:'2026-09-21',timezone:context.timezone},facts:[{dimension:'workBoundaries',state:'known',detail:'One hour this morning.'},{dimension:'priorities',state:'known',detail:'Finish the report.'}],questions:[{dimension:'deadlines',question:'When is the report due?'}]}},context,null,'Help me outline the report work.','en');
+  const next=buildAssistantTurn({...output,planning:{...output.planning,facts:[{dimension:'deadlines',state:'known',detail:'Due this afternoon.'}],draft:'Start with the outline, then finish the report before the afternoon deadline.'}},context,first.planning,'This afternoon.','en');
+  expect(next.planning?.status).toBe('drafted');expect(next.missing).toEqual([]);expect(next.message).not.toMatch(/sleep|caregiving|meals|\?/i);
+ });
  it.each(['endpoint','capture step','subsystem','unsupported schedule optimization','creation intent'])('rejects internal language in every rendered surface: %s',term=>{
   for(const planning of [{...output.planning,questions:[{dimension:'horizon',question:`Which ${term}?`}]},{...output.planning,draft:'A flexible draft.',skipDiscovery:true,assumptions:[`Use this ${term}.`]}]){
    expect(()=>buildAssistantTurn({...output,planning},context,null,golden,'en')).toThrow();
