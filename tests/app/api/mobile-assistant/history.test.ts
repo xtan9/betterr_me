@@ -25,3 +25,10 @@ it('does not read history without a verified native identity or visible conversa
  rows.assistant_conversations=null;
  expect((await GET(new Request(`https://betterr.me/api/mobile/assistant/history?conversationId=${conversation}`))).status).toBe(404);expect(filters.assistant_messages).toBeUndefined();
 });
+it.each(['drafted','applied','cancelled'])('restores current owner-private %s session state instead of the immutable pre-accept handle',async(status)=>{
+ rows.assistant_turns={id:'turn',response:{planning:{sessionId:'session',version:'before-accept',status:'drafted'},ui:{quickReplies:[]}}};
+ rows.planning_sessions={id:'session',version:'after-undo',status,start_date:'2030-01-01',end_date:'2030-01-14',timezone:'UTC',readiness:{sleep:'missing',horizon:'known'},assumptions:['Sleep remains flexible']};
+ const response=await GET(new Request(`https://betterr.me/api/mobile/assistant/history?conversationId=${conversation}`));expect(response.status).toBe(200);const body=await response.json();
+ if(status==='drafted')expect(body.planning).toMatchObject({version:'after-undo',missing:['sleep'],horizon:{startDate:'2030-01-01',endDate:'2030-01-14'}});else expect(body.planning).toBeUndefined();
+ expect(filters.planning_sessions).toContainEqual(['user_id',owner]);expect(filters.planning_sessions).toContainEqual(['conversation_id',conversation]);
+});
