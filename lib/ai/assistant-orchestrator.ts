@@ -11,11 +11,16 @@ const civilDate=z.string().refine(isValidLocalDate);
 export const horizonSchema=z.object({startDate:civilDate,endDate:civilDate,timezone:z.string().min(1).max(100)}).strict().refine(value=>{
  try{new Intl.DateTimeFormat('en',{timeZone:value.timezone});return value.endDate>=value.startDate&&Date.parse(value.endDate)-Date.parse(value.startDate)<=90*86400000;}catch{return false;}
 });
-const memoryFields={kind:z.enum(['fact','preference','routine','goal','current_state','inference']),key:z.string().min(1).max(100),content:text,confidence:z.number().min(0).max(1),temporality:z.enum(['durable','temporary'])};
+const memoryFields={kind:z.enum(['fact','preference','routine','goal','current_state','inference']),key:z.string().min(1).max(100),content:text,confidence:z.number().min(0).max(1),temporality:z.enum(['durable','temporary']),validFor:z.object({amount:z.number().int().min(1).max(366),unit:z.enum(['days','weeks','months'])}).strict().nullable().default(null)};
 export const memoryUpdate=z.discriminatedUnion('operation',[
  z.object({operation:z.literal('upsert'),...memoryFields}).strict(),
  z.object({operation:z.literal('supersede'),memoryId:z.string().uuid(),replacement:z.object(memoryFields).strict().nullable()}).strict(),
-]);
+]).superRefine((update,ctx)=>{
+ const memory=update.operation==='upsert'?update:update.replacement;
+ if(!memory)return;
+ if(memory.kind==='current_state'&&memory.temporality!=='temporary')ctx.addIssue({code:'custom',message:'Current state must be temporary'});
+ if(memory.validFor&&(memory.temporality!=='temporary'||memory.validFor.amount>({days:366,weeks:52,months:12}[memory.validFor.unit])))ctx.addIssue({code:'custom',message:'Invalid temporary duration'});
+});
 export const assistantOutput=z.object({
  intent:z.enum(['conversation','capture','planning','next_action','clarification']),
  message:z.string().trim().min(1).max(4000),
@@ -30,7 +35,7 @@ export const assistantOutput=z.object({
  memoryUpdates:z.array(memoryUpdate).max(10),
  nextActionWindow:z.object({start:z.string().datetime({offset:true}),end:z.string().datetime({offset:true}),available:z.literal(true)}).strict().nullable(),
 }).strict();
-export type Memory={id:string;kind:string;key:string;content:string;confidence:number;temporality:'durable'|'temporary';updated_at:string;effective_until:string|null};
+export type Memory={id:string;kind:string;key:string;content:string;confidence:number;temporality:'durable'|'temporary';updated_at:string;effective_from?:string;effective_until:string|null};
 export type PlanningState={id?:string;status:'discovering'|'ready'|'drafted';horizon:z.infer<typeof horizonSchema>|null;readiness:Record<string,z.infer<typeof status>>;facts:Record<string,string>;assumptions:string[]};
 
 /** A missing horizon fact explicitly withdraws dates; omission keeps them. */
@@ -53,8 +58,10 @@ export function planningCalendarContext(events:PlannerEvent[],range:z.infer<type
 
 /** Bound context deterministically; temporary and inferred memories remain labelled. */
 export function selectMemories(memories:Memory[],planning:PlanningState|null,now:Date){
- return memories.filter(memory=>!memory.effective_until||Date.parse(memory.effective_until)>now.getTime()).sort((a,b)=>{
-  const rank=(m:Memory)=>(planning&&['routine','preference'].includes(m.kind)?4:0)+(m.temporality==='durable'?2:0)+(m.kind!=='inference'?1:0);
+ const active=memories.filter(memory=>(!memory.effective_from||Date.parse(memory.effective_from)<=now.getTime())&&(!memory.effective_until||Date.parse(memory.effective_until)>now.getTime()));
+ const overridden=new Set(active.filter(memory=>memory.temporality==='temporary').map(memory=>memory.key));
+ return active.filter(memory=>memory.temporality==='temporary'||!overridden.has(memory.key)).sort((a,b)=>{
+  const rank=(m:Memory)=>(m.temporality==='temporary'?8:0)+(planning&&['routine','preference'].includes(m.kind)?4:0)+(m.kind!=='inference'?1:0);
   return rank(b)-rank(a)||b.updated_at.localeCompare(a.updated_at)||a.id.localeCompare(b.id);
  }).slice(0,24);
 }
@@ -66,10 +73,16 @@ const assumptionLabels={
  en:{horizon:'Dates',sleep:'Sleep and wake times',caregiving:'Pickup and caregiving times',fixedCommitments:'Fixed commitments',workBoundaries:'Focused work hours',meals:'Meal times',exercise:'Exercise times',deadlines:'Deadlines',priorities:'Priorities'},
  zh:{horizon:'日期',sleep:'睡眠和起床时间',caregiving:'接送和照顾家人的时间',fixedCommitments:'固定安排',workBoundaries:'专注工作时间',meals:'用餐时间',exercise:'运动时间',deadlines:'截止日期',priorities:'优先事项'},
 };
-const internalLanguage=/capture step|subsystem|unsupported schedule optimization|endpoint limitation/i;
+const internalLanguage=/capture\s+step|subsystem|unsupported\s+schedule\s+optimization|\bendpoints?\b|creation\s+intent|捕获步骤|子系统|端点/iu;
+export function assertPublicAssistantText(value:string){if(internalLanguage.test(value))throw new Error('Invalid assistant response');}
+/** Hold an unfinished sentence so a forbidden phrase cannot leak across chunks. */
+export function publicAssistantPrefix(value:string){
+ assertPublicAssistantText(value);
+ return value.match(/^[\s\S]*[.!?。！？](?=\s|$)/u)?.[0]??'';
+}
 export function buildAssistantTurn(value:unknown,context:CaptureContext,previous:PlanningState|null,latest:string,locale:'en'|'zh'){
  const output=assistantOutput.parse(value);
- if(internalLanguage.test(output.message)||output.planning?.draft&&internalLanguage.test(output.planning.draft))throw new Error('Invalid assistant response');
+ assertPublicAssistantText(output.message);
  // Only the capture capability can produce changes; the original validator owns every action.
  if(output.intent!=='capture'&&output.actions.length)throw new Error('Unexpected actions');
  let message=output.message,planning:PlanningState|null=null,missing:(typeof dimensions[number])[]=[],quickReplies:{id:string;label:string;value:string}[]=[];
@@ -99,17 +112,24 @@ export function buildAssistantTurn(value:unknown,context:CaptureContext,previous
    if(skip)for(const key of missing)assumptions.push(flexibleAssumption(key,locale));
   planning={status:missing.length&&!skip?'discovering':'ready',horizon,readiness,facts,assumptions:[...new Set(assumptions)].slice(0,24)};
   if(planning.status==='discovering'){
-   const selected=missing.slice(0,3) as (typeof dimensions[number])[];
+   const material=missing.filter(key=>candidate.questions.some(question=>question.dimension===key));
+   const selected=(material.length?material:missing).slice(0,3);
    // Questions are rendered from structured readiness, never an unbounded model questionnaire.
    message=[message.replace(/[^.!?。！？]*[?？]/g,'').trim(),...selected.map((key,index)=>`${index+1}. ${candidate.questions.find(q=>q.dimension===key)?.question??questions[locale][key]}`),locale==='zh'?'也可以说“直接做草稿”，我会列出明确的假设。':'You can also say “plan now” for a draft with explicit assumptions.'].filter(Boolean).join('\n\n');
    quickReplies=[{id:'plan-now',label:locale==='zh'?'直接做草稿':'Make a draft now',value:locale==='zh'?'跳过，直接做草稿。':'Skip. Plan now.'}];
   }else{
-   if(!candidate.draft)throw new Error('Missing planning draft');
-   const draft=candidate.draft;
+   if(!candidate.draft&&!skip)throw new Error('Missing planning draft');
+   // A skipped discovery must not fail just because the provider omitted prose.
+   // Reuse confirmed constraints; never fabricate dates, times or a calendar schedule.
+   const draft=candidate.draft??[
+    locale==='zh'?'先完成一件最重要且可执行的事，然后再选择下一件。通话和行政事项先作为任务，不自动占用日历。':'Start with one important, actionable task, then choose the next. Keep calls and admin work as tasks, without automatically reserving calendar time.',
+    ...Object.entries(facts).filter(([key])=>readiness[key]==='known').map(([,detail])=>`- ${detail}`),
+   ].join('\n');
    message=[locale==='zh'?'草稿 — 尚未更改任务或日历。':'Draft — no tasks or calendar entries have been changed.',draft,...planning.assumptions.map(a=>`${locale==='zh'?'假设':'Assumption'}: ${a}`)].join('\n\n');
    planning.status='drafted';
   }
  }
+ assertPublicAssistantText(message);
  if(message.length>8000||(planning?.status==='discovering'&&(message.match(/[?？]/g)??[]).length>3))throw new Error('Invalid response length');
  const capture=buildCapturePreview({message,actions:output.actions},context);
  return {message,intent:output.intent,planning,missing,ui:{quickReplies},capture,memoryUpdates:output.memoryUpdates,nextActionWindow:output.nextActionWindow};
@@ -120,4 +140,4 @@ Choose conversation, capture, planning, next_action or clarification. Only captu
 For planning, return structured facts/readiness and an inclusive civil-date horizon when known. Preserve previously known facts. Partial facts (such as school drop-off with no pickup time) remain partial. Decide relevance; do not ask irrelevant questions. Ask at most three questions, ordered by horizon, sleep/wake, caregiving, then other material gaps. Message reflects one or two constraints, without questions; put questions in the questions array. Protect family/rest/work boundaries. If the user says skip, plan now, just make a draft or equivalent, set skipDiscovery and produce a useful provisional multi-day prose draft with explicit assumptions. Unknown dates/times stay flexible, never invent facts. This phase produces prose drafts only, no calendar mutations. Existing calendar coverage is not guaranteed for the whole horizon; do not claim to have checked it. Never recommend moving protected or recurring events.
 When the user withdraws dates, return horizon=null and an explicit horizon fact with state=missing; omit that fact when dates are merely unchanged. For an existing drafted plan, continue refining the draft with its explicit assumptions without repeating discovery. Return assumptions=null to preserve existing custom assumptions, or an array replacing the complete list (including [] to clear resolved assumptions). Set reopenDiscovery=true only when the user asks to resume questions or starts a different plan; then reassess readiness and assumptions. Withdrawing confirmed dates also reopens discovery unless the user explicitly says to draft now; in that case set skipDiscovery=true and reopenDiscovery=false.
 For next_action, only provide nextActionWindow if the user explicitly confirmed availability and supplied a bounded interval. Otherwise ask how much free time they have; do not invent an interval. The server's existing engine chooses a task.
-Memories: emit only durable facts/preferences or clearly temporary current_state updates grounded in explicit user statements. Inferences must remain kind=inference, never confirmed facts. Use stable semantic keys, supersede supplied IDs on explicit correction; no arbitrary fields. Never store assumptions from a draft as facts. Memory is stored privately for future conversations; never claim end-to-end encryption or that administrators cannot read it. Temporary facts need rechecking later. Do not echo sensitive memories unless relevant. New conversation does not clear durable memories.`;
+Memories: emit only durable facts/preferences or clearly temporary current_state updates grounded in explicit user statements. Inferences must remain kind=inference, never confirmed facts. Use stable semantic keys, supersede supplied IDs on explicit correction; no arbitrary fields. For a temporary exception reuse the routine's semantic key, set temporality=temporary, and validFor to the user's stated duration (for "next month", {amount:1,unit:"months"}). The server owns effective timestamps and preserves the durable baseline underneath temporary exceptions. Set validFor=null when no duration was stated; these temporary facts require rechecking after seven days. Never store current_state as durable. Never store assumptions from a draft as facts. Memory is stored privately for future conversations; never claim end-to-end encryption or that administrators cannot read it. Temporary facts need rechecking later. Do not echo sensitive memories unless relevant. New conversation does not clear durable memories.`;

@@ -7,7 +7,7 @@ import {llmProvider,structuredOutputProviderOptions} from '@/lib/ai/provider';
 import {DEFAULT_MODEL_ID,AVAILABLE_MODELS} from '@/lib/ai/models';
 import {checkChatRateLimit} from '@/lib/ai/rate-limit';
 import {buildCapturePreview,type CaptureContext} from '@/lib/ai/native-capture';
-import {assistantOutput,assistantInstructions,buildAssistantTurn,selectMemories,planningCalendarContext,resolvePlanningHorizon,type Memory,type PlanningState} from '@/lib/ai/assistant-orchestrator';
+import {assistantOutput,assistantInstructions,buildAssistantTurn,selectMemories,planningCalendarContext,resolvePlanningHorizon,publicAssistantPrefix,type Memory,type PlanningState} from '@/lib/ai/assistant-orchestrator';
 import {nextActionFacts} from '@/lib/ai/next-action';
 import {safeAiFailure} from '@/lib/ai/safe-failure';
 import {log} from '@/lib/logger';
@@ -50,7 +50,7 @@ export async function POST(request:Request){
   if(tasks.error||projects.error||profile.error)return respond({error:'unavailable'},503);
   const context:CaptureContext={tasks:tasks.data??[],projects:projects.data??[],timezone:profile.data?.timezone||'UTC'};
   const [memories,session]=await Promise.all([
-   client.from('user_memories').select('id,kind,key,content,confidence,temporality,updated_at,effective_until').eq('user_id',userId).eq('status','active').or(`effective_until.is.null,effective_until.gt.${new Date().toISOString()}`).order('temporality').order('updated_at',{ascending:false}).limit(200),
+   client.from('user_memories').select('id,kind,key,content,confidence,temporality,updated_at,effective_from,effective_until').eq('user_id',userId).eq('status','active').or(`effective_until.is.null,effective_until.gt.${new Date().toISOString()}`).order('temporality',{ascending:false}).order('updated_at',{ascending:false}).limit(200),
    client.from('planning_sessions').select('*').eq('user_id',userId).eq('conversation_id',conversationId).maybeSingle(),
   ]);
   if(memories.error||session.error)return respond({error:'unavailable'},503);
@@ -67,7 +67,11 @@ export async function POST(request:Request){
    const streamed=streamText({...options,onError:()=>{ /* Sanitized by the stream boundary. */ }});
    for await(const partial of streamed.partialOutputStream){
     if(signal.aborted)throw new Error('Cancelled');
-    if(typeof partial.message==='string')emit(partial.message);
+    // Planning needs readiness/calendar validation; recommendations need the engine.
+    // Other replies may stream complete, checked sentences while the model works.
+    if(['conversation','capture','clarification'].includes(partial.intent??'')&&!partial.planning&&typeof partial.message==='string'){
+     const prefix=publicAssistantPrefix(partial.message);if(prefix)emit(prefix);
+    }
    }
    return {output:await streamed.output};
   };
@@ -93,6 +97,7 @@ export async function POST(request:Request){
    output.capture=buildCapturePreview({message:output.message,actions:[]},context);
   }
   const storedOutput={message:output.message,intent:output.intent,planning:output.planning,missing:output.missing,ui:output.ui,capture:output.capture,memoryUpdates:output.memoryUpdates};
+  emit?.(output.message);
   if(signal.aborted)throw new Error('Cancelled');
   const stored=await client.rpc('assistant_finish_turn',{p_id:input.requestId,p_fingerprint:fingerprint,p_output:storedOutput});
   if(stored.error||stored.data?.status!=='complete')return {body:{error:stored.data?.status==='conflict'?'conflict':'unavailable'},status:stored.data?.status==='conflict'?409:502};
