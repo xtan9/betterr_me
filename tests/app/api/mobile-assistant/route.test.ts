@@ -196,6 +196,17 @@ it.each([false,true])('retries an oversized planning draft once without publishi
  expect(mocks.rpc.mock.calls.filter(call=>call[0]==='assistant_finish_turn')).toHaveLength(1);
 });
 
+it.each([false,true])('does not regenerate planning when the checked calendar has no events (stream=%s)',async(stream)=>{
+ const original=mocks.rpc.getMockImplementation()!;
+ mocks.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>name==='planner_schedule_context'?Promise.resolve({data:{coverageComplete:true,events:[]},error:null}):original(name,args));
+ const output={intent:'planning',message:'We will protect family time.',actions:[],memoryUpdates:[],nextActionWindow:null,planning:{horizon:null,facts:[],questions:[],assumptions:[],draft:null,skipDiscovery:false}};
+ mocks.generate.mockResolvedValue({output});mocks.stream.mockImplementation(()=>({partialOutputStream:(async function*(){yield output;})(),output:Promise.resolve(output)}));
+ const req=request({messages:[{role:'user',content:'Help me plan next week.'}]});if(stream)req.headers.set('Accept','application/x-ndjson');
+ const response=await POST(req);const body=await response.text();expect(response.status).toBe(200);expect(body).toContain('discovering');
+ expect(stream?mocks.stream:mocks.generate).toHaveBeenCalledTimes(1);
+ expect(mocks.rpc.mock.calls.map(call=>call[0])).toEqual(['check_ai_chat_rate_limit','assistant_begin_turn','planner_schedule_context','assistant_finish_turn']);
+});
+
 it.each([false,true])('stops after one oversized-draft retry and saves nothing (stream=%s)',async(stream)=>{
  mocks.generate.mockReset();mocks.stream.mockReset();
  const failure={name:'AI_NoObjectGeneratedError',cause:{name:'AI_TypeValidationError',cause:{issues:[{code:'too_big',path:['planning','draft']}]}}};

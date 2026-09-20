@@ -95,8 +95,12 @@ export async function POST(request:Request){
    const date=horizon?.startDate??getLocalDateInTimeZone(new Date(),context.timezone);
    const snapshot=await client.rpc('planner_schedule_context',{p_date:date});
    if(snapshot.error||!Array.isArray(snapshot.data?.events))return {body:{error:'unavailable'},status:503};
-   const contextRange=horizon??{startDate:date,endDate:addLocalDays(date,13),timezone:context.timezone};
-   result=await generate({contextRange,coverageDate:date,coverageComplete:snapshot.data.coverageComplete,events:planningCalendarContext(snapshot.data.events,contextRange)});
+   // An empty snapshot adds no commitments to the already validated discovery
+   // or prose draft. Avoid a second full generation inside the request deadline.
+   if(snapshot.data.events.length){
+    const contextRange=horizon??{startDate:date,endDate:addLocalDays(date,13),timezone:context.timezone};
+    result=await generate({contextRange,coverageDate:date,coverageComplete:snapshot.data.coverageComplete,events:planningCalendarContext(snapshot.data.events,contextRange)});
+   }
   }
   if(signal.aborted)throw new Error('Cancelled');
   const output=buildAssistantTurn(result.output,context,previous,input.messages.at(-1)!.content,input.locale);

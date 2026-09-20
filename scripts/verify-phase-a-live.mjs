@@ -26,8 +26,10 @@ async function account(){
 }
 async function send(owner,content,conversationId){
  console.log('Sending synthetic Assistant turn');
+ const started=performance.now();
  const response=await fetch('https://www.betterr.me/api/mobile/assistant',{method:'POST',headers:{Authorization:`Bearer ${owner.token}`,'Content-Type':'application/json'},body:JSON.stringify({requestId:randomUUID(),...(conversationId?{conversationId}:{}),consent:true,locale:'en',messages:[{role:'user',content}]}),signal:AbortSignal.timeout(65000),redirect:'error'});
  if(!response.ok)throw new Error(`Deployed Assistant returned HTTP ${response.status}`);
+ console.log(`Synthetic Assistant turn completed in ${Math.round(performance.now()-started)} ms`);
  const result=await response.json();
  console.log(JSON.stringify({intent:result.intent,planning:result.planning,message:result.message,proposalItemCount:result.proposal?.body?.items?.length??0}));
  assert(!result.proposal?.body?.items?.length,'Discovery must not produce an apply proposal');
