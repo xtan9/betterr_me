@@ -88,6 +88,14 @@ export function safeAiFailure(error: unknown): Record<string, string | number> {
   const context: Record<string, string | number> = {
     name: typeof rawName === "string" && SAFE_NAMES.has(rawName) ? rawName : "UnknownFailure",
   };
+  const finishReason = read(diagnostic, "finishReason");
+  if (typeof finishReason === "string" && ["stop", "length", "content-filter", "tool-calls", "error", "other", "unknown"].includes(finishReason)) context.finishReason = finishReason;
+  const usage = read(diagnostic, "usage");
+  const outputTokens = usage && typeof usage === "object" ? read(usage, "outputTokens") : undefined;
+  if (typeof outputTokens === "number" && Number.isSafeInteger(outputTokens) && outputTokens >= 0) context.outputTokens = outputTokens;
+  const cause = read(diagnostic, "cause");
+  const causeName = cause && typeof cause === "object" ? read(cause, "name") : undefined;
+  if (typeof causeName === "string" && ["AI_TypeValidationError", "AI_JSONParseError", "ZodError"].includes(causeName)) context.causeName = causeName;
   if (typeof rawCode === "string" && SAFE_CODES.has(rawCode)) context.code = rawCode;
   if (typeof providerCode === "string" && SAFE_CODES.has(providerCode)) context.providerCode = providerCode;
   if (typeof providerType === "string" && SAFE_PROVIDER_TYPES.has(providerType)) context.providerType = providerType;

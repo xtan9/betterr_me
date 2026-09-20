@@ -12,6 +12,7 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
   if (
     path === "/api/mobile/assistant" ||
+    path === "/api/mobile/assistant/history" ||
     path === "/api/mobile/next-action" ||
     path === "/api/mobile/planning" ||
     path.startsWith("/mcp") ||
