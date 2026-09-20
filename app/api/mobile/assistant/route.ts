@@ -58,9 +58,10 @@ export async function POST(request:Request){
   const selectedMemories=selectMemories((memories.data??[]) as Memory[],previous,new Date());
   const configured=process.env.LLM_MODEL,modelId=configured&&AVAILABLE_MODELS.some(model=>model.id===configured)?configured:DEFAULT_MODEL_ID;
   const runTurn=async(emit?: (text:string)=>void,signal=request.signal)=>{
-  const generate=async(calendar:unknown=null)=>{
+  let draftRetryUsed=false,published=false;
+  const generateOnce=async(calendar:unknown)=>{
    const options={model:llmProvider(modelId),output:Output.object({schema:assistantOutput}),providerOptions:structuredOutputProviderOptions,maxOutputTokens:Math.min(6144,Math.max(1,Number.parseInt(process.env.LLM_MAX_TOKENS||'6144',10)||6144)),abortSignal:signal,
-   system:`${assistantInstructions}\nReply in ${input.locale==='zh'?'Simplified Chinese':'English'}, preserving user-entered names. Current instant: ${new Date().toISOString()}; current local date: ${getLocalDateInTimeZone(new Date(),context.timezone)}. Owner context: ${JSON.stringify({capture:context,memories:selectedMemories,planning:previous,calendar})}`,
+   system:`${assistantInstructions}${draftRetryUsed?'\nThe previous draft exceeded its size limit. Regenerate a concise prose outline under 2400 characters. Preserve confirmed constraints and explicit unknowns; do not add facts or calendar actions.':''}\nReply in ${input.locale==='zh'?'Simplified Chinese':'English'}, preserving user-entered names. Current instant: ${new Date().toISOString()}; current local date: ${getLocalDateInTimeZone(new Date(),context.timezone)}. Owner context: ${JSON.stringify({capture:context,memories:selectedMemories,planning:previous,calendar})}`,
    messages:begun.data.messages,
    };
    if(!emit)return generateText(options);
@@ -70,10 +71,20 @@ export async function POST(request:Request){
     // Planning needs readiness/calendar validation; recommendations need the engine.
     // Other replies may stream complete, checked sentences while the model works.
     if(['conversation','capture','clarification'].includes(partial.intent??'')&&!partial.planning&&typeof partial.message==='string'){
-     const prefix=publicAssistantPrefix(partial.message);if(prefix)emit(prefix);
+     const prefix=publicAssistantPrefix(partial.message);if(prefix){published=true;emit(prefix);}
     }
    }
    return {output:await streamed.output};
+  };
+  const generate=async(calendar:unknown=null)=>{
+   try{return await generateOnce(calendar);}catch(error){
+    const failure=safeAiFailure(error);
+    // Retry only the observed length failure, once per turn, before publication.
+    // Reuse original context; invalid output is never trusted, truncated or saved.
+    if(draftRetryUsed||published||signal.aborted||failure.name!=='AI_NoObjectGeneratedError'||failure.causeName!=='AI_TypeValidationError'||failure.validationCode!=='too_big'||failure.validationPath!=='planning.draft')throw error;
+    draftRetryUsed=true;
+    return generateOnce(calendar);
+   }
   };
   let result=await generate();
   const classified=assistantOutput.parse(result.output);

@@ -7,6 +7,7 @@ vi.mock('@supabase/supabase-js',()=>({createClient:(...args:unknown[])=>{mocks.c
 import {POST} from '@/app/api/mobile/assistant/route';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
+import {assistantOutput} from '@/lib/ai/assistant-orchestrator';
 const owner='61300000-0000-0000-0000-000000000001';
 const request=(extra:Record<string,unknown>={},token='user-token')=>new Request('https://betterr.me/api/mobile/assistant',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({requestId:'61300000-0000-0000-0000-000000000002',consent:true,locale:'en',messages:[{role:'user',content:'Add buy milk'}],...extra})});
 beforeEach(()=>{
@@ -178,12 +179,54 @@ it('uses the existing next-action engine only after an explicit availability win
  expect(body.message).toContain('Call Matrix');expect(body.proposal.body.items).toEqual([]);expect(mocks.nextAction).toHaveBeenCalledTimes(1);
 });
 
+it.each([false,true])('retries an oversized planning draft once without publishing or persisting it (stream=%s)',async(stream)=>{
+ mocks.generate.mockReset();mocks.stream.mockReset();
+ const output={intent:'planning',message:'A flexible draft.',actions:[],memoryUpdates:[],nextActionWindow:null,planning:{horizon:null,facts:[],questions:[],assumptions:[],draft:'Start with one useful task. Keep family time protected.',skipDiscovery:true}};
+ const invalid=assistantOutput.safeParse({...output,planning:{...output.planning,draft:'PRIVATE oversized draft '.repeat(200)}});
+ expect(invalid.success).toBe(false);
+ const failure=Object.assign(new Error('Private provider text'),{name:'AI_NoObjectGeneratedError',cause:{name:'AI_TypeValidationError',cause:invalid.error}});
+ mocks.generate.mockRejectedValueOnce(failure).mockResolvedValue({output});
+ mocks.stream.mockImplementationOnce(()=>({partialOutputStream:(async function*(){yield {intent:'planning',planning:{draft:'PRIVATE oversized draft'}};throw failure;})()})).mockImplementation(()=>({partialOutputStream:(async function*(){yield output;})(),output:Promise.resolve(output)}));
+ const req=request({messages:[{role:'user',content:'Skip. Plan now.'}]});if(stream)req.headers.set('Accept','application/x-ndjson');
+ const response=await POST(req),body=await response.text();
+ expect(response.status).toBe(200);expect(body).toContain('Start with one useful task');expect(body).not.toContain('PRIVATE');
+ const provider=stream?mocks.stream:mocks.generate;
+ expect(provider).toHaveBeenCalledTimes(3);expect(provider.mock.calls[1][0].system).toContain('under 2400 characters');
+ expect(mocks.rpc.mock.calls.filter(call=>call[0]==='assistant_finish_turn')).toHaveLength(1);
+});
+
+it.each([false,true])('stops after one oversized-draft retry and saves nothing (stream=%s)',async(stream)=>{
+ mocks.generate.mockReset();mocks.stream.mockReset();
+ const failure={name:'AI_NoObjectGeneratedError',cause:{name:'AI_TypeValidationError',cause:{issues:[{code:'too_big',path:['planning','draft']}]}}};
+ mocks.generate.mockRejectedValue(failure);mocks.stream.mockImplementation(()=>({partialOutputStream:(async function*(){throw failure;})()}));
+ const req=request();if(stream)req.headers.set('Accept','application/x-ndjson');
+ const response=await POST(req);expect(await response.text()).toContain('unavailable');
+ expect(stream?mocks.stream:mocks.generate).toHaveBeenCalledTimes(2);
+ expect(mocks.rpc.mock.calls.filter(call=>call[0]==='assistant_finish_turn')).toHaveLength(0);
+});
+
 it.each([false,true])('honors Skip. Plan now. with missing readiness and no model draft (stream=%s)',async(stream)=>{
  const output={intent:'planning',message:'Which dates?',actions:[],memoryUpdates:[],nextActionWindow:null,planning:{horizon:null,facts:[],questions:[],assumptions:[],draft:null,skipDiscovery:false}};
  mocks.generate.mockResolvedValue({output});mocks.stream.mockImplementation(()=>({partialOutputStream:(async function*(){yield output;})(),output:Promise.resolve(output)}));
  const req=request({messages:[{role:'user',content:'Skip. Plan now.'}]});if(stream)req.headers.set('Accept','application/x-ndjson');
  const response=await POST(req);const body=stream?(await response.text()).trim().split('\n').map(line=>JSON.parse(line)).at(-1):await response.json();
  expect(body.planning.status).toBe('drafted');expect(body.message).not.toContain('?');expect(body.message).toContain('Assumption:');expect(body.proposal.body.items).toEqual([]);
+});
+
+it('does not regenerate after publishing any streamed text',async()=>{
+ const failure={name:'AI_NoObjectGeneratedError',cause:{name:'AI_TypeValidationError',cause:{issues:[{code:'too_big',path:['planning','draft']}]}}};
+ mocks.stream.mockReset().mockImplementation(()=>({partialOutputStream:(async function*(){yield {intent:'conversation',message:'A published sentence.'};throw failure;})()}));
+ const req=request();req.headers.set('Accept','application/x-ndjson');
+ const body=await (await POST(req)).text();expect(body).toContain('A published sentence.');expect(body).toContain('unavailable');
+ expect(mocks.stream).toHaveBeenCalledTimes(1);expect(mocks.rpc.mock.calls.filter(call=>call[0]==='assistant_finish_turn')).toHaveLength(0);
+});
+
+it('shares the single retry budget across initial and calendar-aware generations',async()=>{
+ const failure={name:'AI_NoObjectGeneratedError',cause:{name:'AI_TypeValidationError',cause:{issues:[{code:'too_big',path:['planning','draft']}]}}};
+ const output={intent:'planning',message:'A draft.',actions:[],memoryUpdates:[],nextActionWindow:null,planning:{horizon:null,facts:[],questions:[],assumptions:[],draft:'A concise draft.',skipDiscovery:true}};
+ mocks.generate.mockReset().mockRejectedValueOnce(failure).mockResolvedValueOnce({output}).mockRejectedValue(failure);
+ expect((await POST(request())).status).toBe(502);expect(mocks.generate).toHaveBeenCalledTimes(3);
+ expect(mocks.rpc.mock.calls.filter(call=>call[0]==='assistant_finish_turn')).toHaveLength(0);
 });
 describe('native assistant authenticated proposal route',()=>{
  it('returns an exact preview without applying plan mutations',async()=>{
