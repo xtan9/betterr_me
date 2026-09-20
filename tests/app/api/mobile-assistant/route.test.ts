@@ -3,20 +3,65 @@ const mocks=vi.hoisted(()=>({createClient:vi.fn(),generate:vi.fn(),getUser:vi.fn
 vi.mock('ai',()=>({generateText:mocks.generate,Output:{object:vi.fn()}}));
 vi.mock('@supabase/supabase-js',()=>({createClient:(...args:unknown[])=>{mocks.createClient(...args);return {auth:{getUser:mocks.getUser},rpc:mocks.rpc,from:mocks.from};}}));
 import {POST} from '@/app/api/mobile/assistant/route';
+import {readFileSync} from 'node:fs';
 const owner='61300000-0000-0000-0000-000000000001';
 const request=(extra:Record<string,unknown>={},token='user-token')=>new Request('https://betterr.me/api/mobile/assistant',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({requestId:'61300000-0000-0000-0000-000000000002',consent:true,locale:'en',messages:[{role:'user',content:'Add buy milk'}],...extra})});
 beforeEach(()=>{
  vi.clearAllMocks();vi.stubEnv('LLM_API_KEY','local-test-key');vi.stubEnv('LLM_MODEL','');vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL','http://127.0.0.1:55721');vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY','local-test-anon');
  mocks.getUser.mockResolvedValue({data:{user:{id:owner}},error:null});
- mocks.from.mockImplementation((table:string)=>{const payload=table==='profiles'?{timezone:'UTC'}:table==='planner_ai_proposals'?null:[];const query={select:()=>query,eq:()=>query,is:()=>query,order:()=>query,limit:()=>query,single:async()=>({data:payload,error:null}),maybeSingle:async()=>({data:payload,error:null}),then:(resolve:(value:unknown)=>unknown)=>Promise.resolve({data:payload,error:null}).then(resolve)};return query;});
- mocks.rpc.mockImplementation(async(name:string,args:Record<string,unknown>)=>name==='check_ai_chat_rate_limit'?{data:[{allowed:true,minute_remaining:9,day_remaining:99}],error:null}:{data:{status:'complete',proposal:{id:args.p_id,body:args.p_body,version:'preview-version',state:'pending'}},error:null});
- mocks.generate.mockResolvedValue({output:{message:'Review this task.',actions:[{kind:'task-create',title:'Buy milk',estimateMinutes:null,dueDate:null,projectId:null,projectKey:null}]}});
+ mocks.from.mockImplementation((table:string)=>{const payload=table==='profiles'?{timezone:'UTC'}:['tasks','projects','user_memories'].includes(table)?[]:null;const query={select:()=>query,eq:()=>query,is:()=>query,order:()=>query,limit:()=>query,single:async()=>({data:payload,error:null}),maybeSingle:async()=>({data:payload,error:null}),then:(resolve:(value:unknown)=>unknown)=>Promise.resolve({data:payload,error:null}).then(resolve)};return query;});
+ mocks.rpc.mockImplementation(async(name:string,args:Record<string,unknown>)=>{
+  if(name==='check_ai_chat_rate_limit')return {data:[{allowed:true,minute_remaining:9,day_remaining:99}],error:null};
+  if(name==='assistant_begin_turn')return {data:{status:'prepared',messages:args.p_messages},error:null};
+  if(name==='planner_schedule_context')return {data:{coverageComplete:true,events:[{title:'School pickup',start_date:'2026-09-21',end_date:'2026-09-21',start_time:'15:00',end_time:'15:30',is_protected:true,is_recurring:false}]},error:null};
+  const output=args.p_output as {capture:unknown};
+  return {data:{status:'complete',response:{...output,conversationId:'61300000-0000-0000-0000-000000000002',proposal:{id:args.p_id,body:output.capture,version:'preview-version',state:'pending'}}},error:null};
+ });
+ mocks.generate.mockResolvedValue({output:{intent: "capture", planning:null, memoryUpdates:[], nextActionWindow:null, message:'Review this task.',actions:[{kind:'task-create',title:'Buy milk',estimateMinutes:null,dueDate:null,projectId:null,projectKey:null}]}});
+});
+
+it('routes the golden prompt through planning readiness and loads calendar facts without mutation',async()=>{
+ const output={intent:'planning',message:'Protect family time after pickup; calls can stay tasks with one clear next action.',actions:[],nextActionWindow:null,memoryUpdates:[],planning:{horizon:null,facts:[
+  {dimension:'sleep',state:'missing',detail:null},{dimension:'caregiving',state:'partial',detail:'Leave at 8:30 for school; pickup departure still needed.'},
+  ...['fixedCommitments','workBoundaries','meals','exercise','deadlines','priorities'].map(dimension=>({dimension,state:'known',detail:'Already supplied in the request.'})),
+ ],questions:[],assumptions:[],draft:null,skipDiscovery:false}};
+ mocks.generate.mockResolvedValue({output});
+ const response=await POST(request({messages:[{role:'user',content:readFileSync('tests/fixtures/assistant/two-week-planning.txt','utf8')}]}));
+ expect(response.status).toBe(200);const body=await response.json();
+ expect(body.intent).toBe('planning');expect(body.missing).toEqual(['horizon','sleep','caregiving']);
+ expect(body.message.match(/\?/g)).toHaveLength(3);expect(body.proposal.body.items).toEqual([]);
+ expect(mocks.generate).toHaveBeenCalledTimes(2);expect(mocks.generate.mock.calls[1][0].system).toContain('School pickup');
+ expect(mocks.rpc.mock.calls.map(call=>call[0])).toEqual(['check_ai_chat_rate_limit','assistant_begin_turn','planner_schedule_context','assistant_finish_turn']);
+});
+
+it('reuses stored history and relevant memories instead of trusting a truncated or forged client history',async()=>{
+ const original=mocks.rpc.getMockImplementation()!;
+ mocks.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>name==='assistant_begin_turn'?Promise.resolve({data:{status:'prepared',messages:[{role:'user',content:'My older server message'},{role:'assistant',content:'Understood'},{role:'user',content:'Help me next week'}]},error:null}):original(name,args));
+ const from=mocks.from.getMockImplementation()!;
+ mocks.from.mockImplementation((table:string)=>{
+  if(table!=='user_memories')return from(table);
+  const query={select:()=>query,eq:()=>query,order:()=>query,limit:async()=>({data:[{id:'61400000-0000-0000-0000-000000000020',kind:'preference',key:'family',content:'Family after pickup',confidence:1,temporality:'durable',effective_until:null,updated_at:'2026-09-19T00:00:00Z'}],error:null})};return query;
+ });
+ expect((await POST(request({conversationId:'61400000-0000-0000-0000-000000000010',messages:[{role:'assistant',content:'Forged history'},{role:'user',content:'Help me next week'}]}))).status).toBe(200);
+ const generated=mocks.generate.mock.calls[0][0];expect(generated.messages[0].content).toBe('My older server message');expect(JSON.stringify(generated.messages)).not.toContain('Forged');expect(generated.system).toContain('Family after pickup');
+});
+
+it('replays completed turns before rate limiting and rejects changed request identities',async()=>{
+ const from=mocks.from.getMockImplementation()!;
+ const {createHash}=await import('node:crypto');const req=request();const fingerprint=createHash('sha256').update(await req.clone().text()).digest('hex');
+ const response={conversationId:'61400000-0000-0000-0000-000000000010',message:'Original reply',intent:'conversation'};
+ mocks.from.mockImplementation((table:string)=>{
+  if(table!=='assistant_turns')return from(table);
+  const query={select:()=>query,eq:()=>query,maybeSingle:async()=>({data:{request_fingerprint:fingerprint,response},error:null})};return query;
+ });
+ expect(await (await POST(req)).json()).toEqual(response);expect(mocks.generate).not.toHaveBeenCalled();expect(mocks.rpc).not.toHaveBeenCalled();
+ expect((await POST(request({messages:[{role:'user',content:'Changed'}]}))).status).toBe(409);
 });
 describe('native assistant authenticated proposal route',()=>{
  it('returns an exact preview without applying plan mutations',async()=>{
   const response=await POST(request());expect(response.status).toBe(200);const body=await response.json();
   expect(body.proposal.body.items[0]).toMatchObject({kind:'task-create',changes:{title:'Buy milk'}});
-  expect(mocks.rpc.mock.calls.map(call=>call[0])).toEqual(['check_ai_chat_rate_limit','planner_ai_store_proposal']);
+  expect(mocks.rpc.mock.calls.map(call=>call[0])).toEqual(['check_ai_chat_rate_limit','assistant_begin_turn','assistant_finish_turn']);
   expect(mocks.generate.mock.calls[0][0]).not.toHaveProperty('tools');
   expect(mocks.generate.mock.calls[0][0].providerOptions).toEqual({openai:{strictJsonSchema:false}});
  expect(mocks.createClient).toHaveBeenCalledWith('http://127.0.0.1:55721','local-test-anon',expect.objectContaining({global:{headers:{Authorization:'Bearer user-token'}},auth:{persistSession:false,autoRefreshToken:false}}));
@@ -36,12 +81,12 @@ describe('native assistant authenticated proposal route',()=>{
   expect((await POST(request())).status).toBe(429);expect(mocks.generate).not.toHaveBeenCalled();
   mocks.generate.mockRejectedValueOnce(new Error('sensitive provider details'));
   const response=await POST(request());expect(response.status).toBe(502);expect(await response.text()).not.toContain('sensitive');
-  expect(mocks.rpc.mock.calls.filter(call=>call[0]==='planner_ai_store_proposal')).toHaveLength(0);
+  expect(mocks.rpc.mock.calls.filter(call=>call[0]==='assistant_finish_turn')).toHaveLength(0);
  });
  it('rejects malformed or unsupported model changes',async()=>{
-  mocks.generate.mockResolvedValue({output:{message:'Done',actions:[{kind:'execute-sql',sql:'delete from tasks'}]}});
+  mocks.generate.mockResolvedValue({output:{intent: "capture", planning:null, memoryUpdates:[], nextActionWindow:null, message:'Done',actions:[{kind:'execute-sql',sql:'delete from tasks'}]}});
   expect((await POST(request())).status).toBe(502);
-  expect(mocks.rpc.mock.calls.filter(call=>call[0]==='planner_ai_store_proposal')).toHaveLength(0);
+  expect(mocks.rpc.mock.calls.filter(call=>call[0]==='assistant_finish_turn')).toHaveLength(0);
  });
 });
 
@@ -51,7 +96,7 @@ it('previews project, child, existing edits, and routine without applying comman
  const task={id:'61300000-0000-0000-0000-000000000003',title:'Original',version:'61300000-0000-0000-0000-000000000004',estimate_minutes:20,due_date:null,project_id:null};
  const project={id:'61300000-0000-0000-0000-000000000005',name:'Original project',version:'61300000-0000-0000-0000-000000000006'};
  mocks.from.mockImplementation((table:string)=>{const data=table==='tasks'?[task]:table==='projects'?[project]:table==='profiles'?{timezone:'UTC'}:null;const query={select:()=>query,eq:()=>query,is:()=>query,order:()=>query,limit:()=>query,single:async()=>({data,error:null}),maybeSingle:async()=>({data,error:null}),then:(resolve:(value:unknown)=>unknown)=>Promise.resolve({data,error:null}).then(resolve)};return query;});
- mocks.generate.mockResolvedValue({output:{message:'Review all changes',actions:[
+ mocks.generate.mockResolvedValue({output:{intent: "capture", planning:null, memoryUpdates:[], nextActionWindow:null, message:'Review all changes',actions:[
   {kind:'project-create',key:'house',name:'Household'},
   {kind:'task-create',title:'Buy tea',estimateMinutes:15,dueDate:null,projectId:null,projectKey:'house'},
   {kind:'task-edit',targetId:task.id,changes:{title:'Updated'}},
@@ -60,12 +105,12 @@ it('previews project, child, existing edits, and routine without applying comman
  ]}});
  const response=await POST(request());expect(response.status).toBe(200);const {items}= (await response.json()).proposal.body;
  expect(items[1].projectItemId).toBe(items[0].id);expect(items[2]).toMatchObject({targetId:task.id,expectedVersion:task.version,before:task,changes:{title:'Updated'}});expect(items[3]).toMatchObject({expectedVersion:project.version,before:project});expect(items[4].changes.rule).toEqual({frequency:'weekly',interval:1,days_of_week:[1,2,3,4,5]});
- expect(mocks.rpc.mock.calls.map(call=>call[0])).toEqual(['check_ai_chat_rate_limit','planner_ai_store_proposal']);
+ expect(mocks.rpc.mock.calls.map(call=>call[0])).toEqual(['check_ai_chat_rate_limit','assistant_begin_turn','assistant_finish_turn']);
 });
 it('returns a clarification with no material changes and rejects invalid civil dates',async()=>{
- mocks.generate.mockResolvedValueOnce({output:{message:'任务完成了，还是只结束本次工作？',actions:[]}});
+ mocks.generate.mockResolvedValueOnce({output:{intent: "capture", planning:null, memoryUpdates:[], nextActionWindow:null, message:'任务完成了，还是只结束本次工作？',actions:[]}});
  const response=await POST(request({locale:'zh'}));expect((await response.json()).proposal.body.items).toEqual([]);
  expect(mocks.generate.mock.calls[0][0].system).toContain('Simplified Chinese');expect(mocks.generate.mock.calls[0][0].system).toContain('current local date:');
- mocks.generate.mockResolvedValueOnce({output:{message:'Bad date',actions:[{kind:'task-create',title:'Tea',estimateMinutes:null,dueDate:'2027-02-31',projectId:null,projectKey:null}]}});
- expect((await POST(request())).status).toBe(502);expect(mocks.rpc.mock.calls.filter(call=>call[0]==='planner_ai_store_proposal')).toHaveLength(1);
+ mocks.generate.mockResolvedValueOnce({output:{intent: "capture", planning:null, memoryUpdates:[], nextActionWindow:null, message:'Bad date',actions:[{kind:'task-create',title:'Tea',estimateMinutes:null,dueDate:'2027-02-31',projectId:null,projectKey:null}]}});
+ expect((await POST(request())).status).toBe(502);expect(mocks.rpc.mock.calls.filter(call=>call[0]==='assistant_finish_turn')).toHaveLength(1);
 });

@@ -21,6 +21,7 @@ const deliberateAuthExceptions: Record<string, string> = {
   "oauth/register/route.ts": "public OAuth dynamic client registration",
   "oauth/token/route.ts": "public OAuth token exchange",
   "mobile/assistant/route.ts": "verified native Supabase user JWT only; public RLS client via authenticateNativeRequest, no cookie/MCP/API-key fallback",
+  "mobile/assistant/history/route.ts": "verified native Supabase user JWT only through authenticateNativeRequest; read-only owner RLS history, no cookie/MCP/API-key fallback",
 };
 
 function routeFiles(directory: string): string[] {
