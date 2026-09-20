@@ -7,7 +7,7 @@ import {llmProvider,structuredOutputProviderOptions} from '@/lib/ai/provider';
 import {DEFAULT_MODEL_ID,AVAILABLE_MODELS} from '@/lib/ai/models';
 import {checkChatRateLimit} from '@/lib/ai/rate-limit';
 import {buildCapturePreview,type CaptureContext} from '@/lib/ai/native-capture';
-import {assistantOutput,assistantInstructions,buildAssistantTurn,selectMemories,planningCalendarContext,type Memory,type PlanningState} from '@/lib/ai/assistant-orchestrator';
+import {assistantOutput,assistantInstructions,buildAssistantTurn,selectMemories,planningCalendarContext,resolvePlanningHorizon,type Memory,type PlanningState} from '@/lib/ai/assistant-orchestrator';
 import {nextActionFacts} from '@/lib/ai/next-action';
 import {safeAiFailure} from '@/lib/ai/safe-failure';
 import {log} from '@/lib/logger';
@@ -76,10 +76,11 @@ export async function POST(request:Request){
   if(classified.intent==='planning'||classified.planning){
    // Read the existing planner snapshot only for planning. It includes recurrence identities;
    // coverageComplete applies to this civil day, never to the whole multi-day horizon.
-   const date=classified.planning?.horizon?.startDate??previous?.horizon?.startDate??getLocalDateInTimeZone(new Date(),context.timezone);
+   const horizon=resolvePlanningHorizon(classified.planning,previous);
+   const date=horizon?.startDate??getLocalDateInTimeZone(new Date(),context.timezone);
    const snapshot=await client.rpc('planner_schedule_context',{p_date:date});
    if(snapshot.error||!Array.isArray(snapshot.data?.events))return {body:{error:'unavailable'},status:503};
-   const contextRange=classified.planning?.horizon??previous?.horizon??{startDate:date,endDate:addLocalDays(date,13),timezone:context.timezone};
+   const contextRange=horizon??{startDate:date,endDate:addLocalDays(date,13),timezone:context.timezone};
    result=await generate({contextRange,coverageDate:date,coverageComplete:snapshot.data.coverageComplete,events:planningCalendarContext(snapshot.data.events,contextRange)});
   }
   if(signal.aborted)throw new Error('Cancelled');
