@@ -29,6 +29,13 @@ const output={intent:'planning',message:'Family time after pickup stays protecte
   {dimension:'priorities',state:'known',detail:'Handle admin early without blocking every call. Finish three hours of video work; split remaining focus equally between app and YouTube.'},
  ],questions:[],assumptions:[],draft:null,skipDiscovery:false}};
 describe('planning discovery and draft contract',()=>{
+ it('clears old travel for a no-travel draft but never normalizes a zero duration',()=>{
+  const prior=buildAssistantTurn({...output,planning:{...output.planning,travelMinutes:15}},context,null,'A trip takes 15 minutes.','en').planning;
+  const candidate={...output,planning:{...output.planning,travelMinutes:null,draft:'Two focus blocks at home; no travel reservations.',skipDiscovery:true}};
+  const turn=buildAssistantTurn(candidate,context,prior,'No travel is needed. Plan now.','en');
+  expect(turn.planning?.travelMinutes).toBeNull();expect(turn.planning?.status).toBe('drafted');expect(turn.capture.items).toEqual([]);
+  for(const travelMinutes of [0,-1,1441])expect(()=>buildAssistantTurn({...candidate,planning:{...candidate.planning,travelMinutes}},context,prior,'No travel is needed.','en')).toThrow();
+ });
  it('preserves, corrects and withdraws only explicitly confirmed travel duration',()=>{
   const first=buildAssistantTurn({...output,planning:{...output.planning,travelMinutes:15}},context,null,'The trip takes 15 minutes. Plan now.','en');
   const next=buildAssistantTurn(output,context,first.planning,'Skip. Plan now.','en');expect(next.planning?.travelMinutes).toBe(15);
