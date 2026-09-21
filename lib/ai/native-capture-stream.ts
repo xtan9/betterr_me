@@ -15,7 +15,9 @@ export function captureStreamResponse(
  const cancel=()=>abort.abort();
  parent.addEventListener('abort',cancel,{once:true});
  if(parent.aborted)cancel();
- const timeout=setTimeout(cancel,55000);
+ // Planning can classify intent, reload horizon context, and regenerate once.
+ // Stop before the route's 120-second execution limit so recovery stays typed.
+ const timeout=setTimeout(cancel,115000);
  const cleanup=()=>{clearTimeout(timeout);parent.removeEventListener('abort',cancel);};
  const encoder=new TextEncoder();
  const stream=new ReadableStream<Uint8Array>({
