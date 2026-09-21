@@ -1,9 +1,22 @@
 import {readFileSync} from 'node:fs';
 import {describe,it,expect} from 'vitest';
-import {buildAssistantTurn,selectMemories,planningCalendarContext,memoryUpdate,type Memory} from '@/lib/ai/assistant-orchestrator';
+import {buildAssistantTurn,selectMemories,planningCalendarContext,memoryUpdate,type Memory,type PlanningState,assertPublicAssistantText} from '@/lib/ai/assistant-orchestrator';
 
 const context={timezone:'America/Los_Angeles',tasks:[],projects:[]};
 const golden=readFileSync('tests/fixtures/assistant/two-week-planning.txt','utf8');
+it('selects temporary preferences for their actual planning period and preserves the baseline across expiry',()=>{
+ const baseline:Memory={id:'baseline',key:'gym',kind:'routine',content:'Gym Monday–Saturday',confidence:1,temporality:'durable',effective_until:null,updated_at:'2026-09-01T00:00:00Z'};
+ const temporary:Memory={...baseline,id:'exception',temporality:'temporary',content:'Four gym days for two weeks',effective_from:'2026-09-21T00:00:00Z',effective_until:'2026-10-05T00:00:00Z'};
+ const vacation:Memory={...temporary,id:'vacation',key:'vacation',kind:'current_state',content:'On vacation for two weeks'};
+ const plan=(startDate:string,endDate:string):PlanningState=>({status:'drafted',horizon:{startDate,endDate,timezone:'UTC'},readiness:{},facts:{},assumptions:[]});
+ const ids=(planning:PlanningState)=>selectMemories([baseline,temporary,vacation],planning,new Date('2026-09-20')).map(memory=>memory.id);
+ expect(ids(plan('2026-09-21','2026-10-04'))).toEqual(['exception','vacation']);
+ expect(ids(plan('2026-09-28','2026-10-11'))).toEqual(['exception','vacation','baseline']);
+ expect(ids(plan('2026-10-05','2026-10-18'))).toEqual(['baseline']);
+ const inference:Memory={...temporary,id:'inference',kind:'inference',content:'Maybe prefers no gym',confidence:0.6};
+ expect(selectMemories([baseline,inference],null,new Date('2026-09-25')).map(memory=>memory.id)).toEqual(['baseline']);
+});
+it('does not expose planner engine terminology',()=>expect(()=>assertPublicAssistantText('The planner engine will handle this.')).toThrow());
 const output={intent:'planning',message:'Family time after pickup stays protected. Calls can remain tasks, with one clear next action.',actions:[],memoryUpdates:[],nextActionWindow:null,
  planning:{horizon:null,facts:[
   {dimension:'sleep',state:'missing',detail:null},

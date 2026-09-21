@@ -55,7 +55,7 @@ export async function POST(request:Request){
   ]);
   if(memories.error||session.error)return respond({error:'unavailable'},503);
   const previous:PlanningState|null=session.data&&!['applied','cancelled'].includes(session.data.status)?{id:session.data.id,status:session.data.status,horizon:session.data.start_date?{startDate:session.data.start_date,endDate:session.data.end_date,timezone:session.data.timezone}:null,readiness:session.data.readiness,facts:session.data.facts,assumptions:session.data.assumptions,travelMinutes:session.data.travel_minutes??null}:null;
-  const selectedMemories=selectMemories((memories.data??[]) as Memory[],previous,new Date());
+  let selectedMemories=selectMemories((memories.data??[]) as Memory[],previous,new Date());
   const configured=process.env.LLM_MODEL,modelId=configured&&AVAILABLE_MODELS.some(model=>model.id===configured)?configured:DEFAULT_MODEL_ID;
   const runTurn=async(emit?: (text:string)=>void,signal=request.signal)=>{
   let schemaRetryHint:string|null=null,published=false;
@@ -93,12 +93,15 @@ export async function POST(request:Request){
    // Read the existing planner snapshot only for planning. It includes recurrence identities;
    // coverageComplete applies to this civil day, never to the whole multi-day horizon.
    const horizon=resolvePlanningHorizon(classified.planning,previous);
+   const horizonMemories=horizon?selectMemories((memories.data??[]) as Memory[],{status:'discovering',horizon,readiness:{},facts:{},assumptions:[]},new Date()):selectedMemories;
+   const memoryPeriodChanged=JSON.stringify(horizonMemories)!==JSON.stringify(selectedMemories);
+   selectedMemories=horizonMemories;
    const date=horizon?.startDate??getLocalDateInTimeZone(new Date(),context.timezone);
    const snapshot=await client.rpc('planner_schedule_context',{p_date:date});
    if(snapshot.error||!Array.isArray(snapshot.data?.events))return {body:{error:'unavailable'},status:503};
    // An empty snapshot adds no commitments to the already validated discovery
    // or prose draft. Avoid a second full generation inside the request deadline.
-   if(snapshot.data.events.length){
+   if(snapshot.data.events.length||memoryPeriodChanged){
     const contextRange=horizon??{startDate:date,endDate:addLocalDays(date,13),timezone:context.timezone};
     result=await generate({contextRange,coverageDate:date,coverageComplete:snapshot.data.coverageComplete,events:planningCalendarContext(snapshot.data.events,contextRange)});
    }
