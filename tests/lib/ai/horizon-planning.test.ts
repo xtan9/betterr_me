@@ -2,11 +2,21 @@ import {expect,it} from 'vitest';
 import {buildHorizonPreview,horizonPlanningRequest,horizonContext,horizonGenerationOutput,flattenHorizonOutput} from '@/lib/ai/horizon-planning';
 import type {PlanningContext} from '@/lib/ai/guided-planning';
 import {goldenContext,goldenInput,goldenDraft} from '../../fixtures/assistant/phase-b-golden';
+import {datedOutput} from '../../fixtures/assistant/dated-output';
 const id='61500000-0000-0000-0000-000000000003';
 const context:PlanningContext={version:id,timezone:'America/Los_Angeles',tasks:[],events:[],priorities:{version:null,taskIds:[]}};
 const input={requestId:id,consent:true as const,locale:'en' as const,horizon:{startDate:'2026-10-30',endDate:'2026-11-02',timezone:'America/Los_Angeles'},commitments:'Family after 15:00, weekends family',needs:'',goals:'',travelMinutes:null};
 const event=(date:string,startTime='10:00',endTime='11:00')=>({date,startTime,endTime,kind:'event-create',targetId:null,title:'Focus',taskId:null,taskItemIndex:null,protected:false,category:'work'});
 const output=(events:unknown[])=>({message:'Review the dates',questions:[],assumptions:[],capture:{message:'',actions:[]},events,priorityTaskIds:null});
+it('enforces the same 200-event total before and after flattening a complete horizon',()=>{
+ const events=Array.from({length:201},(_,index)=>event(new Date(Date.UTC(2026,8,21+Math.floor(index/20))).toISOString().slice(0,10),`${String(Math.floor(index%20/2)+6).padStart(2,'0')}:${index%2?'30':'00'}`,`${String(Math.floor(index%20/2)+6).padStart(2,'0')}:${index%2?'45':'15'}`));
+ const accepted=datedOutput({...output([]),events:events.slice(0,200)},goldenInput.horizon);
+ expect(horizonGenerationOutput(goldenInput.horizon).safeParse(accepted).success).toBe(true);
+ expect(buildHorizonPreview(flattenHorizonOutput(accepted,goldenInput.horizon),goldenInput,goldenContext).events).toHaveLength(200);
+ const rejected=datedOutput({...output([]),events},goldenInput.horizon);
+ expect(horizonGenerationOutput(goldenInput.horizon).safeParse(rejected).success).toBe(false);
+ expect(()=>flattenHorizonOutput(rejected,goldenInput.horizon)).toThrow();
+});
 it('requires a result for every civil date and rejects a two-day prefix of a fortnight',()=>{
  const {events,...metadata}=goldenDraft();
  const days=Object.fromEntries(Array.from({length:14},(_,offset)=>{

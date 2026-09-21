@@ -7,9 +7,10 @@ import {wallInstant} from '@/lib/calendar/planner-intervals';
 
 export const horizonPlanningRequest=planningRequest.omit({date:true,timezone:true}).extend({horizon:horizonSchema,commitments:z.string().max(12000),needs:z.string().max(6000)}).strict();
 export const sessionPlanningRequest=z.object({requestId:z.string().uuid(),consent:z.literal(true),locale:z.enum(['en','zh']),sessionId:z.string().uuid(),sessionVersion:z.string().uuid()}).strict();
+const MAX_HORIZON_EVENTS=200;
 export const horizonPlanningOutput=planningOutput.extend({
  questions:planningOutput.shape.questions.max(3),
- events:z.array(planningOutput.shape.events.element.extend({date:z.string().refine(isValidLocalDate)})).max(200),
+ events:z.array(planningOutput.shape.events.element.extend({date:z.string().refine(isValidLocalDate)})).max(MAX_HORIZON_EVENTS),
  // Daily priorities and unbounded new recurrences are not implied by a dated draft.
  priorityTaskIds:z.null(),
 }).strict();
@@ -21,8 +22,12 @@ export function horizonDays(horizon:z.infer<typeof horizonSchema>){
 }
 /** Require the model to consider every date, including explicitly empty days. */
 export function horizonGenerationOutput(horizon:z.infer<typeof horizonSchema>){
- const events=z.array(planningOutput.shape.events.element).max(20);
- return horizonPlanningOutput.omit({events:true}).extend({days:z.object(Object.fromEntries(horizonDays(horizon).map(date=>[date,events]))).strict()}).strict();
+ const events=planningOutput.shape.events;
+ return horizonPlanningOutput.omit({events:true}).extend({days:z.object(Object.fromEntries(horizonDays(horizon).map(date=>[date,events]))).strict()}).strict().superRefine((output,ctx)=>{
+  if(Object.values(output.days).reduce((total,day)=>total+day.length,0)>MAX_HORIZON_EVENTS){
+   ctx.addIssue({code:z.ZodIssueCode.too_big,type:'array',maximum:MAX_HORIZON_EVENTS,inclusive:true,path:['days'],message:'Too many reservations across the planning horizon'});
+  }
+ });
 }
 export function flattenHorizonOutput(value:unknown,horizon:z.infer<typeof horizonSchema>){
  const {days,...metadata}=horizonGenerationOutput(horizon).parse(value);

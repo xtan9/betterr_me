@@ -3,6 +3,11 @@ import { describe, expect, it } from "vitest";
 import { safeAiFailure } from "@/lib/ai/safe-failure";
 
 describe("safeAiFailure", () => {
+  it('reports direct server-side schema failures without private paths or values',()=>{
+    const failure={name:'ZodError',issues:[{code:'too_big',path:['days','2030-01-01','private title'],message:'private conversation',received:'private value'}]};
+    expect(safeAiFailure(failure)).toEqual({name:'ZodError',validationCode:'too_big',validationPath:'days.*.*'});
+    expect(JSON.stringify(safeAiFailure(failure))).not.toMatch(/private|2030/);
+  });
   it('identifies fixed guided-planning fields and legacy Zod categories without values',()=>{
     const failure={name:'AI_NoObjectGeneratedError',cause:{name:'AI_TypeValidationError',cause:{issues:[{code:'invalid_enum_value',path:['events',0,'category'],received:'private text',message:'private text'}]}}};
     expect(safeAiFailure(failure)).toMatchObject({validationPath:'events.*.category',validationCode:'invalid_enum_value'});
