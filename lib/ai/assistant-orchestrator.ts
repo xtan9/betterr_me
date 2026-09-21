@@ -119,7 +119,7 @@ export function buildAssistantTurn(value:unknown,context:CaptureContext,previous
    const flexibleAssumption=(key:typeof dimensions[number],language:'en'|'zh')=>language==='zh'?`${assumptionLabels.zh[key]}尚未确认，将保持灵活。`:`${assumptionLabels.en[key]}: not confirmed; keep this flexible.`;
    // Rebuild automatic unknowns from current readiness, including after a locale change.
    const automatic=new Set(dimensions.flatMap(key=>[flexibleAssumption(key,'en'),flexibleAssumption(key,'zh')]));
-   const assumptions=[...(candidate.assumptions??(continuingDraft?previous.assumptions:[]))].filter(value=>!automatic.has(value));
+   const assumptions=[...(candidate.assumptions??previous?.assumptions??[])].filter(value=>!automatic.has(value));
    if(skip)for(const key of missing)assumptions.push(flexibleAssumption(key,locale));
   planning={status:missing.length&&!skip?'discovering':'ready',horizon,readiness,facts,assumptions:[...new Set(assumptions)].slice(0,24),travelMinutes:candidate.travelMinutes===undefined?previous?.travelMinutes??null:candidate.travelMinutes};
   if(planning.status==='discovering'){
