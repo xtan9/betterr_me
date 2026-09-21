@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import { safeAiFailure } from "@/lib/ai/safe-failure";
 
 describe("safeAiFailure", () => {
+  it('identifies the fixed travel-duration field without recording its value',()=>{
+    expect(safeAiFailure({name:'ZodError',issues:[{code:'too_small',path:['planning','travelMinutes'],received:'PRIVATE',message:'PRIVATE'}]})).toEqual({name:'ZodError',validationCode:'too_small',validationPath:'planning.travelMinutes'});
+  });
   it('reports direct server-side schema failures without private paths or values',()=>{
     const failure={name:'ZodError',issues:[{code:'too_big',path:['days','2030-01-01','private title'],message:'private conversation',received:'private value'}]};
     expect(safeAiFailure(failure)).toEqual({name:'ZodError',validationCode:'too_big',validationPath:'days.*.*'});
