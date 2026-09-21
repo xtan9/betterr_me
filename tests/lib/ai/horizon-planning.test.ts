@@ -85,3 +85,9 @@ it('compares reservations in different timezones by instant across DST',()=>{
  expect(()=>buildHorizonPreview(output([event('2026-11-02')]),input,{...context,events:[before]})).toThrow('overlap');
  expect(buildHorizonPreview(output([event('2026-11-02','11:00','12:00')]),input,{...context,events:[before]}).events).toHaveLength(1);
 });
+it('validates an existing task against its proposed estimate edit, not its old estimate',()=>{
+ const tasks=[{id,title:'Finish video',version:id,estimate_minutes:30,due_date:null,project_id:null}];
+ const draft={...output([{...event('2026-11-02'),taskId:id}]),capture:{message:'',actions:[{kind:'task-edit',targetId:id,changes:{estimate_minutes:180}}]}};
+ expect(()=>buildHorizonPreview(draft,input,{...context,tasks})).toThrow('Task does not fit');
+ expect(buildHorizonPreview({...draft,events:[{...event('2026-11-02','10:00','13:00'),taskId:id}]},input,{...context,tasks}).events).toHaveLength(1);
+});

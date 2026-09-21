@@ -25,8 +25,17 @@ describe.skipIf(process.env.PHASE_B_LIVE!=='1')('live Phase B planning quality',
   const gym=events.filter(event=>/gym/i.test(String(event.title)));
   expect(gym.filter(event=>!/(travel|drive|commute)/i.test(String(event.title)))).toHaveLength(12);
   for(const event of events){
+   const title=String(event.title),start=String(event.start_time),end=String(event.end_time);
    const day=new Date(`${event.start_date}T12:00:00Z`).getUTCDay();
    if(/gym/i.test(String(event.title)))expect(day).not.toBe(0);
+   if(/gym/i.test(title)&&!/(travel|drive|commute)/i.test(title))expect(event).toMatchObject({start_time:day>=5?'06:30':'09:00',end_time:day>=5?'07:15':'09:45'});
+   if(!/sleep/i.test(title)){
+    expect(event.end_date).toBe(event.start_date);expect(start>='06:00'&&end<='22:00').toBe(true);
+    const overlaps=(from:string,to:string)=>start<to&&end>from;
+    if(!/meal|eat|breakfast|lunch|snack|walk/i.test(title))for(const [from,to] of [['10:00','10:30'],['13:30','14:00'],['15:30','16:00']])expect(overlaps(from,to)).toBe(false);
+    if(!/dog|walk/i.test(title))expect(overlaps('06:00','06:15')).toBe(false);
+    if(day>=1&&day<=4&&!/school|drop.?off|pick.?up|travel|drive|commute/i.test(title))for(const [from,to] of [['08:30','08:45'],['14:45','15:15']])expect(overlaps(from,to)).toBe(false);
+   }
    if(/(?:app|youtube|focus|video)/i.test(String(event.title))){expect(day).toBeGreaterThan(0);expect(day).toBeLessThan(5);expect(String(event.end_time)<='14:45').toBe(true);}
    expect(String(event.title)).not.toMatch(/call|pediatrician|PCP|Matrix|dentist|therapist|psychiatrist|cleaning/i);
   }
@@ -42,8 +51,11 @@ describe.skipIf(process.env.PHASE_B_LIVE!=='1')('live Phase B planning quality',
   expect(app).toBeGreaterThan(0);expect(youtube).toBeGreaterThan(0);expect(Math.abs(app-youtube)/Math.max(app,youtube)).toBeLessThanOrEqual(0.35);
   for(let offset=0;offset<14;offset++){
    const date=new Date(Date.UTC(2026,8,21+offset)).toISOString().slice(0,10);
-   const minutes=events.filter(event=>event.start_date===date).reduce((sum,event)=>{const clock=(time:unknown)=>{const [h,m]=String(time).split(':').map(Number);return h*60+m;};return sum+((event.end_date!==date?1440:clock(event.end_time))-clock(event.start_time));},0);
-   expect(minutes).toBeLessThanOrEqual(22*60);
+   // Measure the confirmed 06:00–22:00 waking window, even if sleep is
+   // omitted from the calendar. Include blocks carried over from another day.
+   const civil=(day:unknown,time:unknown)=>{const [h,m]=String(time).split(':').map(Number);return Date.parse(`${day}T00:00:00Z`)+(h*60+m)*60000;};
+   const minutes=events.reduce((sum,event)=>sum+Math.max(0,Math.min(civil(event.end_date,event.end_time),civil(date,'22:00'))-Math.max(civil(event.start_date,event.start_time),civil(date,'06:00')))/60000,0);
+   expect(minutes).toBeLessThanOrEqual(14*60);
   }
  },120000);
  it('keeps unknown exact times flexible and surfaces assumptions instead of inventing reservations',async()=>{

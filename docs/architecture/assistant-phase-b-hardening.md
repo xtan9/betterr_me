@@ -29,7 +29,7 @@ Source: mobile `docs/assistant-orchestrator-memory-v1.md`, especially §§6, 7, 
 
 ## Exact new/strengthened tests
 
-- `tests/lib/ai/horizon-planning.test.ts`: authored golden fortnight, proposed overlap/protected target, wrong travel/duplicate recurring occupancy/new routine refusal, two estimate cases, captured-task fit, cross-timezone occupancy. Existing boundary/DST tests retained.
+- `tests/lib/ai/horizon-planning.test.ts`: authored golden fortnight, proposed overlap/protected target, wrong travel/duplicate recurring occupancy/new routine refusal, two estimate cases, captured-task fit, edited-task estimate fit, cross-timezone occupancy. Existing boundary/DST tests retained.
 - `tests/lib/ai/assistant-orchestrator.test.ts`: period-aware temporary selection, baseline return/expiry, inference precedence, internal `planner engine` guard.
 - `tests/app/api/mobile-assistant/route.test.ts`: reselect preferences after resolving future dates with an empty calendar.
 - `tests/app/api/mobile-assistant/persistence.integration.test.ts`: real DB multi-day preview/accept/retry/Undo/ownership and session change during generation.
@@ -38,6 +38,8 @@ Source: mobile `docs/assistant-orchestrator-memory-v1.md`, especially §§6, 7, 
 - Mobile `GuidedPlanningControl.test.tsx`: revised/withdrawn/rejected/conflicting proposals and end-of-horizon coverage recovery; `AssistantScreen.test.tsx` retains recovery coverage with versioned local state.
 
 Run live tests with `PHASE_B_LIVE=1` and usable `LLM_API_KEY` (optional `LLM_BASE_URL`), using the normal Vitest command. The configured Vercel export returned redacted values and environment injection did not provide a usable key; no successful live-model call is claimed. Full-suite and review results are recorded in the PRs.
+
+Local verification: backend full suite 5,913 passed / 6 opt-in skipped; the subsequent estimate-edit test also passed in the 16-test focused suite. Mobile 300 tests passed across 49 suites. Both typechecks and changed-file lint passed. The two route/PostgREST integration tests passed separately against an isolated database, as did all seven SQL fixtures named above or covering guided planning, capture, confirmed bookings and memory lifecycle. Standards review found no actionable issue; spec review identified an overly permissive live open-space assertion, corrected to measure the 06:00–22:00 waking interval and require two free hours, with explicit sleep, meal, dog-walk, school and gym boundary checks. Live execution remains pending.
 
 ## Still required before Phase C
 
