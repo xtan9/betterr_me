@@ -67,17 +67,30 @@ export async function POST(request:Request){
   if('horizon' in input)options.system=horizonPlanningInstructions(input,context,providerContext);
   options.system+=' Event startTime and endTime must use 24-hour local HH:MM strings such as 15:00 and 15:10, without seconds, dates or timezone suffixes; only endTime may use 24:00.';
   stage='generation';
-  const result=await generateText(options).catch(error=>{
+  let retried=false;
+  let result=await generateText(options).catch(error=>{
    const failure=safeAiFailure(error);
    // Regenerate invalid model output once; never repair/truncate it into acceptance.
-   // Domain validation and proposal storage remain outside this retry boundary.
    if(generation.signal.aborted||failure.name!=='AI_NoObjectGeneratedError'||failure.causeName!=='AI_TypeValidationError')throw error;
+   retried=true;
    return generateText({...options,system:`${options.system}\nThe previous output failed schema validation (${failure.validationCode??'validation failure'} at ${failure.validationPath??'output'}). Regenerate from the original context using every required field, declared enum value and type. Times must be HH:MM. Never invent missing facts or change the requested task, date or time.`});
   });
   if(request.signal.aborted)return new Response(null,{status:499,headers});
   if(generation.signal.aborted)return respond({error:'unavailable'},502);
   stage='validation';
-  const body='horizon' in input?buildHorizonPreview(result.output,input,context):buildSchedulePreview(result.output,input,context);
+  let body;
+  try{body='horizon' in input?buildHorizonPreview(result.output,input,context):buildSchedulePreview(result.output,input,context);}
+  catch(error){
+   // A rejected draft never reaches storage. Regenerate once, then run every
+   // validator again; share the existing deadline and schema-retry allowance.
+   if(!('horizon' in input)||retried||generation.signal.aborted||!(error instanceof Error)||error.message!=='Proposed overlap')throw error;
+   stage='generation';
+   result=await generateText({...options,messages:[...options.messages,{role:'assistant' as const,content:JSON.stringify(result.output)},{role:'user' as const,content:'The previous proposal was rejected because its reservations overlap each other or existing calendar occupancy. Regenerate the entire proposal from the original confirmed facts. Check every proposed interval against every other proposed interval and all expanded existing commitments. Treat broad family/rest boundaries as constraints, not duplicate reservations around meals or care. Never move protected commitments, shorten required task durations, omit required days, or invent times to hide a conflict. If confirmed facts cannot fit, return concise clarification questions with no actions.'}]});
+   if(request.signal.aborted)return new Response(null,{status:499,headers});
+   if(generation.signal.aborted)return respond({error:'unavailable'},502);
+   stage='validation';
+   body=buildHorizonPreview(result.output,input,context);
+  }
   if('sessionId' in requestInput)Object.assign(body,{planningSession:{id:requestInput.sessionId,version:requestInput.sessionVersion}});
   stage='storage';
   const stored=await client.rpc('planner_schedule_store_proposal',{p_id:input.requestId,p_fingerprint:fingerprint,p_body:body});
