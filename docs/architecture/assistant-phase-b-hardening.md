@@ -43,6 +43,12 @@ Local verification: backend full suite 5,913 passed / 6 opt-in skipped; the subs
 
 ## Still required before Phase C
 
+### Follow-up: explicitly unnecessary travel
+
+Authenticated production browser tests passed cross-conversation durable preference reuse, a temporary four-day gym override, and restoration of the six-day baseline for a horizon after expiry. A minimal two-reservation fortnight also passed exact preview, recurrence-coverage recovery, and reject-without-apply. These do not replace full golden-plan quality evaluation.
+
+The same small at-home scenario with "No travel is needed" failed repeatedly at `planning.travelMinutes` with a nonpositive-duration validation error. The generation contract now explicitly describes no travel as `null`, never zero, both in the field's schema description and system instructions. The positive-duration validator is unchanged. A regression verifies that null clears a previous duration, while zero, negative and oversized values still fail; an opt-in real-model regression covers the original no-travel prompt. Production re-verification remains required.
+
 ### Follow-up: model-independent generation contract
 
 Production browser smoke subsequently exposed timeout, overlap and incomplete-horizon failures (fixed in backend #1033–#1037 and mobile #102–#103), followed by a remaining server-side `ZodError`. Full live sign-off is still outstanding.

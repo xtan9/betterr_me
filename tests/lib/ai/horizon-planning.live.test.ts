@@ -14,6 +14,15 @@ function requireCredentials(){
 }
 
 describe.skipIf(process.env.PHASE_B_LIVE!=='1')('live Phase B planning quality',()=>{
+ it('represents explicitly unnecessary travel as null without creating travel reservations',async()=>{
+  requireCredentials();const context={timezone:'America/Los_Angeles',tasks:[],projects:[]};
+  const prompt='For Sep21–Oct4 2026 in America/Los_Angeles, draft exactly two App focus blocks at home: Sep21 and Sep28 11:00–11:30. No travel is needed. All other dates have no new reservations. Leave unknown routines flexible. Plan now, preview only; no new tasks or memories.';
+  let output;
+  try{output=(await generateText({model:llmProvider(DEFAULT_MODEL_ID),output:Output.object({schema:assistantOutput}),providerOptions:structuredOutputProviderOptions,maxOutputTokens:6144,abortSignal:AbortSignal.timeout(55000),system:`${assistantInstructions}\nOwner context:${JSON.stringify({capture:context,planning:null,memories:[]})}`,messages:[{role:'user',content:prompt}]})).output;}
+  catch(error){throw new Error(`Synthetic no-travel evaluation failed: ${JSON.stringify(safeAiFailure(error))}; output withheld`);}
+  const turn=buildAssistantTurn(output,context,null,prompt,'en');
+  expect(turn.planning?.status).toBe('drafted');expect(turn.planning?.travelMinutes).toBeNull();expect(turn.capture.items).toEqual([]);
+ },60000);
  it('produces a coherent golden two-week preview with family boundaries, open space and actionable admin tasks',async()=>{
   requireCredentials();
   let output;
