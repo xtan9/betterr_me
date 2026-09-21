@@ -118,12 +118,14 @@ it.each(['deadline','disconnect'])('cancels overlap regeneration on %s without s
  const response=POST(new Request(horizonRequest(),{signal:parent.signal}));await vi.advanceTimersByTimeAsync(0);
  if(reason==='deadline')await vi.advanceTimersByTimeAsync(285000);else parent.abort();
  expect((await response).status).toBe(reason==='deadline'?502:499);expect(signal.aborted).toBe(true);
+ if(reason==='deadline')expect(m.logError).toHaveBeenCalledWith('[mobile-planning] Request failed',undefined,expect.objectContaining({attempt:2,previousFailure:{name:'Error',reason:'overlap'}}));
  expect(m.generate).toHaveBeenCalledTimes(2);expect(m.rpc.mock.calls.some(call=>call[0]==='planner_schedule_store_proposal')).toBe(false);expect(vi.getTimerCount()).toBe(0);
 });
 it('distinguishes provider failure without logging private error messages',async()=>{
  m.generate.mockRejectedValueOnce(new Error('PRIVATE prompt and output'));
  const response=await POST(request());expect(response.status).toBe(502);
- expect(m.logError).toHaveBeenCalledWith('[mobile-planning] Request failed',undefined,expect.objectContaining({stage:'generation',reason:'unknown',failure:{name:'Error'}}));
+ expect(m.logError).toHaveBeenCalledWith('[mobile-planning] Request failed',undefined,expect.objectContaining({stage:'generation',reason:'unknown',attempt:1,failure:{name:'Error'}}));
+ expect(m.logError.mock.calls[0][2]).not.toHaveProperty('previousFailure');
  expect(JSON.stringify(m.logError.mock.calls)).not.toContain('PRIVATE');expect(await response.json()).toEqual({error:'unavailable'});
 });
 it.each([null,{version:eventId,status:'drafted'}])('refuses a foreign or stale saved planning session',async(session)=>{

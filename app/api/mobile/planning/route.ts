@@ -23,6 +23,7 @@ const validationReasons=new Map([
 export function OPTIONS(){return new Response(null,{status:204,headers});}
 export async function POST(request:Request){
  let stage:'context'|'generation'|'validation'|'storage'='context';
+ let attempt=0,previousFailure:Record<string,string|number>|undefined;
  try{
   if(Number(request.headers.get('content-length')??0)>32768)return respond({error:'invalid'},413);
   const raw=await request.text();if(new TextEncoder().encode(raw).length>32768)return respond({error:'invalid'},413);
@@ -67,12 +68,14 @@ export async function POST(request:Request){
   if('horizon' in input)options.system=horizonPlanningInstructions(input,context,providerContext);
   options.system+=' Event startTime and endTime must use 24-hour local HH:MM strings such as 15:00 and 15:10, without seconds, dates or timezone suffixes; only endTime may use 24:00.';
   stage='generation';
+  attempt=1;
   let retried=false;
   let result=await generateText(options).catch(error=>{
    const failure=safeAiFailure(error);
    // Regenerate invalid model output once; never repair/truncate it into acceptance.
    if(generation.signal.aborted||failure.name!=='AI_NoObjectGeneratedError'||failure.causeName!=='AI_TypeValidationError')throw error;
    retried=true;
+   attempt=2;previousFailure=failure;
    return generateText({...options,system:`${options.system}\nThe previous output failed schema validation (${failure.validationCode??'validation failure'} at ${failure.validationPath??'output'}). Regenerate from the original context using every required field, declared enum value and type. Times must be HH:MM. Never invent missing facts or change the requested task, date or time.`});
   });
   if(request.signal.aborted)return new Response(null,{status:499,headers});
@@ -85,6 +88,7 @@ export async function POST(request:Request){
    // validator again; share the existing deadline and schema-retry allowance.
    if(!('horizon' in input)||retried||generation.signal.aborted||!(error instanceof Error)||error.message!=='Proposed overlap')throw error;
    stage='generation';
+   attempt=2;previousFailure={name:'Error',reason:'overlap'};
    result=await generateText({...options,messages:[...options.messages,{role:'assistant' as const,content:JSON.stringify(result.output)},{role:'user' as const,content:'The previous proposal was rejected because its reservations overlap each other or existing calendar occupancy. Regenerate the entire proposal from the original confirmed facts. Check every proposed interval against every other proposed interval and all expanded existing commitments. Treat broad family/rest boundaries as constraints, not duplicate reservations around meals or care. Never move protected commitments, shorten required task durations, omit required days, or invent times to hide a conflict. If confirmed facts cannot fit, return concise clarification questions with no actions.'}]});
    if(request.signal.aborted)return new Response(null,{status:499,headers});
    if(generation.signal.aborted)return respond({error:'unavailable'},502);
@@ -100,7 +104,7 @@ export async function POST(request:Request){
  }catch(error){
   if(request.signal.aborted)return new Response(null,{status:499,headers});
   const reason=stage==='validation'&&error instanceof Error?validationReasons.get(error.message)??'unknown':'unknown';
-  log.error('[mobile-planning] Request failed',undefined,{stage,reason,failure:safeAiFailure(error)});
+  log.error('[mobile-planning] Request failed',undefined,{stage,reason,attempt,...(previousFailure?{previousFailure}:{}),failure:safeAiFailure(error)});
   return respond({error:'unavailable'},502);
  }
 }
