@@ -36,3 +36,13 @@ it('exhausts the shared retry without truncation, storage or private error conte
  expect(m.error).toHaveBeenCalledWith('[mobile-planning] Request failed',undefined,expect.objectContaining({stage:'generation',failure:expect.objectContaining({validationCode:'too_big',validationPath:'days'})}));
  expect(JSON.stringify(m.error.mock.calls)).not.toContain('PRIVATE');
 });
+it('retains the safe first validation failure when regeneration aborts',async()=>{
+ let calls=0;const model=new MockLanguageModelV3({doGenerate:async()=>{
+  if(++calls===1)return generated(draft(201));
+  throw new DOMException('PRIVATE provider response','AbortError');
+ }});m.provider.mockReturnValue(model);
+ const response=await POST(request());expect(response.status).toBe(502);expect(await response.json()).toEqual({error:'unavailable'});
+ expect(calls).toBe(2);expect(m.rpc.mock.calls.some(call=>call[0]==='planner_schedule_store_proposal')).toBe(false);
+ expect(m.error).toHaveBeenCalledWith('[mobile-planning] Request failed',undefined,expect.objectContaining({attempt:2,previousFailure:expect.objectContaining({validationCode:'too_big',validationPath:'days'}),failure:{name:'AbortError'}}));
+ expect(JSON.stringify(m.error.mock.calls)).not.toContain('PRIVATE');
+});
