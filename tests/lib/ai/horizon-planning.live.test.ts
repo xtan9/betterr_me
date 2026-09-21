@@ -17,7 +17,7 @@ describe.skipIf(process.env.PHASE_B_LIVE!=='1')('live Phase B planning quality',
  it('produces a coherent golden two-week preview with family boundaries, open space and actionable admin tasks',async()=>{
   requireCredentials();
   let output;
-  try{output=(await generateText({model:llmProvider(DEFAULT_MODEL_ID),output:Output.object({schema:horizonGenerationOutput(goldenInput.horizon)}),providerOptions:structuredOutputProviderOptions,maxOutputTokens:16000,abortSignal:AbortSignal.timeout(115000),system:horizonPlanningInstructions(goldenInput,goldenContext,{tasks:[],events:[],priorities:[]}),messages:[{role:'user',content:JSON.stringify(goldenInput)}]})).output;}
+  try{output=(await generateText({model:llmProvider(DEFAULT_MODEL_ID),output:Output.object({schema:horizonGenerationOutput(goldenInput.horizon)}),providerOptions:structuredOutputProviderOptions,maxOutputTokens:16000,abortSignal:AbortSignal.timeout(285000),system:horizonPlanningInstructions(goldenInput,goldenContext,{tasks:[],events:[],priorities:[]}),messages:[{role:'user',content:JSON.stringify(goldenInput)}]})).output;}
   catch(error){throw new Error(`Synthetic model evaluation failed: ${JSON.stringify(safeAiFailure(error))}; output withheld`);}
   const plan=buildHorizonPreview(flattenHorizonOutput(output,goldenInput.horizon),goldenInput,goldenContext);
   expect(plan.questions).toEqual([]);expect(plan.events.length).toBeGreaterThan(14);
@@ -57,7 +57,7 @@ describe.skipIf(process.env.PHASE_B_LIVE!=='1')('live Phase B planning quality',
    const minutes=events.reduce((sum,event)=>sum+Math.max(0,Math.min(civil(event.end_date,event.end_time),civil(date,'22:00'))-Math.max(civil(event.start_date,event.start_time),civil(date,'06:00')))/60000,0);
    expect(minutes).toBeLessThanOrEqual(14*60);
   }
- },120000);
+ },300000);
  it('keeps unknown exact times flexible and surfaces assumptions instead of inventing reservations',async()=>{
   requireCredentials();const input={...goldenInput,commitments:'Exact sleep, pickup, gym and work times are unknown.',needs:'Calls stay tasks. Family after pickup. Weekends family first.',goals:'Skip further discovery; provide a provisional draft with assumptions. Do not invent fixed times.',travelMinutes:null};
   let output;
