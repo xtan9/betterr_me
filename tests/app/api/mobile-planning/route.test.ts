@@ -80,6 +80,37 @@ it('does not store the earlier days if a later event conflicts',async()=>{
  expect((await POST(horizonRequest())).status).toBe(502);expect(m.rpc.mock.calls.some(call=>call[0]==='planner_schedule_store_proposal')).toBe(false);
  expect(m.logError).toHaveBeenCalledWith('[mobile-planning] Request failed',undefined,expect.objectContaining({stage:'validation',reason:'overlap',failure:{name:'Error'}}));
  expect(JSON.stringify(m.logError.mock.calls)).not.toContain('Family');
+ expect(m.generate).toHaveBeenCalledTimes(2);
+});
+it('regenerates an overlapping horizon once and stores only the fully revalidated replacement',async()=>{
+ context.events=[{id:eventId,title:'PRIVATE family',start_date:'2030-01-14',end_date:'2030-01-14',start_time:'12:00',end_time:'13:00',is_recurring:false,is_protected:true,timezone:'UTC'}];
+ const rpc=m.rpc.getMockImplementation()!;
+ m.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>name==='planner_horizon_context'?Promise.resolve({data:context,error:null}):rpc(name,args));
+ const invalid={...output(),events:[{...output().events[0],date:'2030-01-14'}]};
+ const valid={...output(),events:[{...output().events[0],date:'2030-01-14',startTime:'14:00',endTime:'14:30'}]};
+ m.generate.mockResolvedValueOnce({output:invalid}).mockResolvedValueOnce({output:valid});
+ const response=await POST(horizonRequest());expect(response.status).toBe(200);
+ expect((await response.json()).proposal.body.events[0].changes.start_time).toBe('14:00');
+ expect(m.generate).toHaveBeenCalledTimes(2);expect(m.generate.mock.calls[1][0].messages[1].content).toBe(JSON.stringify(invalid));
+ expect(m.rpc.mock.calls.filter(call=>call[0]==='planner_schedule_store_proposal')).toHaveLength(1);
+ expect(m.rpc.mock.calls.some(call=>call[0]==='planner_schedule_command')).toBe(false);expect(m.logError).not.toHaveBeenCalled();
+});
+it('shares one retry across schema failure and overlap rejection',async()=>{
+ const rpc=m.rpc.getMockImplementation()!;m.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>name==='planner_horizon_context'?Promise.resolve({data:context,error:null}):rpc(name,args));
+ const event={...output().events[0],date:'2030-01-01'};
+ m.generate.mockRejectedValueOnce({name:'AI_NoObjectGeneratedError',cause:{name:'AI_TypeValidationError'}}).mockResolvedValue({output:{...output(),events:[event,event]}});
+ expect((await POST(horizonRequest())).status).toBe(502);expect(m.generate).toHaveBeenCalledTimes(2);
+ expect(m.rpc.mock.calls.some(call=>call[0]==='planner_schedule_store_proposal')).toBe(false);
+});
+it.each(['deadline','disconnect'])('cancels overlap regeneration on %s without storing either draft',async(reason)=>{
+ vi.useFakeTimers();const parent=new AbortController();let signal!:AbortSignal;
+ const rpc=m.rpc.getMockImplementation()!;m.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>name==='planner_horizon_context'?Promise.resolve({data:context,error:null}):rpc(name,args));
+ const event={...output().events[0],date:'2030-01-01'};
+ m.generate.mockResolvedValueOnce({output:{...output(),events:[event,event]}}).mockImplementationOnce((options:{abortSignal:AbortSignal})=>{signal=options.abortSignal;return new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(new Error('aborted')),{once:true}));});
+ const response=POST(new Request(horizonRequest(),{signal:parent.signal}));await vi.advanceTimersByTimeAsync(0);
+ if(reason==='deadline')await vi.advanceTimersByTimeAsync(285000);else parent.abort();
+ expect((await response).status).toBe(reason==='deadline'?502:499);expect(signal.aborted).toBe(true);
+ expect(m.generate).toHaveBeenCalledTimes(2);expect(m.rpc.mock.calls.some(call=>call[0]==='planner_schedule_store_proposal')).toBe(false);expect(vi.getTimerCount()).toBe(0);
 });
 it('distinguishes provider failure without logging private error messages',async()=>{
  m.generate.mockRejectedValueOnce(new Error('PRIVATE prompt and output'));
