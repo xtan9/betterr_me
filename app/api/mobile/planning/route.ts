@@ -14,7 +14,7 @@ const headers={'Cache-Control':'no-store','Access-Control-Allow-Origin':'*','Acc
 const respond=(body:unknown,status=200)=>Response.json(body,{status,headers});
 // Only fixed validator messages map to diagnostics; never emit exception text.
 const validationReasons=new Map([
- ['Proposed overlap','overlap'],['Invalid duration','duration'],['Task does not fit reservation','task_fit'],
+ ['Proposed overlap','overlap'],['Invalid duration','duration'],['Invalid travel duration','travel_duration'],['Task does not fit reservation','task_fit'],
  ['Event outside horizon','horizon'],['Target outside horizon','target_horizon'],['Duplicate event target','duplicate_target'],
  ['Unsupported event edit','protected_target'],['Unexpected target','unexpected_target'],['Unknown task','task_reference'],
  ['Unknown captured task','capture_reference'],['Unsupported horizon capture','capture_kind'],['Unsupported capture','capture_kind'],

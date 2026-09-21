@@ -49,6 +49,8 @@ Authenticated production browser tests passed cross-conversation durable prefere
 
 The same small at-home scenario with "No travel is needed" failed repeatedly at `planning.travelMinutes` with a nonpositive-duration validation error. The generation contract now explicitly describes no travel as `null`, never zero, both in the field's schema description and system instructions. The positive-duration validator is unchanged. A regression verifies that null clears a previous duration, while zero, negative and oversized values still fail; an opt-in real-model regression covers the original no-travel prompt. Production re-verification remains required.
 
+A later golden-preview attempt reached domain validation on its first generation but failed the existing duration check. Safe diagnostics now distinguish a nonpositive interval from a travel block that differs from the confirmed per-leg duration, with no private values. Horizon generation instructions explicitly match both existing rules: each travel leg uses the confirmed duration, and an explicitly requested overnight reservation is split at civil midnight. Neither rejected intervals nor incorrect travel durations are normalized into acceptance. Route regressions assert both failure reasons, sanitized errors, and no proposal storage. The exact production duration subtype remains unproven until re-verification.
+
 ### Follow-up: model-independent generation contract
 
 Production browser smoke subsequently exposed timeout, overlap and incomplete-horizon failures (fixed in backend #1033–#1037 and mobile #102–#103), followed by a remaining server-side `ZodError`. Full live sign-off is still outstanding.

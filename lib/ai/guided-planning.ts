@@ -29,7 +29,8 @@ export function buildSchedulePreview(value:unknown,input:z.infer<typeof planning
   if(action.taskItemIndex!==null&&taskItem?.kind!=='task-create')throw new Error('Unknown captured task');
   const endDate=action.endTime==='24:00'?addLocalDays(input.date,1):input.date,endTime=action.endTime==='24:00'?'00:00':action.endTime;
   const a=wallInstant(input.date,action.startTime,input.timezone),b=wallInstant(endDate,endTime,input.timezone);
-  if(action.kind!=='event-remove'&&(b<=a||action.category==='travel'&&(b-a)/60000!==input.travelMinutes))throw new Error('Invalid duration');
+  if(action.kind!=='event-remove'&&b<=a)throw new Error('Invalid duration');
+  if(action.kind!=='event-remove'&&action.category==='travel'&&(b-a)/60000!==input.travelMinutes)throw new Error('Invalid travel duration');
   return {id:randomUUID(),kind:action.kind,...(before?{targetId:before.id,expectedVersion:before.version,before}:{}),...(taskItem?{taskItemId:taskItem.id}:{}),category:action.category,changes:action.kind==='event-remove'?{}:{title:action.title,start_date:input.date,end_date:endDate,start_time:action.startTime,end_time:endTime,timezone:input.timezone,task_id:action.taskId,is_protected:action.protected}};
  });
  const proposed=events.filter(event=>event.kind!=='event-remove').map(event=>({...event.changes,id:event.id,is_recurring:false,is_exception:false,recurrence_rule:null,session_ended_at:null}) as PlannerEvent);
