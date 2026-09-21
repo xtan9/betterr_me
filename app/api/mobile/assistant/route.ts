@@ -12,7 +12,7 @@ import {nextActionFacts} from '@/lib/ai/next-action';
 import {safeAiFailure} from '@/lib/ai/safe-failure';
 import {log} from '@/lib/logger';
 import {captureStreamResponse,AssistantStreamError} from '@/lib/ai/native-capture-stream';
-export const maxDuration=60;
+export const maxDuration=120;
 const requestSchema=z.object({requestId:z.string().uuid(),conversationId:z.string().uuid().optional(),consent:z.literal(true),locale:z.enum(['en','zh']),messages:z.array(z.object({role:z.enum(['user','assistant']),content:z.string().min(1).max(8000)}).strict()).min(1).max(40)}).strict().refine(value=>value.messages.at(-1)?.role==='user');
 const headers={'Cache-Control':'no-store','Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS'};
 const respond=(body:unknown,status=200)=>Response.json(body,{status,headers});
