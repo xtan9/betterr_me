@@ -1,5 +1,6 @@
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
-const m=vi.hoisted(()=>({getUser:vi.fn(),rpc:vi.fn(),from:vi.fn(),generate:vi.fn()}));
+const m=vi.hoisted(()=>({getUser:vi.fn(),rpc:vi.fn(),from:vi.fn(),generate:vi.fn(),logError:vi.fn()}));
+vi.mock('@/lib/logger',()=>({log:{error:m.logError}}));
 vi.mock('ai',()=>({generateText:m.generate,Output:{object:vi.fn()}}));
 vi.mock('@supabase/supabase-js',()=>({createClient:()=>({auth:{getUser:m.getUser},rpc:m.rpc,from:m.from})}));
 import {POST} from '@/app/api/mobile/planning/route';
@@ -77,6 +78,14 @@ it('does not store the earlier days if a later event conflicts',async()=>{
  m.rpc.mockImplementation(async(name:string)=>({error:null,data:name==='check_ai_chat_rate_limit'?[{allowed:true,minute_remaining:9,day_remaining:99}]:{...context,coverageComplete:true}}));
  m.generate.mockResolvedValue({output:{...output(),events:[{...output().events[0],date:'2030-01-01'},{...output().events[0],date:'2030-01-14'}]}});
  expect((await POST(horizonRequest())).status).toBe(502);expect(m.rpc.mock.calls.some(call=>call[0]==='planner_schedule_store_proposal')).toBe(false);
+ expect(m.logError).toHaveBeenCalledWith('[mobile-planning] Request failed',undefined,expect.objectContaining({stage:'validation',reason:'overlap',failure:{name:'Error'}}));
+ expect(JSON.stringify(m.logError.mock.calls)).not.toContain('Family');
+});
+it('distinguishes provider failure without logging private error messages',async()=>{
+ m.generate.mockRejectedValueOnce(new Error('PRIVATE prompt and output'));
+ const response=await POST(request());expect(response.status).toBe(502);
+ expect(m.logError).toHaveBeenCalledWith('[mobile-planning] Request failed',undefined,expect.objectContaining({stage:'generation',reason:'unknown',failure:{name:'Error'}}));
+ expect(JSON.stringify(m.logError.mock.calls)).not.toContain('PRIVATE');expect(await response.json()).toEqual({error:'unavailable'});
 });
 it.each([null,{version:eventId,status:'drafted'}])('refuses a foreign or stale saved planning session',async(session)=>{
  m.from.mockImplementation((table:string)=>{const q={select:()=>q,eq:vi.fn(()=>q),maybeSingle:async()=>({error:null,data:table==='planning_sessions'?session:null})};return q;});

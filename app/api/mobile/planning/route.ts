@@ -12,8 +12,17 @@ import {log} from '@/lib/logger';
 export const maxDuration=300;
 const headers={'Cache-Control':'no-store','Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS'};
 const respond=(body:unknown,status=200)=>Response.json(body,{status,headers});
+// Only fixed validator messages map to diagnostics; never emit exception text.
+const validationReasons=new Map([
+ ['Proposed overlap','overlap'],['Invalid duration','duration'],['Task does not fit reservation','task_fit'],
+ ['Event outside horizon','horizon'],['Target outside horizon','target_horizon'],['Duplicate event target','duplicate_target'],
+ ['Unsupported event edit','protected_target'],['Unexpected target','unexpected_target'],['Unknown task','task_reference'],
+ ['Unknown captured task','capture_reference'],['Unsupported horizon capture','capture_kind'],['Unsupported capture','capture_kind'],
+ ['Unknown priority','priority_reference'],['Routine outside horizon','routine_horizon'],
+]);
 export function OPTIONS(){return new Response(null,{status:204,headers});}
 export async function POST(request:Request){
+ let stage:'context'|'generation'|'validation'|'storage'='context';
  try{
   if(Number(request.headers.get('content-length')??0)>32768)return respond({error:'invalid'},413);
   const raw=await request.text();if(new TextEncoder().encode(raw).length>32768)return respond({error:'invalid'},413);
@@ -57,6 +66,7 @@ export async function POST(request:Request){
   };
   if('horizon' in input)options.system=horizonPlanningInstructions(input,context,providerContext);
   options.system+=' Event startTime and endTime must use 24-hour local HH:MM strings such as 15:00 and 15:10, without seconds, dates or timezone suffixes; only endTime may use 24:00.';
+  stage='generation';
   const result=await generateText(options).catch(error=>{
    const failure=safeAiFailure(error);
    // Regenerate invalid model output once; never repair/truncate it into acceptance.
@@ -66,15 +76,18 @@ export async function POST(request:Request){
   });
   if(request.signal.aborted)return new Response(null,{status:499,headers});
   if(generation.signal.aborted)return respond({error:'unavailable'},502);
+  stage='validation';
   const body='horizon' in input?buildHorizonPreview(result.output,input,context):buildSchedulePreview(result.output,input,context);
   if('sessionId' in requestInput)Object.assign(body,{planningSession:{id:requestInput.sessionId,version:requestInput.sessionVersion}});
+  stage='storage';
   const stored=await client.rpc('planner_schedule_store_proposal',{p_id:input.requestId,p_fingerprint:fingerprint,p_body:body});
   if(stored.error||stored.data?.status!=='complete')return respond({error:stored.data?.status==='conflict'?'conflict':'unavailable'},stored.data?.status==='conflict'?409:502);
   return respond({proposal:stored.data.proposal});
   }finally{clearTimeout(deadline);request.signal.removeEventListener('abort',cancel);}
  }catch(error){
   if(request.signal.aborted)return new Response(null,{status:499,headers});
-  log.error('[mobile-planning] Request failed',undefined,{failure:safeAiFailure(error)});
+  const reason=stage==='validation'&&error instanceof Error?validationReasons.get(error.message)??'unknown':'unknown';
+  log.error('[mobile-planning] Request failed',undefined,{stage,reason,failure:safeAiFailure(error)});
   return respond({error:'unavailable'},502);
  }
 }
