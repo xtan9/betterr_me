@@ -54,7 +54,7 @@ export async function POST(request:Request){
    client.from('planning_sessions').select('*').eq('user_id',userId).eq('conversation_id',conversationId).maybeSingle(),
   ]);
   if(memories.error||session.error)return respond({error:'unavailable'},503);
-  const previous:PlanningState|null=session.data&&!['applied','cancelled'].includes(session.data.status)?{id:session.data.id,status:session.data.status,horizon:session.data.start_date?{startDate:session.data.start_date,endDate:session.data.end_date,timezone:session.data.timezone}:null,readiness:session.data.readiness,facts:session.data.facts,assumptions:session.data.assumptions}:null;
+  const previous:PlanningState|null=session.data&&!['applied','cancelled'].includes(session.data.status)?{id:session.data.id,status:session.data.status,horizon:session.data.start_date?{startDate:session.data.start_date,endDate:session.data.end_date,timezone:session.data.timezone}:null,readiness:session.data.readiness,facts:session.data.facts,assumptions:session.data.assumptions,travelMinutes:session.data.travel_minutes??null}:null;
   const selectedMemories=selectMemories((memories.data??[]) as Memory[],previous,new Date());
   const configured=process.env.LLM_MODEL,modelId=configured&&AVAILABLE_MODELS.some(model=>model.id===configured)?configured:DEFAULT_MODEL_ID;
   const runTurn=async(emit?: (text:string)=>void,signal=request.signal)=>{

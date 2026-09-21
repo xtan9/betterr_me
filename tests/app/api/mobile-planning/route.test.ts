@@ -35,3 +35,41 @@ it('expands existing daily recurrence and rejects a conflicting weekend block',a
 it('keeps Tuesday free when a new weekly routine only occurs on Monday',async()=>{m.generate.mockResolvedValue({output:{...output(),events:[],capture:{message:'Mondays only',actions:[{kind:'routine-create',title:'Weekly care',date:'2030-01-01',startTime:'08:00',endTime:'08:30',timezone:'UTC',protected:true,frequency:'weekly',daysOfWeek:[1]}]}}});const response=await POST(request());expect(response.status).toBe(200);const body=(await response.json()).proposal.body;expect(body.capture.items[0].changes.rule).toMatchObject({frequency:'weekly',days_of_week:[1]});expect(body.freeTime).toEqual([{start:'2030-01-01T00:00:00.000Z',end:'2030-01-02T00:00:00.000Z'}]);});
 it('previews a tired-day move with exact original version and unchanged protected sleep',async()=>{context.events=[{id:eventId,title:'Deep work',version:owner,start_date:'2030-01-01',end_date:'2030-01-01',start_time:'15:00',end_time:'16:00',timezone:'UTC',app_owned:true,is_protected:false,is_recurring:false},{id:'61500000-0000-0000-0000-000000000004',title:'Sleep',start_date:'2030-01-01',end_date:'2030-01-01',start_time:'00:00',end_time:'08:00',timezone:'UTC',app_owned:true,is_protected:true,is_recurring:false}];const result=output();Object.assign(result.events[0],{kind:'event-edit',targetId:eventId,title:'Deep work',startTime:'16:00',endTime:'17:00',protected:false,category:'work'});m.generate.mockResolvedValue({output:result});const response=await POST(request());expect(response.status).toBe(200);const body=(await response.json()).proposal.body;expect(body.events).toHaveLength(1);expect(body.events[0]).toMatchObject({targetId:eventId,expectedVersion:owner,before:{start_time:'15:00'},changes:{start_time:'16:00'}});expect(body.freeTime[0].start).toBe('2030-01-01T08:00:00.000Z');});
 
+const horizon={startDate:'2030-01-01',endDate:'2030-01-14',timezone:'UTC'};
+const horizonRequest=()=>request({date:undefined,timezone:undefined,horizon});
+it('loads coverage for the entire horizon and stores one exact multi-day envelope',async()=>{
+ m.rpc.mockImplementation(async(name:string,args:Record<string,unknown>)=>({error:null,data:name==='planner_horizon_context'?{...context,coverageComplete:true}:name==='check_ai_chat_rate_limit'?[{allowed:true,minute_remaining:9,day_remaining:99}]:{status:'complete',proposal:{body:args.p_body}}}));
+ m.generate.mockResolvedValue({output:{...output(),events:[{...output().events[0],date:'2030-01-01'},{...output().events[0],date:'2030-01-14'}]}});
+ const response=await POST(horizonRequest());expect(response.status).toBe(200);const body=(await response.json()).proposal.body;
+ expect(body.horizon).toEqual(horizon);expect(body.events.map((e:{changes:{start_date:string}})=>e.changes.start_date)).toEqual(['2030-01-01','2030-01-14']);
+ expect(m.rpc).toHaveBeenCalledWith('planner_horizon_context',{p_start:'2030-01-01',p_end:'2030-01-14'});
+ expect(m.generate).toHaveBeenCalledTimes(1);expect(m.generate.mock.calls[0][0].system).toContain('weekday/weekend');
+ expect(m.rpc.mock.calls.filter(call=>call[0]==='planner_schedule_store_proposal')).toHaveLength(1);
+});
+it('refuses generation when even a later civil day has incomplete recurrence coverage',async()=>{
+ m.rpc.mockImplementation(async(name:string)=>({error:null,data:name==='check_ai_chat_rate_limit'?[{allowed:true,minute_remaining:9,day_remaining:99}]:{...context,coverageComplete:false}}));
+ expect((await POST(horizonRequest())).status).toBe(422);expect(m.generate).not.toHaveBeenCalled();
+});
+it('does not store the earlier days if a later event conflicts',async()=>{
+ context.events=[{id:eventId,title:'Family',start_date:'2030-01-14',end_date:'2030-01-14',start_time:'12:00',end_time:'13:00',is_recurring:false,is_protected:true,timezone:'UTC'}];
+ m.rpc.mockImplementation(async(name:string)=>({error:null,data:name==='check_ai_chat_rate_limit'?[{allowed:true,minute_remaining:9,day_remaining:99}]:{...context,coverageComplete:true}}));
+ m.generate.mockResolvedValue({output:{...output(),events:[{...output().events[0],date:'2030-01-01'},{...output().events[0],date:'2030-01-14'}]}});
+ expect((await POST(horizonRequest())).status).toBe(502);expect(m.rpc.mock.calls.some(call=>call[0]==='planner_schedule_store_proposal')).toBe(false);
+});
+it.each([null,{version:eventId,status:'drafted'}])('refuses a foreign or stale saved planning session',async(session)=>{
+ m.from.mockImplementation((table:string)=>{const q={select:()=>q,eq:vi.fn(()=>q),maybeSingle:async()=>({error:null,data:table==='planning_sessions'?session:null})};return q;});
+ const req=request({date:undefined,timezone:undefined,commitments:undefined,needs:undefined,goals:undefined,travelMinutes:undefined,sessionId:owner,sessionVersion:owner});
+ expect((await POST(req)).status).toBe(409);expect(m.generate).not.toHaveBeenCalled();
+});
+it.each([15,null])('uses saved session facts and confirmed travel %s without inventing a duration',async(travelMinutes)=>{
+ const session={version:owner,status:'drafted',start_date:horizon.startDate,end_date:horizon.endDate,timezone:'UTC',facts:{workBoundaries:'Family after 15:00'},readiness:{workBoundaries:'known'},assumptions:['Calls remain tasks'],travel_minutes:travelMinutes};
+ const filters:unknown[][]=[];
+ m.from.mockImplementation((table:string)=>{const q={select:()=>q,eq:(...args:unknown[])=>{if(table==='planning_sessions')filters.push(args);return q;},maybeSingle:async()=>({error:null,data:table==='planning_sessions'?session:null})};return q;});
+ m.rpc.mockImplementation(async(name:string,args:Record<string,unknown>)=>({error:null,data:name==='planner_horizon_context'?{...context,coverageComplete:true}:name==='check_ai_chat_rate_limit'?[{allowed:true,minute_remaining:9,day_remaining:99}]:{status:'complete',proposal:{body:args.p_body}}}));
+ m.generate.mockResolvedValue({output:{...output(),events:[{...output().events[0],date:'2030-01-01',endTime:'12:15',category:'travel'}]}});
+ const response=await POST(request({date:undefined,timezone:undefined,commitments:undefined,needs:undefined,goals:undefined,travelMinutes:undefined,sessionId:eventId,sessionVersion:owner}));
+ expect(response.status).toBe(200);const body=(await response.json()).proposal.body;expect(body.planningSession).toEqual({id:eventId,version:owner});expect(filters).toContainEqual(['user_id',owner]);
+ expect(body.events).toHaveLength(travelMinutes===null?0:1);expect(body.questions).toHaveLength(travelMinutes===null?1:0);
+ expect(m.generate.mock.calls[0][0].messages[0].content).toContain('Family after 15:00');
+});
+

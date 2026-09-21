@@ -25,6 +25,11 @@ export async function GET(request:Request){
   if(turn.error)return respond({error:'unavailable'},503);
   const proposal=turn.data?await client.from('planner_ai_proposals').select('*').eq('user_id',userId).eq('id',turn.data.id).maybeSingle():null;
   if(proposal?.error)return respond({error:'unavailable'},503);
-  return respond({conversationId:conversation.data.id,messages:page.map(({role,content,request_id})=>({role,content,...(request_id?{requestId:request_id}:{})})),before:(messages.data?.length??0)>40?page[0].sequence:null,ui:turn.data?.response?.ui,proposal:proposal?.data??null});
+  // Turn responses are immutable. Undo and later discovery advance the session
+  // independently, so restoring its old response handle would make retries stale.
+  const session=await client.from('planning_sessions').select('id,version,status,start_date,end_date,timezone,readiness,assumptions').eq('user_id',userId).eq('conversation_id',conversation.data.id).maybeSingle();
+  if(session.error)return respond({error:'unavailable'},503);
+  const current=session.data,planning=current&&['discovering','ready','drafted'].includes(current.status)?{sessionId:current.id,version:current.version,status:current.status,horizon:current.start_date?{startDate:current.start_date,endDate:current.end_date,timezone:current.timezone}:null,missing:Object.entries(current.readiness??{}).filter(([,state])=>state==='missing'||state==='partial').map(([key])=>key),assumptions:current.assumptions}:undefined;
+  return respond({conversationId:conversation.data.id,messages:page.map(({role,content,request_id})=>({role,content,...(request_id?{requestId:request_id}:{})})),before:(messages.data?.length??0)>40?page[0].sequence:null,ui:turn.data?.response?.ui,planning,proposal:proposal?.data??null});
  }catch{return respond({error:'unavailable'},503);}
 }
