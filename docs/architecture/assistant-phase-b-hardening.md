@@ -43,6 +43,14 @@ Local verification: backend full suite 5,913 passed / 6 opt-in skipped; the subs
 
 ## Still required before Phase C
 
+### Follow-up: model-independent generation contract
+
+Production browser smoke subsequently exposed timeout, overlap and incomplete-horizon failures (fixed in backend #1033–#1037 and mobile #102–#103), followed by a remaining server-side `ZodError`. Full live sign-off is still outstanding.
+
+The per-date provider schema allowed up to 20 events on each of 14 dates (280 total), while the flattened preview contract allowed only 200. A deterministic 201-event fixture reproduced this mismatch. Both schemas now enforce the same 200-event total, before the SDK returns a generated result. There is no truncation or increased acceptance limit. The existing single schema-regeneration allowance can now recover from this specific failure before proposal storage.
+
+`tests/app/api/mobile-planning/generation.test.ts` uses the real AI SDK with a synthetic model transport: an oversized response is rejected and regenerated once, only the valid 200-event replacement is stored, and two oversized responses store nothing. `horizon-planning.test.ts` checks both sides of the 200/201 boundary. `safe-failure.test.ts` covers direct server-side schema errors with allowlisted field paths; private dates, arbitrary keys, messages and values stay omitted. These are implementation regressions, not a model-quality evaluation or proof of the remaining production error's exact cause. No model selection, timeout, SQL mutation, acceptance or Undo behavior changed in this follow-up.
+
 Run the three live model evaluations with configured credentials and signed-in physical-device smoke. The deterministic/DB evidence is not a substitute for either. No claim of complete production sign-off is made.
 
 Intentionally deferred Phase C: derived current availability, automatic Next Action invocation, proactive notifications, Start/Later/Something else actions, and execution-history-informed recommendations. These are absent from this change.

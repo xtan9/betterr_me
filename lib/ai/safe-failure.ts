@@ -46,7 +46,7 @@ const SAFE_PROVIDER_PARAMS = new Set([
   "tools",
 ]);
 
-const SAFE_SCHEMA_FIELDS = new Set(['intent','message','actions','planning','horizon','startDate','endDate','timezone','facts','dimension','state','detail','questions','question','assumptions','draft','skipDiscovery','reopenDiscovery','memoryUpdates','operation','memoryId','replacement','kind','key','content','confidence','temporality','validFor','amount','unit','nextActionWindow','start','end','available','events','capture','title','startTime','endTime','taskId','taskItemIndex','targetId','protected','category','priorityTaskIds']);
+const SAFE_SCHEMA_FIELDS = new Set(['intent','message','actions','planning','horizon','startDate','endDate','timezone','facts','dimension','state','detail','questions','question','assumptions','draft','skipDiscovery','reopenDiscovery','memoryUpdates','operation','memoryId','replacement','kind','key','content','confidence','temporality','validFor','amount','unit','nextActionWindow','start','end','available','days','events','capture','title','startTime','endTime','taskId','taskItemIndex','targetId','protected','category','priorityTaskIds']);
 const SAFE_ISSUE_CODES = new Set(['invalid_type','invalid_union','invalid_value','too_small','too_big','invalid_format','unrecognized_keys','custom','invalid_enum_value','invalid_literal','invalid_string']);
 
 function read(error: object, property: string): unknown {
@@ -101,7 +101,9 @@ export function safeAiFailure(error: unknown): Record<string, string | number> {
   if (typeof causeName === "string" && ["AI_TypeValidationError", "AI_JSONParseError", "ZodError"].includes(causeName)) context.causeName = causeName;
   // Never expose issue messages, received values, arbitrary keys, or model text.
   try {
-    const validation = cause && typeof cause === 'object' ? read(cause, 'cause') : undefined;
+    const validation = read(diagnostic, 'name') === 'ZodError' ? diagnostic
+      : causeName === 'ZodError' ? cause
+      : cause && typeof cause === 'object' ? read(cause, 'cause') : undefined;
     const issues = validation && typeof validation === 'object' ? read(validation, 'issues') : undefined;
     const issue = Array.isArray(issues) ? issues[0] : undefined;
     if (issue && typeof issue === 'object') {
