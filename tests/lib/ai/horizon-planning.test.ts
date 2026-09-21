@@ -1,5 +1,5 @@
 import {expect,it} from 'vitest';
-import {buildHorizonPreview,horizonPlanningRequest,horizonContext} from '@/lib/ai/horizon-planning';
+import {buildHorizonPreview,horizonPlanningRequest,horizonContext,horizonGenerationOutput,flattenHorizonOutput} from '@/lib/ai/horizon-planning';
 import type {PlanningContext} from '@/lib/ai/guided-planning';
 import {goldenContext,goldenInput,goldenDraft} from '../../fixtures/assistant/phase-b-golden';
 const id='61500000-0000-0000-0000-000000000003';
@@ -7,6 +7,19 @@ const context:PlanningContext={version:id,timezone:'America/Los_Angeles',tasks:[
 const input={requestId:id,consent:true as const,locale:'en' as const,horizon:{startDate:'2026-10-30',endDate:'2026-11-02',timezone:'America/Los_Angeles'},commitments:'Family after 15:00, weekends family',needs:'',goals:'',travelMinutes:null};
 const event=(date:string,startTime='10:00',endTime='11:00')=>({date,startTime,endTime,kind:'event-create',targetId:null,title:'Focus',taskId:null,taskItemIndex:null,protected:false,category:'work'});
 const output=(events:unknown[])=>({message:'Review the dates',questions:[],assumptions:[],capture:{message:'',actions:[]},events,priorityTaskIds:null});
+it('requires a result for every civil date and rejects a two-day prefix of a fortnight',()=>{
+ const {events,...metadata}=goldenDraft();
+ const days=Object.fromEntries(Array.from({length:14},(_,offset)=>{
+  const date=new Date(Date.UTC(2026,8,21+offset)).toISOString().slice(0,10);
+  return [date,events.filter(event=>event.date===date).map(({date:_,...event})=>event)];
+ }));
+ const generated={...metadata,days};
+ expect(flattenHorizonOutput(generated,goldenInput.horizon)).toEqual({...metadata,events:[...events].sort((a,b)=>a.date.localeCompare(b.date))});
+ const partial={...generated,days:Object.fromEntries(Object.entries(days).slice(0,2))};
+ expect(horizonGenerationOutput(goldenInput.horizon).safeParse(partial).success).toBe(false);
+ expect(horizonGenerationOutput(goldenInput.horizon).safeParse({...generated,days:{...days,'2026-10-05':[]}}).success).toBe(false);
+ expect(days['2026-09-27']).toEqual([]);
+});
 it('validates an authored golden fortnight with distinct school days, Friday childcare and family-first weekends',()=>{
  const events:PlanningContext['events']=[];
  for(let offset=0;offset<14;offset++){

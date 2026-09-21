@@ -1,3 +1,4 @@
+import {datedOutput} from '../../../fixtures/assistant/dated-output';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 const m=vi.hoisted(()=>({getUser:vi.fn(),rpc:vi.fn(),from:vi.fn(),generate:vi.fn(),logError:vi.fn()}));
 vi.mock('@/lib/logger',()=>({log:{error:m.logError}}));
@@ -43,7 +44,7 @@ it('completes a multi-day preview beyond two minutes without accepting it',async
  vi.useFakeTimers();let signal!:AbortSignal;
  const rpc=m.rpc.getMockImplementation()!;
  m.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>name==='planner_horizon_context'?Promise.resolve({data:context,error:null}):rpc(name,args));
- m.generate.mockImplementation(async(options:{abortSignal:AbortSignal})=>{signal=options.abortSignal;await new Promise(resolve=>setTimeout(resolve,150000));return {output:{...output(),events:[]}};});
+ m.generate.mockImplementation(async(options:{abortSignal:AbortSignal})=>{signal=options.abortSignal;await new Promise(resolve=>setTimeout(resolve,150000));return {output:datedOutput({...output(),events:[]},horizon)};});
  const response=POST(horizonRequest());await vi.advanceTimersByTimeAsync(150000);
  expect((await response).status).toBe(200);expect(signal.aborted).toBe(false);
  expect(m.rpc.mock.calls.filter(call=>call[0]==='planner_schedule_store_proposal')).toHaveLength(1);
@@ -62,7 +63,7 @@ it.each(['deadline','disconnect'])('never retries or stores a preview after gene
 });
 it('loads coverage for the entire horizon and stores one exact multi-day envelope',async()=>{
  m.rpc.mockImplementation(async(name:string,args:Record<string,unknown>)=>({error:null,data:name==='planner_horizon_context'?{...context,coverageComplete:true}:name==='check_ai_chat_rate_limit'?[{allowed:true,minute_remaining:9,day_remaining:99}]:{status:'complete',proposal:{body:args.p_body}}}));
- m.generate.mockResolvedValue({output:{...output(),events:[{...output().events[0],date:'2030-01-01'},{...output().events[0],date:'2030-01-14'}]}});
+ m.generate.mockResolvedValue({output:datedOutput({...output(),events:[{...output().events[0],date:'2030-01-01'},{...output().events[0],date:'2030-01-14'}]},horizon)});
  const response=await POST(horizonRequest());expect(response.status).toBe(200);const body=(await response.json()).proposal.body;
  expect(body.horizon).toEqual(horizon);expect(body.events.map((e:{changes:{start_date:string}})=>e.changes.start_date)).toEqual(['2030-01-01','2030-01-14']);
  expect(m.rpc).toHaveBeenCalledWith('planner_horizon_context',{p_start:'2030-01-01',p_end:'2030-01-14'});
@@ -73,10 +74,17 @@ it('refuses generation when even a later civil day has incomplete recurrence cov
  m.rpc.mockImplementation(async(name:string)=>({error:null,data:name==='check_ai_chat_rate_limit'?[{allowed:true,minute_remaining:9,day_remaining:99}]:{...context,coverageComplete:false}}));
  expect((await POST(horizonRequest())).status).toBe(422);expect(m.generate).not.toHaveBeenCalled();
 });
+it('never stores a partial model calendar labelled as a complete fortnight',async()=>{
+ const rpc=m.rpc.getMockImplementation()!;m.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>name==='planner_horizon_context'?Promise.resolve({data:context,error:null}):rpc(name,args));
+ const generated=datedOutput({...output(),events:[{...output().events[0],date:'2030-01-01'}]},horizon);
+ delete generated.days['2030-01-14'];m.generate.mockResolvedValue({output:generated});
+ expect((await POST(horizonRequest())).status).toBe(502);
+ expect(m.rpc.mock.calls.some(call=>call[0]==='planner_schedule_store_proposal')).toBe(false);
+});
 it('does not store the earlier days if a later event conflicts',async()=>{
  context.events=[{id:eventId,title:'Family',start_date:'2030-01-14',end_date:'2030-01-14',start_time:'12:00',end_time:'13:00',is_recurring:false,is_protected:true,timezone:'UTC'}];
  m.rpc.mockImplementation(async(name:string)=>({error:null,data:name==='check_ai_chat_rate_limit'?[{allowed:true,minute_remaining:9,day_remaining:99}]:{...context,coverageComplete:true}}));
- m.generate.mockResolvedValue({output:{...output(),events:[{...output().events[0],date:'2030-01-01'},{...output().events[0],date:'2030-01-14'}]}});
+ m.generate.mockResolvedValue({output:datedOutput({...output(),events:[{...output().events[0],date:'2030-01-01'},{...output().events[0],date:'2030-01-14'}]},horizon)});
  expect((await POST(horizonRequest())).status).toBe(502);expect(m.rpc.mock.calls.some(call=>call[0]==='planner_schedule_store_proposal')).toBe(false);
  expect(m.logError).toHaveBeenCalledWith('[mobile-planning] Request failed',undefined,expect.objectContaining({stage:'validation',reason:'overlap',failure:{name:'Error'}}));
  expect(JSON.stringify(m.logError.mock.calls)).not.toContain('Family');
@@ -88,17 +96,17 @@ it('regenerates an overlapping horizon once and stores only the fully revalidate
  m.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>name==='planner_horizon_context'?Promise.resolve({data:context,error:null}):rpc(name,args));
  const invalid={...output(),events:[{...output().events[0],date:'2030-01-14'}]};
  const valid={...output(),events:[{...output().events[0],date:'2030-01-14',startTime:'14:00',endTime:'14:30'}]};
- m.generate.mockResolvedValueOnce({output:invalid}).mockResolvedValueOnce({output:valid});
+ m.generate.mockResolvedValueOnce({output:datedOutput(invalid,horizon)}).mockResolvedValueOnce({output:datedOutput(valid,horizon)});
  const response=await POST(horizonRequest());expect(response.status).toBe(200);
  expect((await response.json()).proposal.body.events[0].changes.start_time).toBe('14:00');
- expect(m.generate).toHaveBeenCalledTimes(2);expect(m.generate.mock.calls[1][0].messages[1].content).toBe(JSON.stringify(invalid));
+ expect(m.generate).toHaveBeenCalledTimes(2);expect(m.generate.mock.calls[1][0].messages[1].content).toBe(JSON.stringify(datedOutput(invalid,horizon)));
  expect(m.rpc.mock.calls.filter(call=>call[0]==='planner_schedule_store_proposal')).toHaveLength(1);
  expect(m.rpc.mock.calls.some(call=>call[0]==='planner_schedule_command')).toBe(false);expect(m.logError).not.toHaveBeenCalled();
 });
 it('shares one retry across schema failure and overlap rejection',async()=>{
  const rpc=m.rpc.getMockImplementation()!;m.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>name==='planner_horizon_context'?Promise.resolve({data:context,error:null}):rpc(name,args));
  const event={...output().events[0],date:'2030-01-01'};
- m.generate.mockRejectedValueOnce({name:'AI_NoObjectGeneratedError',cause:{name:'AI_TypeValidationError'}}).mockResolvedValue({output:{...output(),events:[event,event]}});
+ m.generate.mockRejectedValueOnce({name:'AI_NoObjectGeneratedError',cause:{name:'AI_TypeValidationError'}}).mockResolvedValue({output:datedOutput({...output(),events:[event,event]},horizon)});
  expect((await POST(horizonRequest())).status).toBe(502);expect(m.generate).toHaveBeenCalledTimes(2);
  expect(m.rpc.mock.calls.some(call=>call[0]==='planner_schedule_store_proposal')).toBe(false);
 });
@@ -106,7 +114,7 @@ it.each(['deadline','disconnect'])('cancels overlap regeneration on %s without s
  vi.useFakeTimers();const parent=new AbortController();let signal!:AbortSignal;
  const rpc=m.rpc.getMockImplementation()!;m.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>name==='planner_horizon_context'?Promise.resolve({data:context,error:null}):rpc(name,args));
  const event={...output().events[0],date:'2030-01-01'};
- m.generate.mockResolvedValueOnce({output:{...output(),events:[event,event]}}).mockImplementationOnce((options:{abortSignal:AbortSignal})=>{signal=options.abortSignal;return new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(new Error('aborted')),{once:true}));});
+ m.generate.mockResolvedValueOnce({output:datedOutput({...output(),events:[event,event]},horizon)}).mockImplementationOnce((options:{abortSignal:AbortSignal})=>{signal=options.abortSignal;return new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(new Error('aborted')),{once:true}));});
  const response=POST(new Request(horizonRequest(),{signal:parent.signal}));await vi.advanceTimersByTimeAsync(0);
  if(reason==='deadline')await vi.advanceTimersByTimeAsync(285000);else parent.abort();
  expect((await response).status).toBe(reason==='deadline'?502:499);expect(signal.aborted).toBe(true);
@@ -128,7 +136,7 @@ it.each([15,null])('uses saved session facts and confirmed travel %s without inv
  const filters:unknown[][]=[];
  m.from.mockImplementation((table:string)=>{const q={select:()=>q,eq:(...args:unknown[])=>{if(table==='planning_sessions')filters.push(args);return q;},maybeSingle:async()=>({error:null,data:table==='planning_sessions'?session:null})};return q;});
  m.rpc.mockImplementation(async(name:string,args:Record<string,unknown>)=>({error:null,data:name==='planner_horizon_context'?{...context,coverageComplete:true}:name==='check_ai_chat_rate_limit'?[{allowed:true,minute_remaining:9,day_remaining:99}]:{status:'complete',proposal:{body:args.p_body}}}));
- m.generate.mockResolvedValue({output:{...output(),events:[{...output().events[0],date:'2030-01-01',endTime:'12:15',category:'travel'}]}});
+ m.generate.mockResolvedValue({output:datedOutput({...output(),events:[{...output().events[0],date:'2030-01-01',endTime:'12:15',category:'travel'}]},horizon)});
  const response=await POST(request({date:undefined,timezone:undefined,commitments:undefined,needs:undefined,goals:undefined,travelMinutes:undefined,sessionId:eventId,sessionVersion:owner}));
  expect(response.status).toBe(200);const body=(await response.json()).proposal.body;expect(body.planningSession).toEqual({id:eventId,version:owner});expect(filters).toContainEqual(['user_id',owner]);
  expect(body.events).toHaveLength(travelMinutes===null?0:1);expect(body.questions).toHaveLength(travelMinutes===null?1:0);
