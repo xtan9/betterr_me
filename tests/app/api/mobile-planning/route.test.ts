@@ -137,17 +137,39 @@ it('distinguishes provider failure without logging private error messages',async
 it.each([null,{version:eventId,status:'drafted'}])('refuses a foreign or stale saved planning session',async(session)=>{
  m.from.mockImplementation((table:string)=>{const q={select:()=>q,eq:vi.fn(()=>q),maybeSingle:async()=>({error:null,data:table==='planning_sessions'?session:null})};return q;});
  const req=request({date:undefined,timezone:undefined,commitments:undefined,needs:undefined,goals:undefined,travelMinutes:undefined,sessionId:owner,sessionVersion:owner});
- expect((await POST(req)).status).toBe(409);expect(m.generate).not.toHaveBeenCalled();
+ expect((await POST(req)).status).toBe(409);expect(m.generate).not.toHaveBeenCalled();expect(m.from).not.toHaveBeenCalledWith('assistant_messages');
+});
+
+it.each(['history','provider'])('fails closed without exposing source conversation on %s failure',async(failure)=>{
+ const session={version:owner,status:'drafted',conversation_id:eventId,updated_at:'2026-09-21T12:00:00Z',start_date:horizon.startDate,end_date:horizon.endDate,timezone:'UTC',facts:{},readiness:{},assumptions:[],travel_minutes:null};
+ m.from.mockImplementation((table:string)=>{const q={select:()=>q,eq:()=>q,lte:()=>q,order:()=>q,limit:async()=>({error:failure==='history'?{message:'PRIVATE source lookup error'}:null,data:failure==='history'?null:[{role:'user',content:'PRIVATE exact source detail'}]}),maybeSingle:async()=>({error:null,data:table==='planning_sessions'?session:null})};return q;});
+ const rpc=m.rpc.getMockImplementation()!;m.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>name==='planner_horizon_context'?Promise.resolve({data:context,error:null}):rpc(name,args));
+ m.generate.mockRejectedValue(new Error('PRIVATE exact source detail'));
+ const response=await POST(request({date:undefined,timezone:undefined,commitments:undefined,needs:undefined,goals:undefined,travelMinutes:undefined,sessionId:eventId,sessionVersion:owner}));
+ expect(response.status).toBe(failure==='history'?503:502);expect(await response.json()).toEqual({error:'unavailable'});expect(JSON.stringify(m.logError.mock.calls)).not.toContain('PRIVATE');expect(m.rpc.mock.calls.some(call=>call[0]==='planner_schedule_store_proposal')).toBe(false);if(failure==='history')expect(m.generate).not.toHaveBeenCalled();
 });
 it.each([15,null])('uses saved session facts and confirmed travel %s without inventing a duration',async(travelMinutes)=>{
- const session={version:owner,status:'drafted',start_date:horizon.startDate,end_date:horizon.endDate,timezone:'UTC',facts:{workBoundaries:'Family after 15:00'},readiness:{workBoundaries:'known'},assumptions:['Calls remain tasks'],travel_minutes:travelMinutes};
+ const session={version:owner,status:'drafted',conversation_id:eventId,updated_at:'2026-09-21T12:00:00Z',start_date:horizon.startDate,end_date:horizon.endDate,timezone:'UTC',facts:{workBoundaries:'Family after 15:00'},readiness:{workBoundaries:'known'},assumptions:['Calls remain tasks'],travel_minutes:travelMinutes};
  const filters:unknown[][]=[];
- m.from.mockImplementation((table:string)=>{const q={select:()=>q,eq:(...args:unknown[])=>{if(table==='planning_sessions')filters.push(args);return q;},maybeSingle:async()=>({error:null,data:table==='planning_sessions'?session:null})};return q;});
+ m.from.mockImplementation((table:string)=>{const q={select:()=>q,eq:(...args:unknown[])=>{if(table==='planning_sessions')filters.push(args);return q;},lte:()=>q,order:()=>q,limit:async()=>({error:null,data:[]}),maybeSingle:async()=>({error:null,data:table==='planning_sessions'?session:null})};return q;});
  m.rpc.mockImplementation(async(name:string,args:Record<string,unknown>)=>({error:null,data:name==='planner_horizon_context'?{...context,coverageComplete:true}:name==='check_ai_chat_rate_limit'?[{allowed:true,minute_remaining:9,day_remaining:99}]:{status:'complete',proposal:{body:args.p_body}}}));
  m.generate.mockResolvedValue({output:datedOutput({...output(),events:[{...output().events[0],date:'2030-01-01',endTime:'12:15',category:'travel'}]},horizon)});
  const response=await POST(request({date:undefined,timezone:undefined,commitments:undefined,needs:undefined,goals:undefined,travelMinutes:undefined,sessionId:eventId,sessionVersion:owner}));
  expect(response.status).toBe(200);const body=(await response.json()).proposal.body;expect(body.planningSession).toEqual({id:eventId,version:owner});expect(filters).toContainEqual(['user_id',owner]);
  expect(body.events).toHaveLength(travelMinutes===null?0:1);expect(body.questions).toHaveLength(travelMinutes===null?1:0);
  expect(m.generate.mock.calls[0][0].messages[0].content).toContain('Family after 15:00');
+});
+
+it.each([owner,eventId])('carries exact user source details omitted from a summary with owner/version bounds for %s',async(userId)=>{
+ m.getUser.mockResolvedValue({data:{user:{id:userId}},error:null});
+ const session={version:owner,status:'drafted',conversation_id:eventId,updated_at:'2026-09-21T12:00:00Z',start_date:horizon.startDate,end_date:horizon.endDate,timezone:'UTC',facts:{priorities:'Two at-home focus reservations'},readiness:{priorities:'known'},assumptions:[],travel_minutes:null};
+ const history={select:vi.fn(),eq:vi.fn(),lte:vi.fn(),order:vi.fn(),limit:vi.fn().mockResolvedValue({error:null,data:[{role:'user',content:'Correction: both reservations are 11:00–11:30, January 1 and January 8.'},{role:'assistant',content:'Invented 09:00 time must not become a user fact.'},{role:'user',content:'Two private at-home reservations on January 1 and January 8.'}]})};
+ for(const method of [history.select,history.eq,history.lte,history.order])method.mockReturnValue(history);
+ m.from.mockImplementation((table:string)=>{if(table==='assistant_messages')return history;const q={select:()=>q,eq:()=>q,maybeSingle:async()=>({error:null,data:table==='planning_sessions'?session:null})};return q;});
+ const rpc=m.rpc.getMockImplementation()!;m.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>name==='planner_horizon_context'?Promise.resolve({data:context,error:null}):rpc(name,args));
+ m.generate.mockResolvedValue({output:datedOutput({...output(),events:[]},horizon)});
+ const response=await POST(request({date:undefined,timezone:undefined,commitments:undefined,needs:undefined,goals:undefined,travelMinutes:undefined,sessionId:eventId,sessionVersion:owner}));expect(response.status).toBe(200);
+ expect(history.eq).toHaveBeenCalledWith('user_id',userId);expect(history.eq).toHaveBeenCalledWith('conversation_id',eventId);expect(history.lte).toHaveBeenCalledWith('created_at',session.updated_at);expect(history.order).toHaveBeenCalledWith('sequence',{ascending:false});expect(history.limit).toHaveBeenCalledWith(40);
+ const supplied=JSON.stringify(m.generate.mock.calls[0][0].messages);expect(supplied).toContain('11:00–11:30');expect(supplied.indexOf('Two private')).toBeLessThan(supplied.indexOf('Correction:'));expect(supplied).not.toContain('Invented 09:00');expect(JSON.stringify(m.logError.mock.calls)).not.toContain('private');
 });
 
