@@ -2,6 +2,19 @@
 
 Source: mobile `docs/assistant-orchestrator-memory-v1.md`, especially §§6, 7, 13–15 and 17. This verification does not authorize or implement Phase C.
 
+## Current production verification
+
+The dated results below supersede the earlier pending-live statements retained in this investigation history. On production commit `236183a4` (backend #1040), the authenticated mobile web flow produced a complete September 21–October 4 preview after explicit clarification around the account's existing protected 09:00–10:00 occupancy:
+
+- 44 dated reservations: 12 Monday–Saturday gym sessions, 24 separate 15-minute travel legs, three 60-minute priority video sessions, one two-hour outdoor block, and four project-focus blocks. Both Sundays remained gym-free. Video completed before lower-priority work; remaining App/YouTube time was 150/150 minutes.
+- No focused work after the 14:45 pickup boundary, on Fridays, or on weekends. Meals, dog walks, school, sleep and family stayed explicit constraints instead of duplicate calendar entries; the outdoor day's lunch shift was explicitly authorized in the synthetic fixture. Calendar gaps covered all 14 dates and substantial waking time remained unallocated.
+- Admin and cleaning stayed tasks rather than forced calendar blocks. The prose preserved the individual admin queue; the exact task preview grouped some remaining admin into a generic task, a quality limitation rather than evidence of separate actionable records for each call.
+- Reject succeeded; the manual calendar still contained only existing protected events. No production Accept was clicked. Atomic accept, retry and Undo evidence remains the isolated real-database/SQL coverage above, not a production mutation claim.
+- The previously failing no-travel request passed both conversation and exact preview: only two at-home 11:00–11:30 reservations, no travel or task additions, then successful rejection.
+- New conversations reused durable gym/family/decision-friction preferences; a temporary four-day gym exception applied during its period, and a later horizon restored the durable six-day baseline. A later horizon did not apply the expired synthetic vacation state. Temporary test exceptions were subsequently withdrawn explicitly.
+
+These are real production-model browser observations; they do not claim the opt-in CLI suite or a physical-device run passed. Initial discovery repeated an already supplied sleep question. A subsequent conflicting revision exposed a deterministic response bug: implicit continuation of a drafted plan swallowed the newly uncertain constraint's clarification and emitted a generic fallback draft. The follow-up now reopens discovery when an explicitly updated fact retracts known readiness; explicit skip still produces assumptions. Regression cases cover supplied/fallback questions and skip, and an opt-in live case covers conflict clarification without re-asking confirmed sleep. Production re-verification of this follow-up is still required before final conversational sign-off.
+
 ## Gaps fixed
 
 - A task reservation could reach preview even when its known estimate exceeded the block (or its estimate was unknown), then fail only at accept. Multi-day preview now rejects it using the exact proposed task estimate, including new/edited tasks. The existing atomic accept validator remains unchanged.
