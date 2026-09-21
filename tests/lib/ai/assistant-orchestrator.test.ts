@@ -29,6 +29,16 @@ const output={intent:'planning',message:'Family time after pickup stays protecte
   {dimension:'priorities',state:'known',detail:'Handle admin early without blocking every call. Finish three hours of video work; split remaining focus equally between app and YouTube.'},
  ],questions:[],assumptions:[],draft:null,skipDiscovery:false}};
 describe('planning discovery and draft contract',()=>{
+ it.each([{questions:[]},{questions:[{dimension:'workBoundaries',question:'The requested times overlap protected commitments. Which different times should I use?'}]}])('surfaces a newly conflicting confirmed fact instead of silently continuing a draft ($questions)',({questions})=>{
+  const prior:PlanningState={status:'drafted',horizon:{startDate:'2026-09-21',endDate:'2026-10-04',timezone:context.timezone},readiness:{horizon:'known',workBoundaries:'known'},facts:{workBoundaries:'At-home focus September 21 and 28, 11:00–11:30.'},assumptions:['Keep weekends mostly open.']};
+  const candidate={...output,message:'The requested 09:00–09:30 times conflict with protected commitments. Nothing has changed.',planning:{...output.planning,facts:[{dimension:'workBoundaries',state:'partial',detail:'Requested 09:00–09:30 conflicts with protected 09:00–10:00.'}],questions,draft:null,assumptions:null}};
+  const turn=buildAssistantTurn(candidate,context,prior,'Move both sessions to 09:00. Preserve protected events and ask about conflicts.','en');
+  expect(turn.planning?.status).toBe('discovering');expect(turn.message).toContain('conflict with protected commitments');expect(turn.message).toContain('?');expect(turn.message).not.toContain('Start with one important');expect(turn.capture.items).toEqual([]);
+  const skipped=buildAssistantTurn(candidate,context,prior,'Skip. Plan now.','en');
+  expect(skipped.planning?.status).toBe('drafted');expect(skipped.message).toContain('Focused work hours: not confirmed; keep this flexible.');expect(skipped.capture.items).toEqual([]);
+  expect(turn.planning?.assumptions).toEqual(prior.assumptions);expect(skipped.planning?.assumptions).toContain(prior.assumptions[0]);
+  const cleared=buildAssistantTurn({...candidate,planning:{...candidate.planning,assumptions:[]}},context,prior,'Remove the previous assumption and clarify the conflict.','en');expect(cleared.planning?.assumptions).toEqual([]);
+ });
  it('clears old travel for a no-travel draft but never normalizes a zero duration',()=>{
   const prior=buildAssistantTurn({...output,planning:{...output.planning,travelMinutes:15}},context,null,'A trip takes 15 minutes.','en').planning;
   const candidate={...output,planning:{...output.planning,travelMinutes:null,draft:'Two focus blocks at home; no travel reservations.',skipDiscovery:true}};

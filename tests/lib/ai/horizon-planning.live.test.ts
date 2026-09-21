@@ -7,13 +7,22 @@ import {llmProvider,structuredOutputProviderOptions} from '@/lib/ai/provider';
 import {DEFAULT_MODEL_ID} from '@/lib/ai/models';
 import {safeAiFailure} from '@/lib/ai/safe-failure';
 import {goldenContext,goldenInput} from '../../fixtures/assistant/phase-b-golden';
-import {assistantInstructions,assistantOutput,buildAssistantTurn,selectMemories,type Memory} from '@/lib/ai/assistant-orchestrator';
+import {assistantInstructions,assistantOutput,buildAssistantTurn,selectMemories,type Memory,type PlanningState} from '@/lib/ai/assistant-orchestrator';
 
 function requireCredentials(){
  if(!process.env.LLM_API_KEY||/redacted|sensitive/i.test(process.env.LLM_API_KEY))throw new Error('Usable AI credentials are required for this opt-in evaluation');
 }
 
 describe.skipIf(process.env.PHASE_B_LIVE!=='1')('live Phase B planning quality',()=>{
+ it('asks about a conflicting revision without re-asking already confirmed sleep times',async()=>{
+  requireCredentials();const context={timezone:'America/Los_Angeles',tasks:[],projects:[]};
+  const previous:PlanningState={status:'drafted',horizon:{startDate:'2026-09-21',endDate:'2026-10-04',timezone:context.timezone},readiness:{horizon:'known',sleep:'known',workBoundaries:'known',fixedCommitments:'known'},facts:{sleep:'Sleep 22:00–06:00; keep the existing 06:30 reminder unchanged.',workBoundaries:'At-home App focus September 21 and 28, 11:00–11:30.',fixedCommitments:'Protected 09:00–10:00 commitments each day.'},assumptions:[],travelMinutes:null};
+  const prompt='Revise both App focus reservations to exactly 09:00–09:30. Do not move protected 09:00–10:00 commitments or silently choose other times. If they conflict, ask me to resolve it and propose no changes. Sleep stays 22:00–06:00; the 06:30 reminder stays unchanged. Preview only.';let output;
+  try{output=(await generateText({model:llmProvider(DEFAULT_MODEL_ID),output:Output.object({schema:assistantOutput}),providerOptions:structuredOutputProviderOptions,maxOutputTokens:6144,abortSignal:AbortSignal.timeout(55000),system:`${assistantInstructions}\nOwner context:${JSON.stringify({capture:context,planning:previous,memories:[]})}`,messages:[{role:'user',content:prompt}]})).output;}
+  catch(error){throw new Error(`Synthetic revision evaluation failed: ${JSON.stringify(safeAiFailure(error))}; output withheld`);}
+  const turn=buildAssistantTurn(output,context,previous,prompt,'en');
+  expect(turn.planning?.status).toBe('discovering');expect(turn.planning?.readiness.sleep).toBe('known');expect(turn.message).toMatch(/conflict|overlap/i);expect(turn.message).toContain('?');expect(turn.message).not.toMatch(/what.*(?:sleep|wake)|start with one important/i);expect(turn.capture.items).toEqual([]);
+ },60000);
  it('asks before moving a requested fixed anchor that conflicts with protected occupancy',async()=>{
   requireCredentials();const context={...goldenContext,events:[{id:'61500000-0000-0000-0000-000000000009',title:'Protected commitment',start_date:'2026-09-21',end_date:'2026-09-21',start_time:'09:00',end_time:'10:00',timezone:goldenContext.timezone,is_recurring:false,is_protected:true}]};let output;
   try{output=(await generateText({model:llmProvider(DEFAULT_MODEL_ID),output:Output.object({schema:horizonGenerationOutput(goldenInput.horizon)}),providerOptions:structuredOutputProviderOptions,maxOutputTokens:4096,abortSignal:AbortSignal.timeout(55000),system:horizonPlanningInstructions(goldenInput,context,{tasks:[],events:context.events,priorities:[]}),messages:[{role:'user',content:JSON.stringify(goldenInput)}]})).output;}
