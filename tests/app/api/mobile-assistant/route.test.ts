@@ -195,6 +195,21 @@ it.each([false,true])('retries an oversized planning draft once without publishi
  expect(provider).toHaveBeenCalledTimes(3);expect(provider.mock.calls[1][0].system).toContain('under 2400 characters');
  expect(mocks.rpc.mock.calls.filter(call=>call[0]==='assistant_finish_turn')).toHaveLength(1);
 });
+it('reselects memory against newly discovered future dates even when the calendar is empty',async()=>{
+ const now=Date.now(),iso=(days:number)=>new Date(now+days*86400000).toISOString(),horizon={startDate:iso(14).slice(0,10),endDate:iso(27).slice(0,10),timezone:'UTC'};
+ const baseline={id:owner,key:'gym',kind:'routine',content:'Durable six-day gym baseline',confidence:1,temporality:'durable',updated_at:iso(-2),effective_until:null};
+ const from=mocks.from.getMockImplementation()!;
+ mocks.from.mockImplementation((table:string)=>{
+  if(table!=='user_memories')return from(table);
+  const query={select:()=>query,eq:()=>query,or:()=>query,order:()=>query,limit:async()=>({error:null,data:[baseline,{...baseline,id:'61500000-0000-0000-0000-000000000003',content:'Temporary four-day gym exception',temporality:'temporary',effective_until:iso(7)}]})};return query;
+ });
+ const rpc=mocks.rpc.getMockImplementation()!;
+ mocks.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>name==='planner_schedule_context'?Promise.resolve({data:{coverageComplete:true,events:[]},error:null}):rpc(name,args));
+ mocks.generate.mockResolvedValue({output:{intent:'planning',message:'Draft.',actions:[],memoryUpdates:[],nextActionWindow:null,planning:{horizon,facts:[],questions:[],assumptions:[],draft:'Use the preferences effective during these dates.',skipDiscovery:true}}});
+ expect((await POST(request())).status).toBe(200);expect(mocks.generate).toHaveBeenCalledTimes(2);
+ expect(mocks.generate.mock.calls[0][0].system).toContain('Temporary four-day gym exception');expect(mocks.generate.mock.calls[0][0].system).not.toContain('Durable six-day gym baseline');
+ expect(mocks.generate.mock.calls[1][0].system).toContain('Durable six-day gym baseline');expect(mocks.generate.mock.calls[1][0].system).not.toContain('Temporary four-day gym exception');
+});
 
 it.each([false,true])('does not regenerate planning when the checked calendar has no events (stream=%s)',async(stream)=>{
  const original=mocks.rpc.getMockImplementation()!;

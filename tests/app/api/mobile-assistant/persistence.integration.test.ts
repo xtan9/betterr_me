@@ -10,6 +10,7 @@ vi.mock('@/lib/auth/native-request',()=>({authenticateNativeRequest:mocks.auth})
 vi.mock('ai',()=>({generateText:mocks.generate,streamText:vi.fn(),Output:{object:vi.fn()}}));
 import {POST} from '@/app/api/mobile/assistant/route';
 import {GET} from '@/app/api/mobile/assistant/history/route';
+import {POST as plan} from '@/app/api/mobile/planning/route';
 const owner='61600000-0000-0000-0000-000000000001',other='61600000-0000-0000-0000-000000000002';
 const root=process.env.ASSISTANT_TEST_REST_URL;
 describe.skipIf(!root)('Phase A route + real PostgreSQL persistence (provider and token verifier stubbed)',()=>{
@@ -66,5 +67,43 @@ describe.skipIf(!root)('Phase A route + real PostgreSQL persistence (provider an
   for(const table of ['assistant_conversations','assistant_messages','user_memories','planning_sessions']){const rows=await otherClient.from(table).select('*');expect(rows.error).toBeNull();expect(rows.data).toEqual([]);}
   mocks.auth.mockResolvedValue({userId:other,client:otherClient});
   expect((await GET(new Request(`http://localhost/api/mobile/assistant/history?conversationId=${first.conversationId}`))).status).toBe(404);
+ });
+ it('runs a two-week session through exact preview, atomic accept, retry, Undo and owner isolation',async()=>{
+  mocks.auth.mockResolvedValue({userId:owner,client});
+  const horizon={startDate:'2030-01-07',endDate:'2030-01-20',timezone:'UTC'};
+  const reply={intent:'planning',message:'Keep family time protected.',actions:[],nextActionWindow:null,memoryUpdates:[],planning:{horizon,facts:[{dimension:'horizon',state:'known',detail:null},{dimension:'workBoundaries',state:'known',detail:'Focused work only Monday–Thursday before pickup at15:00. Weekends family first.'}],questions:[],assumptions:['Unspecified meal and cooking times stay flexible.'],draft:'Gym Monday–Saturday, Sunday rest. Video first, then outdoor work. Calls remain tasks.',skipDiscovery:true,travelMinutes:15}};
+  mocks.generate.mockResolvedValue({output:reply});
+  const response=await POST(new Request('http://localhost/api/mobile/assistant',{method:'POST',body:JSON.stringify({requestId:randomUUID(),consent:true,locale:'en',messages:[{role:'user',content:'Plan January7–20,2030. Sleep22–06; pickup15:00 Mon–Thu; gymMon–Sat09–10; Sundayrest. Video3hours first, outdoor2hours once; calls stay tasks. Plan now.'}]})}));
+  expect(response.status).toBe(200);const conversation=await response.json();expect(conversation.planning.horizon).toEqual(horizon);
+  const events=Array.from({length:14},(_,offset)=>{const date=new Date(Date.UTC(2030,0,7+offset)).toISOString().slice(0,10);return {date,kind:'event-create',targetId:null,title:'Gym',startTime:'09:00',endTime:'10:00',taskId:null,taskItemIndex:null,protected:false,category:'other'};}).filter(event=>new Date(event.date).getUTCDay()!==0);
+  mocks.generate.mockResolvedValue({output:{message:'Start with the pediatrician call. Gym on Mon–Sat; Sunday family rest.',questions:[],assumptions:['Cleaning remains flexible.'],capture:{message:'Calls stay actionable',actions:[{kind:'task-create',title:'Call pediatrician',estimateMinutes:10,dueDate:null,projectId:null,projectKey:null}]},events,priorityTaskIds:null}});
+  const requestId=randomUUID(),request={requestId,consent:true,locale:'en',sessionId:conversation.planning.sessionId,sessionVersion:conversation.planning.version};
+  const preview=await plan(new Request('http://localhost/api/mobile/planning',{method:'POST',body:JSON.stringify(request)}));expect(preview.status).toBe(200);
+  const proposal=(await preview.json()).proposal;expect(proposal.body.events).toHaveLength(12);
+  for(const table of ['tasks','calendar_events'])expect((await client.from(table).select('id')).data).toEqual([]);
+  expect((await otherClient.from('planner_ai_proposals').select('id').eq('id',proposal.id)).data).toEqual([]);
+  const command={operation:'accept',operationId:randomUUID(),proposalId:proposal.id,expectedVersion:proposal.version};
+  expect((await otherClient.rpc('planner_schedule_command',{p_request:command})).data.status).toBe('not-found');
+  const accepted=await client.rpc('planner_schedule_command',{p_request:command});expect(accepted.error).toBeNull();expect(accepted.data.status).toBe('complete');
+  expect((await client.rpc('planner_schedule_command',{p_request:command})).data).toEqual({...accepted.data,status:'already-applied'});
+  const persisted=(await client.from('calendar_events').select('title,start_date,start_time,end_time,is_recurring')).data!;
+  expect(persisted).toHaveLength(12);expect(persisted.every(event=>!event.is_recurring)).toBe(true);
+  for(const event of proposal.body.events)expect(persisted).toContainEqual({title:event.changes.title,start_date:event.changes.start_date,start_time:event.changes.start_time+':00',end_time:event.changes.end_time+':00',is_recurring:false});
+  const undo={operation:'undo',operationId:randomUUID(),changeId:accepted.data.changeId,expectedVersion:accepted.data.changeVersion};
+  const restored=(await client.rpc('planner_schedule_command',{p_request:undo})).data;expect(restored.status).toBe('complete');expect(restored.planning.version).not.toBe(request.sessionVersion);
+  expect((await client.rpc('planner_schedule_command',{p_request:undo})).data.status).toBe('already-applied');
+  for(const table of ['tasks','calendar_events'])expect((await client.from(table).select('id')).data).toEqual([]);
+  expect((await otherClient.from('planning_sessions').select('id')).data).toEqual([]);
+  const generated=mocks.generate.getMockImplementation()!;
+  const raceStatuses:string[]=[];
+  mocks.generate.mockImplementationOnce(async()=>{
+   const turnId=randomUUID();
+   raceStatuses.push((await client.rpc('assistant_begin_turn',{p_id:turnId,p_conversation_id:conversation.conversationId,p_new:false,p_fingerprint:'e'.repeat(64),p_messages:[{role:'user',content:'Change my work boundary while the preview is generating.'}]})).data?.status??'begin-error');
+   const changed=await client.rpc('assistant_finish_turn',{p_id:turnId,p_fingerprint:'e'.repeat(64),p_output:{message:'Revised draft.',intent:'planning',planning:{status:'drafted',horizon,readiness:{horizon:'known'},facts:{workBoundaries:'No focused work after14:00'},assumptions:[],travelMinutes:15},missing:[],ui:{quickReplies:[]},capture:{message:'Revised draft.',items:[]},memoryUpdates:[]}});
+   raceStatuses.push(changed.data?.status??'finish-error');return generated();
+  });
+  const raced=await plan(new Request('http://localhost/api/mobile/planning',{method:'POST',body:JSON.stringify({...request,requestId:randomUUID(),sessionVersion:restored.planning.version})}));
+  expect(raceStatuses).toEqual(['prepared','complete']);expect(raced.status).toBe(409);expect(await raced.json()).toEqual({error:'conflict'});
+  expect((await client.from('calendar_events').select('id')).data).toEqual([]);
  });
 });
