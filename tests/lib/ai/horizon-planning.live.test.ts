@@ -2,7 +2,7 @@
 // Opt-in synthetic evaluation of the production prompt/schema/validator. No DB writes.
 import {generateText,Output} from 'ai';
 import {describe,it,expect} from 'vitest';
-import {horizonPlanningInstructions,horizonPlanningOutput,buildHorizonPreview} from '@/lib/ai/horizon-planning';
+import {horizonPlanningInstructions,horizonGenerationOutput,flattenHorizonOutput,buildHorizonPreview} from '@/lib/ai/horizon-planning';
 import {llmProvider,structuredOutputProviderOptions} from '@/lib/ai/provider';
 import {DEFAULT_MODEL_ID} from '@/lib/ai/models';
 import {safeAiFailure} from '@/lib/ai/safe-failure';
@@ -17,9 +17,9 @@ describe.skipIf(process.env.PHASE_B_LIVE!=='1')('live Phase B planning quality',
  it('produces a coherent golden two-week preview with family boundaries, open space and actionable admin tasks',async()=>{
   requireCredentials();
   let output;
-  try{output=(await generateText({model:llmProvider(DEFAULT_MODEL_ID),output:Output.object({schema:horizonPlanningOutput}),providerOptions:structuredOutputProviderOptions,maxOutputTokens:16000,abortSignal:AbortSignal.timeout(115000),system:horizonPlanningInstructions(goldenInput,goldenContext,{tasks:[],events:[],priorities:[]}),messages:[{role:'user',content:JSON.stringify(goldenInput)}]})).output;}
+  try{output=(await generateText({model:llmProvider(DEFAULT_MODEL_ID),output:Output.object({schema:horizonGenerationOutput(goldenInput.horizon)}),providerOptions:structuredOutputProviderOptions,maxOutputTokens:16000,abortSignal:AbortSignal.timeout(115000),system:horizonPlanningInstructions(goldenInput,goldenContext,{tasks:[],events:[],priorities:[]}),messages:[{role:'user',content:JSON.stringify(goldenInput)}]})).output;}
   catch(error){throw new Error(`Synthetic model evaluation failed: ${JSON.stringify(safeAiFailure(error))}; output withheld`);}
-  const plan=buildHorizonPreview(output,goldenInput,goldenContext);
+  const plan=buildHorizonPreview(flattenHorizonOutput(output,goldenInput.horizon),goldenInput,goldenContext);
   expect(plan.questions).toEqual([]);expect(plan.events.length).toBeGreaterThan(14);
   const events=plan.events.map(event=>event.changes);
   const gym=events.filter(event=>/gym/i.test(String(event.title)));
@@ -61,9 +61,9 @@ describe.skipIf(process.env.PHASE_B_LIVE!=='1')('live Phase B planning quality',
  it('keeps unknown exact times flexible and surfaces assumptions instead of inventing reservations',async()=>{
   requireCredentials();const input={...goldenInput,commitments:'Exact sleep, pickup, gym and work times are unknown.',needs:'Calls stay tasks. Family after pickup. Weekends family first.',goals:'Skip further discovery; provide a provisional draft with assumptions. Do not invent fixed times.',travelMinutes:null};
   let output;
-  try{output=(await generateText({model:llmProvider(DEFAULT_MODEL_ID),output:Output.object({schema:horizonPlanningOutput}),providerOptions:structuredOutputProviderOptions,maxOutputTokens:4096,abortSignal:AbortSignal.timeout(55000),system:horizonPlanningInstructions(input,goldenContext,{tasks:[],events:[]}),messages:[{role:'user',content:JSON.stringify(input)}]})).output;}
+  try{output=(await generateText({model:llmProvider(DEFAULT_MODEL_ID),output:Output.object({schema:horizonGenerationOutput(goldenInput.horizon)}),providerOptions:structuredOutputProviderOptions,maxOutputTokens:4096,abortSignal:AbortSignal.timeout(55000),system:horizonPlanningInstructions(input,goldenContext,{tasks:[],events:[]}),messages:[{role:'user',content:JSON.stringify(input)}]})).output;}
   catch(error){throw new Error(`Synthetic evaluation failed: ${JSON.stringify(safeAiFailure(error))}; output withheld`);}
-  const result=buildHorizonPreview(output,input,goldenContext);expect(result.events).toEqual([]);expect(result.questions.length).toBeLessThanOrEqual(3);expect(result.assumptions.length).toBeGreaterThan(0);expect(result.message).toMatch(/draft|flexible|unknown|confirm/i);
+  const result=buildHorizonPreview(flattenHorizonOutput(output,input.horizon),input,goldenContext);expect(result.events).toEqual([]);expect(result.questions.length).toBeLessThanOrEqual(3);expect(result.assumptions.length).toBeGreaterThan(0);expect(result.message).toMatch(/draft|flexible|unknown|confirm/i);
  },60000);
  it('reuses confirmed durable preferences and the current temporary gym correction in a new conversation',async()=>{
   requireCredentials();const now=new Date('2026-09-21T12:00:00Z');

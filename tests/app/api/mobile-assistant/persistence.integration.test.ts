@@ -1,4 +1,5 @@
 // @vitest-environment node
+import {datedOutput} from '../../../fixtures/assistant/dated-output';
 // Opt-in: a disposable PostgREST database, migrated and seeded as documented in the verification report.
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
@@ -76,7 +77,7 @@ describe.skipIf(!root)('Phase A route + real PostgreSQL persistence (provider an
   const response=await POST(new Request('http://localhost/api/mobile/assistant',{method:'POST',body:JSON.stringify({requestId:randomUUID(),consent:true,locale:'en',messages:[{role:'user',content:'Plan January7–20,2030. Sleep22–06; pickup15:00 Mon–Thu; gymMon–Sat09–10; Sundayrest. Video3hours first, outdoor2hours once; calls stay tasks. Plan now.'}]})}));
   expect(response.status).toBe(200);const conversation=await response.json();expect(conversation.planning.horizon).toEqual(horizon);
   const events=Array.from({length:14},(_,offset)=>{const date=new Date(Date.UTC(2030,0,7+offset)).toISOString().slice(0,10);return {date,kind:'event-create',targetId:null,title:'Gym',startTime:'09:00',endTime:'10:00',taskId:null,taskItemIndex:null,protected:false,category:'other'};}).filter(event=>new Date(event.date).getUTCDay()!==0);
-  mocks.generate.mockResolvedValue({output:{message:'Start with the pediatrician call. Gym on Mon–Sat; Sunday family rest.',questions:[],assumptions:['Cleaning remains flexible.'],capture:{message:'Calls stay actionable',actions:[{kind:'task-create',title:'Call pediatrician',estimateMinutes:10,dueDate:null,projectId:null,projectKey:null}]},events,priorityTaskIds:null}});
+  mocks.generate.mockResolvedValue({output:datedOutput({message:'Start with the pediatrician call. Gym on Mon–Sat; Sunday family rest.',questions:[],assumptions:['Cleaning remains flexible.'],capture:{message:'Calls stay actionable',actions:[{kind:'task-create',title:'Call pediatrician',estimateMinutes:10,dueDate:null,projectId:null,projectKey:null}]},events,priorityTaskIds:null},horizon)});
   const requestId=randomUUID(),request={requestId,consent:true,locale:'en',sessionId:conversation.planning.sessionId,sessionVersion:conversation.planning.version};
   const preview=await plan(new Request('http://localhost/api/mobile/planning',{method:'POST',body:JSON.stringify(request)}));expect(preview.status).toBe(200);
   const proposal=(await preview.json()).proposal;expect(proposal.body.events).toHaveLength(12);
