@@ -35,7 +35,7 @@ describe('planning discovery and draft contract',()=>{
   const turn=buildAssistantTurn(candidate,context,prior,'Move both sessions to 09:00. Preserve protected events and ask about conflicts.','en');
   expect(turn.planning?.status).toBe('discovering');expect(turn.message).toContain('conflict with protected commitments');expect(turn.message).toContain('?');expect(turn.message).not.toContain('Start with one important');expect(turn.capture.items).toEqual([]);
   const skipped=buildAssistantTurn(candidate,context,prior,'Skip. Plan now.','en');
-  expect(skipped.planning?.status).toBe('drafted');expect(skipped.message).toContain('Focused work hours: not confirmed; keep this flexible.');expect(skipped.capture.items).toEqual([]);
+  expect(skipped.planning?.status).toBe('drafted');expect(skipped.message).toContain('Focused work hours');expect(skipped.planning?.assumptions).toContain('Focused work hours: not confirmed; keep this flexible.');expect(skipped.capture.items).toEqual([]);
   expect(turn.planning?.assumptions).toEqual(prior.assumptions);expect(skipped.planning?.assumptions).toContain(prior.assumptions[0]);
   const cleared=buildAssistantTurn({...candidate,planning:{...candidate.planning,assumptions:[]}},context,prior,'Remove the previous assumption and clarify the conflict.','en');expect(cleared.planning?.assumptions).toEqual([]);
  });
@@ -108,8 +108,8 @@ describe('planning discovery and draft contract',()=>{
   const draft=buildAssistantTurn({...output,planning:{...output.planning,draft:'A flexible draft.'}},context,null,'Skip. Plan now.','en');
   const revised=buildAssistantTurn({...output,planning:{...output.planning,facts:[],horizon:{startDate:'2026-09-21',endDate:'2026-10-04',timezone:context.timezone},draft:'Use the confirmed two weeks.'}},context,draft.planning,'Use September 21 through October 4.','en');
   expect(revised.planning?.status).toBe('drafted');
-  expect(revised.message).not.toContain('Dates: not confirmed');
-  expect(revised.message).toContain('Sleep and wake times: not confirmed');
+  expect(revised.message).not.toContain('Dates');
+  expect(revised.message).toContain('Sleep and wake times');expect(revised.planning?.assumptions).toContain('Sleep and wake times: not confirmed; keep this flexible.');
  });
  it('reopens date discovery when dates are withdrawn from a complete draft',()=>{
   const draft=buildAssistantTurn({...output,planning:{...output.planning,horizon:{startDate:'2026-09-21',endDate:'2026-10-04',timezone:context.timezone},facts:output.planning.facts.map(fact=>({...fact,state:'known',detail:'Confirmed'})),draft:'A dated plan.'}},context,null,'Make the plan.','en');
@@ -198,4 +198,13 @@ describe('planning discovery and draft contract',()=>{
   const current={...memories[0],id:'current',key:'time-off',kind:'current_state',content:'Off work for two weeks',temporality:'temporary' as const,effective_until:'2026-10-01T00:00:00Z'};
   expect(selectMemories([...memories,current],null,new Date('2026-09-19')).map(memory=>memory.id)).toContain('current');
  });
+});
+
+it.each(['zh','en'] as const)('summarizes automatic unknowns without repeating a paragraph per dimension (%s)',locale=>{
+ const turn=buildAssistantTurn({...output,planning:{...output.planning,facts:[],skipDiscovery:true,draft:locale==='zh'?'先休息，再处理一件小事。':'Rest first, then one small task.',assumptions:['Keep family time protected.']}},context,null,'Skip. Plan now.',locale);
+ expect(turn.planning?.assumptions).toHaveLength(10);
+ expect(turn.message).toContain('Keep family time protected.');
+ const repeated=locale==='zh'?'尚未确认':'not confirmed';
+ expect(turn.message.split(repeated)).toHaveLength(2);
+ for(const label of locale==='zh'?['日期','睡眠和起床时间','接送和照顾家人的时间','固定安排','专注工作时间','用餐时间','运动时间','截止日期','优先事项']:['Dates','Sleep and wake times','Pickup and caregiving times','Fixed commitments','Focused work hours','Meal times','Exercise times','Deadlines','Priorities'])expect(turn.message).toContain(label);
 });

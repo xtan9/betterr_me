@@ -136,7 +136,15 @@ export function buildAssistantTurn(value:unknown,context:CaptureContext,previous
     locale==='zh'?'先完成一件最重要且可执行的事，然后再选择下一件。通话和行政事项先作为任务，不自动占用日历。':'Start with one important, actionable task, then choose the next. Keep calls and admin work as tasks, without automatically reserving calendar time.',
     ...Object.entries(facts).filter(([key])=>readiness[key]==='known').map(([,detail])=>`- ${detail}`),
    ].join('\n');
-   message=[locale==='zh'?'草稿 — 尚未更改任务或日历。':'Draft — no tasks or calendar entries have been changed.',draft,...planning.assumptions.map(a=>`${locale==='zh'?'假设':'Assumption'}: ${a}`)].join('\n\n');
+   // Keep every unknown in structured planning state; group only generated boilerplate in prose.
+   const unknowns=planning.assumptions.filter(value=>automatic.has(value));
+   const visibleAssumptions=planning.assumptions.filter(value=>!automatic.has(value));
+   if(unknowns.length===1)visibleAssumptions.push(unknowns[0]);
+   else if(unknowns.length){
+    const labels=missing.map(key=>assumptionLabels[locale][key]);
+    visibleAssumptions.push(locale==='zh'?`${labels.join('、')}尚未确认，暂不固定安排。`:`${labels.join(', ')}: not confirmed; keep these flexible.`);
+   }
+   message=[locale==='zh'?'草稿 — 尚未更改任务或日历。':'Draft — no tasks or calendar entries have been changed.',draft,...visibleAssumptions.map(a=>`${locale==='zh'?'假设':'Assumption'}: ${a}`)].join('\n\n');
    planning.status='drafted';
   }
  }
