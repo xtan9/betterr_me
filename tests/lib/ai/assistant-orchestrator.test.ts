@@ -135,15 +135,25 @@ describe('planning discovery and draft contract',()=>{
   expect(next.message).toContain('Which dates');
   expect(next.capture.items).toEqual([]);
  });
- it('asks only dates, sleep and pickup for the golden request, without creating schedule changes',()=>{
+ it('asks one material question while retaining remaining gaps, without creating schedule changes',()=>{
   const turn=buildAssistantTurn(output,context,null,golden,'en');
   expect(turn.planning?.status).toBe('discovering');
   expect(turn.missing).toEqual(['horizon','sleep','caregiving']);
-  expect(turn.message).toContain('Which dates');expect(turn.message).toContain('sleep and wake');expect(turn.message).toContain('pickup');
-  expect(turn.message.match(/\?/g)).toHaveLength(3);
+  expect(turn.message).toContain('Which dates');expect(turn.message).not.toContain('sleep and wake');
+  expect(turn.message.match(/\?/g)).toHaveLength(1);
   expect(turn.message).toContain('Calls can remain tasks');expect(turn.message).toContain('Family time');
   expect(turn.message).not.toMatch(/capture step|subsystem|unsupported schedule optimization|endpoint limitation/);
   expect(turn.capture.items).toEqual([]);expect(turn.ui.quickReplies[0].value).toBe('Skip. Plan now.');
+ });
+ it.each(['en','zh'] as const)('asks for unknown availability with conversational duration choices (%s)',locale=>{
+  const candidate={...output,intent:'next_action',planning:null,message:'Choose a time.'};
+  const turn=buildAssistantTurn(candidate,context,null,'What should I do next?',locale);
+  expect(turn.nextActionWindow).toBeNull();expect(turn.capture.items).toEqual([]);
+  expect(turn.ui.quickReplies.map(reply=>reply.id)).toEqual(['available-15','available-30','available-60']);
+  expect(turn.ui.quickReplies[0].value).toBe(locale==='zh'?'我现在有 15 分钟空闲，请建议接下来做什么。':'I have 15 minutes free now. What should I do next?');
+  const window={start:'2026-09-21T12:00:00Z',end:'2026-09-21T12:15:00Z',available:true};
+  const ready=buildAssistantTurn({...candidate,nextActionWindow:window},context,null,turn.ui.quickReplies[0].value,locale);
+  expect(ready.nextActionWindow).toEqual(window);expect(ready.ui.quickReplies).toEqual([]);
  });
  it('skips discovery with explicit unknowns and keeps the plan a prose draft',()=>{
   const first=buildAssistantTurn(output,context,null,golden,'en');
