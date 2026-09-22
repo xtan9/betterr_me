@@ -36,7 +36,7 @@ it.each([false,true])('routes the golden prompt through planning readiness and l
  const response=await POST(input);
  expect(response.status).toBe(200);const body=stream?(await response.text()).trim().split('\n').map(line=>JSON.parse(line)).at(-1):await response.json();
  expect(body.intent).toBe('planning');expect(body.planning.missing).toEqual(['horizon','sleep','caregiving']);
- expect(body.message.match(/\?/g)).toHaveLength(3);expect(body.proposal.body.items).toEqual([]);
+ expect(body.message.match(/\?/g)).toHaveLength(1);expect(body.proposal.body.items).toEqual([]);
  const provider=stream?mocks.stream:mocks.generate;expect(provider).toHaveBeenCalledTimes(2);expect(provider.mock.calls[1][0].system).toContain('School pickup');
  expect(mocks.rpc.mock.calls.map(call=>call[0])).toEqual(['check_ai_chat_rate_limit','assistant_begin_turn','planner_schedule_context','assistant_finish_turn']);
 });
