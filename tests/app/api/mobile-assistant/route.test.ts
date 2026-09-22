@@ -277,7 +277,7 @@ it.each([false,true])('honors Skip. Plan now. with missing readiness and no mode
  mocks.generate.mockResolvedValue({output});mocks.stream.mockImplementation(()=>({partialOutputStream:(async function*(){yield output;})(),output:Promise.resolve(output)}));
  const req=request({messages:[{role:'user',content:'Skip. Plan now.'}]});if(stream)req.headers.set('Accept','application/x-ndjson');
  const response=await POST(req);const body=stream?(await response.text()).trim().split('\n').map(line=>JSON.parse(line)).at(-1):await response.json();
- expect(body.planning.status).toBe('drafted');expect(body.message).not.toContain('?');expect(body.message).toContain('Assumption:');expect(body.proposal.body.items).toEqual([]);
+ expect(body.planning.status).toBe('drafted');expect(body.message).not.toContain('?');expect(body.message).not.toMatch(/Assumption:|not confirmed/);expect(body.message.length).toBeLessThan(250);expect(body.planning.assumptions).toHaveLength(9);expect(body.proposal.body.items).toEqual([]);
 });
 
 it('does not regenerate after publishing any streamed text',async()=>{

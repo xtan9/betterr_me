@@ -35,7 +35,7 @@ describe('planning discovery and draft contract',()=>{
   const turn=buildAssistantTurn(candidate,context,prior,'Move both sessions to 09:00. Preserve protected events and ask about conflicts.','en');
   expect(turn.planning?.status).toBe('discovering');expect(turn.message).toContain('conflict with protected commitments');expect(turn.message).toContain('?');expect(turn.message).not.toContain('Start with one important');expect(turn.capture.items).toEqual([]);
   const skipped=buildAssistantTurn(candidate,context,prior,'Skip. Plan now.','en');
-  expect(skipped.planning?.status).toBe('drafted');expect(skipped.message).toContain('Focused work hours');expect(skipped.planning?.assumptions).toContain('Focused work hours: not confirmed; keep this flexible.');expect(skipped.capture.items).toEqual([]);
+  expect(skipped.planning?.status).toBe('drafted');expect(skipped.message).not.toContain('Assumption:');expect(skipped.planning?.assumptions).toContain('Focused work hours: not confirmed; keep this flexible.');expect(skipped.capture.items).toEqual([]);
   expect(turn.planning?.assumptions).toEqual(prior.assumptions);expect(skipped.planning?.assumptions).toContain(prior.assumptions[0]);
   const cleared=buildAssistantTurn({...candidate,planning:{...candidate.planning,assumptions:[]}},context,prior,'Remove the previous assumption and clarify the conflict.','en');expect(cleared.planning?.assumptions).toEqual([]);
  });
@@ -60,7 +60,7 @@ describe('planning discovery and draft contract',()=>{
  it('still drafts on explicit skip when the model omits a draft',()=>{
   const turn=buildAssistantTurn(output,context,null,'Skip. Plan now.','en');
   expect(turn.planning?.status).toBe('drafted');expect(turn.message).not.toContain('?');
-  expect(turn.message).toContain('Gym Monday–Saturday');expect(turn.message).toContain('not confirmed');
+  expect(turn.planning?.facts.exercise).toContain('Gym Monday–Saturday');expect(turn.message).not.toContain('not confirmed');
   expect(turn.capture.items).toEqual([]);
  });
  it('asks only material questions for a narrow plan',()=>{
@@ -109,7 +109,7 @@ describe('planning discovery and draft contract',()=>{
   const revised=buildAssistantTurn({...output,planning:{...output.planning,facts:[],horizon:{startDate:'2026-09-21',endDate:'2026-10-04',timezone:context.timezone},draft:'Use the confirmed two weeks.'}},context,draft.planning,'Use September 21 through October 4.','en');
   expect(revised.planning?.status).toBe('drafted');
   expect(revised.message).not.toContain('Dates');
-  expect(revised.message).toContain('Sleep and wake times');expect(revised.planning?.assumptions).toContain('Sleep and wake times: not confirmed; keep this flexible.');
+  expect(revised.message).not.toContain('Sleep and wake times');expect(revised.planning?.assumptions).toContain('Sleep and wake times: not confirmed; keep this flexible.');
  });
  it('reopens date discovery when dates are withdrawn from a complete draft',()=>{
   const draft=buildAssistantTurn({...output,planning:{...output.planning,horizon:{startDate:'2026-09-21',endDate:'2026-10-04',timezone:context.timezone},facts:output.planning.facts.map(fact=>({...fact,state:'known',detail:'Confirmed'})),draft:'A dated plan.'}},context,null,'Make the plan.','en');
@@ -200,11 +200,30 @@ describe('planning discovery and draft contract',()=>{
  });
 });
 
-it.each(['zh','en'] as const)('summarizes automatic unknowns without repeating a paragraph per dimension (%s)',locale=>{
- const turn=buildAssistantTurn({...output,planning:{...output.planning,facts:[],skipDiscovery:true,draft:locale==='zh'?'先休息，再处理一件小事。':'Rest first, then one small task.',assumptions:['Keep family time protected.']}},context,null,'Skip. Plan now.',locale);
+it.each(['zh','en'] as const)('keeps assumption inventories internal instead of appending them to replies (%s)',locale=>{
+ const draft=locale==='zh'?'先休息；如果今天必须处理事情，就只挑一件小事。':'Rest first; if something must be done today, choose just one small task.';
+ const turn=buildAssistantTurn({...output,planning:{...output.planning,facts:[],skipDiscovery:true,draft,assumptions:['Keep family time protected.']}},context,null,'Skip. Plan now.',locale);
  expect(turn.planning?.assumptions).toHaveLength(10);
- expect(turn.message).toContain('Keep family time protected.');
- const repeated=locale==='zh'?'尚未确认':'not confirmed';
- expect(turn.message.split(repeated)).toHaveLength(2);
- for(const label of locale==='zh'?['日期','睡眠和起床时间','接送和照顾家人的时间','固定安排','专注工作时间','用餐时间','运动时间','截止日期','优先事项']:['Dates','Sleep and wake times','Pickup and caregiving times','Fixed commitments','Focused work hours','Meal times','Exercise times','Deadlines','Priorities'])expect(turn.message).toContain(label);
+ expect(turn.planning?.assumptions).toContain('Keep family time protected.');
+ expect(turn.message).toBe(`${locale==='zh'?'草稿 — 尚未更改任务或日历。':'Draft — no tasks or calendar entries have been changed.'}\n\n${draft}`);
+ expect(turn.capture.items).toEqual([]);expect(turn.planning?.horizon).toBeNull();
+});
+
+it.each(['zh','en'] as const)('fallback gives one untimed next step without dumping planning facts (%s)',locale=>{
+ const turn=buildAssistantTurn({...output,planning:{...output.planning,skipDiscovery:true,draft:null}},context,null,'Skip. Plan now.',locale);
+ expect(turn.message.length).toBeLessThan(250);
+ expect(turn.message).not.toMatch(/Assumption|假设|not confirmed|尚未确认|\d{1,2}:\d{2}/);
+ expect(turn.message).not.toContain('Gym Monday–Saturday');
+ expect(turn.planning?.facts.exercise).toBe('Gym Monday–Saturday, rest Sunday.');
+ expect(turn.planning?.readiness.sleep).toBe('missing');expect(turn.capture.items).toEqual([]);
+});
+
+it.each([
+ ['zh','今天生病了','今天先把恢复放在前面。先休息，必要的事只留一件小事。'],
+ ['en','I am tired today','Keep today light. Start with a break, then choose one small task if needed.'],
+ ['zh','我脑子很乱，不知道先做什么','先把最挂心的一件事写下来。它是什么？'],
+] as const)('ordinary support does not start schedule discovery: %s %s',(locale,latest,message)=>{
+ const turn=buildAssistantTurn({...output,intent:'conversation',message,planning:null},context,null,latest,locale);
+ expect(turn.message).toBe(message);expect(turn.planning).toBeNull();expect(turn.capture.items).toEqual([]);
+ expect(turn.message.match(/[?？]/g)?.length??0).toBeLessThanOrEqual(1);
 });
