@@ -1,4 +1,4 @@
-import {beforeEach,describe,expect,it,vi} from 'vitest';
+import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 const mocks=vi.hoisted(()=>({createClient:vi.fn(),generate:vi.fn(),stream:vi.fn(),getUser:vi.fn(),rpc:vi.fn(),from:vi.fn(),nextAction:vi.fn(),logError:vi.fn()}));
 vi.mock('@/lib/ai/next-action',()=>({nextActionFacts:mocks.nextAction}));
 vi.mock('@/lib/logger',()=>({log:{error:mocks.logError}}));
@@ -11,6 +11,7 @@ import {assistantOutput} from '@/lib/ai/assistant-orchestrator';
 const owner='61300000-0000-0000-0000-000000000001';
 const request=(extra:Record<string,unknown>={},token='user-token')=>new Request('https://betterr.me/api/mobile/assistant',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({requestId:'61300000-0000-0000-0000-000000000002',consent:true,locale:'en',messages:[{role:'user',content:'Add buy milk'}],...extra})});
 beforeEach(()=>{
+ vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-09-21T12:00:00Z'));
  mocks.generate.mockReset();mocks.stream.mockReset();
  vi.clearAllMocks();vi.stubEnv('LLM_API_KEY','local-test-key');vi.stubEnv('LLM_MODEL','');vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL','http://127.0.0.1:55721');vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY','local-test-anon');
  mocks.getUser.mockResolvedValue({data:{user:{id:owner}},error:null});
@@ -24,6 +25,7 @@ beforeEach(()=>{
  });
  mocks.generate.mockResolvedValue({output:{intent: "capture", planning:null, memoryUpdates:[], nextActionWindow:null, message:'Review this task.',actions:[{kind:'task-create',title:'Buy milk',estimateMinutes:null,dueDate:null,projectId:null,projectKey:null}]}});
 });
+afterEach(()=>vi.useRealTimers());
 
 it.each([false,true])('routes the golden prompt through planning readiness and loads calendar facts without mutation (stream=%s)',async(stream)=>{
  const output={intent:'planning',message:'Protect family time after pickup; calls can stay tasks with one clear next action.',actions:[],nextActionWindow:null,memoryUpdates:[],planning:{horizon:null,facts:[
@@ -178,6 +180,18 @@ it('uses the existing next-action engine only after an explicit availability win
  mocks.generate.mockResolvedValue({output:{...output,nextActionWindow:window}});mocks.nextAction.mockResolvedValue({selected:{title:'Call Matrix',estimate_minutes:10}});
  const body=await (await POST(request({messages:[{role:'user',content:`I am free from ${window.start} to ${window.end}. What next?`}]}))).json();
  expect(body.message).toContain('Call Matrix');expect(body.proposal.body.items).toEqual([]);expect(mocks.nextAction).toHaveBeenCalledTimes(1);
+});
+
+it.each(['I have 15 minutes free now. What should I do next?','我现在有 15 分钟空闲，请建议接下来做什么。'])('preserves the selected duration despite generation latency: %s',async content=>{
+ mocks.generate.mockImplementation(async()=>{
+  vi.setSystemTime(new Date('2026-09-21T12:00:20Z'));
+  return {output:{intent:'next_action',message:'One step.',planning:null,actions:[],memoryUpdates:[],nextActionWindow:{start:'2026-09-21T12:00:00Z',end:'2026-09-21T12:15:00Z',available:true}}};
+ });
+ mocks.nextAction.mockImplementation(async(_client,_owner,start,end)=>({selected:end-start>=15*60000?{title:'Fifteen-minute task',estimate_minutes:15,source:'priority'}:null}));
+ const body=await (await POST(request({messages:[{role:'user',content}]}))).json();
+ expect(body.message).toContain('Fifteen-minute task');expect(body.message).toContain('daily priority');
+ expect(mocks.nextAction.mock.calls[0].slice(2)).toEqual([Date.parse('2026-09-21T12:00:20Z'),Date.parse('2026-09-21T12:15:20Z')]);
+ expect(body.ui.quickReplies).toEqual([]);expect(body.proposal.body.items).toEqual([]);
 });
 
 it.each([false,true])('retries an oversized planning draft once without publishing or persisting it (stream=%s)',async(stream)=>{

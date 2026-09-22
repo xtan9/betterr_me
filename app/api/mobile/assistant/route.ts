@@ -107,9 +107,18 @@ export async function POST(request:Request){
    }
   }
   if(signal.aborted)throw new Error('Cancelled');
-  const output=buildAssistantTurn(result.output,context,previous,input.messages.at(-1)!.content,input.locale);
+  const latest=input.messages.at(-1)!.content;
+  const generated=assistantOutput.parse(result.output),recommendationAt=Date.now();
+  // The duration buttons confirm relative availability. Resolve their exact
+  // conversational text after generation so latency does not consume a minute.
+  const relativeMinutes=latest.trim().match(/^(?:I have (15|30|60) minutes free now\. What should I do next\?|我现在有 (15|30|60) 分钟空闲，请建议接下来做什么。)$/);
+  if(generated.intent==='next_action'&&relativeMinutes){
+   const minutes=Number(relativeMinutes[1]??relativeMinutes[2]);
+   generated.nextActionWindow={start:new Date(recommendationAt).toISOString(),end:new Date(recommendationAt+minutes*60000).toISOString(),available:true};
+  }
+  const output=buildAssistantTurn(generated,context,previous,latest,input.locale);
   if(output.intent==='next_action'&&output.nextActionWindow){
-   const start=Math.max(Date.now(),Date.parse(output.nextActionWindow.start)),end=Date.parse(output.nextActionWindow.end);
+   const start=Math.max(recommendationAt,Date.parse(output.nextActionWindow.start)),end=Date.parse(output.nextActionWindow.end);
    if(end<=start||end-start>86400000||start>Date.now()+30*86400000)return {body:{error:'invalid'},status:400};
    const facts=await nextActionFacts(client,userId,start,end);
    output.message=facts.selected?`${input.locale==='zh'?'下一步':'Next'}: ${facts.selected.title}\n${facts.selected.estimate_minutes} ${input.locale==='zh'?'分钟':'minutes'}`:input.locale==='zh'?'这段时间没有合适的可执行任务。':'No actionable task fits this window.';
