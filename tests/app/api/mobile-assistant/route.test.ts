@@ -84,6 +84,23 @@ it('lets the latest explicit language choice replace an earlier one without trus
  expect(mocks.generate.mock.calls[0][0].output.schema.safeParse({...output,replyLocale:'zh'}).success).toBe(false);
 });
 
+it.each([
+ 'Please reply in Chinese, don\'t reply in English.',
+ '不要用英文回答，请说中文。',
+ '不要用中文回答，请说英语。',
+ 'Translate the phrase "reply in English" into Chinese.',
+ 'Translate "A sentence. Reply in English." into Chinese.',
+])('does not hard-lock language from negated or quoted wording: %s',async content=>{
+ const rpc=mocks.rpc.getMockImplementation()!;
+ mocks.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>name==='assistant_begin_turn'?Promise.resolve({data:{status:'prepared',messages:[{role:'user',content:'请用中文回答：我有点累。'},{role:'assistant',content:'先休息。'},{role:'user',content}]},error:null}):rpc(name,args));
+ const output={intent:'conversation',replyLocale:'zh',message:'好的。',actions:[],planning:null,memoryUpdates:[],nextActionWindow:null};
+ mocks.generate.mockResolvedValue({output});
+ expect((await POST(request({messages:[{role:'user',content}]}))).status).toBe(200);
+ const schema=mocks.generate.mock.calls[0][0].output.schema;
+ expect(schema.safeParse({...output,replyLocale:'zh'}).success).toBe(true);
+ expect(schema.safeParse({...output,replyLocale:'en'}).success).toBe(true);
+});
+
 it.each([false,true])('routes the golden prompt through planning readiness and loads calendar facts without mutation (stream=%s)',async(stream)=>{
  const output={intent:'planning',message:'Protect family time after pickup; calls can stay tasks with one clear next action.',actions:[],nextActionWindow:null,memoryUpdates:[],planning:{horizon:null,facts:[
   {dimension:'sleep',state:'missing',detail:null},{dimension:'caregiving',state:'partial',detail:'Leave at 8:30 for school; pickup departure still needed.'},
