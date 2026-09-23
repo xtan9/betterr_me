@@ -76,8 +76,10 @@ jobs:
 
       - name: Start disposable Supabase and apply migrations
         if: ${{ github.event_name == 'pull_request' && fromJSON(needs.changes.outputs.classification_json).suites.e2eSupabase }}
+        # setup-cli pins GHCR; clear that override so the pinned CLI can use its
+        # built-in ECR -> GHCR -> source-image fallback when a registry throttles.
         run: >-
-          supabase start
+          env -u SUPABASE_INTERNAL_IMAGE_REGISTRY supabase start
           --exclude analytics,edge-runtime,functions,imgproxy,inbucket,meta,storage,studio,vector
 
       - name: Install PostgreSQL client for pull-request RLS gate

@@ -27,6 +27,57 @@ beforeEach(()=>{
 });
 afterEach(()=>vi.useRealTimers());
 
+it.each([false,true])('offers a day review as text choices after an acknowledged decision without starting a plan (stream=%s)',async stream=>{
+ const history=[{role:'user',content:'虚构测试，不要保存记忆。今天不舒服。'},{role:'assistant',content:'先照顾好自己。'},{role:'user',content:'OK 我要去看 urgent care'}];
+ const output={intent:'conversation',replyLocale:'zh',message:'好，先去看医生。需要我帮你看看今天哪些安排可以调整吗？',followUp:'review_today',actions:[],planning:null,memoryUpdates:[],nextActionWindow:null};
+ mocks.generate.mockResolvedValue({output});mocks.stream.mockImplementation(()=>({partialOutputStream:(async function*(){yield output;})(),output:Promise.resolve(output)}));
+ const req=request({messages:history});if(stream)req.headers.set('Accept','application/x-ndjson');
+ const response=await POST(req);const body=stream?(await response.text()).trim().split('\n').map(line=>JSON.parse(line)).at(-1):await response.json();
+ expect(body.message).toBe(output.message);expect(body.intent).toBe('conversation');
+ expect(body.ui.quickReplies).toEqual([{id:'review-today',label:'看看今天的安排',value:'请看看今天的安排，建议哪些可以调整；先给我建议，不要修改任务或日历。'},{id:'decline-review',label:'暂时不用',value:'暂时不用调整今天的安排。'}]);
+ expect(body.planning).toBeUndefined();expect(body.proposal.body.items).toEqual([]);
+ expect(mocks.rpc.mock.calls.some(([name])=>name==='planner_schedule_context')).toBe(false);
+ expect(mocks.nextAction).not.toHaveBeenCalled();
+});
+
+it.each(['暂时不用调整今天的安排。','No need to adjust today’s schedule for now.'])('declining the review cannot reopen an offer or start planning: %s',async latest=>{
+ const output={intent:'conversation',replyLocale:'zh',message:'好，需要时再叫我。',followUp:null,actions:[],planning:null,memoryUpdates:[],nextActionWindow:null};
+ mocks.generate.mockResolvedValue({output});
+ const body=await (await POST(request({messages:[{role:'assistant',content:'需要我帮你看看今天的安排吗？'},{role:'user',content:latest}]}))).json();
+ expect(body.message).toBe('好，需要时再叫我。');expect(body.ui.quickReplies).toEqual([]);expect(body.planning).toBeUndefined();
+ const schema=mocks.generate.mock.calls[0][0].output.schema;
+ expect(schema.safeParse({...output,followUp:'review_today'}).success).toBe(false);
+ expect(schema.safeParse({...output,intent:'planning'}).success).toBe(false);
+});
+
+it('localizes a decision offer using the reply language rather than the interface language',async()=>{
+ mocks.generate.mockResolvedValue({output:{intent:'conversation',replyLocale:'en',message:'Take care. Would you like to review today’s schedule?',followUp:'review_today',actions:[],planning:null,memoryUpdates:[],nextActionWindow:null}});
+ const body=await (await POST(request({locale:'zh',messages:[{role:'user',content:'OK, I am going to urgent care.'}]}))).json();
+ expect(body.ui.quickReplies.map((choice:{label:string})=>choice.label)).toEqual(['Review today','Not now']);
+ expect(body.planning).toBeUndefined();expect(body.proposal.body.items).toEqual([]);
+});
+
+it('review choice reads existing commitments and returns suggestions without authorizing mutations',async()=>{
+ const output={intent:'planning',replyLocale:'zh',message:'看看今天的安排。',followUp:null,actions:[],memoryUpdates:[],nextActionWindow:null,planning:{horizon:{startDate:'2026-09-21',endDate:'2026-09-21',timezone:'UTC'},facts:[],questions:[],assumptions:[],draft:'保留接送，其他安排等你回来再决定。',skipDiscovery:true}};
+ mocks.generate.mockResolvedValue({output});
+ const body=await (await POST(request({messages:[{role:'user',content:'请看看今天的安排，建议哪些可以调整；先给我建议，不要修改任务或日历。'}]}))).json();
+ expect(body.planning.status).toBe('drafted');expect(body.proposal.body.items).toEqual([]);expect(body.ui.quickReplies).toEqual([]);
+ expect(mocks.rpc.mock.calls.map(([name])=>name)).toEqual(['check_ai_chat_rate_limit','assistant_begin_turn','planner_schedule_context','assistant_finish_turn']);
+ const finalOptions=mocks.generate.mock.calls.at(-1)![0];expect(finalOptions.system).toContain('School pickup');
+});
+
+it('explicit preparation questions and ordinary legacy replies do not get a forced day-review offer',async()=>{
+ mocks.generate.mockResolvedValue({output:{intent:'conversation',message:'Bring your ID and insurance card if you have one.',actions:[],planning:null,memoryUpdates:[],nextActionWindow:null}});
+ const body=await (await POST(request({messages:[{role:'user',content:'What documents should I bring?'}]}))).json();
+ expect(body.ui.quickReplies).toEqual([]);expect(body.planning).toBeUndefined();expect(body.proposal.body.items).toEqual([]);
+});
+
+it.each(['capture','planning','next_action'])('rejects an inconsistent day-review offer with %s intent',async intent=>{
+ mocks.generate.mockResolvedValue({output:{intent,replyLocale:'en',message:'Review today?',followUp:'review_today',actions:[],planning:null,memoryUpdates:[],nextActionWindow:null}});
+ expect((await POST(request())).status).toBe(502);
+ expect(mocks.rpc.mock.calls.some(([name])=>name==='assistant_finish_turn')).toBe(false);
+});
+
 it.each([false,true])('continues saved advice in the explicitly requested language after an English quick suggestion (stream=%s)',async stream=>{
  const history=[{role:'user',content:'请用中文回答：我今天很累，帮我选一个小步骤。'},{role:'assistant',content:'先打开手头那件事，看一眼就可以停。'},{role:'user',content:'What should I do next?'}];
  const originalRpc=mocks.rpc.getMockImplementation()!;

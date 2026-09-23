@@ -7,7 +7,7 @@ import {llmProvider,structuredOutputProviderOptions} from '@/lib/ai/provider';
 import {DEFAULT_MODEL_ID,AVAILABLE_MODELS} from '@/lib/ai/models';
 import {checkChatRateLimit} from '@/lib/ai/rate-limit';
 import {buildCapturePreview,type CaptureContext} from '@/lib/ai/native-capture';
-import {assistantOutput,assistantInstructions,buildAssistantTurn,selectMemories,planningCalendarContext,resolvePlanningHorizon,publicAssistantPrefix,requestedReplyLocale,type Memory,type PlanningState} from '@/lib/ai/assistant-orchestrator';
+import {assistantOutput,assistantInstructions,buildAssistantTurn,selectMemories,planningCalendarContext,resolvePlanningHorizon,publicAssistantPrefix,requestedReplyLocale,dayReviewChoices,type Memory,type PlanningState} from '@/lib/ai/assistant-orchestrator';
 import {nextActionFacts} from '@/lib/ai/next-action';
 import {safeAiFailure} from '@/lib/ai/safe-failure';
 import {log} from '@/lib/logger';
@@ -51,8 +51,9 @@ export async function POST(request:Request){
    :{data:null,error:null};
   if(priorTurn.error)return respond({error:'unavailable'},503);
   const continuingAdvice=priorTurn.data?.response?.intent==='conversation';
+  const declinedReview=Object.values(dayReviewChoices).some(choices=>choices.some(choice=>choice.id==='decline-review'&&choice.value===latest.trim()));
   const requestedLocale=requestedReplyLocale(begun.data.messages);
-  const intentSchema=continuingAdvice?assistantOutput.extend({intent:z.literal('conversation'),planning:z.null(),nextActionWindow:z.null(),actions:assistantOutput.shape.actions.max(0)}):assistantOutput;
+  const intentSchema=declinedReview?assistantOutput.extend({intent:z.literal('conversation'),followUp:z.null(),planning:z.null(),nextActionWindow:z.null(),actions:assistantOutput.shape.actions.max(0),message:z.string().trim().min(1).max(160)}):continuingAdvice?assistantOutput.extend({intent:z.literal('conversation'),planning:z.null(),nextActionWindow:z.null(),actions:assistantOutput.shape.actions.max(0)}):assistantOutput;
   const generationSchema=requestedLocale?intentSchema.extend({replyLocale:z.literal(requestedLocale)}):intentSchema;
   const [tasks,projects,profile]=await Promise.all([
    client.from('tasks').select('id,title,version,estimate_minutes,due_date,project_id').eq('user_id',userId).eq('is_completed',false).is('archived_at',null).order('id').limit(200),
@@ -77,6 +78,7 @@ export async function POST(request:Request){
    messages:begun.data.messages,
    };
    if(continuingAdvice)options.system+='\nThis next-step suggestion continues the preceding ordinary advice. Return conversation with one gentle, untimed step based on that advice. Do not ask for available time or choose a task from the queue.';
+   if(declinedReview)options.system+='\nThe user declined the day-review offer. Acknowledge in one short sentence, without a new question, checklist or suggestion. Return followUp=null; do not start planning.';
    if(requestedLocale)options.system+=`\nReply in ${requestedLocale==='zh'?'Simplified Chinese':'English'}. This is the latest explicit language choice in the stored conversation and takes precedence over the interface or a translated quick suggestion. Set replyLocale accordingly.`;
    if(!emit)return generateText(options);
    const streamed=streamText({...options,onError:()=>{ /* Sanitized by the stream boundary. */ }});
