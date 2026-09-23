@@ -40,6 +40,26 @@ export const assistantOutput=z.object({
 export type Memory={id:string;kind:string;key:string;content:string;confidence:number;temporality:'durable'|'temporary';updated_at:string;effective_from?:string;effective_until:string|null};
 export type PlanningState={id?:string;status:'discovering'|'ready'|'drafted';horizon:z.infer<typeof horizonSchema>|null;readiness:Record<string,z.infer<typeof status>>;facts:Record<string,string>;assumptions:string[];travelMinutes?:number|null};
 
+/** Explicit language choices survive translated quick suggestions in this chat. */
+export function requestedReplyLocale(messages:{role:string;content:string}[]):'en'|'zh'|undefined{
+ let locale:'en'|'zh'|undefined;
+ for(const message of messages){
+  if(message.role!=='user')continue;
+  const languageMention=/(?:用|以)(中文|英文|英语)(?:回答|回复)|(?:reply|respond|answer)\s+in\s+(English|Chinese)/iu;
+  if(!languageMention.test(message.content))continue;
+  // Only enforce direct affirmative commands. Quotes and negations need the
+  // model's interpretation; never turn their embedded words into constraints.
+  const withoutContractions=message.content.replace(/\b\w+'\w+\b/gu,'');
+  if(/["'“”‘’`]/u.test(withoutContractions)){locale=undefined;continue;}
+  for(const clause of message.content.split(/[。！？.!?\n;；,，]/u)){
+   if(!languageMention.test(clause))continue;
+   const match=clause.trim().match(/^(?:请)?(?:用|以)(中文|英文|英语)(?:回答|回复)(?=[\s:：]|$)|^(?:please\s+)?(?:reply|respond|answer)\s+in\s+(English|Chinese)\b/iu);
+   locale=match?(['中文','chinese'].includes((match[1]??match[2]).toLowerCase())?'zh':'en'):undefined;
+  }
+ }
+ return locale;
+}
+
 /** A missing horizon fact explicitly withdraws dates; omission keeps them. */
 export function resolvePlanningHorizon(candidate:z.infer<typeof assistantOutput>['planning'],previous:PlanningState|null){
  const withdrawn=candidate?.facts.some(fact=>fact.dimension==='horizon'&&fact.state!=='known');

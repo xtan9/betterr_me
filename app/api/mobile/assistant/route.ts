@@ -7,7 +7,7 @@ import {llmProvider,structuredOutputProviderOptions} from '@/lib/ai/provider';
 import {DEFAULT_MODEL_ID,AVAILABLE_MODELS} from '@/lib/ai/models';
 import {checkChatRateLimit} from '@/lib/ai/rate-limit';
 import {buildCapturePreview,type CaptureContext} from '@/lib/ai/native-capture';
-import {assistantOutput,assistantInstructions,buildAssistantTurn,selectMemories,planningCalendarContext,resolvePlanningHorizon,publicAssistantPrefix,type Memory,type PlanningState} from '@/lib/ai/assistant-orchestrator';
+import {assistantOutput,assistantInstructions,buildAssistantTurn,selectMemories,planningCalendarContext,resolvePlanningHorizon,publicAssistantPrefix,requestedReplyLocale,type Memory,type PlanningState} from '@/lib/ai/assistant-orchestrator';
 import {nextActionFacts} from '@/lib/ai/next-action';
 import {safeAiFailure} from '@/lib/ai/safe-failure';
 import {log} from '@/lib/logger';
@@ -42,6 +42,18 @@ export async function POST(request:Request){
   if(begun.error)return respond({error:'unavailable'},503);
   if(begun.data?.status==='complete')return respond(begun.data.response);
   if(begun.data?.status!=='prepared')return respond({error:'conflict'},409);
+  const latest=input.messages.at(-1)!.content;
+  const genericNextStep=['what should i do next?','接下来做什么？'].includes(latest.trim().toLowerCase());
+  // A translated suggestion continues the saved conversation. Do not let the
+  // provider reinterpret ordinary advice as a fresh task-selection workflow.
+  const priorTurn=input.conversationId&&genericNextStep
+   ?await client.from('assistant_turns').select('response').eq('user_id',userId).eq('conversation_id',conversationId).not('response','is',null).order('created_at',{ascending:false}).limit(1).maybeSingle()
+   :{data:null,error:null};
+  if(priorTurn.error)return respond({error:'unavailable'},503);
+  const continuingAdvice=priorTurn.data?.response?.intent==='conversation';
+  const requestedLocale=requestedReplyLocale(begun.data.messages);
+  const intentSchema=continuingAdvice?assistantOutput.extend({intent:z.literal('conversation'),planning:z.null(),nextActionWindow:z.null(),actions:assistantOutput.shape.actions.max(0)}):assistantOutput;
+  const generationSchema=requestedLocale?intentSchema.extend({replyLocale:z.literal(requestedLocale)}):intentSchema;
   const [tasks,projects,profile]=await Promise.all([
    client.from('tasks').select('id,title,version,estimate_minutes,due_date,project_id').eq('user_id',userId).eq('is_completed',false).is('archived_at',null).order('id').limit(200),
    client.from('projects').select('id,name,version').eq('user_id',userId).eq('status','active').is('completed_at',null).order('id').limit(200),
@@ -60,10 +72,12 @@ export async function POST(request:Request){
   const runTurn=async(emit?: (text:string)=>void,signal=request.signal)=>{
   let schemaRetryHint:string|null=null,published=false;
   const generateOnce=async(calendar:unknown)=>{
-   const options={model:llmProvider(modelId),output:Output.object({schema:assistantOutput}),providerOptions:structuredOutputProviderOptions,maxOutputTokens:Math.min(6144,Math.max(1,Number.parseInt(process.env.LLM_MAX_TOKENS||'6144',10)||6144)),abortSignal:signal,
+   const options={model:llmProvider(modelId),output:Output.object({schema:generationSchema}),providerOptions:structuredOutputProviderOptions,maxOutputTokens:Math.min(6144,Math.max(1,Number.parseInt(process.env.LLM_MAX_TOKENS||'6144',10)||6144)),abortSignal:signal,
    system:`${assistantInstructions}${schemaRetryHint!==null?`\nThe previous reply did not match the output schema (${schemaRetryHint}). Regenerate from the original context, include every required field with its declared type, and use only declared enum values. Keep planning.draft under 2400 characters and memoryUpdates at most 10 items. Preserve confirmed constraints and explicit unknowns; do not add facts or calendar actions. Prioritize durable planning preferences and combine related memories rather than listing every detail separately.`:''}\nInterface language fallback: ${input.locale==='zh'?'Simplified Chinese':'English'}. Honor the requested reply language via replyLocale; the interface language is only a fallback. Current instant: ${new Date().toISOString()}; current local date: ${getLocalDateInTimeZone(new Date(),context.timezone)}. Owner context: ${JSON.stringify({capture:context,memories:selectedMemories,planning:previous,calendar})}`,
    messages:begun.data.messages,
    };
+   if(continuingAdvice)options.system+='\nThis next-step suggestion continues the preceding ordinary advice. Return conversation with one gentle, untimed step based on that advice. Do not ask for available time or choose a task from the queue.';
+   if(requestedLocale)options.system+=`\nReply in ${requestedLocale==='zh'?'Simplified Chinese':'English'}. This is the latest explicit language choice in the stored conversation and takes precedence over the interface or a translated quick suggestion. Set replyLocale accordingly.`;
    if(!emit)return generateText(options);
    const streamed=streamText({...options,onError:()=>{ /* Sanitized by the stream boundary. */ }});
    for await(const partial of streamed.partialOutputStream){
@@ -88,7 +102,7 @@ export async function POST(request:Request){
    }
   };
   let result=await generate();
-  const classified=assistantOutput.parse(result.output);
+  const classified=generationSchema.parse(result.output);
   if(classified.intent==='planning'||classified.planning){
    // Read the existing planner snapshot only for planning. It includes recurrence identities;
    // coverageComplete applies to this civil day, never to the whole multi-day horizon.
@@ -107,8 +121,7 @@ export async function POST(request:Request){
    }
   }
   if(signal.aborted)throw new Error('Cancelled');
-  const latest=input.messages.at(-1)!.content;
-  const generated=assistantOutput.parse(result.output),recommendationAt=Date.now();
+  const generated=generationSchema.parse(result.output),recommendationAt=Date.now();
   // The duration buttons confirm relative availability. Resolve their exact
   // conversational text after generation so latency does not consume a minute.
   const relativeMinutes=latest.trim().match(/^(?:I have (15|30|60) minutes free now\. What should I do next\?|我现在有 (15|30|60) 分钟空闲，请建议接下来做什么。)$/);

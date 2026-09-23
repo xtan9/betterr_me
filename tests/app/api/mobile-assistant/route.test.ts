@@ -2,7 +2,7 @@ import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 const mocks=vi.hoisted(()=>({createClient:vi.fn(),generate:vi.fn(),stream:vi.fn(),getUser:vi.fn(),rpc:vi.fn(),from:vi.fn(),nextAction:vi.fn(),logError:vi.fn()}));
 vi.mock('@/lib/ai/next-action',()=>({nextActionFacts:mocks.nextAction}));
 vi.mock('@/lib/logger',()=>({log:{error:mocks.logError}}));
-vi.mock('ai',()=>({generateText:mocks.generate,streamText:mocks.stream,Output:{object:vi.fn()}}));
+vi.mock('ai',()=>({generateText:mocks.generate,streamText:mocks.stream,Output:{object:vi.fn(({schema})=>({schema}))}}));
 vi.mock('@supabase/supabase-js',()=>({createClient:(...args:unknown[])=>{mocks.createClient(...args);return {auth:{getUser:mocks.getUser},rpc:mocks.rpc,from:mocks.from};}}));
 import {POST} from '@/app/api/mobile/assistant/route';
 import {readFileSync} from 'node:fs';
@@ -26,6 +26,80 @@ beforeEach(()=>{
  mocks.generate.mockResolvedValue({output:{intent: "capture", planning:null, memoryUpdates:[], nextActionWindow:null, message:'Review this task.',actions:[{kind:'task-create',title:'Buy milk',estimateMinutes:null,dueDate:null,projectId:null,projectKey:null}]}});
 });
 afterEach(()=>vi.useRealTimers());
+
+it.each([false,true])('continues saved advice in the explicitly requested language after an English quick suggestion (stream=%s)',async stream=>{
+ const history=[{role:'user',content:'请用中文回答：我今天很累，帮我选一个小步骤。'},{role:'assistant',content:'先打开手头那件事，看一眼就可以停。'},{role:'user',content:'What should I do next?'}];
+ const originalRpc=mocks.rpc.getMockImplementation()!;
+ mocks.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>name==='assistant_begin_turn'?Promise.resolve({data:{status:'prepared',messages:history},error:null}):originalRpc(name,args));
+ const originalFrom=mocks.from.getMockImplementation()!;
+ const ownership:unknown[][]=[];
+ mocks.from.mockImplementation((table:string)=>{
+  if(table!=='assistant_turns')return originalFrom(table);
+  let prior=false;
+  const query={select:()=>query,eq:(...args:unknown[])=>{if(args[0]==='conversation_id')prior=true;ownership.push(args);return query;},not:()=>query,order:()=>query,limit:()=>query,maybeSingle:async()=>({data:prior?{response:{intent:'conversation'}}:null,error:null})};
+  return query;
+ });
+ const output={intent:'conversation',replyLocale:'zh',message:'只写下一句下一步要做什么，然后停下来休息。',actions:[],planning:null,memoryUpdates:[],nextActionWindow:null};
+ mocks.generate.mockResolvedValue({output});mocks.stream.mockImplementation(()=>({partialOutputStream:(async function*(){yield output;})(),output:Promise.resolve(output)}));
+ const conversationId='61300000-0000-0000-0000-000000000005';
+ const req=request({conversationId,messages:[{role:'user',content:'What should I do next?'}]});if(stream)req.headers.set('Accept','application/x-ndjson');
+ const response=await POST(req);const body=stream?(await response.text()).trim().split('\n').map(line=>JSON.parse(line)).at(-1):await response.json();
+ expect(body.message).toBe(output.message);expect(body.intent).toBe('conversation');expect(body.ui.quickReplies).toEqual([]);expect(body.proposal.body.items).toEqual([]);
+ expect(mocks.nextAction).not.toHaveBeenCalled();
+ expect(ownership).toContainEqual(['user_id',owner]);expect(ownership).toContainEqual(['conversation_id',conversationId]);
+ const options=(stream?mocks.stream:mocks.generate).mock.calls[0][0];
+ expect(options.messages).toEqual(history);
+ // Even a provider misclassification cannot turn this continuation into task selection.
+ expect(options.output.schema.safeParse({...output,intent:'next_action',replyLocale:'zh'}).success).toBe(false);
+ expect(options.output.schema.safeParse({...output,replyLocale:'en'}).success).toBe(false);
+ expect(options.system).toContain('Reply in Simplified Chinese');
+});
+
+it.each([
+ {priorIntent:'planning',latest:'What should I do next?'},
+ {priorIntent:'next_action',latest:'What should I do next?'},
+ {priorIntent:'conversation',latest:'Pick a task from my queue.'},
+])('preserves task-selection availability after $priorIntent: $latest',async({priorIntent,latest})=>{
+ const originalFrom=mocks.from.getMockImplementation()!;
+ mocks.from.mockImplementation((table:string)=>{
+  if(table!=='assistant_turns')return originalFrom(table);
+  let prior=false;
+  const query={select:()=>query,eq:(field:string)=>{if(field==='conversation_id')prior=true;return query;},not:()=>query,order:()=>query,limit:()=>query,maybeSingle:async()=>({data:prior?{response:{intent:priorIntent}}:null,error:null})};return query;
+ });
+ const output={intent:'next_action',message:'Choose a task.',actions:[],planning:null,memoryUpdates:[],nextActionWindow:null};
+ mocks.generate.mockResolvedValue({output});
+ const response=await POST(request({conversationId:'61300000-0000-0000-0000-000000000005',messages:[{role:'user',content:latest}]}));
+ const body=await response.json();expect(body.message).toBe('How much time do you have now?');expect(body.ui.quickReplies).toHaveLength(3);
+ expect(mocks.generate.mock.calls[0][0].output.schema.safeParse(output).success).toBe(true);
+ expect(mocks.nextAction).not.toHaveBeenCalled();expect(body.proposal.body.items).toEqual([]);
+});
+
+it('lets the latest explicit language choice replace an earlier one without trusting assistant text',async()=>{
+ const rpc=mocks.rpc.getMockImplementation()!;
+ mocks.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>name==='assistant_begin_turn'?Promise.resolve({data:{status:'prepared',messages:[{role:'user',content:'请用中文回答：我有点累。'},{role:'assistant',content:'请用英文回答'},{role:'user',content:'Please reply in English. Pick a task from my queue.'}]},error:null}):rpc(name,args));
+ const output={intent:'next_action',replyLocale:'en',message:'Choose a task.',actions:[],planning:null,memoryUpdates:[],nextActionWindow:null};
+ mocks.generate.mockResolvedValue({output});
+ const body=await (await POST(request({locale:'zh',messages:[{role:'user',content:'Please reply in English. Pick a task from my queue.'}]}))).json();
+ expect(body.message).toBe('How much time do you have now?');
+ expect(mocks.generate.mock.calls[0][0].output.schema.safeParse({...output,replyLocale:'zh'}).success).toBe(false);
+});
+
+it.each([
+ 'Please reply in Chinese, don\'t reply in English.',
+ '不要用英文回答，请说中文。',
+ '不要用中文回答，请说英语。',
+ 'Translate the phrase "reply in English" into Chinese.',
+ 'Translate "A sentence. Reply in English." into Chinese.',
+])('does not hard-lock language from negated or quoted wording: %s',async content=>{
+ const rpc=mocks.rpc.getMockImplementation()!;
+ mocks.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>name==='assistant_begin_turn'?Promise.resolve({data:{status:'prepared',messages:[{role:'user',content:'请用中文回答：我有点累。'},{role:'assistant',content:'先休息。'},{role:'user',content}]},error:null}):rpc(name,args));
+ const output={intent:'conversation',replyLocale:'zh',message:'好的。',actions:[],planning:null,memoryUpdates:[],nextActionWindow:null};
+ mocks.generate.mockResolvedValue({output});
+ expect((await POST(request({messages:[{role:'user',content}]}))).status).toBe(200);
+ const schema=mocks.generate.mock.calls[0][0].output.schema;
+ expect(schema.safeParse({...output,replyLocale:'zh'}).success).toBe(true);
+ expect(schema.safeParse({...output,replyLocale:'en'}).success).toBe(true);
+});
 
 it.each([false,true])('routes the golden prompt through planning readiness and loads calendar facts without mutation (stream=%s)',async(stream)=>{
  const output={intent:'planning',message:'Protect family time after pickup; calls can stay tasks with one clear next action.',actions:[],nextActionWindow:null,memoryUpdates:[],planning:{horizon:null,facts:[
