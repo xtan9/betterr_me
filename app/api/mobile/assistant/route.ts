@@ -61,7 +61,7 @@ export async function POST(request:Request){
   let schemaRetryHint:string|null=null,published=false;
   const generateOnce=async(calendar:unknown)=>{
    const options={model:llmProvider(modelId),output:Output.object({schema:assistantOutput}),providerOptions:structuredOutputProviderOptions,maxOutputTokens:Math.min(6144,Math.max(1,Number.parseInt(process.env.LLM_MAX_TOKENS||'6144',10)||6144)),abortSignal:signal,
-   system:`${assistantInstructions}${schemaRetryHint!==null?`\nThe previous reply did not match the output schema (${schemaRetryHint}). Regenerate from the original context, include every required field with its declared type, and use only declared enum values. Keep planning.draft under 2400 characters and memoryUpdates at most 10 items. Preserve confirmed constraints and explicit unknowns; do not add facts or calendar actions. Prioritize durable planning preferences and combine related memories rather than listing every detail separately.`:''}\nReply in ${input.locale==='zh'?'Simplified Chinese':'English'}, preserving user-entered names. Current instant: ${new Date().toISOString()}; current local date: ${getLocalDateInTimeZone(new Date(),context.timezone)}. Owner context: ${JSON.stringify({capture:context,memories:selectedMemories,planning:previous,calendar})}`,
+   system:`${assistantInstructions}${schemaRetryHint!==null?`\nThe previous reply did not match the output schema (${schemaRetryHint}). Regenerate from the original context, include every required field with its declared type, and use only declared enum values. Keep planning.draft under 2400 characters and memoryUpdates at most 10 items. Preserve confirmed constraints and explicit unknowns; do not add facts or calendar actions. Prioritize durable planning preferences and combine related memories rather than listing every detail separately.`:''}\nInterface language fallback: ${input.locale==='zh'?'Simplified Chinese':'English'}. Honor the requested reply language via replyLocale; the interface language is only a fallback. Current instant: ${new Date().toISOString()}; current local date: ${getLocalDateInTimeZone(new Date(),context.timezone)}. Owner context: ${JSON.stringify({capture:context,memories:selectedMemories,planning:previous,calendar})}`,
    messages:begun.data.messages,
    };
    if(!emit)return generateText(options);
@@ -121,9 +121,9 @@ export async function POST(request:Request){
    const start=Math.max(recommendationAt,Date.parse(output.nextActionWindow.start)),end=Date.parse(output.nextActionWindow.end);
    if(end<=start||end-start>86400000||start>Date.now()+30*86400000)return {body:{error:'invalid'},status:400};
    const facts=await nextActionFacts(client,userId,start,end);
-   output.message=facts.selected?`${input.locale==='zh'?'下一步':'Next'}: ${facts.selected.title}\n${facts.selected.estimate_minutes} ${input.locale==='zh'?'分钟':'minutes'}`:input.locale==='zh'?'这段时间没有合适的可执行任务。':'No actionable task fits this window.';
+   output.message=facts.selected?`${output.replyLocale==='zh'?'下一步':'Next'}: ${facts.selected.title}\n${facts.selected.estimate_minutes} ${output.replyLocale==='zh'?'分钟':'minutes'}`:output.replyLocale==='zh'?'这段时间没有合适的可执行任务。':'No actionable task fits this window.';
    if(facts.selected){
-    const reason=input.locale==='zh'
+    const reason=output.replyLocale==='zh'
      ?facts.selected.source==='priority'?'这是你的今日重点，预计能在这段时间内完成。':facts.selected.source==='queue'?'这是行动队列中当前可做、且预计能在这段时间内完成的任务。':'这个任务当前可做，预计能在这段时间内完成。'
      :facts.selected.source==='priority'?'It is a daily priority and its estimate fits this window.':facts.selected.source==='queue'?'It is actionable in your queue and its estimate fits this window.':'It is actionable and its estimate fits this window.';
     output.message+=`\n${reason}`;
