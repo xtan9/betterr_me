@@ -19,6 +19,7 @@ it('paginates owner history and restores current proposal state',async()=>{
  for(const table of Object.keys(filters))expect(filters[table]).toContainEqual(['user_id',owner]);
  expect(filters.assistant_messages).toContainEqual(['conversation_id',conversation]);expect(filters.assistant_messages).toContainEqual(['sequence',101]);
  expect(response.headers.get('Cache-Control')).toBe('no-store');
+ expect(body.planningSessionId).toBeNull();
 });
 it('does not read history without a verified native identity or visible conversation',async()=>{
  mocks.auth.mockResolvedValueOnce(null);expect((await GET(new Request('https://betterr.me/api/mobile/assistant/history'))).status).toBe(401);expect(mocks.from).not.toHaveBeenCalled();
@@ -30,5 +31,6 @@ it.each(['drafted','applied','cancelled'])('restores current owner-private %s se
  rows.planning_sessions={id:'session',version:'after-undo',status,start_date:'2030-01-01',end_date:'2030-01-14',timezone:'UTC',readiness:{sleep:'missing',horizon:'known'},assumptions:['Sleep remains flexible']};
  const response=await GET(new Request(`https://betterr.me/api/mobile/assistant/history?conversationId=${conversation}`));expect(response.status).toBe(200);const body=await response.json();
  if(status==='drafted')expect(body.planning).toMatchObject({version:'after-undo',missing:['sleep'],horizon:{startDate:'2030-01-01',endDate:'2030-01-14'}});else expect(body.planning).toBeUndefined();
+ expect(body.planningSessionId).toBe('session');
  expect(filters.planning_sessions).toContainEqual(['user_id',owner]);expect(filters.planning_sessions).toContainEqual(['conversation_id',conversation]);
 });
