@@ -14,7 +14,7 @@ export async function GET(request:Request){
   if(parsed.data.conversationId)query=query.eq('id',parsed.data.conversationId);
   const conversation=await query.order('last_message_at',{ascending:false}).limit(1).maybeSingle();
   if(conversation.error)return respond({error:'unavailable'},503);
-  if(!conversation.data)return parsed.data.conversationId?respond({error:'not-found'},404):respond({conversationId:null,messages:[],before:null});
+  if(!conversation.data)return parsed.data.conversationId?respond({error:'not-found'},404):respond({conversationId:null,messages:[],before:null,planningSessionId:null});
   let history=client.from('assistant_messages').select('role,content,sequence,request_id').eq('user_id',userId).eq('conversation_id',conversation.data.id);
   if(parsed.data.before)history=history.lt('sequence',parsed.data.before);
   const messages=await history.order('sequence',{ascending:false}).limit(41);
@@ -30,6 +30,8 @@ export async function GET(request:Request){
   const session=await client.from('planning_sessions').select('id,version,status,start_date,end_date,timezone,readiness,assumptions').eq('user_id',userId).eq('conversation_id',conversation.data.id).maybeSingle();
   if(session.error)return respond({error:'unavailable'},503);
   const current=session.data,planning=current&&['discovering','ready','drafted'].includes(current.status)?{sessionId:current.id,version:current.version,status:current.status,horizon:current.start_date?{startDate:current.start_date,endDate:current.end_date,timezone:current.timezone}:null,missing:Object.entries(current.readiness??{}).filter(([,state])=>state==='missing'||state==='partial').map(([key])=>key),assumptions:current.assumptions}:undefined;
-  return respond({conversationId:conversation.data.id,messages:page.map(({role,content,request_id})=>({role,content,...(request_id?{requestId:request_id}:{})})),before:(messages.data?.length??0)>40?page[0].sequence:null,ui:turn.data?.response?.ui,planning,proposal:proposal?.data??null});
+  // Ownership remains useful after acceptance/cancellation: clients may still
+  // have an undo or uncertain command for this session in their local cache.
+  return respond({conversationId:conversation.data.id,messages:page.map(({role,content,request_id})=>({role,content,...(request_id?{requestId:request_id}:{})})),before:(messages.data?.length??0)>40?page[0].sequence:null,ui:turn.data?.response?.ui,planning,planningSessionId:current?.id??null,proposal:proposal?.data??null});
  }catch{return respond({error:'unavailable'},503);}
 }

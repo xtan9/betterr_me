@@ -172,6 +172,32 @@ it.each([false,true])('keeps private provider/database details out of responses 
  expect(mocks.logError).toHaveBeenCalled();expect(JSON.stringify(mocks.logError.mock.calls)).not.toContain(secret);
 });
 
+it.each([false,true])('uses the requested reply language for generated advice and server duration choices (stream=%s)',async stream=>{
+ for(const intent of ['conversation','next_action']){
+  const output={intent,replyLocale:'zh',message:'先休息一下，今天只选一件必要的小事。',planning:null,actions:[],memoryUpdates:[],nextActionWindow:null};
+  mocks.generate.mockResolvedValue({output});
+  mocks.stream.mockImplementation(()=>({partialOutputStream:(async function*(){yield output;})(),output:Promise.resolve(output)}));
+  const req=request({locale:'en',messages:[{role:'user',content:intent==='conversation'?'请用中文回答：我今天很累，帮我选一个小步骤。':'请用中文回答：从任务队列选一件接下来做。'}]});
+  if(stream)req.headers.set('Accept','application/x-ndjson');
+  const response=await POST(req);
+  expect(response.status).toBe(200);
+  const body=stream?(await response.text()).trim().split('\n').map(line=>JSON.parse(line)).at(-1):await response.json();
+  expect(body.message).toBe(intent==='conversation'?output.message:'现在能腾出多久？');
+  expect(body.ui.quickReplies).toEqual(intent==='conversation'?[]:expect.arrayContaining([expect.objectContaining({label:'15 分钟'})]));
+  expect(body.planning).toBeUndefined();expect(body.proposal.body.items).toEqual([]);
+ }
+ expect(mocks.nextAction).not.toHaveBeenCalled();
+});
+
+it('uses the requested reply language for a confirmed queue recommendation despite the interface language',async()=>{
+ const window={start:'2026-09-21T12:00:00Z',end:'2026-09-21T12:15:00Z',available:true};
+ mocks.generate.mockResolvedValue({output:{intent:'next_action',replyLocale:'en',message:'One small task.',planning:null,actions:[],memoryUpdates:[],nextActionWindow:window}});
+ mocks.nextAction.mockResolvedValue({selected:{title:'Buy tea',estimate_minutes:10,source:'queue'}});
+ const body=await (await POST(request({locale:'zh',messages:[{role:'user',content:'Please reply in English. I have 15 minutes free now; choose a task from my queue.'}]}))).json();
+ expect(body.message).toBe('Next: Buy tea\n10 minutes\nIt is actionable in your queue and its estimate fits this window.');
+ expect(body.proposal.body.items).toEqual([]);
+});
+
 it('uses the existing next-action engine only after an explicit availability window',async()=>{
  const window={start:new Date(Date.now()+60000).toISOString(),end:new Date(Date.now()+1800000).toISOString(),available:true};
  const output={intent:'next_action',message:'Let us choose one action.',planning:null,actions:[],memoryUpdates:[],nextActionWindow:null};
