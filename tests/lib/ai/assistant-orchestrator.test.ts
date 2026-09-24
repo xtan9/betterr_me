@@ -67,6 +67,15 @@ describe('planning discovery and draft contract',()=>{
   const turn=buildAssistantTurn({...output,planning:{...output.planning,facts:[],questions:[{dimension:'deadlines',question:'When is the report due?'}]}},context,null,'Help me plan this report.','en');
   expect(turn.message).toContain('When is the report due?');expect(turn.message).not.toContain('sleep and wake');
  });
+ it.each(['en','zh'] as const)('does not manufacture whole-day questions for a complete narrow draft (%s)',locale=>{
+  const draft=locale==='zh'?'10:00–10:10读书，10:10–10:30休息。':'10:00–10:10 reading; 10:10–10:30 rest.';
+  const candidate={...output,replyLocale:locale,planning:{...output.planning,horizon:{startDate:'2026-09-25',endDate:'2026-09-25',timezone:context.timezone},facts:[{dimension:'workBoundaries',state:'known',detail:'Only 10:00–10:30.'},{dimension:'priorities',state:'known',detail:'Ten minutes reading, then rest.'}],reopenDiscovery:true,questions:[],draft,skipDiscovery:false}};
+  const turn=buildAssistantTurn(candidate,context,null,'Start a separate draft for only this half hour.',locale);
+  expect(turn.planning?.status).toBe('drafted');expect(turn.message).toContain(draft);expect(turn.missing).toEqual([]);expect(turn.ui.quickReplies).toEqual([]);
+  expect(turn.planning?.readiness.sleep).toBe('not_relevant');
+  const conflict=buildAssistantTurn({...candidate,planning:{...candidate.planning,facts:[...candidate.planning.facts,{dimension:'fixedCommitments',state:'partial',detail:'The requested period conflicts with an appointment.'}],questions:[{dimension:'fixedCommitments',question:'Move reading to another day?'}]}},context,null,'Keep the fixed appointment.',locale);
+  expect(conflict.planning?.status).toBe('discovering');expect(conflict.message).toContain('Move reading to another day?');
+ });
  it('finishes narrow-plan discovery after its material question is answered',()=>{
   const first=buildAssistantTurn({...output,planning:{...output.planning,horizon:{startDate:'2026-09-21',endDate:'2026-09-21',timezone:context.timezone},facts:[{dimension:'workBoundaries',state:'known',detail:'One hour this morning.'},{dimension:'priorities',state:'known',detail:'Finish the report.'}],questions:[{dimension:'deadlines',question:'When is the report due?'}]}},context,null,'Help me outline the report work.','en');
   const next=buildAssistantTurn({...output,planning:{...output.planning,facts:[{dimension:'deadlines',state:'known',detail:'Due this afternoon.'}],draft:'Start with the outline, then finish the report before the afternoon deadline.'}},context,first.planning,'This afternoon.','en');
