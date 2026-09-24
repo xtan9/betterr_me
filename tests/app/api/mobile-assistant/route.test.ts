@@ -32,14 +32,18 @@ it('retains exact prior proposal details when the user revises a preview',async(
  const items=[{id:'a',kind:'task-create',changes:{title:'Tea',due_date:'2026-09-25',estimate_minutes:20}},{id:'b',kind:'task-create',changes:{title:'Books',due_date:null,estimate_minutes:10}}];
  const filters:unknown[][]=[];
  mocks.from.mockImplementation((table:string)=>{
+  if(table==='planner_ai_proposals'){
+   let source=false;const query={select:()=>query,eq:(field:string,value:string)=>{if(field==='id'&&value==='old')source=true;return query;},maybeSingle:async()=>({data:source?{id:'old',version:'old-version',state:'pending'}:null,error:null})};return query;
+  }
   if(table!=='assistant_turns')return original(table);
   let prior=false;
-  const query={select:()=>query,eq:(...args:unknown[])=>{filters.push(args);if(args[0]==='conversation_id')prior=true;return query;},not:()=>query,order:()=>query,limit:()=>query,maybeSingle:async()=>({data:prior?{response:{intent:'capture',proposal:{body:{items}}}}:null,error:null})};return query;
+  const query={select:()=>query,eq:(...args:unknown[])=>{filters.push(args);if(args[0]==='conversation_id')prior=true;return query;},not:()=>query,order:()=>query,limit:()=>query,maybeSingle:async()=>({data:prior?{id:'old',response:{intent:'capture',proposal:{body:{items}}}}:null,error:null})};return query;
  });
  const conversationId='61300000-0000-0000-0000-000000000005';
  expect((await POST(request({conversationId,messages:[{role:'user',content:'Change only Tea to Coffee; keep the other details.'}]}))).status).toBe(200);
  expect(mocks.generate.mock.calls[0][0].system).toContain(JSON.stringify(items));
  expect(filters).toContainEqual(['user_id',owner]);expect(filters).toContainEqual(['conversation_id',conversationId]);
+ expect(mocks.rpc.mock.calls.find(([name])=>name==='assistant_finish_turn')?.[1].p_output.supersedeCapture).toEqual({proposalId:'old',version:'old-version'});
 });
 
 it.each(Object.values(emptyTaskChoices).flat())('keeps the empty-queue choice $id in ordinary conversation: $value',async choice=>{

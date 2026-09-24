@@ -84,6 +84,37 @@ begin
   raise exception 'anon begin permitted';
  exception when insufficient_privilege then null;end;
  reset role;
+ perform set_config('test.assistant_sequence',sequence_value::text,true);
+ perform set_config('test.assistant_sequence_called',sequence_called::text,true);
+end $$;
+-- Both serialization orders of replacement versus acceptance must be safe.
+do $$
+declare convo uuid:=gen_random_uuid(); first_id uuid:=gen_random_uuid(); revised_id uuid:=gen_random_uuid();
+ original jsonb; revised jsonb; result jsonb; old_version uuid; sequence_value bigint; sequence_called boolean;
+begin
+ sequence_value:=current_setting('test.assistant_sequence')::bigint;
+ sequence_called:=current_setting('test.assistant_sequence_called')::boolean;
+ perform set_config('request.jwt.claims','{"sub":"61400000-0000-0000-0000-000000000001","role":"authenticated"}',true);
+ set local role authenticated;
+ original:=jsonb_build_object('intent','capture','message','Tea preview','planning',null,'missing','[]'::jsonb,'ui','{"quickReplies":[]}'::jsonb,'memoryUpdates','[]'::jsonb,'capture',jsonb_build_object('message','Tea preview','items',jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'kind','task-create','changes',jsonb_build_object('title','Tea')))));
+ perform public.assistant_begin_turn(first_id,convo,true,repeat('1',64),'[{"role":"user","content":"Preview Tea"}]');
+ result:=public.assistant_finish_turn(first_id,repeat('1',64),original);
+ old_version:=(result->'response'->'proposal'->>'version')::uuid;
+ perform public.assistant_begin_turn(revised_id,convo,false,repeat('2',64),'[{"role":"user","content":"Change Tea to Coffee"}]');
+ revised:=jsonb_set(original,'{capture,items,0,changes,title}','"Coffee"')||jsonb_build_object('supersedeCapture',jsonb_build_object('proposalId',first_id,'version',old_version));
+ result:=public.assistant_finish_turn(revised_id,repeat('2',64),revised);
+ if result->>'status'<>'complete' or result->'response'->>'supersededCaptureProposalId'<>first_id::text then raise exception 'replacement not atomic %',result;end if;
+ if public.assistant_finish_turn(revised_id,repeat('2',64),revised)<>result then raise exception 'replacement replay changed';end if;
+ if public.planner_ai_proposal_command(jsonb_build_object('operation','accept','operationId',gen_random_uuid(),'proposalId',first_id,'expectedVersion',old_version))->>'status'<>'conflict' then raise exception 'old preview accepted after revision';end if;
+ if exists(select 1 from public.tasks) then raise exception 'revision wrote task';end if;
+ -- If acceptance wins first, replacement rolls back instead of exposing a duplicate.
+ first_id:=revised_id;old_version:=(result->'response'->'proposal'->>'version')::uuid;revised_id:=gen_random_uuid();
+ perform public.assistant_begin_turn(revised_id,convo,false,repeat('3',64),'[{"role":"user","content":"Change Coffee to Books"}]');
+ if public.planner_ai_proposal_command(jsonb_build_object('operation','accept','operationId',gen_random_uuid(),'proposalId',first_id,'expectedVersion',old_version))->>'status'<>'complete' then raise exception 'setup acceptance failed';end if;
+ revised:=jsonb_set(original,'{capture,items,0,changes,title}','"Books"')||jsonb_build_object('supersedeCapture',jsonb_build_object('proposalId',first_id,'version',old_version));
+ if public.assistant_finish_turn(revised_id,repeat('3',64),revised)->>'status'<>'conflict' then raise exception 'replacement survived accepted source';end if;
+ if exists(select 1 from public.planner_ai_proposals where id=revised_id) or (select count(*) from public.tasks)<>1 then raise exception 'replacement partially committed';end if;
+ reset role;
  perform setval('public.assistant_messages_sequence_seq',sequence_value,sequence_called);
 end $$;
 rollback;

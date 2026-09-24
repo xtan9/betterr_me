@@ -56,6 +56,8 @@ export async function POST(request:Request){
   const captureTurn=input.conversationId?await latestCaptureTurn(client,userId,conversationId):{data:null,error:null};
   if(captureTurn.error)return respond({error:'unavailable'},503);
   const previousCapture=captureTurn.data?.response?.proposal?.body?.items;
+  const sourceCapture=captureTurn.data?await client.from('planner_ai_proposals').select('id,version,state').eq('user_id',userId).eq('id',captureTurn.data.id).maybeSingle():{data:null,error:null};
+  if(sourceCapture.error)return respond({error:'unavailable'},503);
   const declinedReview=Object.values(dayReviewChoices).some(choices=>choices.some(choice=>choice.id==='decline-review'&&choice.value===latest.trim()));
   const emptyTaskChoice=Object.values(emptyTaskChoices).flat().find(choice=>choice.value===latest.trim());
   const requestedLocale=requestedReplyLocale(begun.data.messages);
@@ -157,7 +159,8 @@ export async function POST(request:Request){
    else output.ui.quickReplies=emptyTaskChoices[output.replyLocale];
    output.capture=buildCapturePreview({message:output.message,actions:[]},context);
   }
-  const storedOutput={message:output.message,intent:output.intent,planning:output.planning,missing:output.missing,ui:output.ui,capture:output.capture,memoryUpdates:output.memoryUpdates,...(generated.cancelPlanning?{cancelPlanning:{sessionId:session.data.id,version:session.data.version}}:{})};
+  const supersedeCapture=output.capture.items.length&&sourceCapture.data?.state==='pending'?{proposalId:sourceCapture.data.id,version:sourceCapture.data.version}:undefined;
+  const storedOutput={message:output.message,intent:output.intent,planning:output.planning,missing:output.missing,ui:output.ui,capture:output.capture,memoryUpdates:output.memoryUpdates,...(generated.cancelPlanning?{cancelPlanning:{sessionId:session.data.id,version:session.data.version}}:{}),...(supersedeCapture?{supersedeCapture}:{})};
   if(!generated.cancelPlanning)emit?.(output.message);
   if(signal.aborted)throw new Error('Cancelled');
   const stored=await client.rpc('assistant_finish_turn',{p_id:input.requestId,p_fingerprint:fingerprint,p_output:storedOutput});
