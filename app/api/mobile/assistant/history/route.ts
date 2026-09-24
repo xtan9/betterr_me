@@ -32,6 +32,6 @@ export async function GET(request:Request){
   const current=session.data,planning=current&&['discovering','ready','drafted'].includes(current.status)?{sessionId:current.id,version:current.version,status:current.status,horizon:current.start_date?{startDate:current.start_date,endDate:current.end_date,timezone:current.timezone}:null,missing:Object.entries(current.readiness??{}).filter(([,state])=>state==='missing'||state==='partial').map(([key])=>key),assumptions:current.assumptions}:undefined;
   // Ownership remains useful after acceptance/cancellation: clients may still
   // have an undo or uncertain command for this session in their local cache.
-  return respond({conversationId:conversation.data.id,messages:page.map(({role,content,request_id})=>({role,content,...(request_id?{requestId:request_id}:{})})),before:(messages.data?.length??0)>40?page[0].sequence:null,ui:turn.data?.response?.ui,planning,planningSessionId:current?.id??null,proposal:proposal?.data??null});
+  return respond({conversationId:conversation.data.id,messages:page.map(({role,content,request_id})=>({role,content,...(request_id?{requestId:request_id}:{})})),before:(messages.data?.length??0)>40?page[0].sequence:null,ui:turn.data?.response?.ui,planning,planningSessionId:current?.id??null,cancelledPlanningSessionId:current?.status==='cancelled'?current.id:undefined,proposal:proposal?.data??null});
  }catch{return respond({error:'unavailable'},503);}
 }

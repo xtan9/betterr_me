@@ -7,7 +7,7 @@ vi.mock('@supabase/supabase-js',()=>({createClient:(...args:unknown[])=>{mocks.c
 import {POST} from '@/app/api/mobile/assistant/route';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
-import {assistantOutput} from '@/lib/ai/assistant-orchestrator';
+import {assistantOutput,emptyTaskChoices} from '@/lib/ai/assistant-orchestrator';
 const owner='61300000-0000-0000-0000-000000000001';
 const request=(extra:Record<string,unknown>={},token='user-token')=>new Request('https://betterr.me/api/mobile/assistant',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({requestId:'61300000-0000-0000-0000-000000000002',consent:true,locale:'en',messages:[{role:'user',content:'Add buy milk'}],...extra})});
 beforeEach(()=>{
@@ -15,7 +15,7 @@ beforeEach(()=>{
  mocks.generate.mockReset();mocks.stream.mockReset();
  vi.clearAllMocks();vi.stubEnv('LLM_API_KEY','local-test-key');vi.stubEnv('LLM_MODEL','');vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL','http://127.0.0.1:55721');vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY','local-test-anon');
  mocks.getUser.mockResolvedValue({data:{user:{id:owner}},error:null});
- mocks.from.mockImplementation((table:string)=>{const payload=table==='profiles'?{timezone:'UTC'}:['tasks','projects','user_memories'].includes(table)?[]:null;const query={select:()=>query,eq:()=>query,or:()=>query,is:()=>query,order:()=>query,limit:()=>query,single:async()=>({data:payload,error:null}),maybeSingle:async()=>({data:payload,error:null}),then:(resolve:(value:unknown)=>unknown)=>Promise.resolve({data:payload,error:null}).then(resolve)};return query;});
+ mocks.from.mockImplementation((table:string)=>{const payload=table==='profiles'?{timezone:'UTC'}:['tasks','projects','user_memories'].includes(table)?[]:null;const query={select:()=>query,eq:()=>query,or:()=>query,is:()=>query,not:()=>query,order:()=>query,limit:()=>query,single:async()=>({data:payload,error:null}),maybeSingle:async()=>({data:payload,error:null}),then:(resolve:(value:unknown)=>unknown)=>Promise.resolve({data:payload,error:null}).then(resolve)};return query;});
  mocks.rpc.mockImplementation(async(name:string,args:Record<string,unknown>)=>{
   if(name==='check_ai_chat_rate_limit')return {data:[{allowed:true,minute_remaining:9,day_remaining:99}],error:null};
   if(name==='assistant_begin_turn')return {data:{status:'prepared',messages:args.p_messages},error:null};
@@ -26,6 +26,81 @@ beforeEach(()=>{
  mocks.generate.mockResolvedValue({output:{intent: "capture", planning:null, memoryUpdates:[], nextActionWindow:null, message:'Review this task.',actions:[{kind:'task-create',title:'Buy milk',estimateMinutes:null,dueDate:null,projectId:null,projectKey:null}]}});
 });
 afterEach(()=>vi.useRealTimers());
+
+it('retains exact prior proposal details when the user revises a preview',async()=>{
+ const original=mocks.from.getMockImplementation()!;
+ const items=[{id:'a',kind:'task-create',changes:{title:'Tea',due_date:'2026-09-25',estimate_minutes:20}},{id:'b',kind:'task-create',changes:{title:'Books',due_date:null,estimate_minutes:10}}];
+ const filters:unknown[][]=[];
+ mocks.from.mockImplementation((table:string)=>{
+  if(table!=='assistant_turns')return original(table);
+  let prior=false;
+  const query={select:()=>query,eq:(...args:unknown[])=>{filters.push(args);if(args[0]==='conversation_id')prior=true;return query;},not:()=>query,order:()=>query,limit:()=>query,maybeSingle:async()=>({data:prior?{response:{intent:'capture',proposal:{body:{items}}}}:null,error:null})};return query;
+ });
+ const conversationId='61300000-0000-0000-0000-000000000005';
+ expect((await POST(request({conversationId,messages:[{role:'user',content:'Change only Tea to Coffee; keep the other details.'}]}))).status).toBe(200);
+ expect(mocks.generate.mock.calls[0][0].system).toContain(JSON.stringify(items));
+ expect(filters).toContainEqual(['user_id',owner]);expect(filters).toContainEqual(['conversation_id',conversationId]);
+});
+
+it.each(Object.values(emptyTaskChoices).flat())('keeps the empty-queue choice $id in ordinary conversation: $value',async choice=>{
+ const output={intent:'conversation',followUp:null,message:'Okay.',actions:[],planning:null,memoryUpdates:[],nextActionWindow:null};
+ mocks.generate.mockResolvedValue({output});
+ const body=await (await POST(request({messages:[{role:'user',content:choice.value}]}))).json();
+ expect(body.ui.quickReplies).toEqual([]);expect(body.proposal.body.items).toEqual([]);expect(mocks.nextAction).not.toHaveBeenCalled();
+ const schema=mocks.generate.mock.calls[0][0].output.schema;
+ expect(schema.safeParse({...output,intent:'next_action'}).success).toBe(false);
+ expect(schema.safeParse({...output,followUp:'review_today'}).success).toBe(false);
+});
+
+it.each([false,true])('cancels only the current versioned draft without emitting a new preview (stream=%s)',async stream=>{
+ const original=mocks.from.getMockImplementation()!;
+ mocks.from.mockImplementation((table:string)=>{
+  if(table!=='planning_sessions')return original(table);
+  const query={select:()=>query,eq:()=>query,maybeSingle:async()=>({data:{id:'draft-id',version:'draft-version',status:'drafted',readiness:{},facts:{},assumptions:[]},error:null})};return query;
+ });
+ const output={intent:'conversation',replyLocale:'zh',cancelPlanning:true,message:'好的，已取消这个草稿。',actions:[],planning:null,memoryUpdates:[],nextActionWindow:null};
+ mocks.generate.mockResolvedValue({output});mocks.stream.mockImplementation(()=>({partialOutputStream:(async function*(){yield output;})(),output:Promise.resolve(output)}));
+ const req=request({messages:[{role:'user',content:'这个计划取消，不用再安排。'}]});if(stream)req.headers.set('Accept','application/x-ndjson');
+ const response=await POST(req);expect(response.status).toBe(200);
+ const body=stream?(await response.text()).trim().split('\n').map(line=>JSON.parse(line)).at(-1):await response.json();
+ expect(body.message).toBe(output.message);expect(body.ui.quickReplies).toEqual([]);
+ expect(mocks.rpc.mock.calls.find(([name])=>name==='assistant_finish_turn')?.[1].p_output).toMatchObject({cancelPlanning:{sessionId:'draft-id',version:'draft-version'},planning:null,capture:{items:[]}});
+ expect(mocks.rpc.mock.calls.some(([name])=>name==='planner_schedule_context')).toBe(false);
+});
+
+it.each(['en','zh'])('offers two ordinary conversation exits when no task fits (%s)',async locale=>{
+ mocks.generate.mockResolvedValue({output:{intent:'next_action',replyLocale:locale,message:'Choose.',actions:[],planning:null,memoryUpdates:[],nextActionWindow:{start:'2026-09-21T12:00:00Z',end:'2026-09-21T12:15:00Z',available:true}}});
+ mocks.nextAction.mockResolvedValue({selected:null});
+ const body=await (await POST(request({locale}))).json();
+ expect(body.ui.quickReplies.map((choice:{label:string})=>choice.label)).toEqual(locale==='zh'?['给我一个小动作','先休息']:['Give me a small action','Rest for now']);
+ expect(body.proposal.body.items).toEqual([]);
+});
+
+it.each(['applied','cancelled',null])('does not cancel a session that is %s',async status=>{
+ const original=mocks.from.getMockImplementation()!;
+ mocks.from.mockImplementation((table:string)=>{
+  if(table!=='planning_sessions')return original(table);
+  const query={select:()=>query,eq:()=>query,maybeSingle:async()=>({data:status?{id:'session',version:'v',status}:null,error:null})};return query;
+ });
+ mocks.generate.mockResolvedValue({output:{intent:'conversation',cancelPlanning:true,message:'Cancelled.',planning:null,actions:[],memoryUpdates:[],nextActionWindow:null}});
+ expect((await POST(request())).status).toBe(502);
+ expect(mocks.rpc.mock.calls.some(([name])=>name==='assistant_finish_turn')).toBe(false);
+});
+
+it('withholds cancellation acknowledgement when the atomic turn conflicts',async()=>{
+ const originalFrom=mocks.from.getMockImplementation()!,originalRpc=mocks.rpc.getMockImplementation()!;
+ mocks.from.mockImplementation((table:string)=>{
+  if(table!=='planning_sessions')return originalFrom(table);
+  const query={select:()=>query,eq:()=>query,maybeSingle:async()=>({data:{id:'draft',version:'v',status:'drafted',facts:{},readiness:{},assumptions:[]},error:null})};return query;
+ });
+ mocks.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>name==='assistant_finish_turn'?Promise.resolve({data:{status:'conflict'},error:null}):originalRpc(name,args));
+ const output={intent:'conversation',cancelPlanning:true,message:'Cancelled.',planning:null,actions:[],memoryUpdates:[],nextActionWindow:null};
+ mocks.stream.mockImplementation(()=>({partialOutputStream:(async function*(){yield {intent:'conversation',message:'Cancelled.'};yield output;})(),output:Promise.resolve(output)}));
+ const input=request();input.headers.set('Accept','application/x-ndjson');
+ const events=(await (await POST(input)).text()).trim().split('\n').map(line=>JSON.parse(line));
+ expect(events.some(event=>event.type==='text')).toBe(false);
+ expect(events.at(-1)).toMatchObject({type:'error',error:'conflict'});
+});
 
 it.each([false,true])('offers a day review as text choices after an acknowledged decision without starting a plan (stream=%s)',async stream=>{
  const history=[{role:'user',content:'虚构测试，不要保存记忆。今天不舒服。'},{role:'assistant',content:'先照顾好自己。'},{role:'user',content:'OK 我要去看 urgent care'}];
@@ -484,7 +559,7 @@ describe('native assistant authenticated proposal route',()=>{
 it('previews project, child, existing edits, and routine without applying commands',async()=>{
  const task={id:'61300000-0000-0000-0000-000000000003',title:'Original',version:'61300000-0000-0000-0000-000000000004',estimate_minutes:20,due_date:null,project_id:null};
  const project={id:'61300000-0000-0000-0000-000000000005',name:'Original project',version:'61300000-0000-0000-0000-000000000006'};
- mocks.from.mockImplementation((table:string)=>{const data=table==='tasks'?[task]:table==='projects'?[project]:table==='profiles'?{timezone:'UTC'}:null;const query={select:()=>query,eq:()=>query,or:()=>query,is:()=>query,order:()=>query,limit:()=>query,single:async()=>({data,error:null}),maybeSingle:async()=>({data,error:null}),then:(resolve:(value:unknown)=>unknown)=>Promise.resolve({data,error:null}).then(resolve)};return query;});
+ mocks.from.mockImplementation((table:string)=>{const data=table==='tasks'?[task]:table==='projects'?[project]:table==='profiles'?{timezone:'UTC'}:null;const query={select:()=>query,eq:()=>query,or:()=>query,is:()=>query,not:()=>query,order:()=>query,limit:()=>query,single:async()=>({data,error:null}),maybeSingle:async()=>({data,error:null}),then:(resolve:(value:unknown)=>unknown)=>Promise.resolve({data,error:null}).then(resolve)};return query;});
  mocks.generate.mockResolvedValue({output:{intent: "capture", planning:null, memoryUpdates:[], nextActionWindow:null, message:'Review all changes',actions:[
   {kind:'project-create',key:'house',name:'Household'},
   {kind:'task-create',title:'Buy tea',estimateMinutes:15,dueDate:null,projectId:null,projectKey:'house'},

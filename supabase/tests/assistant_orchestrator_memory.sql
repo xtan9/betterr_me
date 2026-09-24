@@ -22,6 +22,27 @@ begin
  if (select count(*) from public.assistant_messages m where m.request_id='61400000-0000-0000-0000-000000000011'::uuid)<>2 then raise exception 'message identities missing';end if;
  if exists(select 1 from public.tasks) or exists(select 1 from public.calendar_events) then raise exception 'draft mutated plan';end if;
  if (select count(*) from public.planning_sessions)<>1 then raise exception 'session missing';end if;
+ -- Cancellation is an atomic owner/versioned turn; its replay and later history
+ -- must not offer the old draft again. It never modifies tasks or events.
+ declare
+  cancel_id uuid:=gen_random_uuid(); handle public.planning_sessions; cancelled jsonb; cancellation jsonb;
+ begin
+  select * into handle from public.planning_sessions where conversation_id=conversation;
+  perform public.assistant_begin_turn(cancel_id,conversation,false,repeat('9',64),'[{"role":"user","content":"Cancel this draft"}]');
+  cancellation:='{"message":"Draft cancelled.","intent":"conversation","planning":null,"missing":[],"ui":{"quickReplies":[]},"capture":{"message":"Draft cancelled.","items":[]},"memoryUpdates":[]}';
+  cancellation:=cancellation||jsonb_build_object('cancelPlanning',jsonb_build_object('sessionId',handle.id,'version',gen_random_uuid()));
+  if public.assistant_finish_turn(cancel_id,repeat('9',64),cancellation)->>'status'<>'conflict' then raise exception 'stale cancellation accepted';end if;
+  cancellation:=jsonb_set(cancellation,'{cancelPlanning,version}',to_jsonb(handle.version));
+  cancelled:=public.assistant_finish_turn(cancel_id,repeat('9',64),cancellation);
+  if cancelled->>'status'<>'complete' or cancelled->'response'->>'cancelledPlanningSessionId'<>handle.id::text then raise exception 'cancellation missing %',cancelled;end if;
+  if (select status from public.planning_sessions where id=handle.id)<>'cancelled' then raise exception 'draft remained active';end if;
+  if public.assistant_finish_turn(cancel_id,repeat('9',64),cancellation)<>cancelled then raise exception 'cancellation replay changed';end if;
+  if exists(select 1 from public.tasks) or exists(select 1 from public.calendar_events) then raise exception 'cancellation changed saved work';end if;
+  cancel_id:=gen_random_uuid();
+  perform public.assistant_begin_turn(cancel_id,conversation,false,repeat('8',64),'[{"role":"user","content":"Start a new plan instead"}]');
+  if public.assistant_finish_turn(cancel_id,repeat('8',64),jsonb_set(output,'{memoryUpdates}','[]'))->>'status'<>'complete' then raise exception 'new plan after cancellation failed';end if;
+  if not exists(select 1 from public.planning_sessions where id=handle.id and status='discovering' and version<>handle.version) then raise exception 'cancelled session could not restart';end if;
+ end;
  if public.assistant_begin_turn(request_id,conversation,true,repeat('b',64),'[{"role":"user","content":"Changed"}]')->>'status'<>'conflict' then raise exception 'changed retry accepted';end if;
  select id into memory_id from public.user_memories;
  -- A new conversation sees durable memory, but cannot rewrite another user's data.
