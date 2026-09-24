@@ -64,11 +64,27 @@ begin
  proposal:=public.planner_schedule_store_proposal(gen_random_uuid(),'current-session',body)->'proposal';
  result:=public.planner_schedule_command(jsonb_build_object('operation','accept','operationId',gen_random_uuid(),'proposalId',proposal->>'id','expectedVersion',proposal->>'version'));
  if result->>'status'<>'complete' or (select status from public.planning_sessions where id=(plan->>'sessionId')::uuid)<>'applied' then raise exception 'Session acceptance did not complete %',result;end if;
+ declare cancel_turn uuid:=gen_random_uuid(); cancellation jsonb; begin
+  perform public.assistant_begin_turn(cancel_turn,cid,false,repeat('c',64),'[{"role":"user","content":"Cancel draft"}]');
+  cancellation:=jsonb_build_object('message','Cancelled','intent','conversation','planning',null,'missing','[]'::jsonb,'ui',jsonb_build_object('quickReplies','[]'::jsonb),'capture',jsonb_build_object('message','Cancelled','items','[]'::jsonb),'memoryUpdates','[]'::jsonb,
+   'cancelPlanning',jsonb_build_object('sessionId',plan->>'sessionId','version',(select version from public.planning_sessions where id=(plan->>'sessionId')::uuid)));
+  if public.assistant_finish_turn(cancel_turn,repeat('c',64),cancellation)->>'status'<>'conflict' then raise exception 'Cancellation removed an applied plan';end if;
+  if not exists(select 1 from public.calendar_events) then raise exception 'Cancellation lost saved events';end if;
+ end;
  result:=public.planner_schedule_command(jsonb_build_object('operation','undo','operationId',gen_random_uuid(),'changeId',result->>'changeId','expectedVersion',result->>'changeVersion'));
  if result->>'status'<>'complete' or exists(select 1 from public.calendar_events) then raise exception 'Session undo failed %',result;end if;
  if result->'planning'->>'status'<>'drafted' or result->'planning'->>'version' is null then raise exception 'Undo did not restore usable planning session';end if;
  body:=jsonb_set(body,'{planningSession,version}',result->'planning'->'version');body:=jsonb_set(body,'{contextVersion}',public.planner_horizon_context('2030-01-01','2030-01-02')->'version');
- if public.planner_schedule_store_proposal(gen_random_uuid(),'after-undo',body)->>'status'<>'complete' then raise exception 'Cannot preview again after Undo';end if;
+ proposal:=public.planner_schedule_store_proposal(gen_random_uuid(),'after-undo',body)->'proposal';
+ if proposal is null then raise exception 'Cannot preview again after Undo';end if;
+ declare cancel_turn uuid:=gen_random_uuid(); cancellation jsonb; begin
+  perform public.assistant_begin_turn(cancel_turn,cid,false,repeat('d',64),'[{"role":"user","content":"Cancel this unaccepted draft"}]');
+  cancellation:=jsonb_build_object('message','Cancelled','intent','conversation','planning',null,'missing','[]'::jsonb,'ui',jsonb_build_object('quickReplies','[]'::jsonb),'capture',jsonb_build_object('message','Cancelled','items','[]'::jsonb),'memoryUpdates','[]'::jsonb,
+   'cancelPlanning',jsonb_build_object('sessionId',plan->>'sessionId','version',(select version from public.planning_sessions where id=(plan->>'sessionId')::uuid)));
+  if public.assistant_finish_turn(cancel_turn,repeat('d',64),cancellation)->>'status'<>'complete' then raise exception 'Draft cancellation failed';end if;
+  if public.planner_schedule_command(jsonb_build_object('operation','accept','operationId',gen_random_uuid(),'proposalId',proposal->>'id','expectedVersion',proposal->>'version'))->>'status'<>'conflict' then raise exception 'Cancelled preview was applied';end if;
+  if exists(select 1 from public.calendar_events) then raise exception 'Cancelled preview wrote events';end if;
+ end;
  reset role;
  perform setval('public.assistant_messages_sequence_seq',seq,called);
 end $$;

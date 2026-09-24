@@ -9,7 +9,9 @@ import {checkChatRateLimit} from '@/lib/ai/rate-limit';
 import {buildCapturePreview,type CaptureContext} from '@/lib/ai/native-capture';
 import {assistantOutput,assistantInstructions,buildAssistantTurn,selectMemories,planningCalendarContext,resolvePlanningHorizon,publicAssistantPrefix,requestedReplyLocale,dayReviewChoices,type Memory,type PlanningState} from '@/lib/ai/assistant-orchestrator';
 import {nextActionFacts} from '@/lib/ai/next-action';
+import {emptyTaskChoices} from '@/lib/ai/assistant-orchestrator';
 import {safeAiFailure} from '@/lib/ai/safe-failure';
+import {latestCaptureTurn} from '@/lib/ai/assistant-capture-context';
 import {log} from '@/lib/logger';
 import {captureStreamResponse,AssistantStreamError} from '@/lib/ai/native-capture-stream';
 export const maxDuration=120;
@@ -46,14 +48,20 @@ export async function POST(request:Request){
   const genericNextStep=['what should i do next?','接下来做什么？'].includes(latest.trim().toLowerCase());
   // A translated suggestion continues the saved conversation. Do not let the
   // provider reinterpret ordinary advice as a fresh task-selection workflow.
-  const priorTurn=input.conversationId&&genericNextStep
+  const priorTurn=input.conversationId
    ?await client.from('assistant_turns').select('response').eq('user_id',userId).eq('conversation_id',conversationId).not('response','is',null).order('created_at',{ascending:false}).limit(1).maybeSingle()
    :{data:null,error:null};
   if(priorTurn.error)return respond({error:'unavailable'},503);
-  const continuingAdvice=priorTurn.data?.response?.intent==='conversation';
+  const continuingAdvice=genericNextStep&&priorTurn.data?.response?.intent==='conversation';
+  const captureTurn=input.conversationId?await latestCaptureTurn(client,userId,conversationId):{data:null,error:null};
+  if(captureTurn.error)return respond({error:'unavailable'},503);
+  const previousCapture=captureTurn.data?.response?.proposal?.body?.items;
+  const sourceCapture=captureTurn.data?await client.from('planner_ai_proposals').select('id,version,state').eq('user_id',userId).eq('id',captureTurn.data.id).maybeSingle():{data:null,error:null};
+  if(sourceCapture.error)return respond({error:'unavailable'},503);
   const declinedReview=Object.values(dayReviewChoices).some(choices=>choices.some(choice=>choice.id==='decline-review'&&choice.value===latest.trim()));
+  const emptyTaskChoice=Object.values(emptyTaskChoices).flat().find(choice=>choice.value===latest.trim());
   const requestedLocale=requestedReplyLocale(begun.data.messages);
-  const intentSchema=declinedReview?assistantOutput.extend({intent:z.literal('conversation'),followUp:z.null(),planning:z.null(),nextActionWindow:z.null(),actions:assistantOutput.shape.actions.max(0),message:z.string().trim().min(1).max(160)}):continuingAdvice?assistantOutput.extend({intent:z.literal('conversation'),planning:z.null(),nextActionWindow:z.null(),actions:assistantOutput.shape.actions.max(0)}):assistantOutput;
+  const intentSchema=declinedReview||emptyTaskChoice?assistantOutput.extend({intent:z.literal('conversation'),followUp:z.null(),planning:z.null(),cancelPlanning:z.literal(false).optional(),nextActionWindow:z.null(),actions:assistantOutput.shape.actions.max(0),message:z.string().trim().min(1).max(160)}):continuingAdvice?assistantOutput.extend({intent:z.literal('conversation'),planning:z.null(),nextActionWindow:z.null(),actions:assistantOutput.shape.actions.max(0)}):assistantOutput;
   const generationSchema=requestedLocale?intentSchema.extend({replyLocale:z.literal(requestedLocale)}):intentSchema;
   const [tasks,projects,profile]=await Promise.all([
    client.from('tasks').select('id,title,version,estimate_minutes,due_date,project_id').eq('user_id',userId).eq('is_completed',false).is('archived_at',null).order('id').limit(200),
@@ -79,6 +87,8 @@ export async function POST(request:Request){
    };
    if(continuingAdvice)options.system+='\nThis next-step suggestion continues the preceding ordinary advice. Return conversation with one gentle, untimed step based on that advice. Do not ask for available time or choose a task from the queue.';
    if(declinedReview)options.system+='\nThe user declined the day-review offer. Acknowledge in one short sentence, without a new question, checklist or suggestion. Return followUp=null; do not start planning.';
+   if(emptyTaskChoice)options.system+=emptyTaskChoice.id==='rest'?'\nThe user chose rest after an empty task recommendation. Acknowledge briefly without another offer, question or checklist. Return ordinary conversation, followUp=null, no actions or planning.':'\nThe user chose one small action after an empty task recommendation. Suggest one gentle, untimed action respecting their existing constraints. Do not search the queue again, ask for availability, or offer planning. Return ordinary conversation, followUp=null and no actions.';
+   if(previousCapture?.length)options.system+=`\nPrevious capture preview items (historical proposal, not evidence of acceptance or saved tasks): ${JSON.stringify(previousCapture)}. When the user revises this preview, retain its other items and unchanged details in the replacement proposal. Use current owner task/project context for edits to saved entities. Never treat a proposal item ID as a saved task ID.`;
    if(requestedLocale)options.system+=`\nReply in ${requestedLocale==='zh'?'Simplified Chinese':'English'}. This is the latest explicit language choice in the stored conversation and takes precedence over the interface or a translated quick suggestion. Set replyLocale accordingly.`;
    if(!emit)return generateText(options);
    const streamed=streamText({...options,onError:()=>{ /* Sanitized by the stream boundary. */ }});
@@ -86,7 +96,9 @@ export async function POST(request:Request){
     if(signal.aborted)throw new Error('Cancelled');
     // Planning needs readiness/calendar validation; recommendations need the engine.
     // Other replies may stream complete, checked sentences while the model works.
-    if(['conversation','capture','clarification'].includes(partial.intent??'')&&!partial.planning&&typeof partial.message==='string'){
+    // An active draft can be cancelled by this reply. Its acknowledgement must
+    // wait for the versioned transaction, even before the flag has streamed in.
+    if(!previous&&['conversation','capture','clarification'].includes(partial.intent??'')&&!partial.planning&&!partial.cancelPlanning&&typeof partial.message==='string'){
      const prefix=publicAssistantPrefix(partial.message);if(prefix){published=true;emit(prefix);}
     }
    }
@@ -124,6 +136,7 @@ export async function POST(request:Request){
   }
   if(signal.aborted)throw new Error('Cancelled');
   const generated=generationSchema.parse(result.output),recommendationAt=Date.now();
+  if(generated.cancelPlanning&&(!previous||!session.data?.version||generated.intent!=='conversation'||generated.planning||generated.actions.length||generated.nextActionWindow||generated.followUp))throw new Error('Invalid draft cancellation');
   // The duration buttons confirm relative availability. Resolve their exact
   // conversational text after generation so latency does not consume a minute.
   const relativeMinutes=latest.trim().match(/^(?:I have (15|30|60) minutes free now\. What should I do next\?|我现在有 (15|30|60) 分钟空闲，请建议接下来做什么。)$/);
@@ -141,15 +154,18 @@ export async function POST(request:Request){
     const reason=output.replyLocale==='zh'
      ?facts.selected.source==='priority'?'这是你的今日重点，预计能在这段时间内完成。':facts.selected.source==='queue'?'这是行动队列中当前可做、且预计能在这段时间内完成的任务。':'这个任务当前可做，预计能在这段时间内完成。'
      :facts.selected.source==='priority'?'It is a daily priority and its estimate fits this window.':facts.selected.source==='queue'?'It is actionable in your queue and its estimate fits this window.':'It is actionable and its estimate fits this window.';
-    output.message+=`\n${reason}`;
+   output.message+=`\n${reason}`;
    }
+   else output.ui.quickReplies=emptyTaskChoices[output.replyLocale];
    output.capture=buildCapturePreview({message:output.message,actions:[]},context);
   }
-  const storedOutput={message:output.message,intent:output.intent,planning:output.planning,missing:output.missing,ui:output.ui,capture:output.capture,memoryUpdates:output.memoryUpdates};
-  emit?.(output.message);
+  const supersedeCapture=output.capture.items.length&&sourceCapture.data?.state==='pending'?{proposalId:sourceCapture.data.id,version:sourceCapture.data.version}:undefined;
+  const storedOutput={message:output.message,intent:output.intent,planning:output.planning,missing:output.missing,ui:output.ui,capture:output.capture,memoryUpdates:output.memoryUpdates,...(generated.cancelPlanning?{cancelPlanning:{sessionId:session.data.id,version:session.data.version}}:{}),...(supersedeCapture?{supersedeCapture}:{})};
+  if(!generated.cancelPlanning)emit?.(output.message);
   if(signal.aborted)throw new Error('Cancelled');
   const stored=await client.rpc('assistant_finish_turn',{p_id:input.requestId,p_fingerprint:fingerprint,p_output:storedOutput});
   if(stored.error||stored.data?.status!=='complete')return {body:{error:stored.data?.status==='conflict'?'conflict':'unavailable'},status:stored.data?.status==='conflict'?409:502};
+  if(generated.cancelPlanning)emit?.(output.message);
   return {body:stored.data.response,status:200};
   };
   if(request.headers.get('accept')?.includes('application/x-ndjson'))return captureStreamResponse(request.signal,headers,async(emit,signal)=>{

@@ -22,6 +22,27 @@ begin
  if (select count(*) from public.assistant_messages m where m.request_id='61400000-0000-0000-0000-000000000011'::uuid)<>2 then raise exception 'message identities missing';end if;
  if exists(select 1 from public.tasks) or exists(select 1 from public.calendar_events) then raise exception 'draft mutated plan';end if;
  if (select count(*) from public.planning_sessions)<>1 then raise exception 'session missing';end if;
+ -- Cancellation is an atomic owner/versioned turn; its replay and later history
+ -- must not offer the old draft again. It never modifies tasks or events.
+ declare
+  cancel_id uuid:=gen_random_uuid(); handle public.planning_sessions; cancelled jsonb; cancellation jsonb;
+ begin
+  select * into handle from public.planning_sessions where conversation_id=conversation;
+  perform public.assistant_begin_turn(cancel_id,conversation,false,repeat('9',64),'[{"role":"user","content":"Cancel this draft"}]');
+  cancellation:='{"message":"Draft cancelled.","intent":"conversation","planning":null,"missing":[],"ui":{"quickReplies":[]},"capture":{"message":"Draft cancelled.","items":[]},"memoryUpdates":[]}';
+  cancellation:=cancellation||jsonb_build_object('cancelPlanning',jsonb_build_object('sessionId',handle.id,'version',gen_random_uuid()));
+  if public.assistant_finish_turn(cancel_id,repeat('9',64),cancellation)->>'status'<>'conflict' then raise exception 'stale cancellation accepted';end if;
+  cancellation:=jsonb_set(cancellation,'{cancelPlanning,version}',to_jsonb(handle.version));
+  cancelled:=public.assistant_finish_turn(cancel_id,repeat('9',64),cancellation);
+  if cancelled->>'status'<>'complete' or cancelled->'response'->>'cancelledPlanningSessionId'<>handle.id::text then raise exception 'cancellation missing %',cancelled;end if;
+  if (select status from public.planning_sessions where id=handle.id)<>'cancelled' then raise exception 'draft remained active';end if;
+  if public.assistant_finish_turn(cancel_id,repeat('9',64),cancellation)<>cancelled then raise exception 'cancellation replay changed';end if;
+  if exists(select 1 from public.tasks) or exists(select 1 from public.calendar_events) then raise exception 'cancellation changed saved work';end if;
+  cancel_id:=gen_random_uuid();
+  perform public.assistant_begin_turn(cancel_id,conversation,false,repeat('8',64),'[{"role":"user","content":"Start a new plan instead"}]');
+  if public.assistant_finish_turn(cancel_id,repeat('8',64),jsonb_set(output,'{memoryUpdates}','[]'))->>'status'<>'complete' then raise exception 'new plan after cancellation failed';end if;
+  if not exists(select 1 from public.planning_sessions where id=handle.id and status='discovering' and version<>handle.version) then raise exception 'cancelled session could not restart';end if;
+ end;
  if public.assistant_begin_turn(request_id,conversation,true,repeat('b',64),'[{"role":"user","content":"Changed"}]')->>'status'<>'conflict' then raise exception 'changed retry accepted';end if;
  select id into memory_id from public.user_memories;
  -- A new conversation sees durable memory, but cannot rewrite another user's data.
@@ -62,6 +83,37 @@ begin
   perform public.assistant_begin_turn(gen_random_uuid(),gen_random_uuid(),true,repeat('a',64),'[]');
   raise exception 'anon begin permitted';
  exception when insufficient_privilege then null;end;
+ reset role;
+ perform set_config('test.assistant_sequence',sequence_value::text,true);
+ perform set_config('test.assistant_sequence_called',sequence_called::text,true);
+end $$;
+-- Both serialization orders of replacement versus acceptance must be safe.
+do $$
+declare convo uuid:=gen_random_uuid(); first_id uuid:=gen_random_uuid(); revised_id uuid:=gen_random_uuid();
+ original jsonb; revised jsonb; result jsonb; old_version uuid; sequence_value bigint; sequence_called boolean;
+begin
+ sequence_value:=current_setting('test.assistant_sequence')::bigint;
+ sequence_called:=current_setting('test.assistant_sequence_called')::boolean;
+ perform set_config('request.jwt.claims','{"sub":"61400000-0000-0000-0000-000000000001","role":"authenticated"}',true);
+ set local role authenticated;
+ original:=jsonb_build_object('intent','capture','message','Tea preview','planning',null,'missing','[]'::jsonb,'ui','{"quickReplies":[]}'::jsonb,'memoryUpdates','[]'::jsonb,'capture',jsonb_build_object('message','Tea preview','items',jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'kind','task-create','changes',jsonb_build_object('title','Tea')))));
+ perform public.assistant_begin_turn(first_id,convo,true,repeat('1',64),'[{"role":"user","content":"Preview Tea"}]');
+ result:=public.assistant_finish_turn(first_id,repeat('1',64),original);
+ old_version:=(result->'response'->'proposal'->>'version')::uuid;
+ perform public.assistant_begin_turn(revised_id,convo,false,repeat('2',64),'[{"role":"user","content":"Change Tea to Coffee"}]');
+ revised:=jsonb_set(original,'{capture,items,0,changes,title}','"Coffee"')||jsonb_build_object('supersedeCapture',jsonb_build_object('proposalId',first_id,'version',old_version));
+ result:=public.assistant_finish_turn(revised_id,repeat('2',64),revised);
+ if result->>'status'<>'complete' or result->'response'->>'supersededCaptureProposalId'<>first_id::text then raise exception 'replacement not atomic %',result;end if;
+ if public.assistant_finish_turn(revised_id,repeat('2',64),revised)<>result then raise exception 'replacement replay changed';end if;
+ if public.planner_ai_proposal_command(jsonb_build_object('operation','accept','operationId',gen_random_uuid(),'proposalId',first_id,'expectedVersion',old_version))->>'status'<>'conflict' then raise exception 'old preview accepted after revision';end if;
+ if exists(select 1 from public.tasks) then raise exception 'revision wrote task';end if;
+ -- If acceptance wins first, replacement rolls back instead of exposing a duplicate.
+ first_id:=revised_id;old_version:=(result->'response'->'proposal'->>'version')::uuid;revised_id:=gen_random_uuid();
+ perform public.assistant_begin_turn(revised_id,convo,false,repeat('3',64),'[{"role":"user","content":"Change Coffee to Books"}]');
+ if public.planner_ai_proposal_command(jsonb_build_object('operation','accept','operationId',gen_random_uuid(),'proposalId',first_id,'expectedVersion',old_version))->>'status'<>'complete' then raise exception 'setup acceptance failed';end if;
+ revised:=jsonb_set(original,'{capture,items,0,changes,title}','"Books"')||jsonb_build_object('supersedeCapture',jsonb_build_object('proposalId',first_id,'version',old_version));
+ if public.assistant_finish_turn(revised_id,repeat('3',64),revised)->>'status'<>'conflict' then raise exception 'replacement survived accepted source';end if;
+ if exists(select 1 from public.planner_ai_proposals where id=revised_id) or (select count(*) from public.tasks)<>1 then raise exception 'replacement partially committed';end if;
  reset role;
  perform setval('public.assistant_messages_sequence_seq',sequence_value,sequence_called);
 end $$;

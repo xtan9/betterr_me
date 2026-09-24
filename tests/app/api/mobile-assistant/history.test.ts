@@ -26,11 +26,24 @@ it('does not read history without a verified native identity or visible conversa
  rows.assistant_conversations=null;
  expect((await GET(new Request(`https://betterr.me/api/mobile/assistant/history?conversationId=${conversation}`))).status).toBe(404);expect(filters.assistant_messages).toBeUndefined();
 });
+it('restores the last real capture preview after ordinary clarification',async()=>{
+ const original=mocks.from.getMockImplementation()!;
+ mocks.from.mockImplementation((table:string)=>{
+  if(table!=='assistant_turns')return original(table);
+  let capture=false;
+  const query={select:()=>query,eq:(field:string)=>{if(field==='response->>intent')capture=true;return query;},not:()=>query,order:()=>query,limit:()=>query,maybeSingle:async()=>({data:capture?{id:'capture-turn'}:{id:'ordinary-turn',response:{intent:'conversation',ui:{quickReplies:[]}}},error:null})};return query;
+ });
+ rows.planner_ai_proposals={id:'capture-turn',state:'pending'};
+ const body=await (await GET(new Request(`https://betterr.me/api/mobile/assistant/history?conversationId=${conversation}`))).json();
+ expect(body.proposal).toEqual(rows.planner_ai_proposals);
+ expect(filters.planner_ai_proposals).toContainEqual(['id','capture-turn']);
+});
 it.each(['drafted','applied','cancelled'])('restores current owner-private %s session state instead of the immutable pre-accept handle',async(status)=>{
  rows.assistant_turns={id:'turn',response:{planning:{sessionId:'session',version:'before-accept',status:'drafted'},ui:{quickReplies:[]}}};
  rows.planning_sessions={id:'session',version:'after-undo',status,start_date:'2030-01-01',end_date:'2030-01-14',timezone:'UTC',readiness:{sleep:'missing',horizon:'known'},assumptions:['Sleep remains flexible']};
  const response=await GET(new Request(`https://betterr.me/api/mobile/assistant/history?conversationId=${conversation}`));expect(response.status).toBe(200);const body=await response.json();
  if(status==='drafted')expect(body.planning).toMatchObject({version:'after-undo',missing:['sleep'],horizon:{startDate:'2030-01-01',endDate:'2030-01-14'}});else expect(body.planning).toBeUndefined();
+ expect(body.cancelledPlanningSessionId).toBe(status==='cancelled'?'session':undefined);
  expect(body.planningSessionId).toBe('session');
  expect(filters.planning_sessions).toContainEqual(['user_id',owner]);expect(filters.planning_sessions).toContainEqual(['conversation_id',conversation]);
 });

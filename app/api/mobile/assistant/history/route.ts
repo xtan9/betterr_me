@@ -1,5 +1,6 @@
 import {z} from 'zod';
 import {authenticateNativeRequest} from '@/lib/auth/native-request';
+import {latestCaptureTurn} from '@/lib/ai/assistant-capture-context';
 const headers={'Cache-Control':'no-store','Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'GET, OPTIONS'};
 const respond=(body:unknown,status=200)=>Response.json(body,{status,headers});
 export function OPTIONS(){return new Response(null,{status:204,headers});}
@@ -23,7 +24,9 @@ export async function GET(request:Request){
   // Restore the latest proposal using its current state, not the immutable response's old state.
   const turn=await client.from('assistant_turns').select('id,response').eq('user_id',userId).eq('conversation_id',conversation.data.id).not('response','is',null).order('created_at',{ascending:false}).limit(1).maybeSingle();
   if(turn.error)return respond({error:'unavailable'},503);
-  const proposal=turn.data?await client.from('planner_ai_proposals').select('*').eq('user_id',userId).eq('id',turn.data.id).maybeSingle():null;
+  const capture=await latestCaptureTurn(client,userId,conversation.data.id);
+  if(capture.error)return respond({error:'unavailable'},503);
+  const proposal=capture.data?await client.from('planner_ai_proposals').select('*').eq('user_id',userId).eq('id',capture.data.id).maybeSingle():null;
   if(proposal?.error)return respond({error:'unavailable'},503);
   // Turn responses are immutable. Undo and later discovery advance the session
   // independently, so restoring its old response handle would make retries stale.
@@ -32,6 +35,6 @@ export async function GET(request:Request){
   const current=session.data,planning=current&&['discovering','ready','drafted'].includes(current.status)?{sessionId:current.id,version:current.version,status:current.status,horizon:current.start_date?{startDate:current.start_date,endDate:current.end_date,timezone:current.timezone}:null,missing:Object.entries(current.readiness??{}).filter(([,state])=>state==='missing'||state==='partial').map(([key])=>key),assumptions:current.assumptions}:undefined;
   // Ownership remains useful after acceptance/cancellation: clients may still
   // have an undo or uncertain command for this session in their local cache.
-  return respond({conversationId:conversation.data.id,messages:page.map(({role,content,request_id})=>({role,content,...(request_id?{requestId:request_id}:{})})),before:(messages.data?.length??0)>40?page[0].sequence:null,ui:turn.data?.response?.ui,planning,planningSessionId:current?.id??null,proposal:proposal?.data??null});
+  return respond({conversationId:conversation.data.id,messages:page.map(({role,content,request_id})=>({role,content,...(request_id?{requestId:request_id}:{})})),before:(messages.data?.length??0)>40?page[0].sequence:null,ui:turn.data?.response?.ui,planning,planningSessionId:current?.id??null,cancelledPlanningSessionId:current?.status==='cancelled'?current.id:undefined,proposal:proposal?.data??null});
  }catch{return respond({error:'unavailable'},503);}
 }
