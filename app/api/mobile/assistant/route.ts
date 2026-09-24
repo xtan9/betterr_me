@@ -11,6 +11,7 @@ import {assistantOutput,assistantInstructions,buildAssistantTurn,selectMemories,
 import {nextActionFacts} from '@/lib/ai/next-action';
 import {emptyTaskChoices} from '@/lib/ai/assistant-orchestrator';
 import {safeAiFailure} from '@/lib/ai/safe-failure';
+import {latestCaptureTurn} from '@/lib/ai/assistant-capture-context';
 import {log} from '@/lib/logger';
 import {captureStreamResponse,AssistantStreamError} from '@/lib/ai/native-capture-stream';
 export const maxDuration=120;
@@ -52,7 +53,9 @@ export async function POST(request:Request){
    :{data:null,error:null};
   if(priorTurn.error)return respond({error:'unavailable'},503);
   const continuingAdvice=genericNextStep&&priorTurn.data?.response?.intent==='conversation';
-  const previousCapture=priorTurn.data?.response?.intent==='capture'?priorTurn.data.response.proposal?.body?.items:undefined;
+  const captureTurn=input.conversationId?await latestCaptureTurn(client,userId,conversationId):{data:null,error:null};
+  if(captureTurn.error)return respond({error:'unavailable'},503);
+  const previousCapture=captureTurn.data?.response?.proposal?.body?.items;
   const declinedReview=Object.values(dayReviewChoices).some(choices=>choices.some(choice=>choice.id==='decline-review'&&choice.value===latest.trim()));
   const emptyTaskChoice=Object.values(emptyTaskChoices).flat().find(choice=>choice.value===latest.trim());
   const requestedLocale=requestedReplyLocale(begun.data.messages);

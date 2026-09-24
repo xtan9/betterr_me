@@ -1,5 +1,6 @@
 import {z} from 'zod';
 import {authenticateNativeRequest} from '@/lib/auth/native-request';
+import {latestCaptureTurn} from '@/lib/ai/assistant-capture-context';
 const headers={'Cache-Control':'no-store','Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'GET, OPTIONS'};
 const respond=(body:unknown,status=200)=>Response.json(body,{status,headers});
 export function OPTIONS(){return new Response(null,{status:204,headers});}
@@ -23,7 +24,9 @@ export async function GET(request:Request){
   // Restore the latest proposal using its current state, not the immutable response's old state.
   const turn=await client.from('assistant_turns').select('id,response').eq('user_id',userId).eq('conversation_id',conversation.data.id).not('response','is',null).order('created_at',{ascending:false}).limit(1).maybeSingle();
   if(turn.error)return respond({error:'unavailable'},503);
-  const proposal=turn.data?await client.from('planner_ai_proposals').select('*').eq('user_id',userId).eq('id',turn.data.id).maybeSingle():null;
+  const capture=await latestCaptureTurn(client,userId,conversation.data.id);
+  if(capture.error)return respond({error:'unavailable'},503);
+  const proposal=capture.data?await client.from('planner_ai_proposals').select('*').eq('user_id',userId).eq('id',capture.data.id).maybeSingle():null;
   if(proposal?.error)return respond({error:'unavailable'},503);
   // Turn responses are immutable. Undo and later discovery advance the session
   // independently, so restoring its old response handle would make retries stale.
