@@ -22,6 +22,9 @@ test('execution and reminder routes reach their own auth without browser cookies
   const settings=await client.get('/api/mobile/execution/settings',{maxRedirects:0});
   expect(settings.status()).toBe(401);expect(await settings.json()).toEqual({error:'unauthorized'});
   const dispatch=await client.get('/api/cron/assistant-reminders',{maxRedirects:0});
-  expect([401,503]).toContain(dispatch.status());expect(dispatch.headers().location).toBeUndefined();
+  // Disposable PR servers intentionally have no delivery credentials.
+  if(dispatch.status()===500)expect(await dispatch.json()).toEqual({error:'Server misconfigured'});
+  else{expect(dispatch.status()).toBe(401);expect(await dispatch.json()).toEqual({error:'Unauthorized'});}
+  expect(dispatch.headers().location).toBeUndefined();
  }finally{await client.dispose();}
 });
