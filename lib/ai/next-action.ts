@@ -5,7 +5,7 @@ export type RecommendationTask={id:string;title:string;version:string;estimate_m
 async function rows<T>(client:SupabaseClient,table:string,userId:string,columns='*'):Promise<T[]>{
  const all:T[]=[];for(let offset=0;;offset+=500){const {data,error}=await client.from(table).select(columns).eq('user_id',userId).order(table==='planner_routine_schedules'?'series_id':'id').range(offset,offset+499);if(error||!data)throw new Error('Unavailable context');all.push(...data as T[]);if(data.length<500)return all;}
 }
-export async function nextActionFacts(client:SupabaseClient,userId:string,start:number,end:number){
+export async function nextActionFacts(client:SupabaseClient,userId:string,start:number,end:number,options:{excludedIds?:string[]}={}){
  const profile=await client.from('profiles').select('timezone').eq('id',userId).single();if(profile.error)throw new Error('Unavailable profile');
  const timezone=profile.data?.timezone||'UTC',date=getLocalDateInTimeZone(new Date(start),timezone),endDate=getLocalDateInTimeZone(new Date(end),timezone);
  const [queue,priorities,events,taskMetadata,series,schedules]=await Promise.all([
@@ -25,6 +25,7 @@ export async function nextActionFacts(client:SupabaseClient,userId:string,start:
  const order=[...new Set<string>([...priorities.data.taskIds,...queue.data.queue,...remaining.map(task=>task.id)])];
  const skipped:{id:string;title:string;reasons:string[]}[]=[];let selected:(RecommendationTask&{due_date:string|null;source:'priority'|'queue'|'other'})|null=null;
  for(const id of order){const task=byId.get(id);if(!task)continue;const reasons=[...task.facts.reasons];
+  if(options.excludedIds?.includes(id))reasons.push('deferred');
   if(task.estimate_minutes===null&&!reasons.includes('estimate-unknown'))reasons.push('estimate-unknown');
   if(gapMinutes<=0)reasons.push('occupied');else if(task.estimate_minutes!==null&&task.estimate_minutes>gapMinutes&&!reasons.includes('gap-too-short'))reasons.push('gap-too-short');
   if(reasons.length||!task.facts.actionable){skipped.push({id,title:task.title,reasons:reasons.length?reasons:['unavailable']});continue;}
