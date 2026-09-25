@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     if (command.operation === 'accept') {
       if (!command.proposalId) return reply({ error: 'invalid' }, 400);
       const { data, error } = await auth.client.from('planner_ai_proposals').select('body,state,version,proposal_type').eq('user_id', auth.userId).eq('id', command.proposalId).maybeSingle();
-      if (error) return reply({ error: 'unavailable' }, 503);
+      if (error) { log.error('[mobile-planning-command] Proposal read failed', undefined, { reason: 'unavailable' }); return reply({ error: 'unavailable' }, 503); }
       if (!data || data.proposal_type !== 'schedule' || data.state === 'pending' && data.version !== command.expectedVersion) return reply({ error: 'conflict' }, 409);
       // A retry of an applied command uses the existing database idempotency path.
       if (data.state === 'pending') {
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
       }
     }
     const result = await auth.client.rpc('planner_schedule_command', { p_request: command });
-    if (result.error) return reply({ error: 'unavailable' }, 503);
+    if (result.error) { log.error('[mobile-planning-command] Command failed', undefined, { reason: 'unavailable' }); return reply({ error: 'unavailable' }, 503); }
     return reply(result.data);
   } catch (error) {
     const invalid = error instanceof z.ZodError || error instanceof SyntaxError;
