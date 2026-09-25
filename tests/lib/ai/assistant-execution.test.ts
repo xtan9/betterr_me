@@ -27,3 +27,11 @@ it('enforces opt-in, local hours, daily cap, two-hour spacing and snooze',()=>{
  expect(reminderDue({...settings,snoozedUntil:'2030-01-01T19:00:00Z'},now)).toBe(false);
  expect(reminderDue(settings,Date.parse('2030-01-02T02:00:00Z'))).toBe(false);
 });
+it('uses elapsed spacing across the DST fold and resets the cap at local midnight',()=>{
+ const settings={enabled:true,timezone:'America/Los_Angeles',startMinute:0,endMinute:1440,lastSentAt:'2026-11-01T08:30:00Z',sentDate:'2026-11-01',sentCount:1,snoozedUntil:null};
+ expect(reminderDue(settings,Date.parse('2026-11-01T09:30:00Z'))).toBe(false);
+ expect(reminderDue(settings,Date.parse('2026-11-01T10:30:00Z'))).toBe(true);
+ expect(reminderDue({...settings,lastSentAt:null,sentCount:3},Date.parse('2026-11-02T07:59:59Z'))).toBe(false);
+ expect(reminderDue({...settings,lastSentAt:null,sentCount:3},Date.parse('2026-11-02T08:00:00Z'))).toBe(true);
+ expect(reminderDue({...settings,lastSentAt:null,startMinute:180,endMinute:240},Date.parse('2026-03-08T10:00:00Z'))).toBe(true);
+});

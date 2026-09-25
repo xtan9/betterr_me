@@ -25,9 +25,11 @@ create table public.assistant_reminder_settings (
  version uuid not null default gen_random_uuid(),
  snoozed_until timestamptz,
  last_sent_at timestamptz,
+ last_checked_at timestamptz,
  sent_date date,
  sent_count integer not null default 0
 );
+create index assistant_reminder_dispatch_order on public.assistant_reminder_settings(last_checked_at nulls first,user_id) where enabled;
 create table public.assistant_push_devices (
  token text primary key check(length(token)<250 and token ~ '^(ExponentPushToken|ExpoPushToken)\[[A-Za-z0-9_-]+\]$'),
  user_id uuid not null references public.profiles(id) on delete cascade,
@@ -95,9 +97,10 @@ begin
   if found and token_owner<>owner_id then return jsonb_build_object('status','conflict');end if;
   insert into public.assistant_push_devices(token,user_id,session_id) values(p_request->>'token',owner_id,(auth.jwt()->>'session_id')::uuid) on conflict(token) do update set updated_at=now(),session_id=excluded.session_id where assistant_push_devices.user_id=owner_id;
  end if;
- insert into public.assistant_reminder_settings(user_id,enabled,timezone,start_minute,end_minute,locale)
- values(owner_id,(p_request->>'enabled')::boolean,p_request->>'timezone',(p_request->>'startMinute')::integer,(p_request->>'endMinute')::integer,p_request->>'locale')
- on conflict(user_id) do update set enabled=excluded.enabled,timezone=excluded.timezone,start_minute=excluded.start_minute,end_minute=excluded.end_minute,locale=excluded.locale,version=gen_random_uuid();
+ insert into public.assistant_reminder_settings(user_id,enabled,timezone,start_minute,end_minute,locale,snoozed_until)
+ values(owner_id,(p_request->>'enabled')::boolean,p_request->>'timezone',(p_request->>'startMinute')::integer,(p_request->>'endMinute')::integer,p_request->>'locale',
+  (select max(until_at) from public.assistant_execution_events where user_id=owner_id and operation='later' and until_at>now()))
+ on conflict(user_id) do update set enabled=excluded.enabled,timezone=excluded.timezone,start_minute=excluded.start_minute,end_minute=excluded.end_minute,locale=excluded.locale,snoozed_until=greatest(assistant_reminder_settings.snoozed_until,excluded.snoozed_until),version=gen_random_uuid();
  if not (p_request->>'enabled')::boolean then delete from public.assistant_push_devices where user_id=owner_id;end if;
  return jsonb_build_object('status','complete');
 exception when invalid_text_representation or check_violation or not_null_violation then return jsonb_build_object('status','invalid');

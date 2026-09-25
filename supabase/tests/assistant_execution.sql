@@ -17,7 +17,10 @@ begin
  if public.assistant_execution_command(request||jsonb_build_object('operationId',gen_random_uuid(),'expectedVersion',gen_random_uuid()))->>'status'<>'conflict' then raise exception 'stale task accepted';end if;
  if public.assistant_execution_command(request||jsonb_build_object('operationId',gen_random_uuid(),'expectedVersion',null))->>'status'<>'conflict' then raise exception 'missing version accepted';end if;
  settings:='{"enabled":true,"timezone":"UTC","startMinute":0,"endMinute":1440,"locale":"en","expectedVersion":null,"token":"ExpoPushToken[fixture-one]"}';
+ request:=request||jsonb_build_object('operation','later','operationId',gen_random_uuid(),'until',now()+interval '2 hours');
+ if public.assistant_execution_command(request)->>'status'<>'complete' then raise exception 'later before opt-in failed';end if;
  if public.assistant_reminder_settings_command(settings)->>'status'<>'complete' then raise exception 'settings failed';end if;
+ if not exists(select 1 from public.assistant_reminder_settings where snoozed_until>=now()+interval '2 hours') then raise exception 'enabling reminders lost earlier Later';end if;
  select s.version into version from public.assistant_reminder_settings s;
  if public.assistant_reminder_settings_command(settings)->>'status'<>'conflict' then raise exception 'stale settings accepted';end if;
  request:=request||jsonb_build_object('operation','later','operationId',gen_random_uuid(),'until',now()+interval '2 hours');

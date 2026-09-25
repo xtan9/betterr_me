@@ -10,13 +10,15 @@ export async function GET(request:Request){
  if(!auth.ok)return Response.json({error:auth.error},{status:auth.status});
  try{
   const client=createAdminClient(),now=Date.now();
-  // Stable pagination; atomic claims enforce the shared cap across devices.
-  let sent=0,checked=0,offset=0;
-  while(Date.now()-now<40_000){
-   const settings=await client.from('assistant_reminder_settings').select('*').eq('enabled',true).order('user_id').range(offset,offset+99);
+  // Persist progress before slow work so failed users cannot starve later users.
+  // Atomic claims separately enforce the shared cap across devices/workers.
+  let sent=0,checked=0;
+   const settings=await client.from('assistant_reminder_settings').select('*').eq('enabled',true).order('last_checked_at',{nullsFirst:true}).order('user_id').range(0,99);
    if(settings.error||!settings.data)throw new Error('Unavailable');
    for(const row of settings.data){
     if(Date.now()-now>=40_000)break;
+    const progress=await client.from('assistant_reminder_settings').update({last_checked_at:new Date(now).toISOString()}).eq('user_id',row.user_id);
+    if(progress.error)throw new Error('Unavailable');
     checked++;
     if(!reminderDue({enabled:row.enabled,timezone:row.timezone,startMinute:row.start_minute,endMinute:row.end_minute,lastSentAt:row.last_sent_at,sentDate:row.sent_date,sentCount:row.sent_count,snoozedUntil:row.snoozed_until},now))continue;
     try{
@@ -46,8 +48,6 @@ export async function GET(request:Request){
      }
     }catch{ /* Private content and provider payloads must not enter logs. Claim stays consumed. */ }
    }
-   if(settings.data.length<100)break;offset+=100;
-  }
   return Response.json({checked,sent},{headers:{'Cache-Control':'no-store'}});
  }catch{return Response.json({error:'unavailable'},{status:503});}
 }

@@ -11,7 +11,7 @@ beforeEach(()=>{
  mocks.quiet.mockResolvedValue({pushQuietWindow:{status:'ready',value:{status:'disabled'}},userTimeZone:{status:'resolved',value:'UTC'}});
  mocks.recommend.mockImplementation(async()=>({selected:mocks.selected?{title:'Private task'}:null}));
  mocks.rpc.mockImplementation(async(name:string)=>({data:name==='assistant_active_push_devices'?[{token:'ExpoPushToken[fixture]'}]:name==='assistant_claim_reminder'?mocks.claim:{queue:{},priorities:{}},error:null}));
- mocks.from.mockImplementation(()=>{const q={select:()=>q,eq:()=>q,order:()=>q,range:async()=>({data:[{user_id:'owner',enabled:true,timezone:'UTC',start_minute:540,end_minute:1020,last_sent_at:null,sent_date:null,sent_count:0,snoozed_until:null,locale:'en',version:'version'}]})};return q;});
+ mocks.from.mockImplementation(()=>{const q={select:()=>q,eq:()=>q,order:()=>q,update:()=>q,then:(resolve:(value:unknown)=>void)=>resolve({error:null}),range:async()=>({data:[{user_id:'owner',enabled:true,timezone:'UTC',start_minute:540,end_minute:1020,last_sent_at:null,sent_date:null,sent_count:0,snoozed_until:null,locale:'en',version:'version'}]})};return q;});
 });
 it('sends only a generic owner-scoped notification after eligibility and an atomic claim',async()=>{
  expect((await GET(new Request('https://example.test'))).status).toBe(200);
@@ -24,4 +24,11 @@ it('does not send without suitable work or after another worker consumed the quo
 it('requires cron authorization and fails closed on unavailable quiet-hours context',async()=>{
  mocks.allow=false;expect((await GET(new Request('https://example.test'))).status).toBe(401);expect(mocks.from).not.toHaveBeenCalled();
  mocks.allow=true;mocks.quiet.mockResolvedValue(null);await GET(new Request('https://example.test'));expect(mocks.send).not.toHaveBeenCalled();
+});
+it('resumes behind a slow user on the next dispatch instead of starving later users',async()=>{
+ const checked=new Map<string,string>();let owner='';let update:unknown;
+ mocks.from.mockImplementation(()=>{const q={select:()=>q,eq:(_key:string,value:string)=>{owner=value;return q;},order:()=>q,range:async()=>({data:['first','second'].sort((a,b)=>(checked.get(a)??'').localeCompare(checked.get(b)??'')).map(user_id=>({user_id,enabled:true,timezone:'UTC',start_minute:0,end_minute:1440,version:'v'}))}),update:(value:{last_checked_at:string})=>{update=value;return q;},then:(resolve:(value:unknown)=>void)=>{if(update){checked.set(owner,(update as {last_checked_at:string}).last_checked_at);update=undefined;}resolve({error:null});}};return q;});
+ mocks.quiet.mockImplementation(async()=>{vi.advanceTimersByTime(41000);throw new Error('slow dependency');});
+ await GET(new Request('https://example.test'));await GET(new Request('https://example.test'));
+ expect(mocks.quiet.mock.calls.map(call=>call[0])).toEqual(['first','second']);expect(mocks.send).not.toHaveBeenCalled();
 });
