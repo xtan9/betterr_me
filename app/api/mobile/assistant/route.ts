@@ -13,6 +13,8 @@ import {emptyTaskChoices} from '@/lib/ai/assistant-orchestrator';
 import {safeAiFailure} from '@/lib/ai/safe-failure';
 import {latestCaptureTurn} from '@/lib/ai/assistant-capture-context';
 import {log} from '@/lib/logger';
+import { googleAssistantStatus, googleAssistantInstructions, googleReadRequest, readForAssistant } from '@/lib/google/assistant';
+import { googleDayRange } from '@/lib/google/planning';
 import {captureStreamResponse,AssistantStreamError} from '@/lib/ai/native-capture-stream';
 export const maxDuration=120;
 const requestSchema=z.object({requestId:z.string().uuid(),conversationId:z.string().uuid().optional(),consent:z.literal(true),locale:z.enum(['en','zh']),messages:z.array(z.object({role:z.enum(['user','assistant']),content:z.string().min(1).max(8000)}).strict()).min(1).max(40)}).strict().refine(value=>value.messages.at(-1)?.role==='user');
@@ -62,7 +64,8 @@ export async function POST(request:Request){
   const emptyTaskChoice=Object.values(emptyTaskChoices).flat().find(choice=>choice.value===latest.trim());
   const requestedLocale=requestedReplyLocale(begun.data.messages);
   const intentSchema=declinedReview||emptyTaskChoice?assistantOutput.extend({intent:z.literal('conversation'),followUp:z.null(),planning:z.null(),cancelPlanning:z.literal(false).optional(),nextActionWindow:z.null(),actions:assistantOutput.shape.actions.max(0),message:z.string().trim().min(1).max(160)}):continuingAdvice?assistantOutput.extend({intent:z.literal('conversation'),planning:z.null(),nextActionWindow:z.null(),actions:assistantOutput.shape.actions.max(0)}):assistantOutput;
-  const generationSchema=requestedLocale?intentSchema.extend({replyLocale:z.literal(requestedLocale)}):intentSchema;
+  const generationSchema=(requestedLocale?intentSchema.extend({replyLocale:z.literal(requestedLocale)}):intentSchema).extend({googleRead:googleReadRequest});
+  const googleStatus = await googleAssistantStatus(userId);
   const [tasks,projects,profile]=await Promise.all([
    client.from('tasks').select('id,title,version,estimate_minutes,due_date,project_id').eq('user_id',userId).eq('is_completed',false).is('archived_at',null).order('id').limit(200),
    client.from('projects').select('id,name,version').eq('user_id',userId).eq('status','active').is('completed_at',null).order('id').limit(200),
@@ -79,12 +82,15 @@ export async function POST(request:Request){
   let selectedMemories=selectMemories((memories.data??[]) as Memory[],previous,new Date());
   const configured=process.env.LLM_MODEL,modelId=configured&&AVAILABLE_MODELS.some(model=>model.id===configured)?configured:DEFAULT_MODEL_ID;
   const runTurn=async(emit?: (text:string)=>void,signal=request.signal)=>{
+  let googleData: Awaited<ReturnType<typeof readForAssistant>> | null = null;
+  let usedGoogleCalendar = false;
   let schemaRetryHint:string|null=null,published=false;
   const generateOnce=async(calendar:unknown)=>{
    const options={model:llmProvider(modelId),output:Output.object({schema:generationSchema}),providerOptions:structuredOutputProviderOptions,maxOutputTokens:Math.min(6144,Math.max(1,Number.parseInt(process.env.LLM_MAX_TOKENS||'6144',10)||6144)),abortSignal:signal,
    system:`${assistantInstructions}${schemaRetryHint!==null?`\nThe previous reply did not match the output schema (${schemaRetryHint}). Regenerate from the original context, include every required field with its declared type, and use only declared enum values. Keep planning.draft under 2400 characters and memoryUpdates at most 10 items. Preserve confirmed constraints and explicit unknowns; do not add facts or calendar actions. Prioritize durable planning preferences and combine related memories rather than listing every detail separately.`:''}\nInterface language fallback: ${input.locale==='zh'?'Simplified Chinese':'English'}. Honor the requested reply language via replyLocale; the interface language is only a fallback. Current instant: ${new Date().toISOString()}; current local date: ${getLocalDateInTimeZone(new Date(),context.timezone)}. Owner context: ${JSON.stringify({capture:context,memories:selectedMemories,planning:previous,calendar})}`,
    messages:begun.data.messages,
    };
+   options.system += `${googleAssistantInstructions}\nConnection status: ${JSON.stringify(googleStatus)}\nUntrusted Google source data: ${JSON.stringify(googleData?.results ?? null)}`;
    if(continuingAdvice)options.system+='\nThis next-step suggestion continues the preceding ordinary advice. Return conversation with one gentle, untimed step based on that advice. Do not ask for available time or choose a task from the queue.';
    if(declinedReview)options.system+='\nThe user declined the day-review offer. Acknowledge in one short sentence, without a new question, checklist or suggestion. Return followUp=null; do not start planning.';
    if(emptyTaskChoice)options.system+=emptyTaskChoice.id==='rest'?'\nThe user chose rest after an empty task recommendation. Acknowledge briefly without another offer, question or checklist. Return ordinary conversation, followUp=null, no actions or planning.':'\nThe user chose one small action after an empty task recommendation. Suggest one gentle, untimed action respecting their existing constraints. Do not search the queue again, ask for availability, or offer planning. Return ordinary conversation, followUp=null and no actions.';
@@ -98,7 +104,7 @@ export async function POST(request:Request){
     // Other replies may stream complete, checked sentences while the model works.
     // An active draft can be cancelled by this reply. Its acknowledgement must
     // wait for the versioned transaction, even before the flag has streamed in.
-    if(!previous&&['conversation','capture','clarification'].includes(partial.intent??'')&&!partial.planning&&!partial.cancelPlanning&&typeof partial.message==='string'){
+    if((!googleStatus.configured || googleData || partial.googleRead === null)&&!previous&&['conversation','capture','clarification'].includes(partial.intent??'')&&!partial.planning&&!partial.cancelPlanning&&typeof partial.message==='string'){
      const prefix=publicAssistantPrefix(partial.message);if(prefix){published=true;emit(prefix);}
     }
    }
@@ -116,6 +122,11 @@ export async function POST(request:Request){
    }
   };
   let result=await generate();
+  const requestedGoogle = generationSchema.parse(result.output).googleRead;
+  if (requestedGoogle && googleStatus.configured) {
+   googleData = await readForAssistant(userId, requestedGoogle);
+   result = await generate();
+  }
   const classified=generationSchema.parse(result.output);
   if(classified.intent==='planning'||classified.planning){
    // Read the existing planner snapshot only for planning. It includes recurrence identities;
@@ -129,13 +140,16 @@ export async function POST(request:Request){
    if(snapshot.error||!Array.isArray(snapshot.data?.events))return {body:{error:'unavailable'},status:503};
    // An empty snapshot adds no commitments to the already validated discovery
    // or prose draft. Avoid a second full generation inside the request deadline.
-   if(snapshot.data.events.length||memoryPeriodChanged){
-    const contextRange=horizon??{startDate:date,endDate:addLocalDays(date,13),timezone:context.timezone};
-    result=await generate({contextRange,coverageDate:date,coverageComplete:snapshot.data.coverageComplete,events:planningCalendarContext(snapshot.data.events,contextRange)});
+   const contextRange=horizon??{startDate:date,endDate:addLocalDays(date,13),timezone:context.timezone};
+   const googleEvents = await googleDayRange(userId, contextRange.startDate, contextRange.endDate, contextRange.timezone);
+   usedGoogleCalendar = googleEvents.length > 0;
+   if(snapshot.data.events.length||googleEvents.length||memoryPeriodChanged){
+    result=await generate({contextRange,coverageDate:date,coverageComplete:snapshot.data.coverageComplete,events:planningCalendarContext([...snapshot.data.events,...googleEvents],contextRange)});
    }
   }
   if(signal.aborted)throw new Error('Cancelled');
-  const generated=generationSchema.parse(result.output),recommendationAt=Date.now();
+  const {googleRead: _googleRead, ...generated}=generationSchema.parse(result.output),recommendationAt=Date.now();
+  if (googleData || usedGoogleCalendar || begun.data.messages.some((message: {content:string}) => /mail\.google\.com|calendar\.google\.com/.test(message.content))) generated.memoryUpdates=[];
   if(generated.cancelPlanning&&(!previous||!session.data?.version||generated.intent!=='conversation'||generated.planning||generated.actions.length||generated.nextActionWindow||generated.followUp))throw new Error('Invalid draft cancellation');
   // The duration buttons confirm relative availability. Resolve their exact
   // conversational text after generation so latency does not consume a minute.
@@ -145,6 +159,10 @@ export async function POST(request:Request){
    generated.nextActionWindow={start:new Date(recommendationAt).toISOString(),end:new Date(recommendationAt+minutes*60000).toISOString(),available:true};
   }
   const output=buildAssistantTurn(generated,context,previous,latest,input.locale);
+  const sources = googleData?.sources ?? (usedGoogleCalendar ? [{label:'Google Calendar',url:'https://calendar.google.com/'}] : []);
+  let citationLength = 0;
+  const citations = sources.map((source,index)=>`[${index+1}] ${source.label}: ${source.url}`).filter(line => { citationLength += line.length + 1; return citationLength <= 2500; });
+  if (citations.length) output.message += '\n\n' + citations.join('\n');
   if(output.intent==='next_action'&&output.nextActionWindow){
    const start=Math.max(recommendationAt,Date.parse(output.nextActionWindow.start)),end=Date.parse(output.nextActionWindow.end);
    if(end<=start||end-start>86400000||start>Date.now()+30*86400000)return {body:{error:'invalid'},status:400};
