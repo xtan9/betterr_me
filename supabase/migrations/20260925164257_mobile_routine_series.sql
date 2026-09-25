@@ -46,31 +46,33 @@ begin
    'startTime',r.start_time,'endTime',r.end_time,'protected',r.is_protected,
    'effectiveFrom',v.effective_from,'activationDate',s.activation_date,
    'supported',planner_private.routine_rule_supported(v.recurrence_rule),
-   'nextDate',n.day,'nextStartTime',n.start_time,
+   'nextDate',n.day,'nextStartTime',n.start_time,'nextStartInstant',n.starts_at,
    'nextReason',case when n.day is not null then null when s.status<>'active' then s.status
      when not planner_private.routine_rule_supported(v.recurrence_rule) then 'unsupported' else 'none-in-horizon' end
  ) order by case s.status when 'active' then 0 when 'paused' then 1 else 2 end,v.defaults->>'title',s.id),'[]') into rows
  from public.planner_routine_schedules r join public.recurring_task_series s on s.id=r.series_id and s.user_id=owner_id
  join public.recurring_task_series_revisions v on v.id=s.current_revision_id
  left join lateral (
-   select candidates.day,candidates.start_time from (
-   select e.start_date as day,e.start_time
+   select (candidates.starts_at at time zone s.time_zone)::date as day,
+     (candidates.starts_at at time zone s.time_zone)::time as start_time,candidates.starts_at from (
+   select (e.start_date+e.start_time) at time zone e.timezone as starts_at
    from public.recurring_task_occurrences o join public.calendar_events e on e.routine_occurrence_id=o.id and e.user_id=owner_id
    where o.series_id=s.id and o.state in ('open','extra') and (e.start_date+e.start_time) at time zone e.timezone>statement_timestamp()
    union all
-   select d.scheduled_date as day,h.start_time
+   select (d.scheduled_date+h.start_time) at time zone s.time_zone as starts_at
    from public.recurring_task_series_revisions rv
    cross join lateral public.recurring_task_scheduled_dates(rv.recurrence_rule,rv.recurrence_anchor,rv.activation_date,
      greatest((statement_timestamp() at time zone s.time_zone)::date,rv.effective_from),
      least(greatest((statement_timestamp() at time zone s.time_zone)::date,rv.effective_from)+366,coalesce(rv.effective_to-1,'9999-12-31'::date),coalesce(s.last_scheduled_date,'9999-12-31'::date))) d
    cross join lateral planner_private.routine_schedule_at(s.id,d.scheduled_date) h
    where rv.series_id=s.id and rv.state='active' and s.status<>'ended'
+     and (s.occurrence_limit is null or (select count(*) from public.recurring_task_occurrences kept where kept.series_id=s.id and kept.state<>'withdrawn')<s.occurrence_limit)
      and planner_private.routine_rule_supported(rv.recurrence_rule)
      and (d.scheduled_date+h.start_time) at time zone s.time_zone>statement_timestamp()
      and not exists(select 1 from public.recurring_task_intentional_absences a where a.series_id=s.id and a.scheduled_date=d.scheduled_date)
      and planner_private.routine_time_valid(d.scheduled_date,h.start_time,h.end_time,s.time_zone)
      and not exists(select 1 from public.recurring_task_occurrences o where o.series_id=s.id and o.scheduled_date=d.scheduled_date)
-   ) candidates order by candidates.day,candidates.start_time limit 1
+   ) candidates order by candidates.starts_at limit 1
  ) n on true
  where r.user_id=owner_id;
  return jsonb_build_object('status','complete','rows',rows);
@@ -198,15 +200,17 @@ begin
  day:=(p_request->>'effectiveDate')::date;
  select * into schedule from public.planner_routine_schedules where series_id=series.id;
  impact:=planner_private.routine_series_impact(series.id,day);
- perform set_config('betterr.recurring_lifecycle','on',true);
  -- Retain all details of exceptions and already-started work. The lifecycle
  -- keeps these as Extra Occurrences if the new rule removes their date.
- update public.recurring_task_occurrences o set overrides=o.details||o.overrides
- where o.series_id=series.id and o.state in ('open','extra') and o.id in
-   (select (i->>'id')::uuid from jsonb_array_elements(impact) i where (i->>'preserved')::boolean);
- update public.tasks t set occurrence_overrides=o.overrides from public.recurring_task_occurrences o
- where o.task_id=t.id and o.series_id=series.id and o.state in ('open','extra') and o.id in
-   (select (i->>'id')::uuid from jsonb_array_elements(impact) i where (i->>'preserved')::boolean);
+ for occurrence in select o.* from public.recurring_task_occurrences o
+   where o.series_id=series.id and o.state in ('open','extra') and o.id in
+     (select (i->>'id')::uuid from jsonb_array_elements(impact) i where (i->>'preserved')::boolean)
+   order by o.id loop
+   result:=public.recurring_task_lifecycle('edit-occurrence',jsonb_build_object('userId',owner_id,'seriesId',series.id,
+     'occurrenceId',occurrence.id,'taskId',occurrence.task_id,'scope','this',
+     'idempotencyKey',request_id::text||':preserve:'||occurrence.id::text,'updates',occurrence.details||occurrence.overrides));
+   if result->>'status' not in ('complete','already-applied') then raise exception using errcode='PT409',message='Routine preservation rejected',detail=result::text; end if;
+ end loop;
  if p_request->>'operation'='revise' then
    insert into public.planner_routine_schedule_revisions values(series.id,day,owner_id,(p_request->>'startTime')::time,(p_request->>'endTime')::time,(p_request->>'protected')::boolean)
    on conflict(series_id,effective_from) do update set start_time=excluded.start_time,end_time=excluded.end_time,is_protected=excluded.is_protected;

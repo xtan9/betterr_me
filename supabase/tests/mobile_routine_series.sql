@@ -104,4 +104,64 @@ begin
  if public.planner_routine_series_snapshot()->'rows'<>'[]'::jsonb or exists(select 1 from public.planner_routine_schedule_revisions) then raise exception 'cross-account read'; end if;
  if public.planner_routine_series_command(request)->>'status'<>'not-found' then raise exception 'cross-account write'; end if;
 end $$;
+select set_config('request.jwt.claims','{"sub":"62000000-0000-0000-0000-000000000001","role":"authenticated"}',true);
+do $$
+declare result jsonb; item jsonb; before_row jsonb; after_row jsonb; request jsonb; preview jsonb;
+ series_id uuid; today date:=(statement_timestamp() at time zone 'UTC')::date;
+begin
+ set local role authenticated;
+ result:=public.planner_routine_command(jsonb_build_object('operation','create','operationId',gen_random_uuid(),'title','Already started','date',today,
+   'startTime','00:00','endTime','23:59','timezone','UTC','protected',true,'rule','{"frequency":"daily","interval":1}'::jsonb));
+ if result->>'status' is distinct from 'complete' then raise exception 'create started %',result; end if;
+ series_id:=(result->>'seriesId')::uuid;
+ before_row:=public.planner_routine_snapshot(today)->'rows'->0;
+ select value into item from jsonb_array_elements(public.planner_routine_series_snapshot()->'rows') where value->>'id'=series_id::text;
+ request:=jsonb_build_object('operation','pause','seriesId',series_id,'effectiveDate',today,'expectedSeriesToken',item->'seriesToken','expectedScheduleVersion',item->'scheduleVersion');
+ preview:=public.planner_routine_series_preview(request);
+ if preview->>'preserved' is distinct from '1' or preview->>'affected' is distinct from '0' then raise exception 'started preview %',preview; end if;
+ result:=public.planner_routine_series_command(request||jsonb_build_object('operationId',gen_random_uuid(),'previewToken',preview->>'token'));
+ if result->>'status' is distinct from 'complete' then raise exception 'pause started %',result; end if;
+ after_row:=public.planner_routine_snapshot(today)->'rows'->0;
+ if after_row->'event' is distinct from before_row->'event' or after_row->'task'->>'title' is distinct from 'Already started' then raise exception 'started work changed'; end if;
+
+ result:=public.planner_routine_command(jsonb_build_object('operation','create','operationId',gen_random_uuid(),'title','Future end','date',today+2,
+   'startTime','09:00','endTime','10:00','timezone','UTC','protected',true,'rule','{"frequency":"daily","interval":1}'::jsonb));
+ series_id:=(result->>'seriesId')::uuid;
+ select value into item from jsonb_array_elements(public.planner_routine_series_snapshot()->'rows') where value->>'id'=series_id::text;
+ request:=jsonb_build_object('operation','end','seriesId',series_id,'effectiveDate',today+4,'expectedSeriesToken',item->'seriesToken','expectedScheduleVersion',item->'scheduleVersion');
+ preview:=public.planner_routine_series_preview(request);
+ result:=public.planner_routine_series_command(request||jsonb_build_object('operationId',gen_random_uuid(),'previewToken',preview->>'token'));
+ if result->>'status' is distinct from 'complete' then raise exception 'future end %',result; end if;
+ select value into after_row from jsonb_array_elements(public.planner_routine_snapshot(today+3)->'rows') where value->'series'->>'id'=series_id::text;
+ if after_row->'event'->>'start_time' is distinct from '09:00:00' then raise exception 'pre-end active date lost %',after_row; end if;
+
+ result:=public.planner_routine_command(jsonb_build_object('operation','create','operationId',gen_random_uuid(),'title','Future pause','date',today+6,
+   'startTime','09:00','endTime','10:00','timezone','UTC','protected',true,'rule','{"frequency":"daily","interval":1}'::jsonb));
+ series_id:=(result->>'seriesId')::uuid;
+ select value into item from jsonb_array_elements(public.planner_routine_series_snapshot()->'rows') where value->>'id'=series_id::text;
+ request:=jsonb_build_object('operation','pause','seriesId',series_id,'effectiveDate',today+8,'expectedSeriesToken',item->'seriesToken','expectedScheduleVersion',item->'scheduleVersion');
+ preview:=public.planner_routine_series_preview(request);
+ result:=public.planner_routine_series_command(request||jsonb_build_object('operationId',gen_random_uuid(),'previewToken',preview->>'token'));
+ if result->>'status' is distinct from 'complete' then raise exception 'future pause %',result; end if;
+ select value into after_row from jsonb_array_elements(public.planner_routine_snapshot(today+7)->'rows') where value->'series'->>'id'=series_id::text;
+ if after_row->'event'->>'start_time' is distinct from '09:00:00' then raise exception 'pre-pause active date lost %',after_row; end if;
+end $$;
+do $$
+declare result jsonb; item jsonb; occurrence jsonb; series_id uuid;
+begin
+ set local role authenticated;
+ perform set_config('request.jwt.claims','{"sub":"62000000-0000-0000-0000-000000000002","role":"authenticated"}',true);
+ result:=public.planner_routine_command(jsonb_build_object('operation','create','operationId',gen_random_uuid(),'title','Tokyo routine','date','2090-03-13',
+   'startTime','09:00','endTime','10:00','timezone','Asia/Tokyo','protected',true,'rule','{"frequency":"daily","interval":1}'::jsonb));
+ series_id:=(result->>'seriesId')::uuid;
+ select value into item from jsonb_array_elements(public.planner_routine_series_snapshot()->'rows') where value->>'id'=series_id::text;
+ if (item->>'nextStartInstant')::timestamptz is distinct from '2090-03-13T00:00:00Z'::timestamptz then raise exception 'next instant missing %',item; end if;
+ select value into occurrence from jsonb_array_elements(public.planner_routine_snapshot('2090-03-13')->'rows') where value->'series'->>'id'=series_id::text;
+ result:=public.calendar_capture_command('edit',gen_random_uuid(),(occurrence->'event'->>'id')::uuid,(occurrence->'event'->>'version')::uuid,
+   '{"start_date":"2090-03-14","end_date":"2090-03-14","start_time":"00:30","end_time":"01:30","timezone":"UTC"}'::jsonb);
+ if result->>'status' is distinct from 'complete' then raise exception 'cross-zone edit %',result; end if;
+ select value into item from jsonb_array_elements(public.planner_routine_series_snapshot()->'rows') where value->>'id'=series_id::text;
+ if (item->>'nextStartInstant')::timestamptz is distinct from '2090-03-14T00:00:00Z'::timestamptz or item->>'nextStartTime' is distinct from '09:00:00'
+ then raise exception 'next must compare absolute instants and display the series zone %',item; end if;
+end $$;
 rollback;
