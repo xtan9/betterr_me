@@ -32,7 +32,7 @@ export async function nextActionFacts(client:SupabaseClient,userId:string,start:
   if(reasons.length||!task.facts.actionable){skipped.push({id,title:task.title,reasons:reasons.length?reasons:['unavailable']});continue;}
   if(!selected)selected={...task,due_date:dueById.get(id)??null,source:priorities.data.taskIds.includes(id)?'priority':queue.data.queue.includes(id)?'queue':'other'};
  }
- return {selected,skipped,occupied,window:{start:new Date(start).toISOString(),end:new Date(end).toISOString(),availableUntil:new Date(availableUntil).toISOString(),gapMinutes,timezone},generatedAt:new Date().toISOString()};
+ return {selected,skipped,occupied,googleSources:external.length?[{label:'Google Calendar',url:'https://calendar.google.com/'}]:[],window:{start:new Date(start).toISOString(),end:new Date(end).toISOString(),availableUntil:new Date(availableUntil).toISOString(),gapMinutes,timezone},generatedAt:new Date().toISOString()};
 }
 
 

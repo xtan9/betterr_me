@@ -12,6 +12,9 @@ const apiRoot = join(process.cwd(), "app", "api");
  * Keep this list narrow and reviewed whenever a route is added.
  */
 const deliberateAuthExceptions: Record<string, string> = {
+  "mobile/connections/route.ts": "authenticateNativeRequest verifies native bearer owner before server-only encrypted Google storage; no cookie fallback",
+  "mobile/connections/callback/route.ts": "public redirect-only OAuth callback, fixed native destination; no token exchange or mutation until native bearer and one-time state verification",
+  "mobile/planning/command/route.ts": "authenticateNativeRequest verifies native bearer; owner-filtered proposal, external conflict read and owner RLS command",
   "mobile/next-action/route.ts": "verified native Supabase user JWT through authenticateNativeRequest; read-only owner RLS context",
   "mobile/planning/route.ts": "verified native Supabase user JWT through authenticateNativeRequest; immutable owner RLS proposal",
   "cron/dispatch-reminders/route.ts": "CRON_SECRET service credential",

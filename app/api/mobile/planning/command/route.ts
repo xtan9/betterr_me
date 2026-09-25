@@ -4,6 +4,7 @@ import { googleDayRange } from '@/lib/google/planning';
 import { occupiedIntervals, wallInstant, type PlannerEvent } from '@/lib/calendar/planner-intervals';
 import { addLocalDays, getOccurrencesInRange } from '@/lib/recurring-tasks/scheduling';
 import type { RecurrenceRule } from '@/lib/db/types';
+import { log } from '@/lib/logger';
 
 export const maxDuration = 60;
 const headers = { 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -41,5 +42,9 @@ export async function POST(request: Request) {
     const result = await auth.client.rpc('planner_schedule_command', { p_request: command });
     if (result.error) return reply({ error: 'unavailable' }, 503);
     return reply(result.data);
-  } catch (error) { return reply({ error: error instanceof z.ZodError || error instanceof SyntaxError ? 'invalid' : 'unavailable' }, error instanceof z.ZodError || error instanceof SyntaxError ? 400 : 503); }
+  } catch (error) {
+    const invalid = error instanceof z.ZodError || error instanceof SyntaxError;
+    if (!invalid) log.error('[mobile-planning-command] Request failed', undefined, { reason: 'unavailable' });
+    return reply({ error: invalid ? 'invalid' : 'unavailable' }, invalid ? 400 : 503);
+  }
 }

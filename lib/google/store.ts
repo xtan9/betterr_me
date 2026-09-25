@@ -18,13 +18,9 @@ export function googleConnectionStore(client: SupabaseClient): GoogleConnectionS
       return data ? recordFromRow(data) : null;
     },
     async begin(record, stateHash, attempt, expectedRevision) {
-      const saved = expectedRevision
-        ? await client.from('google_connections').update(rowFromRecord(record)).eq('user_id', record.userId).eq('service', record.service).eq('revision', expectedRevision).select('revision').maybeSingle()
-        : await client.from('google_connections').insert(rowFromRecord(record)).select('revision').maybeSingle();
-      if (saved.error?.code === '23505' || !saved.error && !saved.data) throw new GoogleConnectionError('conflict');
-      if (saved.error) throw unavailable();
-      const { error } = await client.from('google_connection_attempts').upsert({ state_hash: stateHash, user_id: attempt.userId, service: attempt.service, revision: attempt.revision, verifier: attempt.verifier, expires_at: attempt.expiresAt }, { onConflict: 'user_id,service' });
+      const { data, error } = await client.rpc('google_connection_begin', { p_record: rowFromRecord(record), p_state_hash: stateHash, p_verifier: attempt.verifier, p_expires_at: attempt.expiresAt, p_expected_revision: expectedRevision });
       if (error) throw unavailable();
+      if (!data) throw new GoogleConnectionError('conflict');
     },
     async consume(userId, stateHash, now) {
       const { data, error } = await client.from('google_connection_attempts').delete().eq('user_id', userId).eq('state_hash', stateHash).gt('expires_at', now).select('*').maybeSingle();

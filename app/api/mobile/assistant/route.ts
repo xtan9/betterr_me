@@ -159,14 +159,12 @@ export async function POST(request:Request){
    generated.nextActionWindow={start:new Date(recommendationAt).toISOString(),end:new Date(recommendationAt+minutes*60000).toISOString(),available:true};
   }
   const output=buildAssistantTurn(generated,context,previous,latest,input.locale);
-  const sources = googleData?.sources ?? (usedGoogleCalendar ? [{label:'Google Calendar',url:'https://calendar.google.com/'}] : []);
-  let citationLength = 0;
-  const citations = sources.map((source,index)=>`[${index+1}] ${source.label}: ${source.url}`).filter(line => { citationLength += line.length + 1; return citationLength <= 2500; });
-  if (citations.length) output.message += '\n\n' + citations.join('\n');
+  const sources = [...(googleData?.sources ?? []), ...(usedGoogleCalendar ? [{label:'Google Calendar',url:'https://calendar.google.com/'}] : [])];
   if(output.intent==='next_action'&&output.nextActionWindow){
    const start=Math.max(recommendationAt,Date.parse(output.nextActionWindow.start)),end=Date.parse(output.nextActionWindow.end);
    if(end<=start||end-start>86400000||start>Date.now()+30*86400000)return {body:{error:'invalid'},status:400};
    const facts=await nextActionFacts(client,userId,start,end);
+   sources.push(...(facts.googleSources ?? []));
    output.message=facts.selected?`${output.replyLocale==='zh'?'下一步':'Next'}: ${facts.selected.title}\n${facts.selected.estimate_minutes} ${output.replyLocale==='zh'?'分钟':'minutes'}`:output.replyLocale==='zh'?'这段时间没有合适的可执行任务。':'No actionable task fits this window.';
    if(facts.selected){
     const reason=output.replyLocale==='zh'
@@ -177,6 +175,10 @@ export async function POST(request:Request){
    else output.ui.quickReplies=emptyTaskChoices[output.replyLocale];
    output.capture=buildCapturePreview({message:output.message,actions:[]},context);
   }
+  let citationLength = 0;
+  const seenSources = new Set<string>();
+  const citations = sources.filter(source => { if (seenSources.has(source.url)) return false; seenSources.add(source.url); return true; }).map((source,index)=>`[${index+1}] ${source.label}: ${source.url}`).filter(line => { citationLength += line.length + 1; return citationLength <= 2500; });
+  if (citations.length) output.message += '\n\n' + citations.join('\n');
   const supersedeCapture=output.capture.items.length&&sourceCapture.data?.state==='pending'?{proposalId:sourceCapture.data.id,version:sourceCapture.data.version}:undefined;
   const storedOutput={message:output.message,intent:output.intent,planning:output.planning,missing:output.missing,ui:output.ui,capture:output.capture,memoryUpdates:output.memoryUpdates,...(generated.cancelPlanning?{cancelPlanning:{sessionId:session.data.id,version:session.data.version}}:{}),...(supersedeCapture?{supersedeCapture}:{})};
   if(!generated.cancelPlanning)emit?.(output.message);

@@ -36,5 +36,21 @@ describe.skipIf(!root)('Google connections against disposable Postgres and Postg
     expect(await store.save({ ...record, status: 'connected', credential: 'late-secret' }, revision)).toBe(false);
     await expect(store.begin({ ...record, revision: randomUUID() }, 'late', { userId: owner, service: 'gmail', revision, verifier: 'encrypted-only', expiresAt: new Date().toISOString() }, revision)).rejects.toMatchObject({ reason: 'conflict' });
     expect(await store.get(owner, 'gmail')).toBeNull();
+    expect((await admin.from('google_connection_attempts').select('*').eq('user_id', owner)).data).toEqual([]);
+  });
+  it('atomically replaces the state with its connection revision under competing starts', async () => {
+    await admin.from('google_connection_attempts').delete().eq('user_id', owner);
+    await admin.from('google_connections').delete().eq('user_id', owner);
+    const store = googleConnectionStore(admin), base = randomUUID();
+    const record: ConnectionRecord = { userId: owner, service: 'gmail', revision: base, status: 'disconnected', email: null, credential: null, subject: null, selectedCalendars: [] };
+    const attempt = { userId: owner, service: 'gmail' as const, revision: base, verifier: 'encrypted', expiresAt: new Date(Date.now() + 60000).toISOString() };
+    await store.begin(record, 'base', attempt, null);
+    const revisions = [randomUUID(), randomUUID()];
+    const results = await Promise.allSettled(revisions.map((revision, index) => store.begin({ ...record, revision }, `race-${index}`, { ...attempt, revision }, base)));
+    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+    const winner = results.findIndex(result => result.status === 'fulfilled');
+    expect((await store.get(owner, 'gmail'))?.revision).toBe(revisions[winner]);
+    expect((await store.consume(owner, `race-${winner}`, new Date().toISOString()))?.revision).toBe(revisions[winner]);
+    for (const client of [user, anon]) expect((await client.rpc('google_connection_begin', { p_record: {}, p_state_hash: 'bad', p_verifier: 'bad', p_expires_at: new Date().toISOString(), p_expected_revision: null })).error).not.toBeNull();
   });
 });

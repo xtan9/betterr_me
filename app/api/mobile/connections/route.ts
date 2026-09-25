@@ -4,6 +4,7 @@ import { googleConfig, googleRuntime } from '@/lib/google/runtime';
 import { googleServices, GoogleConnectionError } from '@/lib/google/contracts';
 import { publicConnection } from '@/lib/google/connections';
 import { GoogleReads } from '@/lib/google/reads';
+import { log } from '@/lib/logger';
 
 export const maxDuration = 60;
 const headers = { 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' };
@@ -18,6 +19,7 @@ const requestSchema = z.discriminatedUnion('action', [
 ]);
 function failure(error: unknown) {
   const reason = error instanceof GoogleConnectionError ? error.reason : 'unavailable';
+  if (reason === 'unavailable' || reason === 'not-configured') log.error('[mobile-connections] Request failed', undefined, { reason });
   return reply({ error: reason }, reason === 'invalid' ? 400 : reason === 'conflict' ? 409 : reason === 'limited' ? 429 : 503);
 }
 export function OPTIONS() { return new Response(null, { status: 204, headers }); }
