@@ -1,6 +1,6 @@
 # Phase C: proactive execution
 
-Status: implementation preparation. Notification policy confirmed in conversation: disabled by default, at most three reminders per day, at least two hours apart, within user-selected hours; Later suspends reminders until the selected time and no suitable next action means no notification. Runtime implementation is under verification; device delivery remains a separate gate.
+Status: implemented; automated verification complete, native device delivery pending. Notification policy confirmed in conversation: disabled by default, at most three reminders per day, at least two hours apart, within user-selected hours; Later suspends reminders until the selected time and no suitable next action means no notification. Runtime implementation is under verification; device delivery remains a separate gate.
 
 Source of truth: mobile `docs/assistant-orchestrator-memory-v1.md`, sections 10, 11 and 15. Phase C is authorized. This addendum records implementation boundaries that the original five-point phase outline does not specify.
 
@@ -26,7 +26,7 @@ Disabled by default; explicit opt-in and user-selected reminder hours; at most t
 
 The earlier once-per-day proposal is superseded by the subsequent conversation. Frequency can be adjusted later; do not implement the stale limit.
 
-Current native dependencies do not include a notification SDK. Existing backend delivery is Web Push, which is not evidence of native iOS delivery support. Device-delivery verification and any native dependency/build changes must be stated separately.
+The pre-Phase-C native dependencies did not include a notification SDK. Existing backend delivery is Web Push, which is not evidence of native iOS delivery support. Device-delivery verification and any native dependency/build changes must be stated separately.
 
 ## Verification plan
 
@@ -56,3 +56,11 @@ Execution feedback uses a separate owner-private table and versioned, idempotent
 Reminder claims are serialized per owner, respect selected local hours and existing push quiet hours, and consume quota even on uncertain transport failure to prevent duplicate sends. Delivery targets must have a live auth session. The dispatcher reuses existing grounded eligibility and fails closed on missing recurrence/history/quiet-hour context. Service-only read/claim functions are unavailable to authenticated clients. Its generated notification text contains no task or conversation content.
 
 Native delivery requires configured EAS project/platform push credentials and a rebuilt app. Unit tests, SQL fixtures and transport acceptance cannot substitute for physical-device delivery verification. New tables and functions are additive; no previous assistant-turn/planner SQL function is replaced.
+
+## Verification results
+
+- Backend full Vitest: 6,008 passed, 16 opt-in/environment skips. An additional DST-fold/local-midnight regression and the focused execution/SQL-policy suite passed (50 tests). TypeScript and changed-file ESLint passed.
+- The additive migration and constrained two-owner fixture ran against an isolated local database. Service-only snapshot, revoked/nonexistent session filtering, snooze, duplicate claim and daily cap assertions passed separately. This is not a production migration or physical-device test.
+- Independent standards/spec reviews identified notification entry reuse, recovery-read retry, pre-opt-in snooze and dispatcher fairness gaps; these were fixed with failing-then-passing regression coverage.
+- Dispatch checks at most 100 candidates per run, oldest checked first. Progress is stored before slow work so time-budget expiry or repeated failures cannot indefinitely starve later users. Large opt-in populations may require higher dispatch throughput; the per-owner notification cap remains unchanged.
+- Native integration is being rebased by merge onto mobile main `40786e1`, preserving the new message context menu, header spacing, project return and iOS form-row fixes. Device push remains gated on EAS/platform credentials and a rebuilt app.
