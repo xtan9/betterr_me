@@ -1,4 +1,10 @@
 [
+  {
+    "path": "mobile_routine_series.sql",
+    "domain": "mobile-planner",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
   {"path":"assistant_multiday_planning.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
   {"path":"assistant_multiday_conflicts.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
   {"path":"assistant_memory_lifecycle.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
