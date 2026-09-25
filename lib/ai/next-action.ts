@@ -1,6 +1,7 @@
 import type {SupabaseClient} from '@supabase/supabase-js';
 import {getLocalDateInTimeZone,addLocalDays} from '@/lib/recurring-tasks/scheduling';
 import {occupiedIntervals,type PlannerEvent} from '@/lib/calendar/planner-intervals';
+import { googlePlanningEvents } from '@/lib/google/planning';
 export type RecommendationTask={id:string;title:string;version:string;estimate_minutes:number|null;facts:{actionable:boolean;reasons:string[];fitsGap:boolean|null}};
 async function rows<T>(client:SupabaseClient,table:string,userId:string,columns='*'):Promise<T[]>{
  const all:T[]=[];for(let offset=0;;offset+=500){const {data,error}=await client.from(table).select(columns).eq('user_id',userId).order(table==='planner_routine_schedules'?'series_id':'id').range(offset,offset+499);if(error||!data)throw new Error('Unavailable context');all.push(...data as T[]);if(data.length<500)return all;}
@@ -19,7 +20,8 @@ export async function nextActionFacts(client:SupabaseClient,userId:string,start:
  // Recommendation is read-only: missing occurrence coverage must be resolved in the manual Calendar first.
  for(const row of series){const through=getLocalDateInTimeZone(new Date(end),row.time_zone);if(row.status==='active'&&row.activation_date<=through&&(!row.coverage_horizon||row.coverage_horizon<(row.last_scheduled_date&&row.last_scheduled_date<through?row.last_scheduled_date:through)))throw new Error('Incomplete occurrence coverage');}
  for(const task of taskMetadata)if(task.scheduled_date&&task.scheduled_date>=addLocalDays(date,-2)&&task.scheduled_date<=addLocalDays(endDate,2)&&!task.is_completed&&!['skipped','withdrawn','completed'].includes(task.recurrence_occurrence_state??'')&&schedules.some(row=>row.series_id===task.recurring_series_id)&&!events.some(event=>event.routine_occurrence_id===task.recurring_occurrence_id))throw new Error('Incomplete routine calendar');
- const occupied=occupiedIntervals(events,start,end,timezone),availableUntil=occupied.length?Math.max(start,occupied[0].start):end,gapMinutes=Math.floor((availableUntil-start)/60000);
+ const external = await googlePlanningEvents(userId,start,end,timezone);
+ const occupied=occupiedIntervals([...events,...external],start,end,timezone),availableUntil=occupied.length?Math.max(start,occupied[0].start):end,gapMinutes=Math.floor((availableUntil-start)/60000);
  const tasks=queue.data.tasks as RecommendationTask[],byId=new Map(tasks.map(task=>[task.id,task])),dueById=new Map(taskMetadata.map(task=>[task.id,task.due_date]));
  const remaining=[...tasks].sort((a,b)=>(dueById.get(a.id)??'9999').localeCompare(dueById.get(b.id)??'9999')||a.id.localeCompare(b.id));
  const order=[...new Set<string>([...priorities.data.taskIds,...queue.data.queue,...remaining.map(task=>task.id)])];
@@ -30,7 +32,7 @@ export async function nextActionFacts(client:SupabaseClient,userId:string,start:
   if(reasons.length||!task.facts.actionable){skipped.push({id,title:task.title,reasons:reasons.length?reasons:['unavailable']});continue;}
   if(!selected)selected={...task,due_date:dueById.get(id)??null,source:priorities.data.taskIds.includes(id)?'priority':queue.data.queue.includes(id)?'queue':'other'};
  }
- return {selected,skipped,occupied,window:{start:new Date(start).toISOString(),end:new Date(end).toISOString(),availableUntil:new Date(availableUntil).toISOString(),gapMinutes,timezone},generatedAt:new Date().toISOString()};
+ return {selected,skipped,occupied,googleSources:external.length?[{label:'Google Calendar',url:'https://calendar.google.com/'}]:[],window:{start:new Date(start).toISOString(),end:new Date(end).toISOString(),availableUntil:new Date(availableUntil).toISOString(),gapMinutes,timezone},generatedAt:new Date().toISOString()};
 }
 
 

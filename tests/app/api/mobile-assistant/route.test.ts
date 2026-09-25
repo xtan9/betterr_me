@@ -1,5 +1,6 @@
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
-const mocks=vi.hoisted(()=>({createClient:vi.fn(),generate:vi.fn(),stream:vi.fn(),getUser:vi.fn(),rpc:vi.fn(),from:vi.fn(),nextAction:vi.fn(),logError:vi.fn()}));
+const mocks=vi.hoisted(()=>({createClient:vi.fn(),generate:vi.fn(),stream:vi.fn(),getUser:vi.fn(),rpc:vi.fn(),from:vi.fn(),nextAction:vi.fn(),logError:vi.fn(),googleStatus:vi.fn(),googleRead:vi.fn()}));
+vi.mock('@/lib/google/assistant',async()=>({...await vi.importActual<typeof import('@/lib/google/assistant')>('@/lib/google/assistant'),googleAssistantStatus:mocks.googleStatus,readForAssistant:mocks.googleRead}));
 vi.mock('@/lib/ai/next-action',()=>({nextActionFacts:mocks.nextAction}));
 vi.mock('@/lib/logger',()=>({log:{error:mocks.logError}}));
 vi.mock('ai',()=>({generateText:mocks.generate,streamText:mocks.stream,Output:{object:vi.fn(({schema})=>({schema}))}}));
@@ -13,6 +14,7 @@ const request=(extra:Record<string,unknown>={},token='user-token')=>new Request(
 beforeEach(()=>{
  vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-09-21T12:00:00Z'));
  mocks.generate.mockReset();mocks.stream.mockReset();
+ mocks.googleStatus.mockReset().mockResolvedValue({configured:false,connections:[]});mocks.googleRead.mockReset();
  vi.clearAllMocks();vi.stubEnv('LLM_API_KEY','local-test-key');vi.stubEnv('LLM_MODEL','');vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL','http://127.0.0.1:55721');vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY','local-test-anon');
  mocks.getUser.mockResolvedValue({data:{user:{id:owner}},error:null});
  mocks.from.mockImplementation((table:string)=>{const payload=table==='profiles'?{timezone:'UTC'}:['tasks','projects','user_memories'].includes(table)?[]:null;const query={select:()=>query,eq:()=>query,or:()=>query,is:()=>query,not:()=>query,order:()=>query,limit:()=>query,single:async()=>({data:payload,error:null}),maybeSingle:async()=>({data:payload,error:null}),then:(resolve:(value:unknown)=>unknown)=>Promise.resolve({data:payload,error:null}).then(resolve)};return query;});
@@ -26,6 +28,26 @@ beforeEach(()=>{
  mocks.generate.mockResolvedValue({output:{intent: "capture", planning:null, memoryUpdates:[], nextActionWindow:null, message:'Review this task.',actions:[{kind:'task-create',title:'Buy milk',estimateMinutes:null,dueDate:null,projectId:null,projectKey:null}]}});
 });
 afterEach(()=>vi.useRealTimers());
+
+it('reads requested Gmail data under the owner, cites it, and strips attempted external memory writes',async()=>{
+ mocks.googleStatus.mockResolvedValue({configured:true,connections:[{service:'gmail',status:'connected'}]});
+ const source={label:'Gmail',url:'https://mail.google.com/mail/?authuser=owner%40example.com#all/id'};
+ mocks.googleRead.mockResolvedValue({results:{gmail:{status:'complete',data:{messages:[{body:'Meeting at noon'}],more:false}}},sources:[source]});
+ const output={intent:'conversation',message:'The meeting is at noon.',actions:[],planning:null,nextActionWindow:null,memoryUpdates:[]};
+ mocks.generate.mockResolvedValueOnce({output:{...output,googleRead:{gmailQuery:'subject:meeting newer_than:7d',calendar:null}}}).mockResolvedValueOnce({output:{...output,googleRead:null,memoryUpdates:[{operation:'upsert',kind:'preference',key:'external',content:'Meeting at noon',confidence:1,temporality:'durable',validFor:null}]}});
+ const response=await POST(request({messages:[{role:'user',content:'Find the meeting time in Gmail.'}]}));
+ expect(response.status).toBe(200); expect(mocks.googleRead).toHaveBeenCalledExactlyOnceWith(owner,{gmailQuery:'subject:meeting newer_than:7d',calendar:null});
+ const stored=mocks.rpc.mock.calls.find(([name])=>name==='assistant_finish_turn')?.[1].p_output;
+ expect(stored.memoryUpdates).toEqual([]); expect(stored.message).toContain(source.url);
+ expect(mocks.generate.mock.calls[1][0].system).toContain('Meeting at noon');
+});
+
+it('keeps calendar citations after next-action response rewriting',async()=>{
+ mocks.generate.mockResolvedValue({output:{intent:'next_action',replyLocale:'en',message:'Choose.',actions:[],planning:null,memoryUpdates:[],nextActionWindow:{start:'2026-09-21T12:00:00Z',end:'2026-09-21T12:15:00Z',available:true}}});
+ mocks.nextAction.mockResolvedValue({selected:null,googleSources:[{label:'Google Calendar',url:'https://calendar.google.com/'}]});
+ const response=await POST(request({messages:[{role:'user',content:'What should I do in the next fifteen minutes?'}]}));
+ expect(response.status).toBe(200);expect((await response.json()).message).toContain('https://calendar.google.com/');
+});
 
 it('retains exact prior proposal details when the user revises a preview',async()=>{
  const original=mocks.from.getMockImplementation()!;

@@ -9,6 +9,7 @@ import {horizonPlanningRequest,sessionPlanningRequest,horizonGenerationOutput,fl
 import {z} from 'zod';
 import {safeAiFailure} from '@/lib/ai/safe-failure';
 import {log} from '@/lib/logger';
+import { googleDayRange } from '@/lib/google/planning';
 export const maxDuration=300;
 const headers={'Cache-Control':'no-store','Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS'};
 const respond=(body:unknown,status=200)=>Response.json(body,{status,headers});
@@ -59,6 +60,8 @@ export async function POST(request:Request){
   if(snapshot.error||!snapshot.data?.version)return respond({error:'unavailable'},503);
   if(snapshot.data.coverageComplete===false)return respond({error:'coverage'},422);
   const context=snapshot.data as PlanningContext;
+  const external = await googleDayRange(userId, horizon?.startDate ?? ('date' in input ? input.date : ''), horizon?.endDate ?? ('date' in input ? input.date : ''), timezone);
+  context.events = [...context.events, ...external];
   // Never silently truncate commitments: refuse oversized contexts rather than plan through omitted time.
   if(context.tasks.length>200||context.events.length>1000)return respond({error:'unavailable'},503);
   const providerContext={timezone:context.timezone,tasks:context.tasks.map(task=>({id:task.id,title:task.title,estimateMinutes:task.estimate_minutes,dueDate:task.due_date,recurring:!!task.recurring_series_id})),events:context.events.map(event=>({id:event.id,title:event.title,startDate:event.start_date,endDate:event.end_date,startTime:event.start_time,endTime:event.end_time,timezone:event.timezone,protected:event.is_protected,recurring:event.is_recurring,rule:event.recurrence_rule,editable:event.app_owned&&!event.is_protected&&!event.is_recurring&&!event.is_exception&&!event.recurring_event_id&&!event.routine_occurrence_id&&!event.session_ended_at})),priorities:context.priorities.taskIds};
