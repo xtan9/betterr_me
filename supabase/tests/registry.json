@@ -352,5 +352,11 @@
     "path": "e2e_local_authenticated_grants.sql",
     "kind": "support",
     "reason": "prepares disposable browser-test grants and is not an acceptance fixture"
+  },
+  {
+    "path": "assistant_execution.sql",
+    "domain": "assistant",
+    "role": "constrained",
+    "cleanup": "transactional"
   }
 ]
