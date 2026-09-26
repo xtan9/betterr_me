@@ -5,10 +5,12 @@ import { GoogleReads } from './reads';
 import { GoogleConnectionError } from './contracts';
 
 /** Read-through occupancy; external events never become editable planner records. */
-export async function googlePlanningEvents(userId: string, start: number, end: number, timezone: string): Promise<PlannerEvent[]> {
+export async function googlePlanningEvents(userId: string, start: number, end: number, timezone: string, readMode: 'foreground' | 'background' = 'foreground'): Promise<PlannerEvent[]> {
   if (!googleConfig()) return [];
   const connections = googleRuntime(), record = await connections.store.get(userId, 'calendar');
   if (!record || record.status === 'disconnected') return [];
+  // Consent covers foreground reads only; unknown external occupancy cannot qualify a reminder.
+  if (readMode === 'background') throw new GoogleConnectionError('unavailable');
   if (record.status !== 'connected') throw new GoogleConnectionError(record.status);
   const events = await new GoogleReads(connections).events(userId, new Date(start).toISOString(), new Date(end).toISOString());
   return events.filter(event => event.busy).map(event => {

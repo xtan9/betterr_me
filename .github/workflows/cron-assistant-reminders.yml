@@ -1,0 +1,23 @@
+name: Assistant reminders
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: assistant-reminders
+  cancel-in-progress: false
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Send opted-in assistant reminders
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl --fail --silent --show-error --max-time 65 \
+            "${APP_URL}/api/cron/assistant-reminders" \
+            -H "Authorization: Bearer ${CRON_SECRET}"

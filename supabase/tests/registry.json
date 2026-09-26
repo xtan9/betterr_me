@@ -1,4 +1,10 @@
 [
+  {
+    "path": "mobile_routine_series.sql",
+    "domain": "mobile-planner",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
   {"path":"assistant_multiday_planning.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
   {"path":"assistant_multiday_conflicts.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
   {"path":"assistant_memory_lifecycle.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
@@ -352,5 +358,11 @@
     "path": "e2e_local_authenticated_grants.sql",
     "kind": "support",
     "reason": "prepares disposable browser-test grants and is not an acceptance fixture"
+  },
+  {
+    "path": "assistant_execution.sql",
+    "domain": "assistant",
+    "role": "constrained",
+    "cleanup": "transactional"
   }
 ]

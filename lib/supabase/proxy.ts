@@ -15,6 +15,9 @@ export async function updateSession(request: NextRequest) {
     path === "/api/mobile/assistant/history" ||
     path === "/api/mobile/next-action" ||
     path === "/api/mobile/planning" ||
+    path === "/api/mobile/execution" ||
+    path === "/api/mobile/execution/settings" ||
+    path === "/api/cron/assistant-reminders" ||
     path.startsWith("/mcp") ||
     path.startsWith("/.well-known") ||
     path.startsWith("/api/oauth")
