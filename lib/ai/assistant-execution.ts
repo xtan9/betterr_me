@@ -20,9 +20,9 @@ export function reminderDue(settings:ReminderSettings,now:number) {
 }
 
 /** Explicit start/later feedback suppresses repeat recommendations, not saved priority order. */
-export async function executionRecommendation(client:SupabaseClient,userId:string,end:number,excluded:string[]=[],now=Date.now()) {
+export async function executionRecommendation(client:SupabaseClient,userId:string,end:number,excluded:string[]=[],now=Date.now(),googleReadMode:'foreground'|'background'='foreground') {
  const feedback=await client.from('assistant_execution_events').select('task_id,until_at').eq('user_id',userId).gt('until_at',new Date(now).toISOString()).limit(200);
  if(feedback.error||!feedback.data||feedback.data.length===200)throw new Error('Unavailable execution history');
  const excludedIds=[...new Set([...excluded,...feedback.data.map(row=>row.task_id as string)])];
- return nextActionFacts(client,userId,now,end,{excludedIds});
+ return nextActionFacts(client,userId,now,end,{excludedIds,googleReadMode});
 }

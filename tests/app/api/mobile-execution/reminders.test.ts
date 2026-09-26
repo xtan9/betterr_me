@@ -13,6 +13,12 @@ beforeEach(()=>{
  mocks.rpc.mockImplementation(async(name:string)=>({data:name==='assistant_active_push_devices'?[{token:'ExpoPushToken[fixture]'}]:name==='assistant_claim_reminder'?mocks.claim:{queue:{},priorities:{}},error:null}));
  mocks.from.mockImplementation(()=>{const q={select:()=>q,eq:()=>q,order:()=>q,update:()=>q,then:(resolve:(value:unknown)=>void)=>resolve({error:null}),range:async()=>({data:[{user_id:'owner',enabled:true,timezone:'UTC',start_minute:540,end_minute:1020,last_sent_at:null,sent_date:null,sent_count:0,snoozed_until:null,locale:'en',version:'version'}]})};return q;});
 });
+it('requests background-safe facts and skips reminders when external occupancy is unavailable',async()=>{
+ mocks.recommend.mockRejectedValueOnce(new Error('Unavailable external occupancy'));
+ await GET(new Request('https://example.test'));
+ expect(mocks.recommend).toHaveBeenCalledWith(expect.anything(),'owner',expect.any(Number),[],expect.any(Number),'background');
+ expect(mocks.send).not.toHaveBeenCalled();
+});
 it('sends only a generic owner-scoped notification after eligibility and an atomic claim',async()=>{
  expect((await GET(new Request('https://example.test'))).status).toBe(200);
  const payload=JSON.parse(mocks.send.mock.calls[0][1].body);expect(payload[0].data).toEqual({kind:'assistant-next-action',ownerId:'owner'});expect(JSON.stringify(payload)).not.toContain('Private task');expect(mocks.rpc).toHaveBeenCalledWith('assistant_claim_reminder',{p_user_id:'owner',p_version:'version'});

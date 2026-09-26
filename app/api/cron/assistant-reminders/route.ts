@@ -34,7 +34,7 @@ export async function GET(request:Request){
       if(key==='rpc')return async(name:string)=>({data:name==='action_queue_snapshot'?snapshot.data.queue:name==='priority_snapshot'?snapshot.data.priorities:null,error:null});
       const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;
      }});
-     const facts=await executionRecommendation(scoped,row.user_id,end,[],now);
+     const facts=await executionRecommendation(scoped,row.user_id,end,[],now,'background');
      if(!facts.selected)continue;
      const claim=await client.rpc('assistant_claim_reminder',{p_user_id:row.user_id,p_version:row.version});
      if(claim.error||claim.data!==true)continue;
