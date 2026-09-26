@@ -13,7 +13,7 @@ describe('native Assistant history through the cookie proxy',()=>{
   expect(response.headers.get('location')).toBeNull();expect(response.headers.get('x-middleware-next')).toBe('1');expect(mocks.create).not.toHaveBeenCalled();
  });
  it('keeps unrelated pages and lookalike history paths cookie-protected',async()=>{
-  for(const path of ['/tasks','/api/mobile/assistant/history-export','/api/mobile/execution/export','/api/cron/assistant-reminders-export']){
+  for(const path of ['/tasks','/api/mobile/assistant/history-export','/api/mobile/execution/export','/api/cron/assistant-reminders-export','/api/mobile/connections/export','/api/mobile/connections-extra','/api/mobile/planning/command-extra']){
    const response=await updateSession(new NextRequest(`https://www.betterr.me${path}`));
    expect(response.headers.get('location')).toBe('https://www.betterr.me/auth/login');
   }
@@ -22,6 +22,9 @@ describe('native Assistant history through the cookie proxy',()=>{
   ['/api/mobile/execution','POST'],['/api/mobile/execution','OPTIONS'],
   ['/api/mobile/execution/settings','GET'],['/api/mobile/execution/settings','POST'],['/api/mobile/execution/settings','OPTIONS'],
   ['/api/cron/assistant-reminders','GET'],
+  ['/api/mobile/connections','GET'],['/api/mobile/connections','POST'],['/api/mobile/connections','OPTIONS'],
+  ['/api/mobile/connections/callback','GET'],
+  ['/api/mobile/planning/command','POST'],['/api/mobile/planning/command','OPTIONS'],
  ])('delegates %s %s to its own bearer or cron authentication',async(path,method)=>{
   const response=await updateSession(new NextRequest(`https://www.betterr.me${path}`,{method}));
   expect(response.headers.get('location')).toBeNull();expect(response.headers.get('x-middleware-next')).toBe('1');expect(mocks.create).not.toHaveBeenCalled();

@@ -15,6 +15,9 @@ export async function updateSession(request: NextRequest) {
     path === "/api/mobile/assistant/history" ||
     path === "/api/mobile/next-action" ||
     path === "/api/mobile/planning" ||
+    path === "/api/mobile/planning/command" ||
+    path === "/api/mobile/connections" ||
+    path === "/api/mobile/connections/callback" ||
     path === "/api/mobile/execution" ||
     path === "/api/mobile/execution/settings" ||
     path === "/api/cron/assistant-reminders" ||
