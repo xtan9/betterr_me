@@ -179,6 +179,8 @@ export async function POST(request:Request){
   const seenSources = new Set<string>();
   const citations = sources.filter(source => { if (seenSources.has(source.url)) return false; seenSources.add(source.url); return true; }).map((source,index)=>`[${index+1}] ${source.label}: ${source.url}`).filter(line => { citationLength += line.length + 1; return citationLength <= 2500; });
   if (citations.length) output.message += '\n\n' + citations.join('\n');
+  // The atomic save requires the public reply and proposal message to match.
+  output.capture.message = output.message;
   const supersedeCapture=output.capture.items.length&&sourceCapture.data?.state==='pending'?{proposalId:sourceCapture.data.id,version:sourceCapture.data.version}:undefined;
   const storedOutput={message:output.message,intent:output.intent,planning:output.planning,missing:output.missing,ui:output.ui,capture:output.capture,memoryUpdates:output.memoryUpdates,...(generated.cancelPlanning?{cancelPlanning:{sessionId:session.data.id,version:session.data.version}}:{}),...(supersedeCapture?{supersedeCapture}:{})};
   if(!generated.cancelPlanning)emit?.(output.message);

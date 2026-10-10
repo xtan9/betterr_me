@@ -30,6 +30,28 @@ Google's external Testing mode can yield short-lived refresh tokens; the app exp
 
 ## Acceptance and limitations
 
+### Cited reply persistence regression (2026-10-10)
+
+Google citations were appended after building the capture preview, leaving its
+message different from the public reply. The existing `assistant_finish_turn`
+transaction rejects that mismatch. Streaming could therefore show an answer and
+then end with an error instead of a persisted completion.
+
+The route now synchronizes the preview message after finalizing citations while
+preserving proposed items. The route test double enforces the existing database
+invariant (also confirmed in the deployed function). Regression coverage requires
+Gmail answers to complete through both JSON and streaming, retain citations, and
+exclude external memory writes; Calendar recommendations must save their citations,
+and explicitly requested task proposals must retain their items.
+
+Run `pnpm exec vitest run tests/app/api/mobile-assistant/route.test.ts`.
+Before this fix, cited JSON replies returned 502 and streaming ended in an error.
+Physical-device acceptance remains: retry the pending Gmail request, confirm the
+interrupted/retry state clears, then reopen the conversation and confirm the answer
+and citations remain. Automated route tests do not substitute for this device check.
+
+### Wider connection acceptance
+
 Automated tests must cover bearer ownership, one-time state/PKCE, narrow scopes, encryption and non-disclosure, concurrent callback/disconnect, stale read rejection, partial/failed reads, calendar choice and timezone semantics, protected schedule conflicts, missing-connector UI combinations and dismissal. A disposable Postgres/PostgREST integration test verifies actual grants/RLS and compare-and-set behavior; it is opt-in via `GOOGLE_CONNECTIONS_TEST_URL=http://127.0.0.1:55462` and rejects other targets.
 
 Before TestFlight rollout, use the installed iPhone app to verify successful/cancelled/partial authorizations, cold and warm callback, separate accounts, reconnect and project-wide revocation, real Gmail answers and citations, calendar choice/recurrence/all-day/DST, read failures, and protected planning. Repeat UI checks in English/Chinese, dark/light and VoiceOver. Mock tests do not fulfill this acceptance.
