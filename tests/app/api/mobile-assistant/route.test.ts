@@ -22,24 +22,35 @@ beforeEach(()=>{
   if(name==='check_ai_chat_rate_limit')return {data:[{allowed:true,minute_remaining:9,day_remaining:99}],error:null};
   if(name==='assistant_begin_turn')return {data:{status:'prepared',messages:args.p_messages},error:null};
   if(name==='planner_schedule_context')return {data:{coverageComplete:true,events:[{title:'School pickup',start_date:'2026-09-21',end_date:'2026-09-21',start_time:'15:00',end_time:'15:30',is_protected:true,is_recurring:false}]},error:null};
-  const output=args.p_output as {capture:unknown;message:string;intent:string;ui:unknown;planning:null|{status:string;assumptions:string[]};missing:string[]};
+  const output=args.p_output as {capture:{message:string};message:string;intent:string;ui:unknown;planning:null|{status:string;assumptions:string[]};missing:string[]};
+  // assistant_finish_turn rejects differing reply and proposal messages.
+  if(output.capture.message!==output.message)return {data:{status:'invalid'},error:null};
   return {data:{status:'complete',response:{message:output.message,intent:output.intent,ui:output.ui,...(output.planning?{planning:{sessionId:'session',status:output.planning.status,missing:output.missing,assumptions:output.planning.assumptions}}:{}),conversationId:'61300000-0000-0000-0000-000000000002',proposal:{id:args.p_id,body:output.capture,version:'preview-version',state:'pending'}}},error:null};
  });
  mocks.generate.mockResolvedValue({output:{intent: "capture", planning:null, memoryUpdates:[], nextActionWindow:null, message:'Review this task.',actions:[{kind:'task-create',title:'Buy milk',estimateMinutes:null,dueDate:null,projectId:null,projectKey:null}]}});
 });
 afterEach(()=>vi.useRealTimers());
 
-it('reads requested Gmail data under the owner, cites it, and strips attempted external memory writes',async()=>{
+it.each([false,true])('saves and completes requested Gmail replies with citations and no external memory writes (stream=%s)',async stream=>{
  mocks.googleStatus.mockResolvedValue({configured:true,connections:[{service:'gmail',status:'connected'}]});
  const source={label:'Gmail',url:'https://mail.google.com/mail/?authuser=owner%40example.com#all/id'};
  mocks.googleRead.mockResolvedValue({results:{gmail:{status:'complete',data:{messages:[{body:'Meeting at noon'}],more:false}}},sources:[source]});
  const output={intent:'conversation',message:'The meeting is at noon.',actions:[],planning:null,nextActionWindow:null,memoryUpdates:[]};
- mocks.generate.mockResolvedValueOnce({output:{...output,googleRead:{gmailQuery:'subject:meeting newer_than:7d',calendar:null}}}).mockResolvedValueOnce({output:{...output,googleRead:null,memoryUpdates:[{operation:'upsert',kind:'preference',key:'external',content:'Meeting at noon',confidence:1,temporality:'durable',validFor:null}]}});
- const response=await POST(request({messages:[{role:'user',content:'Find the meeting time in Gmail.'}]}));
- expect(response.status).toBe(200); expect(mocks.googleRead).toHaveBeenCalledExactlyOnceWith(owner,{gmailQuery:'subject:meeting newer_than:7d',calendar:null});
+ const first={...output,googleRead:{gmailQuery:'subject:meeting newer_than:7d',calendar:null}};
+ const second={...output,googleRead:null,memoryUpdates:[{operation:'upsert',kind:'preference',key:'external',content:'Meeting at noon',confidence:1,temporality:'durable',validFor:null}]};
+ mocks.generate.mockResolvedValueOnce({output:first}).mockResolvedValueOnce({output:second});
+ mocks.stream.mockImplementationOnce(()=>({partialOutputStream:(async function*(){yield first;})(),output:Promise.resolve(first)})).mockImplementationOnce(()=>({partialOutputStream:(async function*(){yield second;})(),output:Promise.resolve(second)}));
+ const input=request({messages:[{role:'user',content:'Find the meeting time in Gmail.'}]});if(stream)input.headers.set('Accept','application/x-ndjson');
+ const response=await POST(input);
+ expect(response.status).toBe(200);
+ const events=stream?(await response.text()).trim().split('\n').map(line=>JSON.parse(line)):[];
+ const body=stream?events.at(-1):await response.json();
+ expect(mocks.googleRead).toHaveBeenCalledExactlyOnceWith(owner,{gmailQuery:'subject:meeting newer_than:7d',calendar:null});
+ if(stream){expect(events.some(event=>event.type==='error')).toBe(false);expect(body.type).toBe('complete');}
+ expect(body.message).toContain(source.url);expect(body.proposal.body.message).toBe(body.message);
  const stored=mocks.rpc.mock.calls.find(([name])=>name==='assistant_finish_turn')?.[1].p_output;
  expect(stored.memoryUpdates).toEqual([]); expect(stored.message).toContain(source.url);
- expect(mocks.generate.mock.calls[1][0].system).toContain('Meeting at noon');
+ expect((stream?mocks.stream:mocks.generate).mock.calls[1][0].system).toContain('Meeting at noon');
 });
 
 it('keeps calendar citations after next-action response rewriting',async()=>{
@@ -47,6 +58,18 @@ it('keeps calendar citations after next-action response rewriting',async()=>{
  mocks.nextAction.mockResolvedValue({selected:null,googleSources:[{label:'Google Calendar',url:'https://calendar.google.com/'}]});
  const response=await POST(request({messages:[{role:'user',content:'What should I do in the next fifteen minutes?'}]}));
  expect(response.status).toBe(200);expect((await response.json()).message).toContain('https://calendar.google.com/');
+});
+
+it('preserves proposed task items when adding Google citations to the saved reply',async()=>{
+ mocks.googleStatus.mockResolvedValue({configured:true,connections:[{service:'gmail',status:'connected'}]});
+ mocks.googleRead.mockResolvedValue({results:{gmail:{status:'complete',data:{messages:[{body:'Bring the report'}],more:false}}},sources:[{label:'Gmail',url:'https://mail.google.com/mail/#all/id'}]});
+ const output={intent:'capture',message:'Review this task.',actions:[{kind:'task-create',title:'Bring the report',estimateMinutes:null,dueDate:null,projectId:null,projectKey:null}],planning:null,nextActionWindow:null,memoryUpdates:[]};
+ mocks.generate.mockResolvedValueOnce({output:{...output,googleRead:{gmailQuery:'subject:report newer_than:7d',calendar:null}}}).mockResolvedValueOnce({output:{...output,googleRead:null}});
+ const response=await POST(request({messages:[{role:'user',content:'Find the report email and propose a task for it.'}]}));
+ expect(response.status).toBe(200);
+ const body=await response.json();
+ expect(body.proposal.body.message).toBe(body.message);expect(body.message).toContain('https://mail.google.com/mail/#all/id');
+ expect(body.proposal.body.items).toHaveLength(1);expect(body.proposal.body.items[0]).toMatchObject({kind:'task-create',changes:{title:'Bring the report'}});
 });
 
 it('retains exact prior proposal details when the user revises a preview',async()=>{
