@@ -84,7 +84,7 @@ export const OWNERSHIP_REGISTRY = [
   rule("control-plane", [/^(?:app|components)\/control-plane\//, /^app\/api\/control-plane\//, /^lib\/control-plane\//], fullE2E({ fullTests: true })),
   rule("admin", [/^app\/dashboard\/admin\//, /^components\/admin\//], fullE2E()),
   rule("habits", [/^app\/(?:api\/)?habits\//, /^components\/habits\//, /^lib\/(?:habits\/|db\/habit|hooks\/use-habit|validations\/habit)/], targetedE2E(HABIT_SPECS)),
-  rule("tasks", [/^app\/(?:api\/)?(?:projects|recurring-tasks|tasks)\//, /^components\/(?:kanban|projects|tasks)\//, /^lib\/(?:projects|recurring-tasks|tasks)\//, /^lib\/(?:db|validations)\/(?:projects?|recurring-tasks?|tasks?)\./], targetedE2E(TASK_SPECS)),
+  rule("tasks", [/^app\/(?:api\/)?(?:projects|recurring-tasks|tasks)\//, /^components\/(?:kanban|projects|tasks)\//, /^lib\/(?:deletion|projects|recurring-tasks|tasks)\//, /^lib\/(?:db|validations)\/(?:projects?|recurring-tasks?|tasks?)\./], targetedE2E(TASK_SPECS)),
   rule("dashboard", [/^app\/(?:api\/)?dashboard\//, /^components\/dashboard\//, /^lib\/dashboard\//, /^lib\/hooks\/use-dashboard\./], targetedE2E([SPECS.dashboard])),
   rule("finance", [/^app\/(?:api\/)?finance\//, /^components\/finance\//, /^lib\/(?:finance\/|validations\/finance-cushion)/, /^i18n\/household-runway-messages\.ts$/], product({ e2eRunway: true })),
   rule("localization", [/^i18n\//, /^components\/language-switcher\.tsx$/], targetedE2E([SPECS.locale])),

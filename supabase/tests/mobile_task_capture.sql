@@ -36,14 +36,11 @@ begin
    'taskId',current_task->>'id','idempotencyKey','stale-web-edit',
    'expectedTaskVersion',current_task->>'version','updates',jsonb_build_object('title','Stale web')));
  if stale->>'status' <> 'conflict' then raise exception 'stale web edit allowed'; end if;
- archived := public.task_capture_command('archive','68200000-0000-0000-0000-000000000006',
-   (result->'task'->>'id')::uuid,(result->'task'->>'version')::uuid);
- if archived->>'status' <> 'complete' or archived->'task'->>'archived_at' is null
-   or archived->'task'->>'is_completed' <> 'false' then raise exception 'archive changed completion'; end if;
- result := public.task_capture_command('unarchive','68200000-0000-0000-0000-000000000007',
-   (archived->'task'->>'id')::uuid,(archived->'task'->>'version')::uuid);
- if result->>'status' <> 'complete' or result->'task'->>'archived_at' is not null
-   or result->'task'->>'description' <> 'Preserve notes' then raise exception 'unarchive lost history'; end if;
+ begin
+   perform public.task_capture_command('archive',gen_random_uuid(),(result->'task'->>'id')::uuid,(result->'task'->>'version')::uuid);
+   raise exception 'obsolete archive was accepted';
+ exception when check_violation then null;
+ end;
  perform set_config('request.jwt.claims','{"sub":"68200000-0000-0000-0000-000000000002","role":"authenticated"}',true);
  if exists(select 1 from public.tasks) or exists(select 1 from public.task_capture_receipts) then
    raise exception 'second account can read private records'; end if;

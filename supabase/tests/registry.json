@@ -1,4 +1,6 @@
 [
+  {"path":"item_deletion_restoration.sql","domain":"tasks","role":"admin","cleanup":"transactional","adminReason":"Seeds pre-migration archived state by disabling only the new lifecycle guards, then verifies restoration preserves project completion after ordinary edits."},
+  {"path":"item_deletion.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
   {"path":"mobile_routine_overnight.sql","domain":"mobile-planner","role":"constrained","cleanup":"transactional"},
   {
     "path": "mobile_routine_series.sql",

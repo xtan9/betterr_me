@@ -1,11 +1,18 @@
+import { executeDeletion, previewDeletion } from '@/lib/deletion/client';
+vi.mock('@/lib/deletion/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/deletion/client')>();
+  return { ...actual, previewDeletion: vi.fn(), executeDeletion: vi.fn() };
+});
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import { toast } from "sonner";
 import userEvent from "@testing-library/user-event";
 import { KanbanDetailModal } from "@/components/kanban/kanban-detail-modal";
 import type { Task } from "@/lib/db/types";
 
 // Mock next-intl
 vi.mock("next-intl", () => ({
+  useLocale: () => "en",
   useTranslations: () => (key: string) => {
     const messages: Record<string, string> = {
       "detail.detailsTab": "Details",
@@ -29,9 +36,9 @@ vi.mock("next-intl", () => ({
       "detail.deleting": "Deleting...",
       "detail.cancel": "Cancel",
       "detail.deleteError": "Failed to delete task",
-      "detail.deleteConfirmTitle": "Delete this task?",
+      "detail.deleteConfirmTitle": "Delete Task",
       "detail.deleteConfirmDescription":
-        "This action cannot be undone. This will permanently delete the task.",
+        "Past history is kept. This cannot be undone.",
       "detail.activityPlaceholder": "Activity log coming soon",
       "detail.footer.allSaved": "All changes saved",
       "detail.footer.saving": "Saving...",
@@ -81,6 +88,8 @@ describe("KanbanDetailModal", () => {
   const mockOnTaskDeleted = vi.fn();
 
   beforeEach(() => {
+    vi.mocked(previewDeletion).mockImplementation(async (_client, kind, id) => ({ status: 'complete', kind, id, title: 'Review task', version: 'v1', children: [], plan: [], retained: [], reminders: [], eventVersions: [] }));
+    vi.mocked(executeDeletion).mockResolvedValue(undefined);
     vi.clearAllMocks();
     global.fetch = vi.fn();
   });
@@ -204,7 +213,6 @@ describe("KanbanDetailModal", () => {
         status: 500,
         json: () => Promise.resolve({ error: "Server error" }),
       });
-      const { toast } = await import("sonner");
       renderModal();
 
       await user.click(screen.getByText("Test Task"));
@@ -224,7 +232,6 @@ describe("KanbanDetailModal", () => {
       (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
         new TypeError("Failed to fetch")
       );
-      const { toast } = await import("sonner");
       renderModal();
 
       await user.click(screen.getByText("Test Task"));
@@ -307,6 +314,18 @@ describe("KanbanDetailModal", () => {
   });
 
   describe("delete task", () => {
+    it("keeps recurring occurrences on their existing deletion flow", async () => {
+      const user = userEvent.setup();
+      vi.mocked(global.fetch).mockResolvedValueOnce({ ok: true } as Response);
+      renderModal({ ...mockTask, recurring_series_id: "series-1" });
+      await user.click(screen.getByRole("button", { name: "Delete" }));
+      await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Delete" }));
+      await waitFor(() => expect(mockOnTaskDeleted).toHaveBeenCalled());
+      expect(global.fetch).toHaveBeenCalledWith(`/api/tasks/${mockTask.id}`, { method: "DELETE" });
+      expect(previewDeletion).not.toHaveBeenCalled();
+      expect(executeDeletion).not.toHaveBeenCalled();
+    });
+
     it("shows delete button with accessible label", () => {
       renderModal();
       const deleteButton = screen.getByRole("button", { name: "Delete" });
@@ -320,10 +339,10 @@ describe("KanbanDetailModal", () => {
       await user.click(screen.getByRole("button", { name: "Delete" }));
 
       await waitFor(() => {
-        expect(screen.getByText("Delete this task?")).toBeInTheDocument();
+        expect(screen.getByRole("heading", { name: "Delete Task" })).toBeInTheDocument();
         expect(
           screen.getByText(
-            "This action cannot be undone. This will permanently delete the task."
+            "Past history is kept. This cannot be undone."
           )
         ).toBeInTheDocument();
       });
@@ -339,22 +358,20 @@ describe("KanbanDetailModal", () => {
       await user.click(screen.getByRole("button", { name: "Delete" }));
 
       await waitFor(() => {
-        expect(screen.getByText("Delete this task?")).toBeInTheDocument();
+        expect(screen.getByRole("heading", { name: "Delete Task" })).toBeInTheDocument();
       });
-      await user.click(screen.getByRole("button", { name: /^Delete$/ }));
+      await user.click(screen.getByRole("button", { name: /^Delete Task$/ }));
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith("/api/tasks/task-1", {
-          method: "DELETE",
-        });
+        expect(executeDeletion).toHaveBeenCalled();
       });
       expect(mockOnClose).toHaveBeenCalled();
       expect(mockOnTaskDeleted).toHaveBeenCalled();
     });
 
     it("shows error toast when delete fails (HTTP error)", async () => {
+    vi.mocked(executeDeletion).mockRejectedValueOnce(new Error("Unavailable"));
       const user = userEvent.setup();
-      const { toast } = await import("sonner");
       (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         ok: false,
         status: 500,
@@ -365,18 +382,18 @@ describe("KanbanDetailModal", () => {
       await user.click(screen.getByRole("button", { name: "Delete" }));
 
       await waitFor(() => {
-        expect(screen.getByText("Delete this task?")).toBeInTheDocument();
+        expect(screen.getByRole("heading", { name: "Delete Task" })).toBeInTheDocument();
       });
-      await user.click(screen.getByRole("button", { name: /^Delete$/ }));
+      await user.click(screen.getByRole("button", { name: /^Delete Task$/ }));
 
       await waitFor(() => {
-        expect(toast.error).toHaveBeenCalledWith("Failed to delete task");
+        expect(screen.getByRole("alert")).toHaveTextContent("Deletion could not be confirmed");
       });
     });
 
     it("shows error toast when delete fails (network error)", async () => {
+    vi.mocked(executeDeletion).mockRejectedValueOnce(new Error("Unavailable"));
       const user = userEvent.setup();
-      const { toast } = await import("sonner");
       (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
         new TypeError("Failed to fetch")
       );
@@ -385,12 +402,12 @@ describe("KanbanDetailModal", () => {
       await user.click(screen.getByRole("button", { name: "Delete" }));
 
       await waitFor(() => {
-        expect(screen.getByText("Delete this task?")).toBeInTheDocument();
+        expect(screen.getByRole("heading", { name: "Delete Task" })).toBeInTheDocument();
       });
-      await user.click(screen.getByRole("button", { name: /^Delete$/ }));
+      await user.click(screen.getByRole("button", { name: /^Delete Task$/ }));
 
       await waitFor(() => {
-        expect(toast.error).toHaveBeenCalledWith("Failed to delete task");
+        expect(screen.getByRole("alert")).toHaveTextContent("Deletion could not be confirmed");
       });
       expect(mockOnClose).not.toHaveBeenCalled();
       expect(mockOnTaskDeleted).not.toHaveBeenCalled();
@@ -428,14 +445,12 @@ describe("KanbanDetailModal", () => {
       await user.click(screen.getByRole("button", { name: "Delete" }));
 
       await waitFor(() => {
-        expect(screen.getByText("Delete this task?")).toBeInTheDocument();
+        expect(screen.getByRole("heading", { name: "Delete Task" })).toBeInTheDocument();
       });
-      await user.click(screen.getByRole("button", { name: /^Delete$/ }));
+      await user.click(screen.getByRole("button", { name: /^Delete Task$/ }));
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith("/api/tasks/task-1", {
-          method: "DELETE",
-        });
+        expect(executeDeletion).toHaveBeenCalled();
       });
       expect(mockOnClose).toHaveBeenCalled();
     });

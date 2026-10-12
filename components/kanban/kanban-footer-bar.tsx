@@ -19,6 +19,7 @@ interface KanbanFooterBarProps {
   isSaving: boolean;
   lastSaveError: boolean;
   isDeleting: boolean;
+  reviewBeforeDelete?: boolean;
   onDelete: () => void;
   onClose: () => void;
 }
@@ -27,6 +28,7 @@ export function KanbanFooterBar({
   isSaving,
   lastSaveError,
   isDeleting,
+  reviewBeforeDelete = false,
   onDelete,
   onClose,
 }: KanbanFooterBarProps) {
@@ -53,7 +55,10 @@ export function KanbanFooterBar({
         )}
       </div>
       <div className="flex items-center gap-2">
-        <AlertDialog>
+        {reviewBeforeDelete ? <Button variant="outline" size="sm" className="text-destructive border-destructive/50 hover:bg-destructive/10"
+          aria-label={t("detail.delete")} disabled={isSaving || isDeleting} onClick={onDelete}>
+          <Trash2 className="size-3.5 mr-1.5" />{t("detail.delete")}
+        </Button> : <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button
               variant="outline"
@@ -83,8 +88,8 @@ export function KanbanFooterBar({
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
-        </AlertDialog>
-        <Button variant="outline" size="sm" onClick={onClose}>
+        </AlertDialog>}
+        <Button variant="outline" size="sm" disabled={isDeleting} onClick={onClose}>
           {t("detail.footer.close")}
         </Button>
       </div>

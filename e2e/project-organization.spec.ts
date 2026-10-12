@@ -6,7 +6,9 @@ import {
   type Page,
 } from '@playwright/test';
 import { E2E_READ_ONLY, FIXTURE_REGISTRY, RUN_CONTEXT } from './constants';
-import { registerFixtureId } from './run-context';
+import { registerFixtureId, requiredE2EEnvironment } from './run-context';
+import { createClient } from '@supabase/supabase-js';
+import { deleteRunItem } from './reviewed-deletion';
 
 test.skip(E2E_READ_ONLY, 'Project organization requires disposable E2E state');
 
@@ -35,16 +37,6 @@ async function readTask(request: APIRequestContext, taskId: string): Promise<Tas
   const body = await response.json() as { task: TaskFixture };
   expect(response.ok(), JSON.stringify(body)).toBe(true);
   return body.task;
-}
-
-async function expectProjectCleanup(response: APIResponse): Promise<void> {
-  const body = await response.text();
-  if (response.status() === 404) {
-    expect(JSON.parse(body)).toEqual({ error: 'Project not found' });
-    return;
-  }
-
-  expect(response.ok(), body).toBe(true);
 }
 
 function kanbanColumn(page: Page, name: 'To Do' | 'In Progress') {
@@ -158,13 +150,18 @@ test('moves a run-owned task, persists its placement, and preserves it after pro
       status: 'in_progress',
     });
   } finally {
-    const [taskCleanupResponse, projectCleanupResponse] = await Promise.all([
-      task ? page.request.delete(`/api/tasks/${task.id}`) : undefined,
-      project ? page.request.delete(`/api/projects/${project.id}`) : undefined,
-    ]);
-    if (taskCleanupResponse) {
-      expect(taskCleanupResponse.ok(), await taskCleanupResponse.text()).toBe(true);
+    const client = createClient(requiredE2EEnvironment('NEXT_PUBLIC_SUPABASE_URL', 'teardown'), requiredE2EEnvironment('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'teardown'));
+    const { error } = await client.auth.signInWithPassword({
+      email: RUN_CONTEXT.identityEmail(requiredE2EEnvironment('E2E_TEST_EMAIL', 'teardown')),
+      password: requiredE2EEnvironment('E2E_TEST_PASSWORD', 'teardown'),
+    });
+    if (error) throw error;
+    try {
+      if (task) await deleteRunItem(client, 'task', task.id);
+      if (project) await deleteRunItem(client, 'project', project.id);
+    } finally {
+      // Other browser workers use this run identity; revoke only this cleanup session.
+      await client.auth.signOut({ scope: 'local' });
     }
-    if (projectCleanupResponse) await expectProjectCleanup(projectCleanupResponse);
   }
 });

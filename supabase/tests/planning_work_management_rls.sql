@@ -775,8 +775,7 @@ begin
     '42501',
     'task ownership transfer'
   );
-  delete from public.tasks
-  where id = '57800000-0000-0000-0000-000000000203';
+  perform public.item_delete_command(gen_random_uuid(),public.item_deletion_preview('task','57800000-0000-0000-0000-000000000203'));
   if exists (select 1 from public.tasks where id = '57800000-0000-0000-0000-000000000203') then
     raise exception 'task owner delete did not persist';
   end if;
@@ -805,8 +804,7 @@ begin
     '42501',
     'project ownership transfer'
   );
-  delete from public.projects
-  where id = '57800000-0000-0000-0000-000000000103';
+  perform public.item_delete_command(gen_random_uuid(),public.item_deletion_preview('project','57800000-0000-0000-0000-000000000103'));
   if exists (select 1 from public.projects where id = '57800000-0000-0000-0000-000000000103') then
     raise exception 'project owner delete did not persist';
   end if;
@@ -907,7 +905,7 @@ begin
   ) then
     raise exception 'second-user task update did not persist';
   end if;
-  delete from public.tasks where id = '57800000-0000-0000-0000-000000000207';
+  perform public.item_delete_command(gen_random_uuid(),public.item_deletion_preview('task','57800000-0000-0000-0000-000000000207'));
 
   insert into public.projects (id, user_id, name, section, color)
   values (
@@ -927,7 +925,7 @@ begin
   ) then
     raise exception 'second-user project update did not persist';
   end if;
-  delete from public.projects where id = '57800000-0000-0000-0000-000000000107';
+  perform public.item_delete_command(gen_random_uuid(),public.item_deletion_preview('project','57800000-0000-0000-0000-000000000107'));
 
 end
 $block$;

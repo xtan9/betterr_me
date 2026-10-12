@@ -393,13 +393,12 @@ end
 $$;
 
 -- Source deletion cannot leave a contradictory Task reminder row.
-reset role;
-delete from public.tasks
-where id = '65500000-0000-0000-0000-000000000104'
-  and user_id = '65500000-0000-0000-0000-000000000001';
-
 do $$
 begin
+  if public.item_delete_command(gen_random_uuid(),public.item_deletion_preview('task',
+      '65500000-0000-0000-0000-000000000104'))->>'status' is distinct from 'complete' then
+    raise exception 'Reviewed task deletion failed';
+  end if;
   if exists (
     select 1 from public.reminders
     where source_type = 'task'

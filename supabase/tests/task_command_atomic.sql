@@ -315,42 +315,32 @@ $rollback_retry$;
 release savepoint task_command_rollback_682;
 
 do $skip$
-declare
-  outcome jsonb;
-  retry_outcome jsonb;
-  router_replay jsonb;
 begin
-  outcome := public.task_command_atomic(
-    'skip',
-    jsonb_build_object(
+  begin
+    perform public.task_command_atomic(
+      'skip',
+      jsonb_build_object(
+        'userId', '68200000-0000-0000-0000-000000000001',
+        'taskId', '68200000-0000-0000-0000-000000000102',
+        'idempotencyKey', 'task-skip-682'
+      )
+    );
+    raise exception 'Legacy ordinary-task skip bypassed reviewed deletion';
+  exception when check_violation then
+    if sqlerrm <> 'Use the deletion preview and confirmation command' then
+      raise;
+    end if;
+  end;
+  if not exists (select 1 from public.tasks
+      where id = '68200000-0000-0000-0000-000000000102') then
+    raise exception 'Rejected ordinary-task skip removed the task';
+  end if;
+  if public.task_command_replay('skip', jsonb_build_object(
       'userId', '68200000-0000-0000-0000-000000000001',
       'taskId', '68200000-0000-0000-0000-000000000102',
       'idempotencyKey', 'task-skip-682'
-    )
-  );
-  retry_outcome := public.task_command_atomic(
-    'skip',
-    jsonb_build_object(
-      'userId', '68200000-0000-0000-0000-000000000001',
-      'taskId', '68200000-0000-0000-0000-000000000102',
-      'idempotencyKey', 'task-skip-682'
-    )
-  );
-  router_replay := public.task_command_replay(
-    'skip',
-    jsonb_build_object(
-      'userId', '68200000-0000-0000-0000-000000000001',
-      'taskId', '68200000-0000-0000-0000-000000000102',
-      'idempotencyKey', 'task-skip-682'
-    )
-  );
-  if outcome->>'status' <> 'complete'
-     or retry_outcome->>'status' <> 'already-applied'
-     or router_replay->>'status' <> 'already-applied'
-     or exists (select 1 from public.tasks
-                where id = '68200000-0000-0000-0000-000000000102') then
-    raise exception 'Ordinary skip did not delete and replay idempotently: %, %, %',
-      outcome, retry_outcome, router_replay;
+    ))->>'status' is distinct from 'not-found' then
+    raise exception 'Rejected ordinary-task skip left a receipt';
   end if;
 end
 $skip$;

@@ -12,6 +12,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import type { Task, TaskUpdate } from "@/lib/db/types";
 import { KanbanInfoCard } from "./kanban-info-card";
+import { ReviewedDeleteDialog } from "@/components/tasks/reviewed-delete-dialog";
 import { KanbanFooterBar } from "./kanban-footer-bar";
 
 interface KanbanDetailModalProps {
@@ -142,7 +143,8 @@ export function KanbanDetailModal({
   }, [description, originalDescription, updateField]);
 
   const handleDelete = useCallback(async () => {
-    if (!task) return;
+    if (!task || isSaving) return;
+    if (!task.recurring_series_id && !task.recurring_occurrence_id) { setIsDeleting(true); return; }
     setIsDeleting(true);
     try {
       const res = await fetch(`/api/tasks/${task.id}`, { method: "DELETE" });
@@ -160,12 +162,14 @@ export function KanbanDetailModal({
     } finally {
       setIsDeleting(false);
     }
-  }, [task, onClose, onTaskDeleted, t]);
+  }, [task, isSaving, onClose, onTaskDeleted, t]);
+
+
 
   if (!task) return null;
 
   return (
-    <Dialog open={!!task} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={!!task} onOpenChange={(open) => { if (!open && !isDeleting) onClose(); }}>
       <DialogContent className="sm:max-w-[85vw] h-[85vh] p-0 gap-0 overflow-hidden flex flex-col bg-[#f5f6f8] dark:bg-[#1a1a2e] data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100 data-[state=open]:slide-in-from-bottom-4 data-[state=closed]:slide-out-to-bottom-4">
         <Tabs defaultValue="details" className="flex-1 flex flex-col overflow-hidden">
           {/* Header area — white bar */}
@@ -264,8 +268,9 @@ export function KanbanDetailModal({
           </TabsContent>
 
           {/* Footer bar */}
-          <KanbanFooterBar isSaving={isSaving} lastSaveError={lastSaveError} isDeleting={isDeleting} onDelete={handleDelete} onClose={onClose} />
+          <KanbanFooterBar reviewBeforeDelete={!task.recurring_series_id && !task.recurring_occurrence_id} isSaving={isSaving} lastSaveError={lastSaveError} isDeleting={isDeleting} onDelete={handleDelete} onClose={() => { if (!isDeleting) onClose(); }} />
         </Tabs>
+        <ReviewedDeleteDialog open={isDeleting && !task.recurring_series_id && !task.recurring_occurrence_id} onOpenChange={setIsDeleting} kind="task" id={task.id} title={task.title} onSuccess={() => { onClose(); onTaskDeleted?.(); }} />
       </DialogContent>
     </Dialog>
   );
