@@ -10,23 +10,25 @@ update public.tasks set archived_at=null where archived_at is not null;
 update public.projects set status='active' where status='archived';
 alter table public.tasks enable trigger planner_guard_project_child;
 
+-- Editing a restored open child is not a request to reopen its parent.
 create or replace function planner_private.guard_completed_project_child() returns trigger
 language plpgsql security definer set search_path=pg_catalog,public as $$
 declare parent public.projects;
 begin
   if new.project_id is not null and not new.is_completed and new.archived_at is null then
     select * into parent from public.projects where id=new.project_id and user_id=new.user_id for no key update;
-    if not found or parent.deleted_at is not null then raise exception using errcode='23503',message='Project not found'; end if;
+    if not found then raise exception using errcode='23503',message='Project not found'; end if;
     if parent.completed_at is not null then
       if tg_op='INSERT' or old.project_id is distinct from new.project_id then
-        raise exception using errcode='23514',message='Reopen the project before adding open tasks';
+        raise exception using errcode='23514',message='Reopen the project before adding an open task';
+      elsif old.is_completed then
+        update public.projects set completed_at=null where id=parent.id and user_id=new.user_id;
       end if;
-      -- Existing explicit child-reopen behavior remains intact.
-      update public.projects set completed_at=null where id=parent.id and user_id=new.user_id;
     end if;
   end if;
   return new;
 end $$;
+revoke all on function planner_private.guard_completed_project_child() from public,anon,authenticated;
 
 create policy tasks_not_deleted on public.tasks as restrictive for all to public
   using (deleted_at is null) with check (deleted_at is null);
@@ -119,6 +121,7 @@ create trigger guard_deleted_task_reminder before insert or update of source_id,
 create function planner_private.deletion_preview(p_kind text,p_id uuid) returns jsonb
 language plpgsql security definer set search_path=pg_catalog,public as $$
 declare owner_id uuid:=auth.uid(); item jsonb; plan jsonb; children jsonb; retained jsonb;
+  reminders jsonb; event_versions jsonb; checked_at timestamptz:=clock_timestamp();
 begin
   if owner_id is null then return jsonb_build_object('status','not-found'); end if;
   if p_kind='project' then
@@ -127,14 +130,15 @@ begin
     select coalesce(jsonb_agg(jsonb_build_object('id',id,'version',version) order by id),'[]') into children
       from public.tasks where user_id=owner_id and project_id=p_id and deleted_at is null;
     return jsonb_build_object('status','complete','kind',p_kind,'id',p_id,'version',item->>'version',
-      'title',item->>'name','children',children,'plan','[]'::jsonb,'retained','[]'::jsonb);
+      'title',item->>'name','children',children,'plan','[]'::jsonb,'retained','[]'::jsonb,
+      'reminders','[]'::jsonb,'eventVersions','[]'::jsonb);
   elsif p_kind='task' then
     select to_jsonb(t) into item from public.tasks t where id=p_id and user_id=owner_id and deleted_at is null;
     if item is null then return jsonb_build_object('status','not-found'); end if;
     if item->>'recurring_series_id' is not null or item->>'recurring_occurrence_id' is not null then
       return jsonb_build_object('status','unsupported');
     end if;
-    select coalesce(jsonb_agg(to_jsonb(e) order by e.id),'[]') into plan
+    select coalesce(jsonb_agg(to_jsonb(e)||jsonb_build_object('timezone',coalesce(e.timezone,p.timezone,'UTC')) order by e.id),'[]') into plan
       from public.calendar_events e join public.profiles p on p.id=e.user_id
       where e.user_id=owner_id and e.task_id=p_id and e.app_owned
         and e.booking_task_id is null and e.routine_occurrence_id is null
@@ -142,12 +146,20 @@ begin
         and e.recurring_event_id is null and e.original_date is null and e.recurrence_rule is null
         and e.end_type is null and e.end_count is null and e.end_date_recurrence is null
         and e.start_time is not null and e.end_time is not null
-        and (e.start_date+e.start_time) at time zone coalesce(e.timezone,p.timezone,'UTC')>statement_timestamp();
+        and (e.start_date+e.start_time) at time zone coalesce(e.timezone,p.timezone,'UTC')>checked_at;
     select coalesce(jsonb_agg(to_jsonb(e) order by e.id),'[]') into retained from public.calendar_events e
       where e.user_id=owner_id and (e.task_id=p_id or e.booking_task_id=p_id)
       and not exists(select 1 from jsonb_array_elements(plan) x where x->>'id'=e.id::text);
+    select coalesce(jsonb_agg(to_jsonb(r) order by r.id),'[]') into reminders
+      from public.reminders r where r.user_id=owner_id and
+        ((r.source_type='task' and r.source_id=p_id) or (r.source_type='calendar_event'
+          and exists(select 1 from jsonb_array_elements(plan) x where x->>'id'=r.source_id::text)));
+    select coalesce(jsonb_agg(to_jsonb(v) order by v.event_id),'[]') into event_versions
+      from public.planner_event_versions v where v.user_id=owner_id
+        and exists(select 1 from jsonb_array_elements(plan) x where x->>'id'=v.event_id::text);
     return jsonb_build_object('status','complete','kind',p_kind,'id',p_id,'version',item->>'version',
-      'title',item->>'title','plan',plan,'retained',retained,'children','[]'::jsonb);
+      'title',item->>'title','plan',plan,'retained',retained,'children','[]'::jsonb,
+      'reminders',reminders,'eventVersions',event_versions);
   end if;
   return jsonb_build_object('status','invalid');
 end $$;
@@ -175,6 +187,7 @@ begin
   if kind='task' then
     perform 1 from public.tasks where id=target and user_id=owner_id for update;
     perform 1 from public.calendar_events where user_id=owner_id and (task_id=target or booking_task_id=target) order by id for update;
+    perform 1 from public.reminders where user_id=owner_id and source_type='task' and source_id=target order by id for update;
   else
     perform 1 from public.projects where id=target and user_id=owner_id for update;
     perform 1 from public.tasks where project_id=target and user_id=owner_id order by id for update;

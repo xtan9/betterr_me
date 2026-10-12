@@ -13,7 +13,9 @@ its existing occurrence behavior.
 
 `item_deletion_preview(kind,id)` returns an owner-scoped versioned impact.
 `item_delete_command(operation_id,preview)` locks the target and dependent rows,
-recomputes the exact impact, rejects changes, and commits atomically. Immutable
+recomputes the exact impact (including reminder snapshots and event versions),
+rejects changes, and commits atomically. Eligibility uses the clock after row
+locks, so a newly started block invalidates an earlier future-block preview. Immutable
 private receipts replay an identical request; reusing an ID for another preview
 is a conflict. The public RPCs are invokers of private definer functions; those
 derive ownership only from auth.uid().
@@ -51,3 +53,17 @@ full application unit suite are required separately from these database checks.
 Local checks use a dedicated `codex_delete_tests` database created from the local
 schema, never the local application's active database or a hosted account.
 Native acceptance of mobile confirmation layouts remains a separate device gate.
+
+October 12 verification: the full application suite passed (6,047 tests), plus
+34 fixture-registry/policy tests after adding restoration coverage. The deletion,
+restoration, task collection, completion, stop, undo, task/calendar capture,
+mobile projects, guided planning, project changes/deletion, task reminders and
+journal-link SQL fixtures passed in the isolated database. Source review findings
+for completed-project restoration, reminder-only changes and elapsed time during
+execution were corrected and covered by regressions.
+
+The local database is a schema clone, not a clean CI reset. The broader planning
+RLS fixture encountered an existing anonymous table grant in the source schema;
+project-creation concurrency needs the CI dblink connection helper. Those two
+fixtures still require the clean CI harness; their local runs are not claimed
+as passes. Hosted rollout and physical-device acceptance remain pending.

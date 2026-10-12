@@ -17,6 +17,15 @@ begin
     values('68120000-0000-0000-0000-000000000001','Past work',current_date-2,current_date-2,'09:00','10:00','UTC',true,false,(task->>'id')::uuid),
     ('68120000-0000-0000-0000-000000000001','External commitment',current_date+3,current_date+3,'09:00','10:00','UTC',false,true,(task->>'id')::uuid);
   preview:=public.item_deletion_preview('task',(task->>'id')::uuid);
+  perform public.update_calendar_event_with_reminders('68120000-0000-0000-0000-000000000001',
+    (event->>'id')::uuid,'{}','[{"reminder_type":"relative","relative_minutes":15,"channels":["push"]}]');
+  if public.item_delete_command(op,preview)->>'status'<>'conflict' then raise exception 'accepted added reminder'; end if;
+  preview:=public.item_deletion_preview('task',(task->>'id')::uuid);
+  if jsonb_array_length(preview->'reminders')<>1 then raise exception 'reminder impact missing'; end if;
+  perform public.transition_calendar_event_reminder('68120000-0000-0000-0000-000000000001',
+    (preview->'reminders'->0->>'id')::uuid,'snoozed');
+  if public.item_delete_command(op,preview)->>'status'<>'conflict' then raise exception 'accepted reminder-only edit'; end if;
+  preview:=public.item_deletion_preview('task',(task->>'id')::uuid);
   if jsonb_array_length(preview->'plan')<>1 then raise exception 'future protected block absent: %',preview; end if;
   if jsonb_array_length(preview->'retained')<>2 then raise exception 'retained commitments absent'; end if;
   -- Preview is not deletion. Stale preview must cause no partial effects.
@@ -62,5 +71,20 @@ begin
     raise exception 'legacy archive accepted';
   exception when check_violation then null;
   end;
+  -- A single RPC can wait while a future block starts. The execution preview
+  -- must use the clock after its locks, not the original statement timestamp.
+  task:=public.task_capture_command('create',gen_random_uuid(),null,null,'{"title":"Starting now"}')->'task';
+  future:=(clock_timestamp() at time zone 'UTC')+interval '1 second';
+  insert into public.calendar_events(user_id,title,start_date,end_date,start_time,end_time,timezone,app_owned,is_protected,task_id)
+    values('68120000-0000-0000-0000-000000000001','Starting block',future::date,(future+interval '1 hour')::date,
+      future::time,(future+interval '1 hour')::time,'UTC',true,false,(task->>'id')::uuid);
+  preview:=public.item_deletion_preview('task',(task->>'id')::uuid);
+  if jsonb_array_length(preview->'plan')<>1 then raise exception 'starting block fixture missing'; end if;
+  perform pg_sleep(1.1);
+  if public.item_delete_command(gen_random_uuid(),preview)->>'status'<>'conflict' then raise exception 'removed newly started block'; end if;
+  if not exists(select 1 from public.calendar_events where task_id=(task->>'id')::uuid) then raise exception 'current block lost'; end if;
+  preview:=public.item_deletion_preview('task',(task->>'id')::uuid);
+  if public.item_delete_command(gen_random_uuid(),preview)->>'status'<>'complete' then raise exception 'fresh current-block review failed'; end if;
+  if not exists(select 1 from public.calendar_events where title='Starting block' and task_id is null) then raise exception 'current commitment not retained'; end if;
 end $$;
 rollback;

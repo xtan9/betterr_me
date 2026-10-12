@@ -21,11 +21,19 @@ begin
   if result->>'status' is distinct from 'complete' then raise exception 'project reopening Undo: %',result; end if;
   select to_jsonb(p) into project from public.projects p where id=(project->>'id')::uuid;
   if project->>'completed_at' is distinct from completed_project->>'completed_at' then raise exception 'project timestamp changed'; end if;
+  begin
+    perform public.task_capture_command('create',gen_random_uuid(),null,null,jsonb_build_object('title','Rejected child','project_id',project->>'id','expected_project_version',project->>'version'));
+    raise exception 'new open child assigned to completed project';
+  exception when check_violation then null;
+  end;
+  result := public.planner_command(jsonb_build_object('operation','reopen-project','operationId',gen_random_uuid(),'projectId',project->>'id','expectedVersion',project->>'version'));
+  if result->>'status' is distinct from 'complete' then raise exception 'explicit reopening failed'; end if;
+  select to_jsonb(p) into project from public.projects p where id=(project->>'id')::uuid;
   result := public.task_capture_command('create',gen_random_uuid(),null,null,jsonb_build_object('title','Plant seeds','project_id',project->>'id','expected_project_version',project->>'version'));
   if result->>'status' is distinct from 'complete' then raise exception 'child creation: %',result; end if;
   task := result->'task';
   select to_jsonb(p) into project from public.projects p where id=(project->>'id')::uuid;
-  if project->>'completed_at' is not null then raise exception 'new child did not reopen parent'; end if;
+  if project->>'completed_at' is not null then raise exception 'project did not remain open'; end if;
   result := public.planner_command(jsonb_build_object('operation','complete-project','operationId',gen_random_uuid(),'projectId',project->>'id','expectedVersion',project->>'version'));
   if result->>'status' is distinct from 'conflict' then raise exception 'open-child completion guard: %',result; end if;
   result := public.planner_command(jsonb_build_object('operation','complete','operationId',gen_random_uuid(),'taskId',task->>'id','expectedVersion',task->>'version','plan','[]'::jsonb));
