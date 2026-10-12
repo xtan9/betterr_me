@@ -4,11 +4,7 @@
 -- defaults, invalid values, ownership masking, and concurrent placement.
 
 -- Remove residue from an interrupted run before creating disposable identities.
-delete from public.projects
-where user_id in (
-  '65100000-0000-0000-0000-000000000001',
-  '65100000-0000-0000-0000-000000000002'
-);
+-- Account fixture cleanup below owns dependent-row cleanup.
 
 do $$
 begin
@@ -111,11 +107,11 @@ begin
     'Work project',
     'work',
     '#3B82F6',
-    'archived',
+    'active',
     7.0
   );
   if outcome->>'type' <> 'created'
-    or outcome->'project'->>'status' <> 'archived'
+    or outcome->'project'->>'status' <> 'active'
     or (outcome->'project'->>'sort_order')::double precision <> 7.0 then
     raise exception 'explicit project creation values were incorrect: %', outcome;
   end if;
@@ -261,10 +257,8 @@ end
 $$;
 
 -- Self-clean committed rows and disposable identities.
-delete from public.projects
-where user_id = '65100000-0000-0000-0000-000000000001';
-delete from public.projects
-where user_id = '65100000-0000-0000-0000-000000000002';
+-- Account fixture cleanup below owns dependent-row cleanup.
+-- Account fixture cleanup below owns dependent-row cleanup.
 select public.sql_fixture_delete_auth_user(
   '65100000-0000-0000-0000-000000000001'
 );

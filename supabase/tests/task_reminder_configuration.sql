@@ -394,9 +394,7 @@ $$;
 
 -- Source deletion cannot leave a contradictory Task reminder row.
 reset role;
-delete from public.tasks
-where id = '65500000-0000-0000-0000-000000000104'
-  and user_id = '65500000-0000-0000-0000-000000000001';
+select public.item_delete_command(gen_random_uuid(),public.item_deletion_preview('task','65500000-0000-0000-0000-000000000104'));
 
 do $$
 begin

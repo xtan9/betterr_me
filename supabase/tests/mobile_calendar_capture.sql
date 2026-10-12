@@ -25,7 +25,7 @@ begin
     raise exception 'stale web accepted';
   exception when sqlstate 'PT409' then null;
   end;
-  delete from public.tasks where id=(task->>'id')::uuid;
+  perform public.item_delete_command(gen_random_uuid(),public.item_deletion_preview('task',(task->>'id')::uuid));
   select * into current_event from public.calendar_events where id=(result->'event'->>'id')::uuid;
   if current_event.task_id is not null or current_event.title<>'Lunch' or current_event.version=(linked->'event'->>'version')::uuid then
     raise exception 'legacy task deletion did not preserve event and version unlink';

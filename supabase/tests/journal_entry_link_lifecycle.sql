@@ -13,10 +13,8 @@ delete from public.journal_entries
 where user_id = '64900000-0000-4000-8000-000000000001';
 delete from public.habits
 where user_id = '64900000-0000-4000-8000-000000000001';
-delete from public.tasks
-where user_id = '64900000-0000-4000-8000-000000000001';
-delete from public.projects
-where user_id = '64900000-0000-4000-8000-000000000001';
+-- Account fixture cleanup below owns dependent-row cleanup.
+-- Account fixture cleanup below owns dependent-row cleanup.
 select set_config(
   'request.jwt.claim.sub',
   '64900000-0000-4000-8000-000000000002',
@@ -26,10 +24,8 @@ delete from public.journal_entries
 where user_id = '64900000-0000-4000-8000-000000000002';
 delete from public.habits
 where user_id = '64900000-0000-4000-8000-000000000002';
-delete from public.tasks
-where user_id = '64900000-0000-4000-8000-000000000002';
-delete from public.projects
-where user_id = '64900000-0000-4000-8000-000000000002';
+-- Account fixture cleanup below owns dependent-row cleanup.
+-- Account fixture cleanup below owns dependent-row cleanup.
 do $$
 begin
   begin
@@ -447,10 +443,8 @@ delete from public.journal_entries
 where user_id = '64900000-0000-4000-8000-000000000001';
 delete from public.habits
 where user_id = '64900000-0000-4000-8000-000000000001';
-delete from public.tasks
-where user_id = '64900000-0000-4000-8000-000000000001';
-delete from public.projects
-where user_id = '64900000-0000-4000-8000-000000000001';
+-- Account fixture cleanup below owns dependent-row cleanup.
+-- Account fixture cleanup below owns dependent-row cleanup.
 
 select set_config(
   'request.jwt.claim.sub',
@@ -461,10 +455,8 @@ delete from public.journal_entries
 where user_id = '64900000-0000-4000-8000-000000000002';
 delete from public.habits
 where user_id = '64900000-0000-4000-8000-000000000002';
-delete from public.tasks
-where user_id = '64900000-0000-4000-8000-000000000002';
-delete from public.projects
-where user_id = '64900000-0000-4000-8000-000000000002';
+-- Account fixture cleanup below owns dependent-row cleanup.
+-- Account fixture cleanup below owns dependent-row cleanup.
 reset role;
 
 do $$

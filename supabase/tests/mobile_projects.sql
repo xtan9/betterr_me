@@ -34,9 +34,12 @@ begin
   result := public.task_capture_command('edit',gen_random_uuid(),(child->>'id')::uuid,(child->>'version')::uuid,
     jsonb_build_object('project_id',project->>'id','expected_project_version',project->>'version'));
   child := result->'task';
-  result := public.project_capture_command('archive',gen_random_uuid(),(project->>'id')::uuid,(project->>'version')::uuid);
-  if result->>'status'<>'complete' or result->'project'->>'status'<>'archived' then raise exception 'project archive failed'; end if;
-  if (select to_jsonb(t) from public.tasks t where id=(child->>'id')::uuid)<>child then raise exception 'archive changed child'; end if;
+  begin
+    perform public.project_capture_command('archive',gen_random_uuid(),(project->>'id')::uuid,(project->>'version')::uuid);
+    raise exception 'obsolete project archive accepted';
+  exception when check_violation then null;
+  end;
+  if (select to_jsonb(t) from public.tasks t where id=(child->>'id')::uuid)<>child then raise exception 'rejected archive changed child'; end if;
   perform set_config('request.jwt.claims','{"sub":"68400000-0000-0000-0000-000000000002","role":"authenticated"}',true);
   if exists(select 1 from public.projects) or exists(select 1 from public.project_capture_receipts) then raise exception 'cross-owner read'; end if;
   result := public.task_capture_command('create',gen_random_uuid(),null,null,

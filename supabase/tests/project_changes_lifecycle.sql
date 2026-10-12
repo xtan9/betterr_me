@@ -4,11 +4,7 @@
 -- through the normalized, owner-scoped RPC.
 
 -- Remove residue from an interrupted run before creating disposable identities.
-delete from public.projects
-where user_id in (
-  '65200000-0000-0000-0000-000000000001',
-  '65200000-0000-0000-0000-000000000002'
-);
+-- Account fixture cleanup below owns dependent-row cleanup.
 
 do $$
 begin
@@ -223,47 +219,12 @@ begin
     raise exception 'invalid project status was not typed: %', outcome;
   end if;
 
-  -- Archive and restore are explicit, idempotent transitions. Repeating an
-  -- already-applied status is an expected outcome, not an error.
-  outcome := public.update_project_atomically(
-    owner_project_id,
-    '65200000-0000-0000-0000-000000000001',
-    '{"status":" archived "}'::jsonb
-  );
-  if outcome->>'type' <> 'updated'
-    or outcome->'project'->>'status' <> 'archived' then
-    raise exception 'project archive was incorrect: %', outcome;
-  end if;
-
-  repeated := public.update_project_atomically(
-    owner_project_id,
-    '65200000-0000-0000-0000-000000000001',
-    '{"status":"archived"}'::jsonb
-  );
-  if repeated->>'type' <> 'already-applied'
-    or repeated->'project'->>'status' <> 'archived' then
-    raise exception 'repeated project archive was not idempotent: %', repeated;
-  end if;
-
-  outcome := public.update_project_atomically(
-    owner_project_id,
-    '65200000-0000-0000-0000-000000000001',
-    '{"status":"active"}'::jsonb
-  );
-  if outcome->>'type' <> 'updated'
-    or outcome->'project'->>'status' <> 'active' then
-    raise exception 'project restore was incorrect: %', outcome;
-  end if;
-
-  repeated := public.update_project_atomically(
-    owner_project_id,
-    '65200000-0000-0000-0000-000000000001',
-    '{"status":"active"}'::jsonb
-  );
-  if repeated->>'type' <> 'already-applied'
-    or repeated->'project'->>'status' <> 'active' then
-    raise exception 'repeated project restore was not idempotent: %', repeated;
-  end if;
+  -- Obsolete clients cannot reintroduce Archive.
+  begin
+    perform public.update_project_atomically(owner_project_id,'65200000-0000-0000-0000-000000000001','{"status":"archived"}'::jsonb);
+    raise exception 'obsolete project archive accepted';
+  exception when check_violation then null;
+  end;
 
   -- Missing and cross-owner projects are deliberately indistinguishable.
   missing := public.update_project_atomically(
@@ -304,11 +265,7 @@ end
 $$;
 
 reset role;
-delete from public.projects
-where user_id in (
-  '65200000-0000-0000-0000-000000000001',
-  '65200000-0000-0000-0000-000000000002'
-);
+-- Account fixture cleanup below owns dependent-row cleanup.
 select public.sql_fixture_delete_auth_user(
   '65200000-0000-0000-0000-000000000001'
 );
