@@ -159,6 +159,9 @@ test('moves a run-owned task, persists its placement, and preserves it after pro
     try {
       if (task) await deleteRunItem(client, 'task', task.id);
       if (project) await deleteRunItem(client, 'project', project.id);
-    } finally { await client.auth.signOut(); }
+    } finally {
+      // Other browser workers use this run identity; revoke only this cleanup session.
+      await client.auth.signOut({ scope: 'local' });
+    }
   }
 });
