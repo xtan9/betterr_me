@@ -31,8 +31,10 @@ records deletion without advertising Undo.
 
 Deploy the backend before the mobile Delete UI. Old archive and unreviewed hard
 delete writes fail rather than silently gaining new destructive meaning. Older
-web/API deletion controls need to adopt these RPCs before they can delete items;
-do not remove the guard to make an obsolete caller work. Existing task/project
+API deletion clients need to adopt these RPCs before they can delete items.
+The web project, task-detail and Kanban controls now use the same reviewed
+command through the authenticated browser client. Do not remove the guard to
+make an obsolete caller work. Existing task/project
 create/edit and routine lifecycle operations remain supported.
 
 This is a shared data migration, not a low-risk UI-only merge. Review the
@@ -62,8 +64,10 @@ journal-link SQL fixtures passed in the isolated database. Source review finding
 for completed-project restoration, reminder-only changes and elapsed time during
 execution were corrected and covered by regressions.
 
-The local database is a schema clone, not a clean CI reset. The broader planning
-RLS fixture encountered an existing anonymous table grant in the source schema;
-project-creation concurrency needs the CI dblink connection helper. Those two
-fixtures still require the clean CI harness; their local runs are not claimed
-as passes. Hosted rollout and physical-device acceptance remain pending.
+The clean CI database reset and all registered SQL fixtures passed on commit
+49371ef3, including planning RLS and project-creation concurrency. That run
+identified obsolete web deletion and E2E cleanup callers, now migrated to the
+reviewed command. The 114 focused component and architecture checks pass,
+including recurring-task compatibility, uncertain retries, stale previews,
+keyboard focus and accessibility. Hosted rollout and physical-device acceptance
+remain pending until the updated browser suite passes.

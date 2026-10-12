@@ -1,3 +1,8 @@
+import { executeDeletion, previewDeletion } from '@/lib/deletion/client';
+vi.mock('@/lib/deletion/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/deletion/client')>();
+  return { ...actual, previewDeletion: vi.fn(), executeDeletion: vi.fn() };
+});
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -46,7 +51,7 @@ const allTranslations: Record<string, Record<string, string>> = {
     "detail.title": "Task Details",
     "detail.edit": "Edit",
     "detail.delete": "Delete Task",
-    "detail.deleteConfirm": "Are you sure you want to delete this task?",
+    "detail.deleteConfirm": "Past history is kept. This cannot be undone.",
     "detail.deleteCancel": "Cancel",
     "detail.back": "Back",
     "detail.completed": "Completed",
@@ -88,6 +93,7 @@ const allTranslations: Record<string, Record<string, string>> = {
 };
 
 vi.mock("next-intl", () => ({
+  useLocale: () => "en",
   useTranslations: (namespace: string) => {
     const ns = allTranslations[namespace] ?? {};
     return (key: string) => {
@@ -156,6 +162,8 @@ describe("TaskDetailContent", () => {
   const user = userEvent.setup();
 
   beforeEach(() => {
+    vi.mocked(previewDeletion).mockImplementation(async (_client, kind, id) => ({ status: 'complete', kind, id, title: 'Review task', version: 'v1', children: [], plan: [], retained: [], reminders: [], eventVersions: [] }));
+    vi.mocked(executeDeletion).mockResolvedValue(undefined);
     vi.clearAllMocks();
     global.fetch = vi.fn();
     vi.mocked(useSWR).mockReturnValue({
@@ -280,7 +288,7 @@ describe("TaskDetailContent", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("Are you sure you want to delete this task?"),
+        screen.getByText("Past history is kept. This cannot be undone."),
       ).toBeInTheDocument();
     });
   });
@@ -299,7 +307,7 @@ describe("TaskDetailContent", () => {
     // Wait for dialog and find confirm button within it
     await waitFor(() => {
       expect(
-        screen.getByText("Are you sure you want to delete this task?"),
+        screen.getByText("Past history is kept. This cannot be undone."),
       ).toBeInTheDocument();
     });
 
@@ -311,15 +319,14 @@ describe("TaskDetailContent", () => {
     await user.click(confirmButton);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith("/api/tasks/task-1", {
-        method: "DELETE",
-      });
+      expect(executeDeletion).toHaveBeenCalled();
     });
     expect(mockToastSuccess).toHaveBeenCalledWith("Task deleted successfully");
     expect(mockPush).toHaveBeenCalledWith("/tasks");
   });
 
   it("shows error toast on delete failure", async () => {
+    vi.mocked(executeDeletion).mockRejectedValueOnce(new Error("Unavailable"));
     vi.mocked(global.fetch).mockResolvedValue({
       ok: false,
       json: () => Promise.resolve({ error: "Server error" }),
@@ -331,7 +338,7 @@ describe("TaskDetailContent", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("Are you sure you want to delete this task?"),
+        screen.getByText("Past history is kept. This cannot be undone."),
       ).toBeInTheDocument();
     });
 
@@ -342,7 +349,7 @@ describe("TaskDetailContent", () => {
     await user.click(confirmButton);
 
     await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalledWith("Failed to delete task");
+      expect(screen.getByRole("alert")).toHaveTextContent("Deletion could not be confirmed");
     });
   });
 

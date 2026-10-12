@@ -19,17 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/layouts/page-header";
 import { PageBreadcrumbs } from "@/components/layouts/page-breadcrumbs";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { ReviewedDeleteDialog } from "@/components/tasks/reviewed-delete-dialog";
 import { EditScopeDialog } from "@/components/tasks/edit-scope-dialog";
 import { TaskDetailSkeleton } from "@/components/tasks/task-detail-skeleton";
 import { TaskDetailsGrid } from "@/components/tasks/task-details-grid";
@@ -58,6 +48,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
   const isDark = resolvedTheme === "dark";
   const { categories } = useCategories();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [scopeDialogOpen, setScopeDialogOpen] = useState(false);
   const [scopeAction, setScopeAction] = useState<"edit" | "delete">("edit");
 
@@ -129,24 +120,6 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
       } finally {
         setIsDeleting(false);
       }
-    }
-  };
-
-  const handleDelete = async () => {
-    setIsDeleting(true);
-    try {
-      const response = await fetch(`/api/tasks/${taskId}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) throw new Error("Failed to delete");
-      revalidateSidebarCounts();
-      toast.success(t("delete.success"));
-      router.push("/tasks");
-    } catch (err) {
-      console.error("Failed to delete task:", err);
-      toast.error(t("delete.error"));
-    } finally {
-      setIsDeleting(false);
     }
   };
 
@@ -267,35 +240,13 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
                 {t("detail.delete")}
               </Button>
             ) : (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" className="gap-2">
-                    <Trash2 className="size-4" />
-                    {t("detail.delete")}
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>{t("detail.delete")}</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {t("detail.deleteConfirm")}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>
-                      {t("detail.deleteCancel")}
-                    </AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleDelete}
-                      disabled={isDeleting}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
-                      <Trash2 className="size-4 mr-2" />
-                      {t("detail.delete")}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              <>
+                <Button variant="destructive" className="gap-2" onClick={() => setDeleteOpen(true)}>
+                  <Trash2 className="size-4" />{t("detail.delete")}
+                </Button>
+                <ReviewedDeleteDialog open={deleteOpen} onOpenChange={setDeleteOpen} kind="task" id={taskId} title={task.title}
+                  onSuccess={() => { revalidateSidebarCounts(); toast.success(t("delete.success")); router.push("/tasks"); }} />
+              </>
             )}
           </div>
 

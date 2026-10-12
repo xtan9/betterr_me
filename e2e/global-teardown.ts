@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 import { E2E_READ_ONLY, FIXTURE_REGISTRY, RUN_CONTEXT } from './constants';
 import { cleanupRegisteredFixtures, requiredE2EEnvironment } from './run-context';
+import { deleteRunItem } from './reviewed-deletion';
 
 async function globalTeardown() {
   if (E2E_READ_ONLY) {
@@ -35,8 +36,7 @@ async function globalTeardown() {
         if (recordFailures.length > 0) throw new Error(recordFailures.join('; '));
       },
       tasks: async (id) => {
-        const { error } = await supabase.from('tasks').delete().eq('id', id);
-        if (error) throw new Error(`task deletion failed: ${error.message}`);
+        await deleteRunItem(supabase, 'task', id);
       },
     });
   } catch (error) {
