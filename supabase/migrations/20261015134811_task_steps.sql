@@ -48,9 +48,10 @@ declare definition text;
 begin
   select pg_get_functiondef('public.task_capture_command(text,uuid,uuid,uuid,jsonb)'::regprocedure) into definition;
   if position('''project_id'',''expected_project_version''' in definition)=0 then raise exception 'Unexpected task capture shape'; end if;
-  definition:=replace(definition,'''project_id'',''expected_project_version''','''project_id'',''expected_project_version'',''steps''');
+  definition:=replace(definition,'''project_id'',''expected_project_version''','''project_id'',''expected_project_version'',''steps'',''priority''');
   definition:=replace(definition,'if p_changes ? ''title'' and',
-    'if p_changes ? ''steps'' and not planner_private.valid_steps(p_changes->''steps'') then return jsonb_build_object(''status'',''invalid-transition''); end if;
+    'if p_changes ? ''priority'' and (jsonb_typeof(p_changes->''priority'')<>''number'' or p_changes->>''priority'' not in (''0'',''1'',''2'',''3'')) then return jsonb_build_object(''status'',''invalid-transition''); end if;
+  if p_changes ? ''steps'' and not planner_private.valid_steps(p_changes->''steps'') then return jsonb_build_object(''status'',''invalid-transition''); end if;
   if p_changes ? ''title'' and');
   if position('insert into public.tasks(user_id,title,estimate_minutes,due_date,planned_date,project_id)' in definition)=0 then raise exception 'Unexpected task insert shape'; end if;
   definition:=replace(definition,'insert into public.tasks(user_id,title,estimate_minutes,due_date,planned_date,project_id)',
@@ -83,8 +84,8 @@ begin
     transition:='reopen';
   elsif not prior.is_completed and jsonb_array_length(p_steps)>0
     and not exists(select 1 from jsonb_array_elements(p_steps) s where not (s->>'checked')::boolean)
-    and exists(select 1 from jsonb_array_elements(p_steps) s join jsonb_array_elements(prior.steps) old on old->>'id'=s->>'id'
-      where (s->>'checked')::boolean and not (old->>'checked')::boolean) then
+    and exists(select 1 from jsonb_array_elements(p_steps) s left join jsonb_array_elements(prior.steps) old on old->>'id'=s->>'id'
+      where (s->>'checked')::boolean and not coalesce((old->>'checked')::boolean,false)) then
     transition:='complete';
   end if;
   before_value:=jsonb_build_object('task',to_jsonb(prior));
@@ -129,7 +130,7 @@ language plpgsql security definer set search_path=pg_catalog,public as $$
 declare owner_id uuid:=auth.uid(); request_id uuid:=(p_request->>'operationId')::uuid;
   receipt public.planner_command_receipts; task public.tasks; occurrence public.recurring_task_occurrences;
   series public.recurring_task_series; change public.planner_changes; desired jsonb; result jsonb;
-  event public.calendar_events; item jsonb;
+  event public.calendar_events; parent public.projects; item jsonb; event_token uuid;
 begin
   if owner_id is null then return jsonb_build_object('status','not-found'); end if;
   if p_request->>'operation'='undo' then
@@ -175,9 +176,21 @@ begin
     if result->>'status'<>'complete' then return result; end if;
   else
     if task.version::text is distinct from change.after_state->'task'->>'version' then return jsonb_build_object('status','conflict'); end if;
+    -- Restoring an old project assignment must not silently reopen a project
+    -- the user explicitly completed after this edit.
+    if (change.before_state->'task'->>'is_completed')::boolean=false then
+      select * into parent from public.projects where id=(change.before_state->'task'->>'project_id')::uuid
+        and user_id=owner_id for no key update;
+      if parent.completed_at is not null then return jsonb_build_object('status','conflict'); end if;
+    end if;
     for item in select value from jsonb_array_elements(coalesce(change.after_state->'events','[]')) order by value->>'id' loop
       select * into event from public.calendar_events where id=(item->>'id')::uuid and user_id=owner_id for update;
       if not found or event.version::text is distinct from item->>'version' then return jsonb_build_object('status','conflict'); end if;
+    end loop;
+    for item in select value from jsonb_array_elements(coalesce(change.after_state->'eventVersions','[]')) order by value->>'id' loop
+      select version into event_token from public.planner_event_versions
+        where event_id=(item->>'id')::uuid and user_id=owner_id for update;
+      if not found or event_token::text is distinct from item->>'version' then return jsonb_build_object('status','conflict'); end if;
     end loop;
     if occurrence.id is not null then
       if occurrence.version::text is distinct from change.after_state->'occurrence'->>'version'
@@ -192,6 +205,10 @@ begin
     perform planner_private.restore_snapshot('tasks',change.before_state->'task',owner_id);
     for item in select value from jsonb_array_elements(coalesce(change.before_state->'events','[]')) order by value->>'id' loop
       perform planner_private.restore_snapshot('calendar_events',item,owner_id);
+    end loop;
+    for item in select value from jsonb_array_elements(coalesce(change.after_state->'reconcileEvents','[]')) loop
+      perform public.update_calendar_event_with_reminders(owner_id,(item->>'id')::uuid,
+        jsonb_build_object('start_date',item->'start_date','start_time',item->'start_time'),null);
     end loop;
     for item in select value from jsonb_array_elements(coalesce(change.after_state->'createdEvents','[]')) loop
       perform public.delete_calendar_event_with_reminders(owner_id,(item->>'id')::uuid);
@@ -239,6 +256,11 @@ begin
   definition:=replace(definition,'when v_occurrence.state = ''extra'' then ''extra''',
     'when v_occurrence.state = ''completed'' and not (v_updates ? ''status'') then ''completed''
           when v_occurrence.state = ''extra'' then ''extra''');
+  if position('elsif v_occurrence.state in (''completed'', ''skipped'', ''withdrawn'') then' in definition)=0 then raise exception 'Unexpected terminal occurrence guard'; end if;
+  definition:=replace(definition,'elsif v_occurrence.state in (''completed'', ''skipped'', ''withdrawn'') then',
+    'elsif v_occurrence.state in (''completed'', ''skipped'', ''withdrawn'')
+      and not (v_occurrence.state=''completed'' and v_updates ? ''steps'' and v_updates-''steps''=''{}''::jsonb
+        and coalesce(current_setting(''betterr.steps_write'',true),'''')=''on'') then');
   execute definition;
 
   -- All parent completion channels (including web/AI lifecycle callers) capture
@@ -276,7 +298,7 @@ begin
   if position('''protected'',''rule''' in definition)=0 then raise exception 'Unexpected routine capture shape'; end if;
   definition:=replace(definition,'''protected'',''rule''','''protected'',''rule'',''steps''');
   definition:=replace(definition,'''title'',''date'',''startTime'',''endTime''','''title'',''date'',''startTime'',''endTime'',''steps''');
-  definition:=replace(definition,'event public.calendar_events;', 'event public.calendar_events; step_event public.calendar_events;');
+  definition:=replace(definition,'event public.calendar_events;', 'event public.calendar_events; step_event public.calendar_events; current_step_event public.calendar_events;');
   definition:=replace(definition,'''dueTime'',null)', '''dueTime'',null,''steps'',coalesce(p_request->''steps'',''[]''::jsonb))');
   definition:=replace(definition,'if request_id is null or',
     'if p_request ? ''steps'' and not planner_private.valid_steps(p_request->''steps'') then return jsonb_build_object(''status'',''invalid''); end if;
@@ -287,13 +309,17 @@ begin
       select * into step_event from public.calendar_events where routine_occurrence_id=occurrence.id and user_id=owner_id;
       result:=planner_private.change_task_steps(task.id,p_request->''steps'');
       if result->>''status''<>''complete'' then raise exception using errcode=''23514'',message=''Routine step edit rejected''; end if;
+      select * into current_step_event from public.calendar_events where id=step_event.id and user_id=owner_id;
       update public.planner_changes set before_state=before_state||jsonb_build_object(''task'',to_jsonb(task),''occurrence'',to_jsonb(occurrence),
         ''events'',(select coalesce(jsonb_agg(e),''[]''::jsonb) from jsonb_array_elements(coalesce(before_state->''events'',''[]'')) e where e->>''id'' is distinct from step_event.id::text)
           ||case when event.id is null then ''[]''::jsonb else jsonb_build_array(to_jsonb(event)) end),
-        after_state=case when result->>''transition'' is null then after_state||jsonb_build_object(''events'',
-          case when step_event.id is null then ''[]''::jsonb else jsonb_build_array(to_jsonb(step_event)) end,
-          ''createdEvents'',case when event.id is null and step_event.id is not null then jsonb_build_array(to_jsonb(step_event)) else ''[]''::jsonb end)
-          else after_state end
+        after_state=after_state||jsonb_build_object(''events'',
+          (select coalesce(jsonb_agg(e),''[]''::jsonb) from jsonb_array_elements(coalesce(after_state->''events'',''[]'')) e where e->>''id'' is distinct from step_event.id::text)
+            ||case when current_step_event.id is null then ''[]''::jsonb else jsonb_build_array(to_jsonb(current_step_event)) end,
+          ''eventVersions'',(select coalesce(jsonb_agg(jsonb_build_object(''id'',event_id,''version'',version)),''[]''::jsonb)
+            from public.planner_event_versions where event_id=current_step_event.id and user_id=owner_id),
+          ''reconcileEvents'',case when event.id is null then ''[]''::jsonb else jsonb_build_array(to_jsonb(event)) end,
+          ''createdEvents'',case when event.id is null and current_step_event.id is not null then jsonb_build_array(to_jsonb(current_step_event)) else ''[]''::jsonb end)
         where id=(result->>''changeId'')::uuid and user_id=owner_id;
       outcome:=outcome||result;
     end if;');
@@ -323,6 +349,31 @@ begin
   execute definition;
 end $routine_steps$;
 
+-- Completion Undo also owns calendar edits made by the same routine save,
+-- including protected reservations outside completion's release plan.
+do $combined_undo$
+declare definition text;
+begin
+  select pg_get_functiondef('planner_private.planner_base_command(jsonb)'::regprocedure) into definition;
+  if position('for item in select value from jsonb_array_elements(coalesce(change.after_state->''released''' in definition)=0 then raise exception 'Unexpected completion Undo shape'; end if;
+  definition:=replace(definition,'  for item in select value from jsonb_array_elements(coalesce(change.after_state->''released''',
+    '  for item in select value from jsonb_array_elements(coalesce(change.after_state->''eventVersions'',''[]'')) order by value->>''id'' loop
+    select version into token from public.planner_event_versions where event_id=(item->>''id'')::uuid and user_id=owner_id for update;
+    if not found or token is distinct from (item->>''version'')::uuid then return jsonb_build_object(''status'',''conflict''); end if;
+  end loop;
+  for item in select value from jsonb_array_elements(coalesce(change.after_state->''released''');
+  definition:=replace(definition,'  update public.planner_changes set undone_at=',
+    '  for item in select value from jsonb_array_elements(coalesce(change.after_state->''reconcileEvents'',''[]'')) loop
+    perform public.update_calendar_event_with_reminders(owner_id,(item->>''id'')::uuid,
+      jsonb_build_object(''start_date'',item->''start_date'',''start_time'',item->''start_time''),null);
+  end loop;
+  for item in select value from jsonb_array_elements(coalesce(change.after_state->''createdEvents'',''[]'')) loop
+    perform public.delete_calendar_event_with_reminders(owner_id,(item->>''id'')::uuid);
+  end loop;
+  update public.planner_changes set undone_at=');
+  execute definition;
+end $combined_undo$;
+
 -- Capture edits keep metadata and checklist changes in the same transaction and
 -- preserve the full pre-save task in the recoverable change.
 do $capture_edits$
@@ -337,7 +388,14 @@ begin
       before_task:=task;
       select * into before_occurrence from public.recurring_task_occurrences where id=task.recurring_occurrence_id;');
   definition:=replace(definition,'outcome := jsonb_build_object(''status'',''complete'',''task'',to_jsonb(task));',
-    'outcome := jsonb_build_object(''status'',''complete'',''task'',to_jsonb(task));
+    'if p_changes ? ''priority'' and task.priority is distinct from (p_changes->>''priority'')::integer then
+    steps_result:=public.task_command_atomic(''edit'',jsonb_build_object(''userId'',owner_id,''taskId'',task.id,
+      ''expectedTaskVersion'',task.version,''idempotencyKey'',''capture-priority:''||p_operation_id::text,
+      ''scope'',''this'',''updates'',jsonb_build_object(''priority'',p_changes->''priority'')));
+    if steps_result->>''status'' not in (''complete'',''already-applied'') then raise exception using errcode=''23514'',message=''Task priority rejected''; end if;
+    select * into task from public.tasks where id=task.id and user_id=owner_id;
+  end if;
+  outcome := jsonb_build_object(''status'',''complete'',''task'',to_jsonb(task));
   if p_operation=''create'' and exists(select 1 from jsonb_array_elements(coalesce(p_changes->''steps'',''[]'')) s where (s->>''checked'')::boolean) then
     steps_result:=planner_private.change_task_steps(task.id,p_changes->''steps'');
     if steps_result->>''status''<>''complete'' then raise exception using errcode=''23514'',message=''Initial step progress rejected''; end if;

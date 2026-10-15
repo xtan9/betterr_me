@@ -25,6 +25,12 @@ their existing linked work and project snapshots; checklist-only changes use the
 pre-save occurrence, task, and reservation. Undo verifies stored versions before
 restoring partial progress and affected records. It does not replay the action
 against newer state. Reusing an operation ID with a different body is a conflict.
+Priority supplied with a checklist save goes through the canonical task command
+inside the capture transaction, before its recoverable snapshot is finalized.
+Combined routine edits track protected reservations and reminder versions even
+when the final Step completes the occurrence. Undo reconciles restored reminder
+timing and removes any reservation created by that save. It locks the former
+project before checking whether restoring an open child would reopen it.
 
 Validation and account ownership apply on the server. Helpers are private. Raw
 checklist updates and new checklist edits through the generic occurrence API are
@@ -37,6 +43,9 @@ continues through the shared completion authority, including web/AI callers.
 capture, progress, parent completion, protected/unrelated reservations, project
 completion remaining explicit, exact Undo, rollback after an enclosing failure,
 replay, changed-payload rejection, ownership, legacy edits, and invalid shapes.
+It also covers final-Step routine completion, completed checklist editing,
+newly checked draft Steps, atomic priority, intervening project completion,
+missing reservations, protected reservations, and relative reminder recovery.
 Existing completion/occurrence/Undo and series fixtures remain applicable.
 
 The companion mobile `scripts/verify-task-steps.mjs` uses real local Auth and REST
