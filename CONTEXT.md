@@ -51,6 +51,11 @@ _Avoid_: Unified calendar feed, calendar events feed
 
 ### Recurring Tasks
 
+**Step**:
+An ordered checklist item within one task or dated occurrence, with its own checked
+state and no independent schedule. Its parent owns completion effects and Undo.
+_Avoid_: Subtask (independently actionable work), child project
+
 **Recurring Task Series**:
 A user-visible lineage of repeating work that retains its identity across schedule and detail changes.
 _Avoid_: Recurring task, template
