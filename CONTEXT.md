@@ -32,6 +32,11 @@ _Avoid_: Saved adjustment, Plan change
 
 ### Calendar
 
+**Planned Date**:
+The single calendar day a person intends to work on a standalone task, independent
+of its deadline. It does not reserve hours or mark the task as a daily priority.
+_Avoid_: Due Date, Scheduled Date
+
 **Calendar Event**:
 A person's full-fidelity calendar entry, including the details and recurrence identity needed to view and edit it.
 _Avoid_: Feed item, overlay item
