@@ -13,7 +13,8 @@ protects started occurrences during future series revisions.
 
 The `check-step` planner command requires the owning task's version and a stable
 operation ID. It locks the series, occurrence, and task in the established order.
-The final new check invokes the existing parent completion command. Unchecking a
+Every check, including the last, saves progress without completing an open parent.
+Fully checked draft and detail saves also leave the parent open. Unchecking a
 completed task, or adding an unchecked Step, invokes Reopen. Direct parent
 completion normalizes every Step to checked for ordinary and recurring clients.
 Rename, reorder, and deletion alone never complete an open parent.
@@ -28,7 +29,7 @@ against newer state. Reusing an operation ID with a different body is a conflict
 Priority supplied with a checklist save goes through the canonical task command
 inside the capture transaction, before its recoverable snapshot is finalized.
 Combined routine edits track protected reservations and reminder versions even
-when the final Step completes the occurrence. Undo reconciles restored reminder
+when the final Step is checked. Undo reconciles restored reminder
 timing and removes any reservation created by that save. It locks the former
 project before checking whether restoring an open child would reopen it.
 
@@ -43,7 +44,8 @@ continues through the shared completion authority, including web/AI callers.
 capture, progress, parent completion, protected/unrelated reservations, project
 completion remaining explicit, exact Undo, rollback after an enclosing failure,
 replay, changed-payload rejection, ownership, legacy edits, and invalid shapes.
-It also covers final-Step routine completion, completed checklist editing,
+It also covers full Step progress on open routine occurrences, explicit parent
+completion after all Steps are checked, completed checklist editing,
 newly checked draft Steps, atomic priority, intervening project completion,
 missing reservations, protected reservations, and relative reminder recovery.
 Existing completion/occurrence/Undo and series fixtures remain applicable.
@@ -58,6 +60,12 @@ revision. It rejects non-local test origins and deletes its disposable accounts.
 The user approved coordinated production rollout on 2026-10-16, after reviewing
 the linked backend and mobile PRs. Merging the backend triggers the production
 migration workflow after CI succeeds.
+
+Later that day the user explicitly requested: "Don't auto complete when steps are
+done." The forward migration replaces only the shared Step-change helper's
+automatic completion branch. Existing completed parents, historical Undo records,
+and explicit parent completion remain unchanged. Deploy this backend rule before
+the corresponding mobile progress-feedback update.
 
 The Steps migration follows the planned-period migration, which replaces task
 capture. Replay and live upgrade therefore extend the same capture function and

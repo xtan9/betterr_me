@@ -12,7 +12,7 @@ declare owner_id uuid:=auth.uid(); parent jsonb; task jsonb; result jsonb; comma
     jsonb_build_object('id',gen_random_uuid(),'title','Brush teeth','checked',false),
     jsonb_build_object('id',gen_random_uuid(),'title','Breakfast','checked',false));
   release_id uuid:=gen_random_uuid(); protected_id uuid:=gen_random_uuid(); sibling_id uuid:=gen_random_uuid();
-  before_task jsonb; before_events jsonb; history_count integer;
+  before_task jsonb; before_events jsonb; history_count integer; preview jsonb;
 begin
   parent:=public.project_capture_command('create',gen_random_uuid(),null,null,'{"name":"Wellbeing"}')->'project';
   result:=public.task_capture_command('create',gen_random_uuid(),null,null,jsonb_build_object('title','Morning',
@@ -55,12 +55,12 @@ begin
   result:=public.planner_command(command_request);
   if result->>'status' is distinct from 'complete' then raise exception 'Final step: %',result; end if;
   select to_jsonb(t) into task from public.tasks t where id=(task->>'id')::uuid;
-  if not (task->>'is_completed')::boolean or exists(select 1 from jsonb_array_elements(task->'steps') s where not (s->>'checked')::boolean)
-    or exists(select 1 from public.calendar_events where id=release_id)
+  if (task->>'is_completed')::boolean or exists(select 1 from jsonb_array_elements(task->'steps') s where not (s->>'checked')::boolean)
+    or not exists(select 1 from public.calendar_events where id=release_id)
     or not exists(select 1 from public.calendar_events where id=protected_id)
     or not exists(select 1 from public.calendar_events where id=sibling_id)
     or (select completed_at from public.projects where id=(parent->>'id')::uuid) is not null
-    then raise exception 'Final step broke linked completion effects'; end if;
+    then raise exception 'Final step must leave the parent and its reservations open'; end if;
   select * into change from public.planner_changes where id=(result->>'changeId')::uuid;
   result:=public.planner_command(jsonb_build_object('operation','undo','operationId',gen_random_uuid(),'changeId',change.id,'expectedVersion',change.version));
   if result->>'status' is distinct from 'complete' then raise exception 'Step completion Undo: %',result; end if;
@@ -72,6 +72,23 @@ begin
   task:=result->'task';
   if task->'steps' is distinct from before_task->'steps' then raise exception 'Legacy edit erased Steps'; end if;
   if task->>'planned_period'<>'morning' then raise exception 'Step completion/Undo or legacy edit erased period'; end if;
+  -- Explicit parent completion still checks every Step and releases eligible time.
+  preview:=public.planner_completion_preview((task->>'id')::uuid);
+  result:=public.planner_command(jsonb_build_object('operation','complete','operationId',gen_random_uuid(),
+    'taskId',task->>'id','expectedVersion',task->>'version','plan',preview->'plan'));
+  if result->>'status' is distinct from 'complete' then raise exception 'Explicit parent completion: %',result; end if;
+  select to_jsonb(t) into task from public.tasks t where id=(task->>'id')::uuid;
+  if not (task->>'is_completed')::boolean
+    or exists(select 1 from jsonb_array_elements(task->'steps') s where not (s->>'checked')::boolean)
+    or exists(select 1 from public.calendar_events where id=release_id)
+    or not exists(select 1 from public.calendar_events where id=protected_id)
+    or not exists(select 1 from public.calendar_events where id=sibling_id) then raise exception 'Explicit completion lost linked effects'; end if;
+  select * into change from public.planner_changes where id=(result->>'changeId')::uuid;
+  result:=public.planner_command(jsonb_build_object('operation','undo','operationId',gen_random_uuid(),'changeId',change.id,'expectedVersion',change.version));
+  if result->>'status' is distinct from 'complete' then raise exception 'Explicit completion Undo: %',result; end if;
+  select to_jsonb(t) into task from public.tasks t where id=(task->>'id')::uuid;
+  if (task->>'is_completed')::boolean or task->'steps' is distinct from before_task->'steps'
+    or not exists(select 1 from public.calendar_events where id=release_id) then raise exception 'Explicit completion Undo lost progress/reservation'; end if;
   -- Existing ordinary web/AI completion writes use the same normalization.
   update public.tasks set is_completed=true where id=(task->>'id')::uuid;
   select to_jsonb(t) into task from public.tasks t where id=(task->>'id')::uuid;
@@ -99,7 +116,7 @@ select set_config('request.jwt.claims','{"sub":"61500000-0000-0000-0000-00000000
 
 -- Checklist transitions use the same occurrence ledger as parent completion.
 do $$
-declare result jsonb; row jsonb; prior_steps jsonb; change public.planner_changes;
+declare result jsonb; row jsonb; prior_steps jsonb; change public.planner_changes; preview jsonb;
   checklist jsonb:=jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'title','First','checked',false),
     jsonb_build_object('id',gen_random_uuid(),'title','Second','checked',false));
 begin
@@ -114,7 +131,9 @@ begin
     if result->>'status' is distinct from 'complete' then raise exception 'Routine final Step: %',result; end if;
     row:=public.planner_routine_snapshot('2090-03-13')->'rows'->0;
   end loop;
-  if row->'occurrence'->>'state' is distinct from 'completed' then raise exception 'Routine ledger not completed'; end if;
+  if row->'occurrence'->>'state' is distinct from 'open' or (row->'task'->>'is_completed')::boolean
+    or exists(select 1 from jsonb_array_elements(row->'task'->'steps') s where not (s->>'checked')::boolean)
+    or row->'event'->>'id' is null then raise exception 'Final routine Step must leave its occurrence and reservation open'; end if;
   select * into change from public.planner_changes where id=(result->>'changeId')::uuid;
   result:=public.planner_command(jsonb_build_object('operation','undo','operationId',gen_random_uuid(),'changeId',change.id,'expectedVersion',change.version));
   if result->>'status' is distinct from 'complete' then raise exception 'Routine final Step Undo: %',result; end if;
@@ -125,6 +144,13 @@ begin
     'taskId',row->'task'->>'id','expectedVersion',row->'task'->>'version','stepId',checklist->1->>'id','checked',true));
   row:=public.planner_routine_snapshot('2090-03-13')->'rows'->0;
   prior_steps:=row->'task'->'steps';
+  preview:=public.planner_completion_preview((row->'task'->>'id')::uuid);
+  result:=public.planner_command(jsonb_build_object('operation','complete','operationId',gen_random_uuid(),
+    'taskId',row->'task'->>'id','expectedVersion',row->'task'->>'version','plan',preview->'plan',
+    'occurrenceVersion',preview->>'occurrenceVersion','seriesToken',preview->>'seriesToken'));
+  if result->>'status' is distinct from 'complete' then raise exception 'Explicit routine completion: %',result; end if;
+  row:=public.planner_routine_snapshot('2090-03-13')->'rows'->0;
+  if row->'occurrence'->>'state' is distinct from 'completed' or not (row->'task'->>'is_completed')::boolean then raise exception 'Explicit routine completion left parent open'; end if;
   result:=public.task_capture_command('edit',gen_random_uuid(),(row->'task'->>'id')::uuid,(row->'task'->>'version')::uuid,
     jsonb_build_object('steps',jsonb_build_array(prior_steps->1||'{"title":"Renamed"}'::jsonb)));
   if result->>'status' is distinct from 'complete' or not (result->'task'->>'is_completed')::boolean then raise exception 'Completed Steps structural edit: %',result; end if;
@@ -135,16 +161,18 @@ begin
   if row->'occurrence'->>'state' is distinct from 'completed' or row->'task'->'steps' is distinct from prior_steps then raise exception 'Completed structural Undo changed state'; end if;
 end $$;
 
--- A newly checked Step also counts as checking, while deletion alone does not.
+-- Fully checked checklist saves and captures still require explicit parent completion.
 do $$
 declare result jsonb; task jsonb; change public.planner_changes;
   checklist jsonb:=jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'title','Done','checked',true));
 begin
   task:=public.task_capture_command('create',gen_random_uuid(),null,null,'{"title":"Empty checklist"}')->'task';
   result:=public.task_capture_command('edit',gen_random_uuid(),(task->>'id')::uuid,(task->>'version')::uuid,jsonb_build_object('steps',checklist));
-  if result->>'status' is distinct from 'complete' or not (result->'task'->>'is_completed')::boolean then raise exception 'New checked Step failed to complete: %',result; end if;
+  if result->>'status' is distinct from 'complete' or (result->'task'->>'is_completed')::boolean
+    or result->'task'->'steps' is distinct from checklist then raise exception 'New checked Step must leave its parent open: %',result; end if;
   result:=public.task_capture_command('create',gen_random_uuid(),null,null,jsonb_build_object('title','Priority checklist','priority',3,'steps',checklist));
-  if result->>'status' is distinct from 'complete' or result->'task'->>'priority'<>'3' or not (result->'task'->>'is_completed')::boolean then raise exception 'Atomic priority/Steps: %',result; end if;
+  if result->>'status' is distinct from 'complete' or result->'task'->>'priority'<>'3' or (result->'task'->>'is_completed')::boolean
+    or result->'task'->'steps' is distinct from checklist then raise exception 'Atomic priority/Steps: %',result; end if;
   select * into change from public.planner_changes where id=(result->>'changeId')::uuid;
   result:=public.planner_command(jsonb_build_object('operation','undo','operationId',gen_random_uuid(),'changeId',change.id,'expectedVersion',change.version));
   if result->>'status' is distinct from 'complete' then raise exception 'Atomic priority/Steps Undo: %',result; end if;
@@ -217,7 +245,10 @@ begin
     'expectedEventVersion',row->'event'->>'version','title','Adjusted protected','date','2090-05-13',
     'startTime','09:30','endTime','10:30','steps',jsonb_build_array(checklist->0||'{"checked":true}'::jsonb));
   result:=public.planner_routine_command(request);
-  if result->>'status' is distinct from 'complete' then raise exception 'Combined protected completion: %',result; end if;
+  if result->>'status' is distinct from 'complete' then raise exception 'Combined protected Step edit: %',result; end if;
+  if (select is_completed from public.tasks where id=(row->'task'->>'id')::uuid)
+    or (select state from public.recurring_task_occurrences where id=(row->'occurrence'->>'id')::uuid)<>'open'
+    then raise exception 'Combined edit must leave its parent open'; end if;
   select * into change from public.planner_changes where id=(result->>'changeId')::uuid;
   result:=public.planner_command(jsonb_build_object('operation','undo','operationId',gen_random_uuid(),'changeId',change.id,'expectedVersion',change.version));
   if result->>'status' is distinct from 'complete' then raise exception 'Combined protected Undo: %',result; end if;
@@ -229,6 +260,6 @@ begin
   select * into change from public.planner_changes where id=(result->>'changeId')::uuid;
   perform public.update_calendar_event_with_reminders(auth.uid(),(row->'event'->>'id')::uuid,'{"title":"Later edit"}'::jsonb,null);
   result:=public.planner_command(jsonb_build_object('operation','undo','operationId',gen_random_uuid(),'changeId',change.id,'expectedVersion',change.version));
-  if result->>'status' is distinct from 'conflict' then raise exception 'Combined completion Undo overwrote protected edit: %',result; end if;
+  if result->>'status' is distinct from 'conflict' then raise exception 'Combined Step Undo overwrote protected edit: %',result; end if;
 end $$;
 rollback;
