@@ -37,6 +37,12 @@ The single calendar day a person intends to work on a standalone task, independe
 of its deadline. It does not reserve hours or mark the task as a daily priority.
 _Avoid_: Due Date, Scheduled Date
 
+**Planned Period**:
+The optional Morning, Afternoon, or Evening grouping a person chooses within a
+task's Planned Date, with Anytime meaning no chosen period. A Planned Period does
+not reserve hours or change the task into a Calendar Event.
+_Avoid_: Start Time, Work Block
+
 **Calendar Event**:
 A person's full-fidelity calendar entry, including the details and recurrence identity needed to view and edit it.
 _Avoid_: Feed item, overlay item
