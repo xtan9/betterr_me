@@ -16,10 +16,12 @@ declare owner_id uuid:=auth.uid(); parent jsonb; task jsonb; result jsonb; comma
 begin
   parent:=public.project_capture_command('create',gen_random_uuid(),null,null,'{"name":"Wellbeing"}')->'project';
   result:=public.task_capture_command('create',gen_random_uuid(),null,null,jsonb_build_object('title','Morning',
-    'project_id',parent->>'id','expected_project_version',parent->>'version','steps',checklist));
+    'project_id',parent->>'id','expected_project_version',parent->>'version','steps',checklist,
+    'planned_date','2090-01-01','planned_period','morning'));
   if result->>'status' is distinct from 'complete' then raise exception 'Step capture: %',result; end if;
   task:=result->'task';
   if task->'steps' is distinct from checklist then raise exception 'Step order/identity lost'; end if;
+  if task->>'planned_date'<>'2090-01-01' or task->>'planned_period'<>'morning' then raise exception 'Step capture lost task placement'; end if;
   insert into public.calendar_events(id,user_id,title,task_id,start_date,end_date,start_time,end_time,timezone,app_owned,is_protected)
     values(release_id,owner_id,'Exact task',(task->>'id')::uuid,'2090-01-01','2090-01-01','09:00','10:00','UTC',true,false),
       (protected_id,owner_id,'Protected',(task->>'id')::uuid,'2090-01-02','2090-01-02','09:00','10:00','UTC',true,true),
@@ -69,6 +71,7 @@ begin
   result:=public.task_capture_command('edit',gen_random_uuid(),(task->>'id')::uuid,(task->>'version')::uuid,'{"estimate_minutes":20}');
   task:=result->'task';
   if task->'steps' is distinct from before_task->'steps' then raise exception 'Legacy edit erased Steps'; end if;
+  if task->>'planned_period'<>'morning' then raise exception 'Step completion/Undo or legacy edit erased period'; end if;
   -- Existing ordinary web/AI completion writes use the same normalization.
   update public.tasks set is_completed=true where id=(task->>'id')::uuid;
   select to_jsonb(t) into task from public.tasks t where id=(task->>'id')::uuid;

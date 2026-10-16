@@ -55,9 +55,13 @@ revision. It rejects non-local test origins and deletes its disposable accounts.
 
 ## Coordinated rollout
 
-The approved feature specification excludes production migration authorization.
-Keep the backend and mobile PRs unmerged until that rollout is approved: merging
-the backend triggers the production migration workflow after CI succeeds.
+The user approved coordinated production rollout on 2026-10-16, after reviewing
+the linked backend and mobile PRs. Merging the backend triggers the production
+migration workflow after CI succeeds.
+
+The Steps migration follows the planned-period migration, which replaces task
+capture. Replay and live upgrade therefore extend the same capture function and
+retain both `planned_date` and `planned_period` when saving checklist progress.
 
 After approval, merge this backend change, verify its migration workflow, then
 merge the dependent mobile change. Verify a task's Steps and a routine's next

@@ -53,9 +53,9 @@ begin
     'if p_changes ? ''priority'' and (jsonb_typeof(p_changes->''priority'')<>''number'' or p_changes->>''priority'' not in (''0'',''1'',''2'',''3'')) then return jsonb_build_object(''status'',''invalid-transition''); end if;
   if p_changes ? ''steps'' and not planner_private.valid_steps(p_changes->''steps'') then return jsonb_build_object(''status'',''invalid-transition''); end if;
   if p_changes ? ''title'' and');
-  if position('insert into public.tasks(user_id,title,estimate_minutes,due_date,planned_date,project_id)' in definition)=0 then raise exception 'Unexpected task insert shape'; end if;
-  definition:=replace(definition,'insert into public.tasks(user_id,title,estimate_minutes,due_date,planned_date,project_id)',
-    'insert into public.tasks(user_id,title,estimate_minutes,due_date,planned_date,project_id,steps)');
+  if position('insert into public.tasks(user_id,title,estimate_minutes,due_date,planned_date,planned_period,project_id)' in definition)=0 then raise exception 'Unexpected task insert shape'; end if;
+  definition:=replace(definition,'insert into public.tasks(user_id,title,estimate_minutes,due_date,planned_date,planned_period,project_id)',
+    'insert into public.tasks(user_id,title,estimate_minutes,due_date,planned_date,planned_period,project_id,steps)');
   definition:=replace(definition,'(p_changes->>''project_id'')::uuid) returning * into task;',
     '(p_changes->>''project_id'')::uuid,(select coalesce(jsonb_agg(s||jsonb_build_object(''checked'',false) order by ord),''[]''::jsonb)
       from jsonb_array_elements(coalesce(p_changes->''steps'',''[]''::jsonb)) with ordinality e(s,ord))) returning * into task;');
