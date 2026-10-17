@@ -16,6 +16,7 @@ const ACCEPTANCE_FIELDS = new Set([
 ]);
 const SUPPORT_FIELDS = new Set(["path", "kind", "reason"]);
 const TRUSTED_ADMIN_FIXTURES = new Set([
+  "assistant_availability_monitor.sql",
   "item_deletion_restoration.sql",
   "calendar_event_reminder_lifecycle.sql",
   "finance_cushion_rls.sql",

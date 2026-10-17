@@ -1,0 +1,51 @@
+name: Assistant Availability
+run-name: Assistant availability — ${{ inputs.mode || 'live' }}
+
+on:
+  schedule:
+    - cron: '2-57/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Live probe or labeled delivery simulation
+        type: choice
+        default: live
+        options: [live, test_failure, test_recovery]
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
+
+concurrency:
+  group: assistant-availability
+  cancel-in-progress: false
+
+jobs:
+  check:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.ASSISTANT_MONITOR_ENABLED == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout trusted default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Use Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+      - name: Probe and reconcile
+        env:
+          MONITOR_MODE: ${{ inputs.mode || 'live' }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APP_URL: https://www.betterr.me
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          ASSISTANT_MONITOR_EMAIL: ${{ secrets.ASSISTANT_MONITOR_EMAIL }}
+          ASSISTANT_MONITOR_PASSWORD: ${{ secrets.ASSISTANT_MONITOR_PASSWORD }}
+          ASSISTANT_MONITOR_USER_ID: ${{ secrets.ASSISTANT_MONITOR_USER_ID }}
+          ASSISTANT_ALERT_EMAIL: ${{ secrets.ASSISTANT_ALERT_EMAIL }}
+          RESEND_API_KEY: ${{ secrets.ASSISTANT_MONITOR_RESEND_KEY }}
+        run: node scripts/ci/assistant-monitor.mjs
