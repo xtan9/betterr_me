@@ -4,7 +4,7 @@ const REMINDER_MS = 30 * 60_000;
 
 // The issue body is the outbox: persist immutable events before either delivery.
 // Each transport also uses the event ID to recover an uncertain acknowledgement.
-export async function reconcileAvailability({ result, store, sendEmail, runUrl, now = () => new Date() }) {
+export async function reconcileAvailability({ result, store, sendEmail, runUrl, now = () => new Date(), deliveryLimit = 4 }) {
   const at = now().toISOString();
   let issue = await store.get();
   if (!issue && result.healthy) return { deliveryFailures: [] };
@@ -41,10 +41,13 @@ export async function reconcileAvailability({ result, store, sendEmail, runUrl, 
   } else await store.save(issue, state);
 
   const deliveryFailures = new Set();
-  for (const event of state.events) {
-    // A failure in one channel must not suppress the other channel.
-    for (const channel of ['email', 'github']) {
-      if (event[channel] === 'sent') continue;
+  // Give each channel a bounded turn. A backlog of slow mail failures cannot
+  // exhaust the worker timeout before the current GitHub event is attempted.
+  for (const channel of ['github', 'email']) {
+    const deadline = Date.now() + 60_000;
+    const pending = state.events.filter((event) => event[channel] !== 'sent');
+    for (const event of pending.slice(0, deliveryLimit)) {
+      if (Date.now() >= deadline) break;
       try {
         if (channel === 'email') await sendEmail(event, issue);
         else await store.event(issue, event);
@@ -52,6 +55,7 @@ export async function reconcileAvailability({ result, store, sendEmail, runUrl, 
         await store.save(issue, state);
       } catch { deliveryFailures.add(channel); }
     }
+    if (state.events.some((event) => event[channel] !== 'sent')) deliveryFailures.add(channel);
   }
   if (state.events.every((event) => event.email === 'sent' && event.github === 'sent')) {
     if (state.phase === 'recovered') await store.close(issue);

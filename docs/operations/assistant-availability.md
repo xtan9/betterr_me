@@ -13,6 +13,10 @@ scheduled runs. One failed attempt is retried after 30 seconds. The issue body i
 the durable incident/outbox state, with large pending queues paged into bot
 comments; each transport retries its own pending event. Pending reminder snapshots
 are replaced by the latest reminder; outage/recovery transitions remain queued.
+Delivery retries are bounded per channel/run, with GitHub processed before email;
+an email backlog cannot consume the worker deadline before the current GitHub
+notification. After interrupted page writes, the latest durable event restores
+the incident phase so a recovery does not acquire a second event ID.
 Workflow concurrency serializes dispatches and scheduled checks. Email calls
 Resend directly, independently of the app/gateway. If GitHub state is unavailable,
 a stable 30-minute fallback email reports the notification-state failure. There

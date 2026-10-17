@@ -178,10 +178,30 @@ describe('availability transports', () => {
     }
     expect(comments.filter((comment) => comment.body.includes('assistant-monitor-event:'))).toHaveLength(105);
     sendEmail.mockResolvedValue(undefined);
-    const store = githubIncidentStore({ token: 'token', repo: 'example/repo', fetchImpl });
-    await reconcileAvailability({ store, sendEmail, result: { healthy: true, category: 'healthy' }, runUrl: event.runUrl, now: () => new Date(Date.parse(at) + 105 * 300_000) });
+    for (let index = 105; savedIssue && index < 140; index++) {
+      const store = githubIncidentStore({ token: 'token', repo: 'example/repo', fetchImpl });
+      const before = sendEmail.mock.calls.length;
+      await reconcileAvailability({ store, sendEmail, result: { healthy: true, category: 'healthy' }, runUrl: event.runUrl, now: () => new Date(Date.parse(at) + index * 300_000) });
+      expect(sendEmail.mock.calls.length - before).toBeLessThanOrEqual(4);
+    }
     expect(savedIssue).toBeNull();
     expect(comments.filter((comment) => comment.body.includes('assistant-monitor-event:'))).toHaveLength(106);
+  });
+  it('recovers a newer paged transition when its manifest write was interrupted', async () => {
+    const recovery = { ...event, id: '70170000-0000-0000-0000-000000000002', kind: 'recovery', at: '2026-10-17T10:05:00.000Z', category: 'healthy', lastSuccessAt: '2026-10-17T10:05:00.000Z' };
+    const body = (value: unknown) => `<!-- assistant-monitor-state:${JSON.stringify(value)} -->`;
+    const fetchImpl = vi.fn<typeof fetch>(async (url) => String(url).includes('/issues/comments/')
+      ? Response.json({ user: { login: 'github-actions[bot]' }, body: body({ ...state, phase: 'recovered', events: [event, recovery] }) })
+      : Response.json([{ number: 3, title: '[Incident] Assistant unavailable', user: { login: 'github-actions[bot]' }, body: body({ ...state, outboxPages: [11] }) }]));
+    const store = githubIncidentStore({ token: 'token', repo: 'example/repo', fetchImpl });
+    const restored = await store.get();
+    expect(restored?.state.phase).toBe('recovered');
+    expect(restored?.state.lastSuccessAt).toBe(recovery.at);
+    const sendEmail = vi.fn();
+    const restoredStore = { ...store, save: vi.fn(), event: vi.fn(), close: vi.fn() };
+    await reconcileAvailability({ store: restoredStore, sendEmail, result: { healthy: true, category: 'healthy' }, runUrl: event.runUrl, now: () => new Date('2026-10-17T10:10:00.000Z') });
+    expect(sendEmail.mock.calls.filter(([entry]) => entry.kind === 'recovery')).toHaveLength(1);
+    expect(sendEmail.mock.calls.find(([entry]) => entry.kind === 'recovery')?.[0].id).toBe(recovery.id);
   });
 });
 

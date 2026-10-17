@@ -86,13 +86,21 @@ export function githubIncidentStore({ token, repo, test = false, fetchImpl = fet
       // A crash while compacting pages may leave duplicates across old/new
       // boundaries. Delivery acknowledgements are monotonic across duplicates.
       const events = new Map();
-      for (const event of savedPages.flatMap((page) => page.events)) {
+      for (const event of [...state.events, ...savedPages.flatMap((page) => page.events)]) {
         const previous = events.get(event.id);
         events.set(event.id, { ...event,
           email: previous?.email === 'sent' ? 'sent' : event.email,
           github: previous?.github === 'sent' ? 'sent' : event.github });
       }
-      state.events = [...events.values()];
+      state.events = [...events.values()].sort((a, b) => a.at.localeCompare(b.at));
+      // Pages can commit ahead of the manifest. The newest durable event is the
+      // transition authority, so restart must not mint a second recovery UUID.
+      const latest = state.events.at(-1);
+      state.phase = latest.kind === 'recovery' ? 'recovered' : 'down';
+      state.startedAt = latest.startedAt;
+      state.lastObservedAt = [state.lastObservedAt, latest.at].sort().at(-1);
+      if (latest.kind !== 'recovery') state.lastAlertAt = latest.at;
+      state.lastSuccessAt = latest.kind === 'recovery' ? latest.at : latest.lastSuccessAt;
     }
     return { number: issue.number, url: `https://github.com/${repo}/issues/${issue.number}`, state };
   };
