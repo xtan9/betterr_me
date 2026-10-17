@@ -31,6 +31,24 @@ beforeEach(()=>{
 });
 afterEach(()=>vi.useRealTimers());
 
+it.each(['initial request','stream event'])('retains the provider failure through the real SDK %s without exposing private details or saving a reply',async boundary=>{
+ const {streamText,Output,APICallError}=await vi.importActual<typeof import('ai')>('ai');
+ const {MockLanguageModelV3}=await import('ai/test');
+ const failure=new APICallError({message:'private provider details',url:'https://provider.invalid/private',requestBodyValues:{prompt:'private prompt'},statusCode:503,responseBody:JSON.stringify({error:{type:'server_error',message:'private upstream details'}})});
+ const model=new MockLanguageModelV3({doStream:async()=>{
+  if(boundary==='initial request')throw failure;
+  return {stream:new ReadableStream({start(controller){controller.enqueue({type:'error',error:failure});controller.close();}})};
+ }});
+ mocks.stream.mockImplementation(options=>streamText({...options,model,maxRetries:0,output:Output.object({schema:options.output.schema})}));
+ const input=request({messages:[{role:'user',content:'今天几号'}]});input.headers.set('Accept','application/x-ndjson');
+ const body=await (await POST(input)).text();
+ expect(body).toBe('{"type":"error","error":"unavailable"}\n');
+ expect(mocks.logError).toHaveBeenCalledWith('[mobile-assistant] Stream failed',undefined,{failure:{name:'AI_APICallError',providerType:'server_error',statusCode:503}});
+ expect(JSON.stringify(mocks.logError.mock.calls)).not.toContain('private');
+ expect(mocks.rpc.mock.calls.filter(([name])=>name==='assistant_finish_turn')).toHaveLength(0);
+ expect(model.doStreamCalls).toHaveLength(1);
+});
+
 it.each([false,true])('saves and completes requested Gmail replies with citations and no external memory writes (stream=%s)',async stream=>{
  mocks.googleStatus.mockResolvedValue({configured:true,connections:[{service:'gmail',status:'connected'}]});
  const source={label:'Gmail',url:'https://mail.google.com/mail/?authuser=owner%40example.com#all/id'};
@@ -579,10 +597,10 @@ describe('native assistant authenticated proposal route',()=>{
   expect(mocks.generate.mock.calls[0][0].providerOptions).toEqual({openai:{strictJsonSchema:false}});
  expect(mocks.createClient).toHaveBeenCalledWith('http://127.0.0.1:55721','local-test-anon',expect.objectContaining({global:{headers:{Authorization:'Bearer user-token'}},auth:{persistSession:false,autoRefreshToken:false}}));
  });
- it.each(['gpt-5.3-codex-spark','gpt-5.4-mini'])('ignores obsolete environment model %s and uses the supported gateway model',async(obsoleteModel)=>{
+ it.each(['gpt-5.3-codex-spark','gpt-5.4-mini','gpt-5.5'])('ignores obsolete environment model %s and uses the supported gateway model',async(obsoleteModel)=>{
   vi.stubEnv('LLM_MODEL',obsoleteModel);
   expect((await POST(request())).status).toBe(200);
-  expect(mocks.generate.mock.calls[0][0].model.modelId).toBe('gpt-5.5');
+  expect(mocks.generate.mock.calls[0][0].model.modelId).toBe('gpt-6.1-sol');
  });
  it('requires consent and a verified native identity',async()=>{
   expect((await POST(request({consent:false}))).status).toBe(400);

@@ -114,7 +114,7 @@ describe('POST /api/conversations/[id]/title', () => {
     expect(data.title).toBe('Test Title');
     expect(mockGenerateText).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: "mock-model:gpt-5.5",
+        model: "mock-model:gpt-6.1-sol",
         maxOutputTokens: 30,
       }),
     );

@@ -103,12 +103,12 @@ describe('PATCH /api/conversations/[id]', () => {
   it('succeeds with valid model', async () => {
     mockUpdateConversation.mockResolvedValue(undefined);
 
-    const response = await PATCH(makePatchRequest({ model: 'gpt-5.5' }), { params });
+    const response = await PATCH(makePatchRequest({ model: 'gpt-6.1-sol' }), { params });
     const data = await response.json();
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(mockUpdateConversation).toHaveBeenCalledWith('conv-1', 'user-123', { model: 'gpt-5.5' });
+    expect(mockUpdateConversation).toHaveBeenCalledWith('conv-1', 'user-123', { model: 'gpt-6.1-sol' });
   });
 
   it('returns 500 on database error', async () => {
