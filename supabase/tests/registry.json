@@ -1,4 +1,5 @@
 [
+  {"path":"assistant_availability_monitor.sql","domain":"assistant-monitor","role":"admin","cleanup":"transactional","adminReason":"Registers only fixture synthetic identities in the private operator registry and ages synthetic history; all quota, cleanup, and authorization assertions run as authenticated or anon."},
   {"path":"task_planned_period.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
   {"path":"task_planned_date.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
   {"path":"task_steps.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},

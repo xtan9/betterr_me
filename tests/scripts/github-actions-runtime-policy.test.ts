@@ -278,6 +278,7 @@ updates:
 
     expect({ sharedConsumers, directSetup }).toEqual({
       sharedConsumers: [
+        "workflows/assistant-availability.yml",
         "workflows/ci.yml",
         "workflows/ci.yml",
         "workflows/ci.yml",

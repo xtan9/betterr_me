@@ -17,6 +17,13 @@ credentials` issue. It uses declared, non-sensitive metadata from
 `.github/secret-expirations.json` and the repository-scoped `GITHUB_TOKEN`;
 interactive agents must still use the `github-issues` skill.
 
+The Assistant availability reporter in `.github/workflows/assistant-availability.yml`
+may create, update, comment on, assign, and close only its bot-authored
+`[Incident] Assistant unavailable` and `[TEST] Assistant availability notification`
+issues. It runs trusted default-branch code with the repository-scoped
+`GITHUB_TOKEN`. Operational procedures are in
+[`docs/operations/assistant-availability.md`](../operations/assistant-availability.md).
+
 ## Conventions
 
 - Create, read, list, update, comment on, label, and close issues through the `github-issues` skill.
