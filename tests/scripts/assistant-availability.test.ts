@@ -112,7 +112,7 @@ describe('availability transports', () => {
       return Response.json({ id: 'email-id' });
     });
     const check = vi.fn().mockResolvedValue({ healthy: true, category: 'healthy', durationMs: 1, attempts: 1 });
-    const env = { GITHUB_REPOSITORY: 'example/repo', GITHUB_RUN_ID: '42', GH_TOKEN: 'token', RESEND_API_KEY: 'key', ASSISTANT_ALERT_EMAIL: 'private@example.test' };
+    const env: NodeJS.ProcessEnv = { NODE_ENV: 'test', GITHUB_REPOSITORY: 'example/repo', GITHUB_RUN_ID: '42', GH_TOKEN: 'token', RESEND_API_KEY: 'key', ASSISTANT_ALERT_EMAIL: 'private@example.test' };
     await expect(runMonitor({ env, fetchImpl, check, now: () => new Date(at) })).resolves.toMatchObject({ deliveryFailures: ['github_state'] });
     await runMonitor({ env: { ...env, GITHUB_RUN_ID: '43' }, fetchImpl, check, now: () => new Date('2026-10-17T10:05:00.000Z') });
     const sends = fetchImpl.mock.calls.filter(([url]) => String(url).includes('api.resend.com'));
