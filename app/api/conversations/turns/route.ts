@@ -41,7 +41,10 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!AVAILABLE_MODELS.some(({ id }) => id === parsed.data.assistantModel)) {
+    // Completed replies can be saved or retried after their model is retired.
+    // This historical metadata does not select a model for new generation.
+    if (parsed.data.assistantModel !== "gpt-5.5" &&
+        !AVAILABLE_MODELS.some(({ id }) => id === parsed.data.assistantModel)) {
       return NextResponse.json(
         { outcome: "failed", error: "Invalid model" },
         { status: 400 },

@@ -74,7 +74,7 @@ describe("POST /api/conversations/turns", () => {
     });
   });
 
-  it("returns an already-saved retry without changing the conversation id", async () => {
+  it.each(["gpt-6.1-sol", "gpt-5.5"])("returns an already-saved %s retry without changing the conversation id", async (assistantModel) => {
     mockCreateInitialTurn.mockResolvedValue({
       outcome: "already_saved",
       conversationId: "conv-1",
@@ -82,7 +82,7 @@ describe("POST /api/conversations/turns", () => {
       messages: [],
     });
 
-    const response = await POST(makeRequest(initialTurn));
+    const response = await POST(makeRequest({ ...initialTurn, assistantModel }));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual(
@@ -90,6 +90,18 @@ describe("POST /api/conversations/turns", () => {
         outcome: "already_saved",
         conversationId: "conv-1",
       }),
+    );
+    expect(mockCreateInitialTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ assistantModel, turnId: "turn-1" }),
+    );
+  });
+
+  it("saves a completed reply from the retired model after deployment", async () => {
+    mockCreateInitialTurn.mockResolvedValue({ outcome: "saved", conversationId: "conv-1", messages: [] });
+    const response = await POST(makeRequest({ ...initialTurn, assistantModel: "gpt-5.5" }));
+    expect(response.status).toBe(201);
+    expect(mockCreateInitialTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ assistantModel: "gpt-5.5", turnId: "turn-1" }),
     );
   });
 
