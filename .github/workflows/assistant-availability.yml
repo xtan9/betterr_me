@@ -33,9 +33,9 @@ jobs:
           ref: main
           persist-credentials: false
       - name: Use Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        uses: ./.github/actions/setup-node-pnpm
         with:
-          node-version: '24'
+          install-dependencies: 'false'
       - name: Probe and reconcile
         env:
           MONITOR_MODE: ${{ inputs.mode || 'live' }}

@@ -10,7 +10,9 @@ can still finish within its longer request deadline.
 
 The schedule targets five minutes, offset from the hour; GitHub can delay/drop
 scheduled runs. One failed attempt is retried after 30 seconds. The issue body is
-the durable incident/outbox state; each transport retries its own pending event.
+the durable incident/outbox state, with large pending queues paged into bot
+comments; each transport retries its own pending event. Pending reminder snapshots
+are replaced by the latest reminder; outage/recovery transitions remain queued.
 Workflow concurrency serializes dispatches and scheduled checks. Email calls
 Resend directly, independently of the app/gateway. If GitHub state is unavailable,
 a stable 30-minute fallback email reports the notification-state failure. There

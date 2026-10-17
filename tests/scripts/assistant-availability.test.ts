@@ -69,6 +69,23 @@ describe('production Assistant availability', () => {
     fetchImpl.mockImplementation(async (url, init) => String(url).includes('/api/mobile/assistant') ? new Response(null, { status: 502 }) : base(url, init));
     await expect(probeAssistant({ ...options, fetchImpl })).resolves.toMatchObject({ healthy: false, category: 'assistant_http', httpStatus: 502 });
   });
+  it('rejects a mismatched identity before touching Assistant history', async () => {
+    const fetchImpl = fixture('');
+    const base = fetchImpl.getMockImplementation()!;
+    fetchImpl.mockImplementation(async (url, init) => String(url).includes('/token') ? Response.json({ access_token: 'token', user: { id: 'someone-else' } }) : base(url, init));
+    await expect(probeAssistant({ ...options, fetchImpl })).resolves.toMatchObject({ healthy: false, category: 'monitor_auth' });
+    expect(fetchImpl.mock.calls.some(([url]) => /\/rpc\/|\/api\/mobile\//.test(String(url)))).toBe(false);
+  });
+  it.each(['http', 'network'])('reports session cleanup failure after a completed reply (%s)', async (failure) => {
+    const fetchImpl = fixture('{"type":"complete","message":"OK","conversationId":"id"}\n');
+    const base = fetchImpl.getMockImplementation()!;
+    fetchImpl.mockImplementation(async (url, init) => {
+      if (!String(url).includes('/logout')) return base(url, init);
+      if (failure === 'http') return new Response(null, { status: 503 });
+      throw new Error('private logout failure');
+    });
+    await expect(probeAssistant({ ...options, fetchImpl })).resolves.toMatchObject({ healthy: false, category: 'monitor_session_cleanup' });
+  });
 });
 
 describe('availability transports', () => {
@@ -119,6 +136,52 @@ describe('availability transports', () => {
     expect(sends).toHaveLength(2);
     expect(sends[0][1]?.body).toBe(sends[1][1]?.body);
     expect(sends[0][1]?.headers).toEqual(sends[1][1]?.headers);
+  });
+  it('keeps GitHub delivery and email recovery working beyond 100 pending transitions', async () => {
+    let savedIssue: { number: number; title: string; body: string; user: { login: string } } | null = null;
+    const comments: Array<{ id: number; body: string; user: { login: string } }> = [];
+    const fetchImpl = vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input));
+      const method = init?.method ?? 'GET';
+      const payload = init?.body ? JSON.parse(String(init.body)) : {};
+      if (url.pathname.includes('/actions/')) return Response.json({ workflow_runs: [] });
+      if (url.pathname.endsWith('/issues') && method === 'POST') {
+        savedIssue = { ...payload, number: 3, user: { login: 'github-actions[bot]' } };
+        return Response.json(savedIssue);
+      }
+      if (url.pathname.endsWith('/issues')) return Response.json(savedIssue ? [savedIssue] : []);
+      const commentId = /\/issues\/comments\/(\d+)$/.exec(url.pathname)?.[1];
+      if (commentId) {
+        const comment = comments.find((entry) => entry.id === Number(commentId))!;
+        if (method === 'PATCH') comment.body = payload.body;
+        return Response.json(comment);
+      }
+      if (url.pathname.endsWith('/comments')) {
+        if (method === 'POST') {
+          const comment = { id: comments.length + 1, body: payload.body, user: { login: 'github-actions[bot]' } };
+          comments.push(comment);
+          return Response.json(comment);
+        }
+        const start = (Number(url.searchParams.get('page')) - 1) * 100;
+        return Response.json(comments.slice(start, start + 100));
+      }
+      if (payload.state === 'closed') savedIssue = null;
+      else savedIssue!.body = payload.body;
+      return Response.json({});
+    });
+    const sendEmail = vi.fn().mockRejectedValue(new Error('mail unavailable'));
+    for (let index = 0; index < 105; index++) {
+      // A new adapter per run reproduces process restart and durable recovery.
+      const store = githubIncidentStore({ token: 'token', repo: 'example/repo', fetchImpl });
+      const healthy = index % 2 === 1;
+      await reconcileAvailability({ store, sendEmail, result: { healthy, category: healthy ? 'healthy' : 'stream_error' }, runUrl: event.runUrl, now: () => new Date(Date.parse(at) + index * 300_000) });
+    }
+    expect(comments.filter((comment) => comment.body.includes('assistant-monitor-event:'))).toHaveLength(105);
+    sendEmail.mockResolvedValue(undefined);
+    const store = githubIncidentStore({ token: 'token', repo: 'example/repo', fetchImpl });
+    await reconcileAvailability({ store, sendEmail, result: { healthy: true, category: 'healthy' }, runUrl: event.runUrl, now: () => new Date(Date.parse(at) + 105 * 300_000) });
+    expect(savedIssue).toBeNull();
+    expect(comments.filter((comment) => comment.body.includes('assistant-monitor-event:'))).toHaveLength(106);
   });
 });
 

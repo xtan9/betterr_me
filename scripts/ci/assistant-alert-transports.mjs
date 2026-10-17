@@ -18,6 +18,13 @@ function issueBody(state, test) {
   return `${test ? 'Labeled delivery test.' : 'Maintainer: @xtan9. Automated synthetic Assistant check; no real conversation data.'}\n\nStatus: **${state.phase}**. Last probe: ${state.lastObservedAt}.\n\n${eventText(state.events.at(-1), { test })}\n\n<!-- assistant-monitor-state:${JSON.stringify(state)} -->`;
 }
 
+function outboxPages(body) {
+  const raw = /<!-- assistant-monitor-state:(\{[^\n]+\}) -->/.exec(body ?? '')?.[1];
+  const ids = JSON.parse(raw).outboxPages ?? [];
+  if (!Array.isArray(ids) || ids.some((id) => !Number.isSafeInteger(id) || id < 1)) throw new Error('invalid_outbox_pages');
+  return ids;
+}
+
 // GitHub issues are public input. Project only the expected, bounded fields;
 // never relay arbitrary body/comment content into mail or workflow logs.
 export function parseIncident(body, repo) {
@@ -60,13 +67,34 @@ export function githubIncidentStore({ token, repo, test = false, fetchImpl = fet
     }
     throw new Error('github_pagination_limit');
   };
+  let savedPages = [];
   const get = async () => {
     const issues = await pages('/issues?state=open&creator=github-actions%5Bbot%5D');
     const matches = issues.filter((issue) => !issue.pull_request && issue.title === title && issue.user?.login === 'github-actions[bot]');
     if (matches.length > 1) throw new Error('duplicate_incident');
     if (!matches.length) return null;
     const issue = matches[0];
-    return { number: issue.number, url: `https://github.com/${repo}/issues/${issue.number}`, state: parseIncident(issue.body, repo) };
+    const state = parseIncident(issue.body, repo);
+    savedPages = [];
+    for (const id of outboxPages(issue.body)) {
+      const comment = await api(`/issues/comments/${id}`);
+      if (comment.user?.login !== 'github-actions[bot]') throw new Error('untrusted_outbox_page');
+      const page = parseIncident(comment.body, repo);
+      savedPages.push({ id, body: comment.body, events: page.events });
+    }
+    if (savedPages.length) {
+      // A crash while compacting pages may leave duplicates across old/new
+      // boundaries. Delivery acknowledgements are monotonic across duplicates.
+      const events = new Map();
+      for (const event of savedPages.flatMap((page) => page.events)) {
+        const previous = events.get(event.id);
+        events.set(event.id, { ...event,
+          email: previous?.email === 'sent' ? 'sent' : event.email,
+          github: previous?.github === 'sent' ? 'sent' : event.github });
+      }
+      state.events = [...events.values()];
+    }
+    return { number: issue.number, url: `https://github.com/${repo}/issues/${issue.number}`, state };
   };
   return {
     get,
@@ -87,7 +115,30 @@ export function githubIncidentStore({ token, repo, test = false, fetchImpl = fet
         throw new Error('github_incident_create');
       }
     },
-    async save(issue, state) { await api(`/issues/${issue.number}`, 'PATCH', { body: issueBody(state, test) }); },
+    async save(issue, state) {
+      let stored = state;
+      if (state.events.length > 50 || savedPages.length) {
+        const nextPages = [];
+        for (let index = 0; index < state.events.length; index += 50) {
+          const events = state.events.slice(index, index + 50);
+          const body = `Delivery outbox page.\n\n<!-- assistant-monitor-state:${JSON.stringify({ ...state, events })} -->`;
+          let page = savedPages[index / 50];
+          if (!page) {
+            const comment = await api(`/issues/${issue.number}/comments`, 'POST', { body });
+            page = { id: comment.id, body, events };
+          } else if (page.body !== body) {
+            await api(`/issues/comments/${page.id}`, 'PATCH', { body });
+            page = { ...page, body, events };
+          }
+          nextPages.push(page);
+        }
+        // Commit the page manifest only after all pages are durable. The body
+        // stays bounded; removed pages remain harmless historical comments.
+        stored = { ...state, events: state.events.slice(-1), outboxPages: nextPages.map((page) => page.id) };
+        await api(`/issues/${issue.number}`, 'PATCH', { body: issueBody(stored, test) });
+        savedPages = nextPages;
+      } else await api(`/issues/${issue.number}`, 'PATCH', { body: issueBody(stored, test) });
+    },
     async event(issue, event) {
       const comments = await pages(`/issues/${issue.number}/comments`);
       if (comments.some((comment) => comment.user?.login === 'github-actions[bot]' && comment.body?.includes(marker(event.id)))) return;
