@@ -4,10 +4,10 @@ export interface ModelOption {
 }
 
 export const AVAILABLE_MODELS: ModelOption[] = [
-  { id: "gpt-5.5", label: "GPT-5.5" },
+  { id: "gpt-6.1-sol", label: "GPT-6.1 Sol" },
 ];
 
-export const DEFAULT_MODEL_ID = "gpt-5.5";
+export const DEFAULT_MODEL_ID = "gpt-6.1-sol";
 
 export function getModelById(id: string): ModelOption | undefined {
   return AVAILABLE_MODELS.find((m) => m.id === id);

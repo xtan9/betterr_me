@@ -97,7 +97,10 @@ export async function POST(request:Request){
    if(previousCapture?.length)options.system+=`\nPrevious capture preview items (historical proposal, not evidence of acceptance or saved tasks): ${JSON.stringify(previousCapture)}. When the user revises this preview, retain its other items and unchanged details in the replacement proposal. Use current owner task/project context for edits to saved entities. Never treat a proposal item ID as a saved task ID.`;
    if(requestedLocale)options.system+=`\nReply in ${requestedLocale==='zh'?'Simplified Chinese':'English'}. This is the latest explicit language choice in the stored conversation and takes precedence over the interface or a translated quick suggestion. Set replyLocale accordingly.`;
    if(!emit)return generateText(options);
-   const streamed=streamText({...options,onError:()=>{ /* Sanitized by the stream boundary. */ }});
+   // Partial output omits SDK error events. Preserve their cause before the
+   // final output getter replaces it with a missing-output/parse error.
+   let streamFailure:{error:unknown}|undefined;
+   const streamed=streamText({...options,onError:event=>{streamFailure=event;}});
    for await(const partial of streamed.partialOutputStream){
     if(signal.aborted)throw new Error('Cancelled');
     // Planning needs readiness/calendar validation; recommendations need the engine.
@@ -108,6 +111,7 @@ export async function POST(request:Request){
      const prefix=publicAssistantPrefix(partial.message);if(prefix){published=true;emit(prefix);}
     }
    }
+   if(streamFailure)throw streamFailure.error;
    return {output:await streamed.output};
   };
   const generate=async(calendar:unknown=null)=>{
