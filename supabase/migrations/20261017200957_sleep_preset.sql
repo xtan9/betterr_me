@@ -72,6 +72,15 @@ begin
 end $$;
 revoke all on function planner_private.sleep_night(uuid,date) from public,anon,authenticated;
 
+-- Pick the next civil bedtime without letting a past spring gap normalize into the future.
+create function planner_private.sleep_first_date(p_time time,p_zone text,p_now timestamptz) returns date language plpgsql stable set search_path=pg_catalog as $$
+declare civil timestamp:=p_now at time zone p_zone; candidate timestamptz:=(civil::date+p_time) at time zone p_zone;
+begin
+ if candidate<=p_now or (candidate at time zone p_zone<>civil::date+p_time and civil::time>=p_time) then return civil::date+1; end if;
+ return civil::date;
+end $$;
+revoke all on function planner_private.sleep_first_date(time,text,timestamptz) from public,anon,authenticated;
+
 create function planner_private.sleep_prepare(p_owner uuid,p_change jsonb) returns jsonb language plpgsql stable security definer set search_path=pg_catalog,public as $$
 declare s public.sleep_schedules; op text:=p_change->>'operation'; zone text; starts time; ends time; day date; initial date;
  ending date; local_today date; d date; existing jsonb; slot jsonb; intervals jsonb:='[]'; checks jsonb:='[]'; preserved integer:=0; plan_version uuid;
@@ -103,8 +112,7 @@ begin
   then return jsonb_build_object('status','conflict'); end if;
   if (existing->>'end')::timestamptz<=statement_timestamp() then return jsonb_build_object('status','past'); end if;
  else
-  day:=local_today;
-  if (day+starts) at time zone zone<=statement_timestamp() then day:=day+1; end if;
+  day:=planner_private.sleep_first_date(starts,zone,statement_timestamp());
   if op='revise' then
    existing:=planner_private.sleep_night(p_owner,day);
    if existing is not null and (existing->>'start')::timestamptz<=statement_timestamp() then day:=day+1; end if;
@@ -150,6 +158,7 @@ end $$;
 revoke all on function planner_private.sleep_prepare(uuid,jsonb) from public,anon,authenticated;
 
 -- Only the authenticated HTTP service can attest a freshly read external calendar preview.
+grant usage on schema planner_private to service_role;
 create function public.planner_sleep_prepare(p_owner uuid,p_change jsonb) returns jsonb language sql security invoker set search_path=pg_catalog as $$
  select planner_private.sleep_prepare(p_owner,p_change)
 $$;

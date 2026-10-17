@@ -17,7 +17,7 @@ begin
  set local role authenticated;
  if public.planner_sleep_snapshot()->'schedule'<>'null'::jsonb then raise exception 'new account has default sleep'; end if;
  begin perform public.planner_sleep_prepare(owner_id,'{}'); raise exception 'client can bypass external preview'; exception when insufficient_privilege then null; end;
- reset role;
+ set local role service_role;
  c:=jsonb_build_object('operation','setup','expectedVersion',null,'timezone','UTC','startTime','23:00','endTime','07:00');
  p:=public.planner_sleep_prepare(owner_id,c);
  if p->>'status'<>'complete' then raise exception 'setup preview %',p; end if;
@@ -94,6 +94,9 @@ begin
  r:=public.planner_sleep_commit(other_id,request,p->>'token');
  if r->>'status'<>'complete' then raise exception 'atomic retry failed'; end if;
  -- Explicit gap/fold examples exercise the same resolver used by every sleep interval.
+ if planner_private.sleep_first_date('02:30','America/Los_Angeles','2027-03-14 10:15Z')<>'2027-03-15'::date then raise exception 'past spring gap blocked tomorrow'; end if;
+ if planner_private.sleep_first_date('02:30','America/Los_Angeles','2027-03-14 09:00Z')<>'2027-03-14'::date then raise exception 'future gap silently skipped'; end if;
+ if planner_private.sleep_first_date('01:30','America/Los_Angeles','2027-11-07 08:45Z')<>'2027-11-07'::date then raise exception 'later fold skipped'; end if;
  if planner_private.routine_interval_valid('2027-03-14','02:30','08:30','America/Los_Angeles') then raise exception 'spring gap accepted'; end if;
  if ('2027-11-07 01:30'::timestamp at time zone 'America/Los_Angeles')<>'2027-11-07 09:30Z'::timestamptz then raise exception 'fold policy changed'; end if;
  if planner_private.routine_end_date('2028-02-29','23:00','07:00')<>'2028-03-01'::date or planner_private.routine_end_date('2026-12-31','23:00','07:00')<>'2027-01-01'::date then raise exception 'civil rollover changed'; end if;
