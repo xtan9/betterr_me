@@ -372,5 +372,11 @@
     "domain": "assistant",
     "role": "constrained",
     "cleanup": "transactional"
+  },
+  {
+    "path": "assistant_timed_task.sql",
+    "domain": "assistant",
+    "role": "constrained",
+    "cleanup": "transactional"
   }
 ]
