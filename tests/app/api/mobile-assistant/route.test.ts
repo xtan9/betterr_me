@@ -90,13 +90,13 @@ it('preserves proposed task items when adding Google citations to the saved repl
  expect(body.proposal.body.items).toHaveLength(1);expect(body.proposal.body.items[0]).toMatchObject({kind:'task-create',changes:{title:'Bring the report'}});
 });
 
-it('retains exact prior proposal details when the user revises a preview',async()=>{
+it.each(['pending','accepted'])('uses the current %s capture state when continuing a conversation',async(state)=>{
  const original=mocks.from.getMockImplementation()!;
  const items=[{id:'a',kind:'task-create',changes:{title:'Tea',due_date:'2026-09-25',estimate_minutes:20}},{id:'b',kind:'task-create',changes:{title:'Books',due_date:null,estimate_minutes:10}}];
  const filters:unknown[][]=[];
  mocks.from.mockImplementation((table:string)=>{
   if(table==='planner_ai_proposals'){
-   let source=false;const query={select:()=>query,eq:(field:string,value:string)=>{if(field==='id'&&value==='old')source=true;return query;},maybeSingle:async()=>({data:source?{id:'old',version:'old-version',state:'pending'}:null,error:null})};return query;
+   let source=false;const query={select:()=>query,eq:(field:string,value:string)=>{if(field==='id'&&value==='old')source=true;return query;},maybeSingle:async()=>({data:source?{id:'old',version:'old-version',state}:null,error:null})};return query;
   }
   if(table!=='assistant_turns')return original(table);
   let prior=false;
@@ -106,7 +106,12 @@ it('retains exact prior proposal details when the user revises a preview',async(
  expect((await POST(request({conversationId,messages:[{role:'user',content:'Change only Tea to Coffee; keep the other details.'}]}))).status).toBe(200);
  expect(mocks.generate.mock.calls[0][0].system).toContain(JSON.stringify(items));
  expect(filters).toContainEqual(['user_id',owner]);expect(filters).toContainEqual(['conversation_id',conversationId]);
- expect(mocks.rpc.mock.calls.find(([name])=>name==='assistant_finish_turn')?.[1].p_output.supersedeCapture).toEqual({proposalId:'old',version:'old-version'});
+ if(state==='pending')expect(mocks.rpc.mock.calls.find(([name])=>name==='assistant_finish_turn')?.[1].p_output.supersedeCapture).toEqual({proposalId:'old',version:'old-version'});
+ else{
+  expect(mocks.generate.mock.calls[0][0].system).toContain('already accepted and saved');
+  expect(mocks.generate.mock.calls[0][0].system).not.toContain('When the user revises this preview');
+  expect(mocks.rpc.mock.calls.find(([name])=>name==='assistant_finish_turn')?.[1].p_output.supersedeCapture).toBeUndefined();
+ }
 });
 
 it.each(Object.values(emptyTaskChoices).flat())('keeps the empty-queue choice $id in ordinary conversation: $value',async choice=>{
