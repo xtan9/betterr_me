@@ -13,16 +13,16 @@ beforeEach(()=>{
   filters[table]??=[];
   let workflow=false;const calls:unknown[][]=[];queries.push({table,calls});
   const record=(method:string,args:unknown[])=>{calls.push([method,...args]);return query;};
-  const query={select:(...args:unknown[])=>record('select',args),eq:(...args:unknown[])=>{filters[table].push(args);return record('eq',args);},in:(...args:unknown[])=>{filters[table].push(args);if(args[0]==='response->>intent')workflow=true;return record('in',args);},lt:(...args:unknown[])=>{filters[table].push(args);return record('lt',args);},not:(...args:unknown[])=>record('not',args),order:(...args:unknown[])=>record('order',args),limit:(...args:unknown[])=>record('limit',args),maybeSingle:async()=>({data:workflow?rows.workflow:rows[table],error:workflow&&failedRead==='workflow'?new Error('unavailable'):null}),then:(resolve:(value:unknown)=>unknown)=>Promise.resolve({data:table==='planner_ai_proposals'?accepted:rows[table],error:table==='planner_ai_proposals'&&failedRead==='accepted'?new Error('unavailable'):null}).then(resolve)};return query;
+  const query={select:(...args:unknown[])=>record('select',args),eq:(...args:unknown[])=>{filters[table].push(args);return record('eq',args);},in:(...args:unknown[])=>{filters[table].push(args);if(args[0]==='response->>intent')workflow=true;return record('in',args);},or:(...args:unknown[])=>{workflow=true;return record('or',args);},lt:(...args:unknown[])=>{filters[table].push(args);return record('lt',args);},not:(...args:unknown[])=>record('not',args),order:(...args:unknown[])=>record('order',args),limit:(...args:unknown[])=>record('limit',args),maybeSingle:async()=>({data:workflow?rows.workflow:rows[table],error:workflow&&failedRead==='workflow'?new Error('unavailable'):null}),then:(resolve:(value:unknown)=>unknown)=>Promise.resolve({data:table==='planner_ai_proposals'?accepted:rows[table],error:table==='planner_ai_proposals'&&failedRead==='accepted'?new Error('unavailable'):null}).then(resolve)};return query;
  });
 });
-it('returns accepted captures only for assistant messages on the owner-scoped page and restores the active workflow',async()=>{
+it.each(['capture','planning','clarification'])('returns owner-scoped receipts and restores a %s workflow',async(intent)=>{
  rows.assistant_messages=[{role:'assistant',content:'Preview, not saved.',sequence:2,request_id:'capture'},{role:'user',content:'Create task',sequence:1,request_id:'user-only'}];
  accepted=[{id:'capture',state:'accepted',body:{items:[{kind:'task-create',changes:{title:'Walk dog'}}]}}];
- rows.workflow={response:{intent:'capture'}};
+ rows.workflow={response:{intent,...(intent==='clarification'?{planning:{sessionId:'later-plan'}}:{})}};
  const response=await GET(new Request(`https://betterr.me/api/mobile/assistant/history?conversationId=${conversation}`));
  expect(response.status).toBe(200);const body=await response.json();
- expect(body.acceptedProposals).toEqual(accepted);expect(body.activeWorkflow).toBe('capture');
+ expect(body.acceptedProposals).toEqual(accepted);expect(body.activeWorkflow).toBe(intent==='capture'?'capture':'planning');
  expect(filters.planner_ai_proposals).toContainEqual(['state','accepted']);
  expect(filters.planner_ai_proposals).toContainEqual(['id',['capture']]);
  expect(filters.planner_ai_proposals).toContainEqual(['user_id',owner]);
@@ -31,7 +31,7 @@ it('returns accepted captures only for assistant messages on the owner-scoped pa
   ['select','id,user_id,version,state,body,expires_at'],['eq','user_id',owner],['eq','state','accepted'],['in','id',['capture']],
  ]);
  expect(queries.find(query=>query.table==='assistant_turns')?.calls).toEqual([
-  ['select','response'],['eq','user_id',owner],['eq','conversation_id',conversation],['in','response->>intent',['capture','planning']],['order','created_at',{ascending:false}],['limit',1],
+  ['select','response'],['eq','user_id',owner],['eq','conversation_id',conversation],['or','response->>intent.in.(capture,planning),response->planning->>sessionId.not.is.null'],['order','created_at',{ascending:false}],['limit',1],
  ]);
 });
 it.each(['accepted','workflow'] as const)('fails closed when the %s state read fails',async(read)=>{
@@ -58,7 +58,7 @@ it('restores the last real capture preview after ordinary clarification',async()
  mocks.from.mockImplementation((table:string)=>{
   if(table!=='assistant_turns')return original(table);
   let capture=false;
-  const query={select:()=>query,eq:(field:string)=>{if(field==='response->>intent')capture=true;return query;},in:()=>query,not:()=>query,order:()=>query,limit:()=>query,maybeSingle:async()=>({data:capture?{id:'capture-turn'}:{id:'ordinary-turn',response:{intent:'conversation',ui:{quickReplies:[]}}},error:null})};return query;
+  const query={select:()=>query,eq:(field:string)=>{if(field==='response->>intent')capture=true;return query;},in:()=>query,or:()=>query,not:()=>query,order:()=>query,limit:()=>query,maybeSingle:async()=>({data:capture?{id:'capture-turn'}:{id:'ordinary-turn',response:{intent:'conversation',ui:{quickReplies:[]}}},error:null})};return query;
  });
  rows.planner_ai_proposals={id:'capture-turn',state:'pending'};
  const body=await (await GET(new Request(`https://betterr.me/api/mobile/assistant/history?conversationId=${conversation}`))).json();
