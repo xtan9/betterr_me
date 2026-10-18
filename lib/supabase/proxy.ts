@@ -13,6 +13,7 @@ export async function updateSession(request: NextRequest) {
   if (
     path === "/api/mobile/assistant" ||
     path === "/api/mobile/assistant/history" ||
+    path === "/api/mobile/assistant/command" ||
     path === "/api/mobile/next-action" ||
     path === "/api/mobile/planning" ||
     path === "/api/mobile/planning/command" ||

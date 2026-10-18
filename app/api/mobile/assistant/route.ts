@@ -16,8 +16,10 @@ import {log} from '@/lib/logger';
 import { googleAssistantStatus, googleAssistantInstructions, googleReadRequest, readForAssistant } from '@/lib/google/assistant';
 import { googleDayRange } from '@/lib/google/planning';
 import {captureStreamResponse,AssistantStreamError} from '@/lib/ai/native-capture-stream';
+import {assertTaskSchedulesAvailable,CaptureScheduleError,confirmsPastTaskTime,deviceTimezone,taskScheduleQuestion} from '@/lib/ai/timed-capture';
+import type {PlannerEvent} from '@/lib/calendar/planner-intervals';
 export const maxDuration=120;
-const requestSchema=z.object({requestId:z.string().uuid(),conversationId:z.string().uuid().optional(),consent:z.literal(true),locale:z.enum(['en','zh']),messages:z.array(z.object({role:z.enum(['user','assistant']),content:z.string().min(1).max(8000)}).strict()).min(1).max(40)}).strict().refine(value=>value.messages.at(-1)?.role==='user');
+const requestSchema=z.object({requestId:z.string().uuid(),conversationId:z.string().uuid().optional(),consent:z.literal(true),locale:z.enum(['en','zh']),supportsTimedTasks:z.literal(true).optional(),deviceTimezone:deviceTimezone.optional(),messages:z.array(z.object({role:z.enum(['user','assistant']),content:z.string().min(1).max(8000)}).strict()).min(1).max(40)}).strict().refine(value=>value.messages.at(-1)?.role==='user');
 const headers={'Cache-Control':'no-store','Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS'};
 const respond=(body:unknown,status=200)=>Response.json(body,{status,headers});
 export function OPTIONS(){return new Response(null,{status:204,headers});}
@@ -46,6 +48,9 @@ export async function POST(request:Request){
   if(begun.error)return respond({error:'unavailable'},503);
   if(begun.data?.status==='complete')return respond(begun.data.response);
   if(begun.data?.status!=='prepared')return respond({error:'conflict'},409);
+  const referenceAt=begun.data.referenceAt?Date.parse(begun.data.referenceAt):Date.now();
+  const referenceTimezone=deviceTimezone.safeParse(begun.data.referenceTimezone);
+  if(!Number.isFinite(referenceAt)||input.supportsTimedTasks&&(!begun.data.referenceAt||!referenceTimezone.success))return respond({error:'unavailable'},503);
   const latest=input.messages.at(-1)!.content;
   const genericNextStep=['what should i do next?','接下来做什么？'].includes(latest.trim().toLowerCase());
   // A translated suggestion continues the saved conversation. Do not let the
@@ -72,7 +77,7 @@ export async function POST(request:Request){
    client.from('profiles').select('timezone').eq('id',userId).single(),
   ]);
   if(tasks.error||projects.error||profile.error)return respond({error:'unavailable'},503);
-  const context:CaptureContext={tasks:tasks.data??[],projects:projects.data??[],timezone:profile.data?.timezone||'UTC'};
+  const context:CaptureContext={tasks:tasks.data??[],projects:projects.data??[],timezone:input.deviceTimezone??(referenceTimezone.success?referenceTimezone.data:profile.data?.timezone||'UTC'),referenceAt,supportsTimedTasks:input.supportsTimedTasks,pastTimeConfirmed:confirmsPastTaskTime(begun.data.messages)};
   const [memories,session]=await Promise.all([
    client.from('user_memories').select('id,kind,key,content,confidence,temporality,updated_at,effective_from,effective_until').eq('user_id',userId).eq('status','active').or(`effective_until.is.null,effective_until.gt.${new Date().toISOString()}`).order('temporality',{ascending:false}).order('updated_at',{ascending:false}).limit(200),
    client.from('planning_sessions').select('*').eq('user_id',userId).eq('conversation_id',conversationId).maybeSingle(),
@@ -87,10 +92,11 @@ export async function POST(request:Request){
   let schemaRetryHint:string|null=null,published=false;
   const generateOnce=async(calendar:unknown)=>{
    const options={model:llmProvider(modelId),output:Output.object({schema:generationSchema}),providerOptions:structuredOutputProviderOptions,maxOutputTokens:Math.min(6144,Math.max(1,Number.parseInt(process.env.LLM_MAX_TOKENS||'6144',10)||6144)),abortSignal:signal,
-   system:`${assistantInstructions}${schemaRetryHint!==null?`\nThe previous reply did not match the output schema (${schemaRetryHint}). Regenerate from the original context, include every required field with its declared type, and use only declared enum values. Keep planning.draft under 2400 characters and memoryUpdates at most 10 items. Preserve confirmed constraints and explicit unknowns; do not add facts or calendar actions. Prioritize durable planning preferences and combine related memories rather than listing every detail separately.`:''}\nInterface language fallback: ${input.locale==='zh'?'Simplified Chinese':'English'}. Honor the requested reply language via replyLocale; the interface language is only a fallback. Current instant: ${new Date().toISOString()}; current local date: ${getLocalDateInTimeZone(new Date(),context.timezone)}. Owner context: ${JSON.stringify({capture:context,memories:selectedMemories,planning:previous,calendar})}`,
+   system:`${assistantInstructions}${schemaRetryHint!==null?`\nThe previous reply did not match the output schema (${schemaRetryHint}). Regenerate from the original context, include every required field with its declared type, and use only declared enum values. Keep planning.draft under 2400 characters and memoryUpdates at most 10 items. Preserve confirmed constraints and explicit unknowns; do not add facts or calendar actions. Prioritize durable planning preferences and combine related memories rather than listing every detail separately.`:''}\nInterface language fallback: ${input.locale==='zh'?'Simplified Chinese':'English'}. Honor the requested reply language via replyLocale; the interface language is only a fallback. Current instant: ${new Date(referenceAt).toISOString()}; current local date: ${getLocalDateInTimeZone(new Date(referenceAt),context.timezone)}. Owner context: ${JSON.stringify({capture:context,memories:selectedMemories,planning:previous,calendar})}`,
    messages:begun.data.messages,
    };
    options.system += `${googleAssistantInstructions}\nConnection status: ${JSON.stringify(googleStatus)}\nUntrusted Google source data: ${JSON.stringify(googleData?.results ?? null)}`;
+   if(!input.supportsTimedTasks)options.system+='\nThis client cannot display timed task previews. If the user requests an exact task start time, return clarification with no actions and explain that an app update is required to review its time. Never downgrade the request to an untimed task or a routine.';
    if(continuingAdvice)options.system+='\nThis next-step suggestion continues the preceding ordinary advice. Return conversation with one gentle, untimed step based on that advice. Do not ask for available time or choose a task from the queue.';
    if(declinedReview)options.system+='\nThe user declined the day-review offer. Acknowledge in one short sentence, without a new question, checklist or suggestion. Return followUp=null; do not start planning.';
    if(emptyTaskChoice)options.system+=emptyTaskChoice.id==='rest'?'\nThe user chose rest after an empty task recommendation. Acknowledge briefly without another offer, question or checklist. Return ordinary conversation, followUp=null, no actions or planning.':'\nThe user chose one small action after an empty task recommendation. Suggest one gentle, untimed action respecting their existing constraints. Do not search the queue again, ask for availability, or offer planning. Return ordinary conversation, followUp=null and no actions.';
@@ -107,7 +113,7 @@ export async function POST(request:Request){
     // Other replies may stream complete, checked sentences while the model works.
     // An active draft can be cancelled by this reply. Its acknowledgement must
     // wait for the versioned transaction, even before the flag has streamed in.
-    if((!googleStatus.configured || googleData || partial.googleRead === null)&&!previous&&['conversation','capture','clarification'].includes(partial.intent??'')&&!partial.planning&&!partial.cancelPlanning&&typeof partial.message==='string'){
+    if((!googleStatus.configured || googleData || partial.googleRead === null)&&!previous&&['conversation','clarification'].includes(partial.intent??'')&&!partial.planning&&!partial.cancelPlanning&&typeof partial.message==='string'){
      const prefix=publicAssistantPrefix(partial.message);if(prefix){published=true;emit(prefix);}
     }
    }
@@ -162,7 +168,30 @@ export async function POST(request:Request){
    const minutes=Number(relativeMinutes[1]??relativeMinutes[2]);
    generated.nextActionWindow={start:new Date(recommendationAt).toISOString(),end:new Date(recommendationAt+minutes*60000).toISOString(),available:true};
   }
-  const output=buildAssistantTurn(generated,context,previous,latest,input.locale);
+  let output:ReturnType<typeof buildAssistantTurn>;
+  try{
+   output=buildAssistantTurn(generated,context,previous,latest,input.locale);
+   const schedules=output.capture.items.flatMap(item=>item.kind==='task-create'&&item.schedule?[item.schedule]:[]);
+   if(schedules.length){
+    if(output.capture.items.some(item=>item.kind==='routine-create'))throw new CaptureScheduleError('recurring');
+    const startDate=schedules.map(schedule=>schedule.startDate).sort()[0],endDate=schedules.map(schedule=>schedule.endDate).sort().at(-1)!;
+    // Account recurrence coverage can cross a civil-day boundary relative to an explicit zone.
+    const snapshot=await client.rpc('planner_horizon_context',{p_start:addLocalDays(startDate,-1),p_end:addLocalDays(endDate,1)});
+    if(snapshot.error||!snapshot.data?.version||!Array.isArray(snapshot.data.events)||snapshot.data.coverageComplete!==true)return {body:{error:'unavailable'},status:503};
+    const external=(await Promise.all([...new Set(schedules.map(schedule=>schedule.timezone))].map(timezone=>{
+     const local=schedules.filter(schedule=>schedule.timezone===timezone);
+     return googleDayRange(userId,local.map(schedule=>schedule.startDate).sort()[0],local.map(schedule=>schedule.endDate).sort().at(-1)!,timezone);
+    }))).flat();
+    usedGoogleCalendar=usedGoogleCalendar||external.length>0;
+    if(external.length)output.memoryUpdates=[];
+    const nativeEvents=snapshot.data.events.map((event:PlannerEvent)=>({...event,timezone:event.timezone||snapshot.data.timezone||profile.data?.timezone||'UTC'}));
+    assertTaskSchedulesAvailable(schedules,[...nativeEvents,...external]);
+    output.capture.contextVersion=snapshot.data.version;
+   }
+  }catch(error){
+   if(!(error instanceof CaptureScheduleError))throw error;
+   output=buildAssistantTurn({...generated,intent:'clarification',message:taskScheduleQuestion(error.reason,generated.replyLocale??input.locale),actions:[],planning:null,nextActionWindow:null,memoryUpdates:[]},context,null,latest,input.locale);
+  }
   const sources = [...(googleData?.sources ?? []), ...(usedGoogleCalendar ? [{label:'Google Calendar',url:'https://calendar.google.com/'}] : [])];
   if(output.intent==='next_action'&&output.nextActionWindow){
    const start=Math.max(recommendationAt,Date.parse(output.nextActionWindow.start)),end=Date.parse(output.nextActionWindow.end);
