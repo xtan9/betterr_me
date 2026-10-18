@@ -15,4 +15,18 @@ describe('sleep conflict confirmation', () => {
     expect(sleepConflictPreview(prepared, [{ ...meeting, title: 'Changed external meeting' }]).token).not.toBe(before.token);
     expect(sleepConflictPreview(prepared, [{ ...meeting, start_time: '22:00', end_time: '23:00' }]).conflicts).toEqual([]);
   });
+  it('ignores local all-day occurrences while honoring a timed exception to their series', () => {
+    const allDay: PlannerEvent = { ...meeting, start_time: null, end_time: null };
+    expect(sleepConflictPreview(prepared, [allDay]).conflicts).toEqual([]);
+    const exception: PlannerEvent = { ...meeting, id: 'exception', is_recurring: false, is_exception: true, recurring_event_id: meeting.id,
+      original_date: '2026-10-17', start_date: '2026-10-17', end_date: '2026-10-17', recurrence_rule: null };
+    expect(sleepConflictPreview(prepared, [allDay, exception]).conflicts).toEqual([
+      { id: 'exception', title: 'Late meeting', nightDate: '2026-10-17', start: '2026-10-17T23:30:00.000Z', end: '2026-10-17T23:45:00.000Z' },
+    ]);
+  });
+  it('does not resurrect a timed occurrence replaced by an all-day exception', () => {
+    const exception: PlannerEvent = { ...meeting, id: 'exception', is_recurring: false, is_exception: true, recurring_event_id: meeting.id,
+      original_date: '2026-10-17', start_date: '2026-10-17', end_date: '2026-10-17', start_time: null, end_time: null, recurrence_rule: null };
+    expect(sleepConflictPreview(prepared, [meeting, exception]).conflicts).toEqual([]);
+  });
 });

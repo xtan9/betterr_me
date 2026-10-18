@@ -8,7 +8,7 @@ export type PreparedSleep = { status: string; token: string; effectiveDate: stri
 /** Includes concrete recurrence dates. Only the stated bounded horizon is checked. */
 export function sleepConflictPreview(prepared: PreparedSleep, events: PlannerEvent[]) {
   const occupied = occupiedIntervals(events, wallInstant(prepared.rangeStart, '00:00', prepared.timezone),
-    wallInstant(addLocalDays(prepared.rangeEnd, 1), '00:00', prepared.timezone), prepared.timezone);
+    wallInstant(addLocalDays(prepared.rangeEnd, 1), '00:00', prepared.timezone), prepared.timezone, { timedOnly: true });
   const conflicts = prepared.intervals.flatMap(sleep => occupied.filter(event => event.start < Date.parse(sleep.end) && Date.parse(sleep.start) < event.end)
     .map(event => ({ ...event, start: new Date(event.start).toISOString(), end: new Date(event.end).toISOString(), nightDate: sleep.nightDate })))
     .sort((a, b) => a.nightDate.localeCompare(b.nightDate) || a.id.localeCompare(b.id));
