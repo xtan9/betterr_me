@@ -14,6 +14,14 @@ export const timedTaskInput=z.object({
  pastConfirmed:z.boolean().describe('True only after the user explicitly confirms the exact past time following a clarification; never infer confirmation from the initial request.'),
 }).strict();
 export type TimedTaskSchedule={startDate:string;startTime:string;endDate:string;endTime:string;timezone:string;durationSource:'explicit'|'estimate'|'default'};
+export const timedTaskScheduleSchema=z.object({
+ startDate:civilDate,startTime:clock,endDate:civilDate,endTime:clock,timezone:deviceTimezone,durationSource:z.enum(['explicit','estimate','default']),
+}).strict().superRefine((schedule,context)=>{
+ try{
+  const minutes=(unambiguousInstant(schedule.endDate,schedule.endTime,schedule.timezone)-unambiguousInstant(schedule.startDate,schedule.startTime,schedule.timezone))/60000;
+  if(minutes<=0||minutes>10080||schedule.durationSource==='default'&&minutes!==30)context.addIssue({code:'custom',message:'Invalid reservation duration'});
+ }catch{context.addIssue({code:'custom',message:'Invalid local reservation time'});}
+});
 type ScheduleFailure='unsupported'|'past'|'ambiguous'|'nonexistent'|'duration'|'overlap'|'recurring';
 export class CaptureScheduleError extends Error {
  constructor(readonly reason:ScheduleFailure){super('Task time requires clarification');}

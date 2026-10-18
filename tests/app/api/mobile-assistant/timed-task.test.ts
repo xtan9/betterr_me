@@ -10,25 +10,26 @@ const owner='61300000-0000-0000-0000-000000000001';
 const requestId='61300000-0000-0000-0000-000000000002';
 const revision='61300000-0000-0000-0000-000000000003';
 let referenceAt='2026-10-18T19:00:00Z';
+let referenceTimezone='UTC',accountTimezone='UTC';
 let events:Record<string,unknown>[]=[];
 const request=(extra:Record<string,unknown>={})=>new Request('https://betterr.me/api/mobile/assistant',{method:'POST',headers:{Authorization:'Bearer test-token','Content-Type':'application/json'},body:JSON.stringify({requestId,consent:true,locale:'zh',supportsTimedTasks:true,deviceTimezone:'America/Los_Angeles',messages:[{role:'user',content:'今晚九点检查门窗'}],...extra})});
 const action=(schedule:Record<string,unknown>={},estimateMinutes:number|null=null)=>({kind:'task-create',title:'检查门窗',estimateMinutes,dueDate:null,projectId:null,projectKey:null,schedule:{startDate:'2026-10-18',startTime:'21:00',timezone:null,endDate:null,endTime:null,durationMinutes:null,pastConfirmed:false,...schedule}});
 const reply=(actions=[action()])=>({intent:'capture',replyLocale:'zh',message:'请确认今晚九点检查门窗。',planning:null,nextActionWindow:null,memoryUpdates:[],actions});
 beforeEach(()=>{
  vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-10-18T19:00:00Z'));vi.clearAllMocks();
- referenceAt='2026-10-18T19:00:00Z';events=[];
+ referenceAt='2026-10-18T19:00:00Z';referenceTimezone='UTC';accountTimezone='UTC';events=[];
  mocks.googleEvents.mockReset().mockResolvedValue([]);
  vi.stubEnv('LLM_API_KEY','local-test-key');
  mocks.auth.mockResolvedValue({userId:owner,client:{from:mocks.from,rpc:mocks.rpc}});
  mocks.from.mockImplementation((table:string)=>{
-  const data=table==='profiles'?{timezone:'UTC'}:['tasks','projects','user_memories'].includes(table)?[]:null;
+  const data=table==='profiles'?{timezone:accountTimezone}:['tasks','projects','user_memories'].includes(table)?[]:null;
   const query={select:()=>query,eq:()=>query,or:()=>query,is:()=>query,not:()=>query,order:()=>query,limit:()=>query,single:async()=>({data,error:null}),maybeSingle:async()=>({data,error:null}),then:(resolve:(value:unknown)=>unknown)=>Promise.resolve({data,error:null}).then(resolve)};
   return query;
  });
  mocks.rpc.mockImplementation(async(name:string,args:Record<string,unknown>)=>{
   if(name==='check_ai_chat_rate_limit')return {data:[{allowed:true,minute_remaining:9,day_remaining:99}],error:null};
-  if(name==='assistant_begin_turn')return {data:{status:'prepared',referenceAt,messages:args.p_messages},error:null};
-  if(name==='planner_horizon_context'||name==='planner_schedule_context')return {data:{version:revision,coverageComplete:true,events,tasks:[]},error:null};
+  if(name==='assistant_begin_turn')return {data:{status:'prepared',referenceAt,referenceTimezone,messages:args.p_messages},error:null};
+  if(name==='planner_horizon_context'||name==='planner_schedule_context')return {data:{version:revision,timezone:accountTimezone,coverageComplete:true,events,tasks:[]},error:null};
   const output=args.p_output as {message:string;intent:string;capture:unknown};
   return {data:{status:'complete',response:{message:output.message,intent:output.intent,conversationId:requestId,proposal:{id:requestId,version:revision,state:'pending',body:output.capture}}},error:null};
  });
@@ -110,6 +111,22 @@ it('asks to separate a recurring request rather than overlook a newly proposed r
  mocks.generate.mockResolvedValue({output:{...reply(),actions:[action(),{kind:'routine-create',title:'Evening routine',date:'2026-10-18',startTime:'21:00',endTime:'22:00',timezone:'America/Los_Angeles',protected:true,frequency:'daily',daysOfWeek:[]}]}});
  const result=await (await POST(request())).json();
  expect(result.intent).toBe('clarification');expect(result.proposal.body.items).toEqual([]);expect(result.message).toContain('重复');
+});
+
+it('retains the original account timezone across an interrupted retry when the device zone was unavailable',async()=>{
+ referenceTimezone='America/Los_Angeles';accountTimezone='America/Los_Angeles';
+ const initial=await (await POST(request({deviceTimezone:undefined}))).json();
+ accountTimezone='Asia/Tokyo';vi.setSystemTime(new Date('2026-10-19T08:00:00Z'));
+ const retried=await (await POST(request({deviceTimezone:undefined}))).json();
+ expect(retried.proposal.body.items[0]?.schedule).toEqual(initial.proposal.body.items[0].schedule);
+});
+
+it('interprets a legacy calendar event without a timezone in the account zone rather than the requested task zone',async()=>{
+ accountTimezone='America/Los_Angeles';referenceTimezone='America/Los_Angeles';
+ mocks.generate.mockResolvedValue({output:reply([action({startDate:'2026-10-19',startTime:'21:00',timezone:'Asia/Tokyo'})])});
+ events=[{id:'legacy',title:'Legacy appointment',start_date:'2026-10-19',end_date:'2026-10-19',start_time:'21:00',end_time:'22:00',timezone:null,is_recurring:false}];
+ const result=await (await POST(request())).json();
+ expect(result.intent).toBe('capture');expect(result.proposal.body.items[0].schedule.timezone).toBe('Asia/Tokyo');
 });
 afterEach(()=>{vi.useRealTimers();vi.unstubAllEnvs();});
 

@@ -17,6 +17,7 @@ import { googleAssistantStatus, googleAssistantInstructions, googleReadRequest, 
 import { googleDayRange } from '@/lib/google/planning';
 import {captureStreamResponse,AssistantStreamError} from '@/lib/ai/native-capture-stream';
 import {assertTaskSchedulesAvailable,CaptureScheduleError,confirmsPastTaskTime,deviceTimezone,taskScheduleQuestion} from '@/lib/ai/timed-capture';
+import type {PlannerEvent} from '@/lib/calendar/planner-intervals';
 export const maxDuration=120;
 const requestSchema=z.object({requestId:z.string().uuid(),conversationId:z.string().uuid().optional(),consent:z.literal(true),locale:z.enum(['en','zh']),supportsTimedTasks:z.literal(true).optional(),deviceTimezone:deviceTimezone.optional(),messages:z.array(z.object({role:z.enum(['user','assistant']),content:z.string().min(1).max(8000)}).strict()).min(1).max(40)}).strict().refine(value=>value.messages.at(-1)?.role==='user');
 const headers={'Cache-Control':'no-store','Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS'};
@@ -48,7 +49,8 @@ export async function POST(request:Request){
   if(begun.data?.status==='complete')return respond(begun.data.response);
   if(begun.data?.status!=='prepared')return respond({error:'conflict'},409);
   const referenceAt=begun.data.referenceAt?Date.parse(begun.data.referenceAt):Date.now();
-  if(!Number.isFinite(referenceAt)||input.supportsTimedTasks&&!begun.data.referenceAt)return respond({error:'unavailable'},503);
+  const referenceTimezone=deviceTimezone.safeParse(begun.data.referenceTimezone);
+  if(!Number.isFinite(referenceAt)||input.supportsTimedTasks&&(!begun.data.referenceAt||!referenceTimezone.success))return respond({error:'unavailable'},503);
   const latest=input.messages.at(-1)!.content;
   const genericNextStep=['what should i do next?','接下来做什么？'].includes(latest.trim().toLowerCase());
   // A translated suggestion continues the saved conversation. Do not let the
@@ -75,7 +77,7 @@ export async function POST(request:Request){
    client.from('profiles').select('timezone').eq('id',userId).single(),
   ]);
   if(tasks.error||projects.error||profile.error)return respond({error:'unavailable'},503);
-  const context:CaptureContext={tasks:tasks.data??[],projects:projects.data??[],timezone:input.deviceTimezone||(profile.data?.timezone||'UTC'),referenceAt,supportsTimedTasks:input.supportsTimedTasks,pastTimeConfirmed:confirmsPastTaskTime(begun.data.messages)};
+  const context:CaptureContext={tasks:tasks.data??[],projects:projects.data??[],timezone:input.deviceTimezone??(referenceTimezone.success?referenceTimezone.data:profile.data?.timezone||'UTC'),referenceAt,supportsTimedTasks:input.supportsTimedTasks,pastTimeConfirmed:confirmsPastTaskTime(begun.data.messages)};
   const [memories,session]=await Promise.all([
    client.from('user_memories').select('id,kind,key,content,confidence,temporality,updated_at,effective_from,effective_until').eq('user_id',userId).eq('status','active').or(`effective_until.is.null,effective_until.gt.${new Date().toISOString()}`).order('temporality',{ascending:false}).order('updated_at',{ascending:false}).limit(200),
    client.from('planning_sessions').select('*').eq('user_id',userId).eq('conversation_id',conversationId).maybeSingle(),
@@ -182,7 +184,8 @@ export async function POST(request:Request){
     }))).flat();
     usedGoogleCalendar=usedGoogleCalendar||external.length>0;
     if(external.length)output.memoryUpdates=[];
-    assertTaskSchedulesAvailable(schedules,[...snapshot.data.events,...external]);
+    const nativeEvents=snapshot.data.events.map((event:PlannerEvent)=>({...event,timezone:event.timezone||snapshot.data.timezone||profile.data?.timezone||'UTC'}));
+    assertTaskSchedulesAvailable(schedules,[...nativeEvents,...external]);
     output.capture.contextVersion=snapshot.data.version;
    }
   }catch(error){

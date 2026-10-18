@@ -150,11 +150,24 @@ do $$ declare source text; anchor text;begin
 end $$;
 
 -- Keep relative-date interpretation attached to the original durable request.
+-- Historic turns remain nullable until their next preparation. The original
+-- account timezone cannot be recovered after the fact; freeze it on that retry.
+alter table public.assistant_turns add column reference_timezone text;
 do $$ declare source text;anchor text;begin
  source:=pg_get_functiondef('planner_private.assistant_begin_turn(uuid,uuid,boolean,text,jsonb)'::regprocedure);
+ anchor:=$a$return jsonb_build_object('status','prepared'$a$;
+ if position(anchor in source)=0 then raise exception 'Assistant preparation missing';end if;
+ source:=replace(source,anchor,$a$
+ -- The existing owner advisory lock serializes preparation and its retries.
+ if t.reference_timezone is null then
+  update public.assistant_turns set reference_timezone=coalesce(
+   (select n.name from pg_timezone_names n join public.profiles p on p.timezone=n.name where p.id=owner_id),'UTC')
+   where user_id=owner_id and id=p_id and reference_timezone is null returning * into t;
+ end if;
+ $a$||anchor);
  anchor:=$a$('status','prepared','conversationId',t.conversation_id,'messages',history)$a$;
  if position(anchor in source)=0 then raise exception 'Assistant prepared response missing';end if;
- source:=replace(source,anchor,$a$('status','prepared','conversationId',t.conversation_id,'messages',history,'referenceAt',t.created_at)$a$);
+ source:=replace(source,anchor,$a$('status','prepared','conversationId',t.conversation_id,'messages',history,'referenceAt',t.created_at,'referenceTimezone',t.reference_timezone)$a$);
  execute source;
 end $$;
 notify pgrst,'reload schema';
