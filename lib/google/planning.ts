@@ -14,9 +14,12 @@ export async function googlePlanningEvents(userId: string, start: number, end: n
   if (record.status !== 'connected') throw new GoogleConnectionError(record.status);
   const events = await new GoogleReads(connections).events(userId, new Date(start).toISOString(), new Date(end).toISOString());
   return events.filter(event => event.busy).map(event => {
-    const a = event.allDay ? new Date(wallInstant(event.start, '00:00', timezone)).toISOString() : new Date(event.start).toISOString();
-    const b = event.allDay ? new Date(wallInstant(event.end, '00:00', timezone)).toISOString() : new Date(event.end).toISOString();
-    return { id: event.id, title: `Google Calendar: ${event.title}`, start_date: a.slice(0, 10), end_date: b.slice(0, 10), start_time: a.slice(11, 19), end_time: b.slice(11, 19), timezone: 'UTC', app_owned: false, is_protected: true, is_recurring: false, is_exception: false, recurrence_rule: null };
+    // Keep date-only identity; the planner uses inclusive all-day end dates.
+    const a = event.allDay ? event.start : new Date(event.start).toISOString();
+    const b = event.allDay ? addLocalDays(event.end, -1) : new Date(event.end).toISOString();
+    return { id: event.id, title: `Google Calendar: ${event.title}`, start_date: a.slice(0, 10), end_date: b.slice(0, 10),
+      start_time: event.allDay ? null : a.slice(11, 19), end_time: event.allDay ? null : b.slice(11, 19), timezone: event.allDay ? timezone : 'UTC',
+      app_owned: false, is_protected: true, is_recurring: false, is_exception: false, recurrence_rule: null };
   });
 }
 export async function googleDayRange(userId: string, startDate: string, endDate: string, timezone: string) {
