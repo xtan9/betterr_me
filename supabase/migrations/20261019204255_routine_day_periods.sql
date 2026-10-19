@@ -592,6 +592,19 @@ begin
         continue;
       end if;
 
+      -- Restoring a removed period must respect an activity moved into its place,
+      -- just as materializing a period for the first time does.
+      if v_occurrence.scheduled_period <> '' and exists (
+        select 1 from public.planner_routine_period_placements as placement
+        where placement.series_id = p_series_id
+          and placement.date = v_occurrence.scheduled_date
+          and placement.period = v_occurrence.scheduled_period
+          and placement.active
+          and placement.occurrence_id <> v_occurrence.id
+      ) then
+        continue;
+      end if;
+
       select revision.*
       into v_revision
       from public.recurring_task_series_revisions as revision

@@ -236,4 +236,46 @@ begin
    'seriesId',result->>'seriesId','effectiveDate','2090-03-23','idempotencyKey',gen_random_uuid()));
  if result->>'status'<>'complete' then raise exception 'Retained deletion helper failed with multiple periods: %',result; end if;
 end $$;
+do $$
+declare request jsonb; result jsonb; row jsonb; series jsonb; preview jsonb; series_id uuid; moved_id text; withdrawn_id text;
+begin
+ result:=public.planner_routine_command(jsonb_build_object('operation','create','operationId',gen_random_uuid(),'title','Restored afternoon walk',
+   'date','2090-03-24','timezone','UTC','timingMode','period','periods',jsonb_build_array('morning','afternoon'),
+   'rule','{"frequency":"daily","interval":1}'::jsonb));
+ if result->>'status' is distinct from 'complete' then raise exception 'Create restoration routine failed: %',result; end if;
+ series_id:=(result->>'seriesId')::uuid;
+ select r->'occurrence'->>'id' into withdrawn_id from jsonb_array_elements(public.planner_routine_snapshot_v2('2090-03-25')->'rows') r
+   where r->'series'->>'id'=series_id::text and r->>'period'='afternoon';
+ if withdrawn_id is null then raise exception 'Restoration setup did not materialize the target occurrence'; end if;
+ select r into series from jsonb_array_elements(public.planner_routine_series_snapshot_v2()->'rows') r where r->>'id'=series_id::text;
+ request:=jsonb_build_object('operation','revise','seriesId',series_id,'effectiveDate','2090-03-25',
+   'expectedSeriesToken',series->'seriesToken','expectedScheduleVersion',series->>'scheduleVersion',
+   'title','Morning walks','timingMode','period','periods',jsonb_build_array('morning'),
+   'rule','{"frequency":"daily","interval":1}'::jsonb);
+ preview:=public.planner_routine_series_preview(request);
+ result:=public.planner_routine_series_command(request||jsonb_build_object('operationId',gen_random_uuid(),'previewToken',preview->>'token'));
+ if result->>'status' is distinct from 'complete' then raise exception 'Removing the target period failed: %',result; end if;
+ if not exists(select 1 from public.recurring_task_occurrences where id=withdrawn_id::uuid and state='withdrawn') then
+   raise exception 'Removing the period did not withdraw its ordinary occurrence'; end if;
+ select r into row from jsonb_array_elements(public.planner_routine_snapshot_v2('2090-03-24')->'rows') r
+   where r->'series'->>'id'=series_id::text and r->>'period'='morning';
+ moved_id:=row->'occurrence'->>'id';
+ result:=public.planner_routine_command(jsonb_build_object('operation','edit','timingMode','period','operationId',gen_random_uuid(),
+   'seriesId',series_id,'occurrenceId',moved_id,'expectedSeriesToken',row->'series'->'revision_token',
+   'expectedOccurrenceVersion',row->'occurrence'->>'version','expectedTaskVersion',row->'task'->>'version','expectedEventVersion',null,
+   'title','Individually moved afternoon walk','date','2090-03-25','period','afternoon'));
+ if result->>'status' is distinct from 'complete' then raise exception 'Moving into the withdrawn period failed: %',result; end if;
+ select r into series from jsonb_array_elements(public.planner_routine_series_snapshot_v2()->'rows') r where r->>'id'=series_id::text;
+ request:=request||jsonb_build_object('expectedSeriesToken',series->'seriesToken','expectedScheduleVersion',series->>'scheduleVersion',
+   'title','Morning and afternoon walks again','periods',jsonb_build_array('morning','afternoon'));
+ preview:=public.planner_routine_series_preview(request);
+ result:=public.planner_routine_series_command(request||jsonb_build_object('operationId',gen_random_uuid(),'previewToken',preview->>'token'));
+ if result->>'status' is distinct from 'complete' then raise exception 'Restoring a withdrawn period must preserve the moved placement: %',result; end if;
+ if (select count(*) from jsonb_array_elements(public.planner_routine_snapshot_v2('2090-03-25')->'rows') r
+   where r->'series'->>'id'=series_id::text and r->'occurrence'->>'state' in ('open','extra','completed'))<>2
+   or not exists(select 1 from jsonb_array_elements(public.planner_routine_snapshot_v2('2090-03-25')->'rows') r
+     where r->'occurrence'->>'id'=moved_id and r->>'period'='afternoon' and r->'task'->>'title'='Individually moved afternoon walk')
+   or not exists(select 1 from public.recurring_task_occurrences where id=withdrawn_id::uuid and state='withdrawn') then
+   raise exception 'Restoring a period replaced the moved occurrence or resurrected a duplicate'; end if;
+end $$;
 rollback;
