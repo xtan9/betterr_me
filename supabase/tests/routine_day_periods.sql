@@ -189,6 +189,7 @@ begin
  result:=public.planner_routine_command(request||jsonb_build_object('operationId',gen_random_uuid()));
  if result->>'status' not in ('not-found','conflict') then raise exception 'Another owner can edit occurrence: %',result; end if;
  perform set_config('request.jwt.claims','{"sub":"62000000-0000-0000-0000-000000000001","role":"authenticated"}',true);
+ perform set_config('request.jwt.claims','{"sub":"62000000-0000-0000-0000-000000000002","role":"authenticated"}',true);
  today:=(clock_timestamp() at time zone 'Pacific/Kiritimati')::date;
  result:=public.planner_routine_command(jsonb_build_object('operation','create','operationId',gen_random_uuid(),'title','Today all periods',
    'date',today,'timezone','Pacific/Kiritimati','timingMode','period','periods',jsonb_build_array('morning','midday','afternoon','evening'),
@@ -196,5 +197,43 @@ begin
  if result->>'status' is distinct from 'complete' then raise exception 'Today period creation failed: %',result; end if;
  if (select count(*) from jsonb_array_elements(public.planner_routine_snapshot_v2(today)->'rows') r where r->'series'->>'id'=result->>'seriesId')<>4 then
    raise exception 'Today periods were expired by an invented clock cutoff'; end if;
+ perform set_config('request.jwt.claims','{"sub":"62000000-0000-0000-0000-000000000001","role":"authenticated"}',true);
+end $$;
+do $$
+declare request jsonb; result jsonb; row jsonb; series jsonb; preview jsonb; series_id uuid; moved_id text;
+begin
+ result:=public.planner_routine_command(jsonb_build_object('operation','create','operationId',gen_random_uuid(),'title','Moved walk',
+   'date','2090-03-21','timezone','UTC','timingMode','period','periods',jsonb_build_array('morning'),
+   'rule','{"frequency":"daily","interval":1}'::jsonb));
+ if result->>'status'<>'complete' then raise exception 'Create moved routine failed: %',result; end if;
+ series_id:=(result->>'seriesId')::uuid;
+ select r into row from jsonb_array_elements(public.planner_routine_snapshot_v2('2090-03-21')->'rows') r where r->'series'->>'id'=series_id::text;
+ moved_id:=row->'occurrence'->>'id';
+ result:=public.planner_routine_command(jsonb_build_object('operation','edit','timingMode','period','operationId',gen_random_uuid(),
+   'seriesId',series_id,'occurrenceId',moved_id,'expectedSeriesToken',row->'series'->'revision_token',
+   'expectedOccurrenceVersion',row->'occurrence'->>'version','expectedTaskVersion',row->'task'->>'version','expectedEventVersion',null,
+   'title','Moved afternoon walk','date','2090-03-22','period','afternoon'));
+ if result->>'status'<>'complete' then raise exception 'Move failed: %',result; end if;
+ select r into series from jsonb_array_elements(public.planner_routine_series_snapshot_v2()->'rows') r where r->>'id'=series_id::text;
+ request:=jsonb_build_object('operation','revise','seriesId',series_id,'effectiveDate','2090-03-22',
+   'expectedSeriesToken',series->'seriesToken','expectedScheduleVersion',series->>'scheduleVersion',
+   'title','Morning and afternoon walks','timingMode','period','periods',jsonb_build_array('morning','afternoon'),
+   'rule','{"frequency":"daily","interval":1}'::jsonb);
+ preview:=public.planner_routine_series_preview(request);
+ if preview->>'status'<>'complete' or (preview->>'affected')::int<1 then raise exception 'Period impact did not count existing ordinary occurrences: %',preview; end if;
+ result:=public.planner_routine_series_command(request||jsonb_build_object('operationId',gen_random_uuid(),'previewToken',preview->>'token'));
+ if result->>'status'<>'complete' then raise exception 'Preserved moved placement blocked series revision: %',result; end if;
+ if (select count(*) from jsonb_array_elements(public.planner_routine_snapshot_v2('2090-03-22')->'rows') r
+   where r->'series'->>'id'=series_id::text and r->'occurrence'->>'state' in ('open','extra','completed'))<>2
+   or not exists(select 1 from jsonb_array_elements(public.planner_routine_snapshot_v2('2090-03-22')->'rows') r
+     where r->'occurrence'->>'id'=moved_id and r->>'period'='afternoon' and r->'task'->>'title'='Moved afternoon walk') then
+   raise exception 'Revision duplicated or replaced an individually moved occurrence'; end if;
+ result:=public.planner_routine_command(jsonb_build_object('operation','create','operationId',gen_random_uuid(),'title','Delete multi-period',
+   'date','2090-03-23','timezone','UTC','timingMode','period','periods',jsonb_build_array('morning','midday','evening'),
+   'rule','{"frequency":"daily","interval":1}'::jsonb));
+ if result->>'status'<>'complete' then raise exception 'Create deletion routine failed: %',result; end if;
+ result:=public.recurring_task_delete_series('delete-series',jsonb_build_object('userId',auth.uid(),
+   'seriesId',result->>'seriesId','effectiveDate','2090-03-23','idempotencyKey',gen_random_uuid()));
+ if result->>'status'<>'complete' then raise exception 'Retained deletion helper failed with multiple periods: %',result; end if;
 end $$;
 rollback;

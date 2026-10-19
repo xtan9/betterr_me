@@ -120,10 +120,13 @@ begin
            and attname = 'series_id'),
         (select attnum from pg_attribute
          where attrelid = 'public.recurring_task_occurrences'::regclass
-           and attname = 'scheduled_date')
+           and attname = 'scheduled_date'),
+        (select attnum from pg_attribute
+         where attrelid = 'public.recurring_task_occurrences'::regclass
+           and attname = 'scheduled_period')
       ]::smallint[]
   ) then
-    raise exception 'Task Occurrence storage is missing Series plus Scheduled Date uniqueness';
+    raise exception 'Task Occurrence storage is missing Series plus Scheduled Date plus Scheduled Period uniqueness';
   end if;
   if not exists (
     select 1
