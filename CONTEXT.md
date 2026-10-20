@@ -38,7 +38,7 @@ of its deadline. It does not reserve hours or mark the task as a daily priority.
 _Avoid_: Due Date, Scheduled Date
 
 **Planned Period**:
-The optional Morning, Afternoon, or Evening grouping a person chooses within a
+The optional Morning, Midday, Afternoon, or Evening grouping a person chooses within a
 task's Planned Date, with Anytime meaning no chosen period. A Planned Period does
 not reserve hours or change the task into a Calendar Event.
 _Avoid_: Start Time, Work Block
@@ -65,6 +65,13 @@ _Avoid_: Subtask (independently actionable work), child project
 **Recurring Task Series**:
 A user-visible lineage of repeating work that retains its identity across schedule and detail changes.
 _Avoid_: Recurring task, template
+
+**Scheduled Period**:
+The named Morning, Midday, Afternoon, or Evening slot of a period routine's Task
+Occurrence. Together with its series and Scheduled Date it identifies the
+occurrence; edits change its placement without replacing this identity. Timed
+routines and web recurrence use no Scheduled Period. It creates no Calendar Event.
+_Avoid_: Start Time, hidden child series
 
 **Series Revision**:
 The definition of a Recurring Task Series effective over a bounded span of local dates.

@@ -40,10 +40,13 @@ begin
            and attname = 'series_id'),
         (select attnum from pg_attribute
          where attrelid = 'public.recurring_task_occurrences'::regclass
-           and attname = 'scheduled_date')
+           and attname = 'scheduled_date'),
+        (select attnum from pg_attribute
+         where attrelid = 'public.recurring_task_occurrences'::regclass
+           and attname = 'scheduled_period')
       ]::smallint[]
   ) then
-      raise exception 'occurrence ledger is missing its series/date uniqueness constraint';
+      raise exception 'occurrence ledger is missing its series/date/period uniqueness constraint';
   end if;
 
   if has_function_privilege(
