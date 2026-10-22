@@ -67,7 +67,7 @@ describe("Habit Reminder Configuration architecture boundaries", () => {
   });
 
   it("keeps Habit configuration request and outcomes storage-independent", () => {
-    const writes = source("lib/habits/writes.ts");
+    const writes = source("lib/habits/write-contract.ts");
     const requestStart = writes.indexOf("export interface HabitReminderConfigurationRequest");
     const persistenceStart = writes.indexOf("export interface HabitReminderConfigurationPersistence");
     const request = writes.slice(requestStart, persistenceStart);

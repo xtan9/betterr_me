@@ -1,16 +1,13 @@
 "use client";
 
+import { selectTaskList, type TaskStatusTab as StatusTab } from "@/lib/tasks/list-selection";
+
 import { useState, useMemo, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { Search } from "lucide-react";
 import { TaskCard } from "./task-card";
 import { TaskEmptyState } from "./task-empty-state";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/lib/hooks/use-debounce";
@@ -25,7 +22,6 @@ interface TaskListProps {
   isLoading?: boolean;
 }
 
-type StatusTab = "pending" | "completed";
 
 export function TaskList({
   tasks,
@@ -39,28 +35,11 @@ export function TaskList({
   const [activeTab, setActiveTab] = useState<StatusTab>("pending");
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearch = useDebounce(searchQuery, 300);
+  const { counts, filteredTasks } = useMemo(
+    () => selectTaskList(tasks, activeTab, debouncedSearch),
+    [tasks, activeTab, debouncedSearch],
+  );
 
-  const counts = useMemo(() => {
-    return {
-      pending: tasks.filter((t) => !t.is_completed).length,
-      completed: tasks.filter((t) => t.is_completed).length,
-    };
-  }, [tasks]);
-
-  const filteredTasks = useMemo(() => {
-    let filtered = tasks.filter((t) =>
-      activeTab === "pending" ? !t.is_completed : t.is_completed
-    );
-
-    if (debouncedSearch) {
-      const query = debouncedSearch.toLowerCase();
-      filtered = filtered.filter((t) =>
-        t.title.toLowerCase().includes(query)
-      );
-    }
-
-    return filtered;
-  }, [tasks, activeTab, debouncedSearch]);
 
   const handleTabChange = useCallback((value: string) => {
     setActiveTab(value as StatusTab);

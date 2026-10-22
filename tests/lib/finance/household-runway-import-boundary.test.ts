@@ -70,11 +70,8 @@ describe("Household Runway Runtime import boundary", () => {
   });
 
   it("keeps the supported result components on semantic Runtime facts", () => {
-    const componentFiles = [
-      "components/finance/household-runway.tsx",
-      "components/finance/household-runway-result.tsx",
-      "components/finance/household-runway-result-parts.tsx",
-    ];
+    const componentFiles = walk(resolve(root, "components/finance"))
+      .map((file) => file.slice(root.length + 1).replaceAll("\\", "/"));
     const violations: string[] = [];
 
     for (const relative of componentFiles) {
@@ -89,7 +86,7 @@ describe("Household Runway Runtime import boundary", () => {
       }
     }
 
-    const resultSources = componentFiles.slice(1).map((relative) =>
+    const resultSources = componentFiles.filter((file) => /household-runway-result(?:-parts)?\.tsx$/.test(file)).map((relative) =>
       readFileSync(resolve(root, relative), "utf8"),
     );
     expect(violations).toEqual([]);
@@ -173,10 +170,11 @@ describe("Household Runway Runtime import boundary", () => {
       resolve(root, "lib/finance/internal/household-runway-interview-runtime.ts"),
       "utf8",
     );
-    const interview = readFileSync(
-      resolve(root, "lib/finance/internal/household-runway-interview.ts"),
-      "utf8",
-    );
+    const interview = [
+      "household-runway-interview.ts",
+      "household-runway-interview-inputs.ts",
+      "household-runway-interview-assessment.ts",
+    ].map((file) => readFileSync(resolve(root, "lib/finance/internal", file), "utf8")).join("\n");
     const assessment = readFileSync(
       resolve(root, "lib/finance/household-runway-assessment.ts"),
       "utf8",
@@ -204,10 +202,11 @@ describe("Household Runway Runtime import boundary", () => {
       resolve(root, "lib/finance/internal/household-runway-interview-runtime.ts"),
       "utf8",
     );
-    const interview = readFileSync(
-      resolve(root, "lib/finance/internal/household-runway-interview.ts"),
-      "utf8",
-    );
+    const interview = [
+      "household-runway-interview.ts",
+      "household-runway-interview-inputs.ts",
+      "household-runway-interview-assessment.ts",
+    ].map((file) => readFileSync(resolve(root, "lib/finance/internal", file), "utf8")).join("\n");
     const assessment = readFileSync(
       resolve(root, "lib/finance/household-runway-assessment.ts"),
       "utf8",

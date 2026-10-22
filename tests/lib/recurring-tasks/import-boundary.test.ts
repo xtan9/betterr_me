@@ -24,6 +24,9 @@ const lifecycleBoundarySources = [
   "lib/sidebar/supabase-query.ts",
   "lib/db/tasks.ts",
   "lib/tasks/commands.ts",
+  "lib/tasks/command-contract.ts",
+  "lib/tasks/command-inputs.ts",
+  "lib/tasks/command-outcomes.ts",
 ];
 
 describe("recurring lifecycle import boundary", () => {

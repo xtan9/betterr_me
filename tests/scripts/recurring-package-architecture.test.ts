@@ -13,6 +13,9 @@ const privateCompositionFiles = new Set([
   "lib/recurring-tasks/index.ts",
   "lib/recurring-tasks/scheduling.ts",
   "lib/tasks/commands.ts",
+  "lib/tasks/command-contract.ts",
+  "lib/tasks/command-inputs.ts",
+  "lib/tasks/command-outcomes.ts",
 ]);
 
 const focusedProductionCoverageAdapters = [

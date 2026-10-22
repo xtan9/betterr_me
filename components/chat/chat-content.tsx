@@ -1,11 +1,8 @@
 "use client";
 
-import {
-  useMemo,
-  useCallback,
-  useEffect,
-  useState,
-} from "react";
+import { fetchJSON } from "@/lib/chat/request";
+
+import { useMemo, useCallback, useEffect, useState } from "react";
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
@@ -27,16 +24,6 @@ import type { Conversation } from "@/lib/db/types";
 
 interface ChatContentProps {
   conversationId?: string;
-}
-
-async function fetchJSON(url: string, init?: RequestInit) {
-  const res = await fetch(url, init);
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Request failed: ${res.status}`);
-  }
-  if (res.status === 204) return null;
-  return res.json();
 }
 
 const fetcher = (url: string) => fetchJSON(url);

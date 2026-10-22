@@ -1,3 +1,4 @@
+import { normalizePreferenceRpcError } from "./preference-rpc-error";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   AppearancePreferenceIntent,
@@ -14,20 +15,8 @@ export class AppearanceDB {
       "set_appearance_preference",
       { theme },
     );
-    if (error) throw this.normalizeRpcError(error);
+    if (error) throw normalizePreferenceRpcError(error);
     if (!data) throw new Error("Profile not found");
     return data as AppearancePreferenceOutcome;
-  }
-
-  private normalizeRpcError(error: unknown) {
-    const normalized = new Error(
-      typeof error === "object" && error !== null && "message" in error
-        ? String((error as { message: unknown }).message)
-        : String(error),
-    );
-    if (typeof error === "object" && error !== null && "code" in error) {
-      Object.assign(normalized, { code: (error as { code: unknown }).code });
-    }
-    return normalized;
   }
 }
