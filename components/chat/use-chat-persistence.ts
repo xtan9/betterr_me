@@ -1,18 +1,10 @@
 "use client";
 
+import { fetchJSON } from "@/lib/chat/request";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { UIMessage } from "ai";
 import { log } from "@/lib/logger";
-
-async function fetchJSON(url: string, init?: RequestInit) {
-  const res = await fetch(url, init);
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Request failed: ${res.status}`);
-  }
-  if (res.status === 204) return null;
-  return res.json();
-}
 
 async function fetchJSONWithRetry(url: string, init: RequestInit) {
   try {

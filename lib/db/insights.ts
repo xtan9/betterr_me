@@ -1,3 +1,4 @@
+import { getWeekStart } from "@/lib/habits/week-utils";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Habit } from "./types";
 import { getLocalDateString } from "@/lib/utils";
@@ -34,15 +35,6 @@ const DAY_NAMES = [
   "friday",
   "saturday",
 ];
-
-function getWeekStart(date: Date, weekStartDay: number): Date {
-  const result = new Date(date);
-  result.setHours(0, 0, 0, 0);
-  const currentDayOfWeek = result.getDay();
-  const daysToSubtract = (currentDayOfWeek - weekStartDay + 7) % 7;
-  result.setDate(result.getDate() - daysToSubtract);
-  return result;
-}
 
 export class InsightsDB {
   constructor(private supabase: SupabaseClient) {}

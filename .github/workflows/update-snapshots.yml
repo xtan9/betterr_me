@@ -18,7 +18,8 @@ concurrency:
 jobs:
   update-snapshots:
     name: Produce screenshot baselines
-    runs-on: ubuntu-latest
+    # Keep browser jobs on an OS supported by the installed Playwright version.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     env:

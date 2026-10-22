@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { HOUR_HEIGHT } from "./time-grid";
+import { HOUR_HEIGHT } from "./time-grid-layout";
 
 /**
  * Teal horizontal line with circle dot indicating current time.

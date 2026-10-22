@@ -1,14 +1,11 @@
 "use client";
 
+import { selectExercises } from "@/lib/fitness/exercise-selection";
+
 import { useState, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { Check, Dumbbell } from "lucide-react";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { ExerciseFilterBar } from "@/components/fitness/exercise-library/exercise-filter-bar";
 import { ExerciseThumbnail } from "@/components/fitness/exercise-thumbnail";
@@ -37,36 +34,11 @@ export function WorkoutAddExercise({
   const [search, setSearch] = useState("");
   const [muscleGroup, setMuscleGroup] = useState<MuscleGroup | null>(null);
   const [equipment, setEquipment] = useState<Equipment | null>(null);
+  const { filteredExercises, groupedExercises } = useMemo(
+    () => selectExercises(exercises, { search, muscleGroup, equipment }),
+    [exercises, search, muscleGroup, equipment],
+  );
 
-  // Client-side filtering (same pattern as ExerciseLibrary)
-  const filteredExercises = useMemo(() => {
-    return exercises.filter((e) => {
-      if (search && !e.name.toLowerCase().includes(search.toLowerCase())) {
-        return false;
-      }
-      if (muscleGroup && e.muscle_group_primary !== muscleGroup) {
-        return false;
-      }
-      if (equipment && e.equipment !== equipment) {
-        return false;
-      }
-      return true;
-    });
-  }, [exercises, search, muscleGroup, equipment]);
-
-  // Group filtered exercises by muscle_group_primary
-  const groupedExercises = useMemo(() => {
-    const groups = new Map<MuscleGroup, typeof filteredExercises>();
-    for (const exercise of filteredExercises) {
-      const group = groups.get(exercise.muscle_group_primary);
-      if (group) {
-        group.push(exercise);
-      } else {
-        groups.set(exercise.muscle_group_primary, [exercise]);
-      }
-    }
-    return groups;
-  }, [filteredExercises]);
 
   const alreadyAddedSet = useMemo(
     () => new Set(workoutExerciseIds),

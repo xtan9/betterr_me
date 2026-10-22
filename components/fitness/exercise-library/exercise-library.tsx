@@ -1,5 +1,7 @@
 "use client";
 
+import { selectExercises } from "@/lib/fitness/exercise-selection";
+
 import { useState, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
@@ -40,36 +42,11 @@ export function ExerciseLibrary() {
     null
   );
   const [isDeleting, setIsDeleting] = useState(false);
+  const { filteredExercises, groupedExercises } = useMemo(
+    () => selectExercises(exercises, { search, muscleGroup, equipment }),
+    [exercises, search, muscleGroup, equipment],
+  );
 
-  // Client-side filtering (EXER-02: no server round-trips)
-  const filteredExercises = useMemo(() => {
-    return exercises.filter((e) => {
-      if (search && !e.name.toLowerCase().includes(search.toLowerCase())) {
-        return false;
-      }
-      if (muscleGroup && e.muscle_group_primary !== muscleGroup) {
-        return false;
-      }
-      if (equipment && e.equipment !== equipment) {
-        return false;
-      }
-      return true;
-    });
-  }, [exercises, search, muscleGroup, equipment]);
-
-  // Group filtered exercises by muscle_group_primary
-  const groupedExercises = useMemo(() => {
-    const groups = new Map<MuscleGroup, Exercise[]>();
-    for (const exercise of filteredExercises) {
-      const group = groups.get(exercise.muscle_group_primary);
-      if (group) {
-        group.push(exercise);
-      } else {
-        groups.set(exercise.muscle_group_primary, [exercise]);
-      }
-    }
-    return groups;
-  }, [filteredExercises]);
 
   const handleEdit = (exercise: Exercise) => {
     setEditingExercise(exercise);

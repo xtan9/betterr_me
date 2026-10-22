@@ -1,3 +1,4 @@
+import { normalizePreferenceRpcError } from "./preference-rpc-error";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   NotificationPreferenceIntent,
@@ -86,7 +87,7 @@ export class NotificationsDB {
       "set_notification_preference",
       { intent },
     );
-    if (error) throw this.normalizeRpcError(error);
+    if (error) throw normalizePreferenceRpcError(error);
     if (!data) throw new Error("Profile not found");
     return data as NotificationPreferenceOutcome;
   }
@@ -96,19 +97,7 @@ export class NotificationsDB {
       "disable_reminder_email_for_service",
       { profile_id: userId },
     );
-    if (error) throw this.normalizeRpcError(error);
+    if (error) throw normalizePreferenceRpcError(error);
     if (!data) throw new Error("Profile not found");
-  }
-
-  private normalizeRpcError(error: unknown) {
-    const normalized = new Error(
-      typeof error === "object" && error !== null && "message" in error
-        ? String((error as { message: unknown }).message)
-        : String(error),
-    );
-    if (typeof error === "object" && error !== null && "code" in error) {
-      Object.assign(normalized, { code: (error as { code: unknown }).code });
-    }
-    return normalized;
   }
 }

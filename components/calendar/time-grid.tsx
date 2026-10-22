@@ -7,7 +7,9 @@ import { AllDayRow } from "./all-day-row";
 import { CurrentTimeIndicator } from "./current-time-indicator";
 import type { CalendarDisplayItem } from "@/lib/calendar/display";
 
-export const HOUR_HEIGHT = 48; // pixels per hour
+import { HOUR_HEIGHT } from "./time-grid-layout";
+
+export { HOUR_HEIGHT } from "./time-grid-layout";
 const TOTAL_HOURS = 24;
 const GRID_HEIGHT = HOUR_HEIGHT * TOTAL_HOURS; // 1152px
 const SCROLL_TO_HOUR = 8; // Scroll to 8 AM on mount

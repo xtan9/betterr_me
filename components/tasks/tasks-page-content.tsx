@@ -1,30 +1,18 @@
 "use client";
 
+import { selectTaskList, type TaskStatusTab as StatusTab } from "@/lib/tasks/list-selection";
+
 import { useState, useMemo, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import useSWR from "swr";
-import {
-  Archive,
-  FolderPlus,
-  Pause,
-  Play,
-  Plus,
-  RefreshCw,
-  Search,
-  Trash2,
-} from "lucide-react";
+import { Archive, FolderPlus, Pause, Play, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/layouts/page-header";
 import { describeRecurrence } from "@/lib/recurring-tasks/scheduling";
 import { useDebounce } from "@/lib/hooks/use-debounce";
@@ -51,7 +39,6 @@ const recurringFetcher = async (url: string) => {
   return data.recurring_tasks;
 };
 
-type StatusTab = "pending" | "completed";
 
 export function TasksPageContent() {
   const t = useTranslations("tasks");
@@ -106,29 +93,11 @@ export function TasksPageContent() {
   const [deletingProject, setDeletingProject] = useState<Project | null>(null);
 
   const tasks = useMemo(() => data ?? [], [data]);
+  const { counts, filteredTasks } = useMemo(
+    () => selectTaskList(tasks, activeTab, debouncedSearch),
+    [tasks, activeTab, debouncedSearch],
+  );
 
-  const counts = useMemo(() => {
-    return {
-      pending: tasks.filter((t) => !t.is_completed).length,
-      completed: tasks.filter((t) => t.is_completed).length,
-    };
-  }, [tasks]);
-
-  // Filter tasks by tab and search
-  const filteredTasks = useMemo(() => {
-    let filtered = tasks.filter((t) =>
-      activeTab === "pending" ? !t.is_completed : t.is_completed
-    );
-
-    if (debouncedSearch) {
-      const query = debouncedSearch.toLowerCase();
-      filtered = filtered.filter((t) =>
-        t.title.toLowerCase().includes(query)
-      );
-    }
-
-    return filtered;
-  }, [tasks, activeTab, debouncedSearch]);
 
   const handleTabChange = useCallback((value: string) => {
     setActiveTab(value as StatusTab);

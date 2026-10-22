@@ -50,7 +50,7 @@ describe("Scheduling creation architecture boundaries", () => {
   });
 
   it("keeps the creation request and outcome storage-independent", () => {
-    const writes = source("lib/scheduling/writes.ts");
+    const writes = source("lib/scheduling/write-contract.ts");
     const requestStart = writes.indexOf("export interface ScheduleEventInput");
     const recordStart = writes.indexOf("export interface ScheduleEventRecord");
     const request = writes.slice(requestStart, recordStart);
@@ -65,7 +65,7 @@ describe("Scheduling creation architecture boundaries", () => {
   });
 
   it("keeps expected related-entity, recurrence, and reminder outcomes typed", () => {
-    const writes = source("lib/scheduling/writes.ts");
+    const writes = source("lib/scheduling/write-contract.ts");
     expect(writes).toContain('{ type: "not-found"; related?: "category" | "recurringEvent" }');
     expect(writes).toContain('{ type: "conflict"; resource?: "event" | "reminder"');
     expect(writes).toContain('{ type: "invalid"; field: string; message: string }');

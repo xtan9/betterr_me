@@ -86,7 +86,7 @@ describe("Project mutation architecture boundaries", () => {
   });
 
   it("keeps the creation request storage-independent", () => {
-    const writes = source("lib/projects/writes.ts");
+    const writes = source("lib/projects/write-contract.ts");
     const requestStart = writes.indexOf("export interface ProjectCreationRequest");
     const requestEnd = writes.indexOf("}\n", requestStart) + 2;
     const request = writes.slice(requestStart, requestEnd);
@@ -99,7 +99,7 @@ describe("Project mutation architecture boundaries", () => {
   });
 
   it("keeps the update request storage-independent", () => {
-    const writes = source("lib/projects/writes.ts");
+    const writes = source("lib/projects/write-contract.ts");
     const requestStart = writes.indexOf("export interface ProjectUpdateRequest");
     const requestEnd = writes.indexOf("}\n", requestStart) + 2;
     const request = writes.slice(requestStart, requestEnd);
@@ -113,7 +113,7 @@ describe("Project mutation architecture boundaries", () => {
   });
 
   it("keeps the deletion request storage-independent", () => {
-    const writes = source("lib/projects/writes.ts");
+    const writes = source("lib/projects/write-contract.ts");
     const requestStart = writes.indexOf("export interface ProjectDeletionRequest");
     const requestEnd = writes.indexOf("}\n", requestStart) + 2;
     const request = writes.slice(requestStart, requestEnd);

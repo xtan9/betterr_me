@@ -202,6 +202,7 @@ describe("conditional test classifier", () => {
     ["export", "app/api/export/route.ts"],
     ["settings", "components/settings/account-settings.tsx"],
     ["settings", "lib/db/current-profile.ts"],
+    ["settings", "lib/hooks/current-profile-cache.ts"],
     ["settings", "lib/db/appearance.ts"],
     ["settings", "lib/hooks/use-profile-theme.ts"],
     ["settings", "lib/hooks/use-notifications.ts"],

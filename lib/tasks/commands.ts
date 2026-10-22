@@ -1,166 +1,75 @@
+/** Routes authenticated Task commands to ordinary or recurring atomic persistence. */
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { AuthenticatedPrincipal } from "@/lib/auth/request-context";
 import { TasksDB } from "@/lib/db";
+
 import type { Task } from "@/lib/db/types";
+
 import { createActivatedRecurringTaskLifecycle } from "@/lib/recurring-tasks/internal/activation";
-import {
-  decodeSeriesVersion,
-  encodeSeriesVersion,
-} from "@/lib/recurring-tasks/internal/capabilities";
+
 import type {
-  OccurrenceOverrides,
-  LifecycleOutcome,
   OccurrenceCommandRequest,
-  OccurrenceUpdateRequest,
-  RecurringTaskLifecyclePort,
   ReviseSeriesRequest,
+  OccurrenceUpdateRequest,
   SeriesCommandRequest,
+  LifecycleOutcome,
 } from "@/lib/recurring-tasks/internal/lifecycle";
-import type { TaskUpdateValues } from "@/lib/validations/task";
 
-export { decodeSeriesVersion, encodeSeriesVersion };
-
-/** Mutations accepted by every interactive Task delivery channel. */
-export type TaskCommandType = "complete" | "reopen" | "skip" | "edit";
-
-export type TaskCommandScope = "this" | "following" | "all";
-
-export type TaskCommandUpdates = TaskUpdateValues;
-
-export interface TaskCommandIntent {
-  expectedTaskVersion?: string;
-  type: TaskCommandType;
-  userId: string;
-  taskId: string;
-  operationId: string;
-  scope?: TaskCommandScope;
-  updates?: TaskCommandUpdates;
-  effectiveDate?: string;
-  /** Opaque public Series version required for future/all Series effects. */
-  expectedVersion?: string;
-  /** Compatibility for already-bound occurrence state callers. */
-  expectedRevisionToken?: number;
-}
-
-export type AuthenticatedTaskCommandPrincipal = Extract<
-  AuthenticatedPrincipal,
-  { type: "user" }
->;
-
-export type AuthenticatedTaskCommandIntent = Omit<
+import type {
+  TaskCommandPersistence,
   TaskCommandIntent,
-  "userId"
->;
+  TaskCommandOutcome,
+  TaskCommandType,
+  TaskCommandSuccess,
+  AuthenticatedTaskCommands,
+  LegacyTaskToggleIntent,
+  AuthenticatedTaskCommandPrincipal,
+} from "./command-contract";
 
-export interface AuthenticatedTaskCommands {
-  execute(intent: AuthenticatedTaskCommandIntent): Promise<TaskCommandOutcome>;
-}
+import {
+  normalizeIntent,
+  toCommandRequest,
+  decodeExpectedRevision,
+  lifecycleMethod,
+  taskUpdatesToSeriesDefaults,
+  taskUpdatesToOccurrenceRequest,
+} from "./command-inputs";
 
-export interface LegacyTaskToggleIntent {
-  userId: string;
-  taskId: string;
-  operationId: string;
-}
+import {
+  invalidTransition,
+  mapPersistenceOutcome,
+  isLifecycleSuccess,
+  mapLifecycleFailure,
+  notFound,
+} from "./command-outcomes";
 
-export interface TaskCommandOrdinaryRequest {
-  expectedTaskVersion?: string;
-  type: TaskCommandType;
-  userId: string;
-  taskId: string;
-  operationId: string;
-  scope?: TaskCommandScope;
-  updates?: TaskCommandUpdates;
-  effectiveDate?: string;
-  expectedVersion?: string;
-}
+import { SupabaseTaskCommandOrdinaryPersistence } from "./command-persistence";
 
-export type TaskCommandPersistenceOutcome =
-  | { status: "complete" | "already-applied"; task?: Task }
-  | { status: "not-found" }
-  | { status: "invalid-transition"; reason: string }
-  | {
-      status: "conflict";
-      reason?: string;
-      expectedRevisionToken?: number;
-      actualRevisionToken?: number;
-      expectedVersion?: string;
-      actualVersion?: string;
-    }
-  | { status: "coverage-unavailable"; reason: string };
+export type {
+  TaskCommandType,
+  TaskCommandScope,
+  TaskCommandUpdates,
+  TaskCommandIntent,
+  AuthenticatedTaskCommandPrincipal,
+  AuthenticatedTaskCommandIntent,
+  AuthenticatedTaskCommands,
+  LegacyTaskToggleIntent,
+  TaskCommandOrdinaryRequest,
+  TaskCommandPersistenceOutcome,
+  TaskCommandPersistence,
+  TaskCommandSuccess,
+  TaskCommandFailure,
+  TaskCommandOutcome,
+} from "./command-contract";
 
-export interface TaskCommandPersistence {
-  /** The visible Task projection is a routing preflight, never an authority. */
-  getTask(taskId: string, userId: string): Promise<Task | null>;
-  /** Replay a completed command after a destructive command removed its Task. */
-  replay?(request: TaskCommandOrdinaryRequest): Promise<TaskCommandPersistenceOutcome>;
-  ordinary: {
-    complete(
-      request: TaskCommandOrdinaryRequest,
-    ): Promise<TaskCommandPersistenceOutcome>;
-    reopen(
-      request: TaskCommandOrdinaryRequest,
-    ): Promise<TaskCommandPersistenceOutcome>;
-    skip(
-      request: TaskCommandOrdinaryRequest,
-    ): Promise<TaskCommandPersistenceOutcome>;
-    edit(
-      request: TaskCommandOrdinaryRequest,
-    ): Promise<TaskCommandPersistenceOutcome>;
-  };
-  lifecycle: Pick<
-    RecurringTaskLifecyclePort,
-    | "completeOccurrence"
-    | "reopenOccurrence"
-    | "skipOccurrence"
-    | "editOccurrence"
-    | "reviseSeries"
-    | "endSeries"
-  >;
-}
+export {
+  isTaskCommandSuccess,
+  taskCommandErrorMessage,
+  taskCommandHttpFailure,
+} from "./command-outcomes";
 
-export type TaskCommandSuccess = {
-  status: "complete" | "already-applied";
-  type: "complete" | "already-applied";
-  operation: TaskCommandType;
-  operationId: string;
-  task?: Task;
-};
-
-export type TaskCommandFailure =
-  | {
-      status: "not-found";
-      type: "not-found";
-      operation: TaskCommandType;
-      operationId: string;
-    }
-  | {
-      status: "invalid-transition";
-      type: "invalid-transition";
-      operation: TaskCommandType;
-      operationId: string;
-      reason: string;
-    }
-  | {
-      status: "conflict";
-      type: "conflict";
-      operation: TaskCommandType;
-      operationId: string;
-      reason?: string;
-      expectedRevisionToken?: number;
-      actualRevisionToken?: number;
-      expectedVersion?: string;
-      actualVersion?: string;
-    }
-  | {
-      status: "coverage-unavailable";
-      type: "coverage-unavailable";
-      operation: TaskCommandType;
-      operationId: string;
-      reason: string;
-    };
-
-export type TaskCommandOutcome = TaskCommandSuccess | TaskCommandFailure;
+export { decodeSeriesVersion, encodeSeriesVersion } from "@/lib/recurring-tasks/internal/capabilities";
 
 /**
  * Shared Task Commands route by visible Task identity. The initial projection
@@ -563,490 +472,6 @@ export function createSupabaseLegacyTaskToggle(
     tasksDB.getTask.bind(tasksDB),
     createSupabaseTaskCommands(supabase),
   );
-}
-
-class SupabaseTaskCommandOrdinaryPersistence {
-  constructor(private readonly supabase: SupabaseClient) {}
-
-  complete(request: TaskCommandOrdinaryRequest) {
-    return this.call(request);
-  }
-
-  reopen(request: TaskCommandOrdinaryRequest) {
-    return this.call(request);
-  }
-
-  skip(request: TaskCommandOrdinaryRequest) {
-    return this.call(request);
-  }
-
-  edit(request: TaskCommandOrdinaryRequest) {
-    return this.call(request);
-  }
-
-  replay(request: TaskCommandOrdinaryRequest) {
-    return this.callReplay(request);
-  }
-
-  private async call(
-    request: TaskCommandOrdinaryRequest,
-  ): Promise<TaskCommandPersistenceOutcome> {
-    const { data, error } = await this.supabase.rpc("task_command_atomic", {
-      p_operation: request.type,
-      p_request: {
-        userId: request.userId,
-        taskId: request.taskId,
-        idempotencyKey: request.operationId,
-        ...(request.expectedTaskVersion === undefined ? {} : { expectedTaskVersion: request.expectedTaskVersion }),
-        ...(request.scope === undefined ? {} : { scope: request.scope }),
-        ...(request.updates === undefined ? {} : { updates: request.updates }),
-        ...(request.effectiveDate === undefined
-          ? {}
-          : { effectiveDate: request.effectiveDate }),
-        ...(request.expectedVersion === undefined
-          ? {}
-          : { expectedVersion: request.expectedVersion }),
-      },
-    });
-    if (error) throw error;
-    return parsePersistenceOutcome(data);
-  }
-
-  private async callReplay(
-    request: TaskCommandOrdinaryRequest,
-  ): Promise<TaskCommandPersistenceOutcome> {
-    const { data, error } = await this.supabase.rpc("task_command_replay", {
-      p_operation: request.type,
-      p_request: {
-        userId: request.userId,
-        taskId: request.taskId,
-        idempotencyKey: request.operationId,
-        ...(request.expectedTaskVersion === undefined ? {} : { expectedTaskVersion: request.expectedTaskVersion }),
-        ...(request.scope === undefined ? {} : { scope: request.scope }),
-        ...(request.updates === undefined ? {} : { updates: request.updates }),
-        ...(request.effectiveDate === undefined
-          ? {}
-          : { effectiveDate: request.effectiveDate }),
-        ...(request.expectedVersion === undefined
-          ? {}
-          : { expectedVersion: request.expectedVersion }),
-      },
-    });
-    if (error) throw error;
-    return parsePersistenceOutcome(data);
-  }
-}
-
-function normalizeIntent(
-  intent: TaskCommandIntent,
-):
-  | { ok: true; value: TaskCommandIntent & { operation: TaskCommandType } }
-  | { ok: false; outcome: TaskCommandFailure } {
-  const operation = isTaskCommandType(intent?.type) ? intent.type : "complete";
-  const operationId = typeof intent?.operationId === "string"
-    ? intent.operationId.trim()
-    : "";
-  const userId = typeof intent?.userId === "string" ? intent.userId.trim() : "";
-  const taskId = typeof intent?.taskId === "string" ? intent.taskId.trim() : "";
-
-  if (!operationId) {
-    return {
-      ok: false,
-      outcome: invalidTransition(
-        operation,
-        operationId,
-        "Task Command operation ID is required",
-      ),
-    };
-  }
-  if (!isTaskCommandType(intent?.type)) {
-    return {
-      ok: false,
-      outcome: invalidTransition(
-        operation,
-        operationId,
-        "Unsupported Task Command",
-      ),
-    };
-  }
-  if (!userId || !taskId) {
-    return { ok: false, outcome: notFound(operation, operationId) };
-  }
-
-  return {
-    ok: true,
-    value: {
-      ...intent,
-      operation,
-      operationId,
-      userId,
-      taskId,
-    },
-  };
-}
-
-function toCommandRequest(
-  intent: TaskCommandIntent & { operation: TaskCommandType },
-): TaskCommandOrdinaryRequest {
-  return {
-    type: intent.operation,
-    userId: intent.userId,
-    taskId: intent.taskId,
-    operationId: intent.operationId,
-    ...(intent.expectedTaskVersion === undefined ? {} : { expectedTaskVersion: intent.expectedTaskVersion }),
-    ...(intent.scope === undefined ? {} : { scope: intent.scope }),
-    ...(intent.updates === undefined ? {} : { updates: intent.updates }),
-    ...(intent.effectiveDate === undefined
-      ? {}
-      : { effectiveDate: intent.effectiveDate }),
-    ...(intent.expectedVersion === undefined
-      ? {}
-      : { expectedVersion: intent.expectedVersion }),
-  };
-}
-
-function decodeExpectedRevision(
-  intent: TaskCommandIntent,
-  seriesId: string,
-  required: boolean,
-):
-  | { ok: true; revisionToken?: number }
-  | { ok: false; outcome: TaskCommandFailure } {
-  if (intent.expectedVersion !== undefined) {
-    const decoded = decodeSeriesVersion(intent.expectedVersion, seriesId);
-    if (!decoded) {
-      return {
-        ok: false,
-        outcome: invalidTransition(
-          intent.type,
-          intent.operationId,
-          "Series version is invalid",
-        ),
-      };
-    }
-    return { ok: true, revisionToken: decoded.revisionToken };
-  }
-  if (required) {
-    return {
-      ok: false,
-      outcome: invalidTransition(
-        intent.type,
-        intent.operationId,
-        "An expected opaque Series version is required",
-      ),
-    };
-  }
-  return {
-    ok: true,
-    ...(intent.expectedRevisionToken === undefined
-      ? {}
-      : { revisionToken: intent.expectedRevisionToken }),
-  };
-}
-
-function taskUpdatesToOccurrenceRequest(
-  updates: TaskCommandUpdates,
-): { updates: OccurrenceOverrides; completed?: boolean } | undefined {
-  const occurrenceUpdates: OccurrenceOverrides = {};
-  if (updates.title !== undefined) occurrenceUpdates.title = updates.title.trim();
-  if (updates.description !== undefined) {
-    occurrenceUpdates.description = updates.description?.trim() || null;
-  }
-  if (updates.priority !== undefined) occurrenceUpdates.priority = updates.priority;
-  if (updates.category_id !== undefined) {
-    occurrenceUpdates.categoryId = updates.category_id?.trim() || null;
-  }
-  if (updates.due_date !== undefined) {
-    occurrenceUpdates.dueDate = updates.due_date?.trim() || null;
-  }
-  if (updates.due_time !== undefined) {
-    occurrenceUpdates.dueTime = updates.due_time?.trim() || null;
-  }
-  if (updates.section !== undefined) occurrenceUpdates.section = updates.section;
-  if (updates.sort_order !== undefined) occurrenceUpdates.sortOrder = updates.sort_order;
-  if (updates.project_id !== undefined) {
-    occurrenceUpdates.projectId = updates.project_id?.trim() || null;
-  }
-  if (updates.completion_difficulty !== undefined) {
-    return undefined;
-  }
-
-  let completed = updates.is_completed;
-  if (updates.status !== undefined) {
-    if (updates.status === "done" || updates.status === "todo") {
-      completed = updates.status === "done";
-    } else {
-      occurrenceUpdates.status = updates.status;
-    }
-  }
-  if (Object.keys(occurrenceUpdates).length === 0 && completed === undefined) {
-    return undefined;
-  }
-  return {
-    updates: occurrenceUpdates,
-    ...(completed === undefined ? {} : { completed }),
-  };
-}
-
-function taskUpdatesToSeriesDefaults(
-  updates: TaskCommandUpdates,
-): ReviseSeriesRequest["defaults"] | undefined {
-  if (
-    updates.due_date !== undefined
-    || updates.is_completed !== undefined
-    || updates.completion_difficulty !== undefined
-  ) {
-    return undefined;
-  }
-  const defaults = {
-    ...(updates.title === undefined ? {} : { title: updates.title.trim() }),
-    ...(updates.description === undefined
-      ? {}
-      : { description: updates.description?.trim() || null }),
-    ...(updates.priority === undefined ? {} : { priority: updates.priority }),
-    ...(updates.category_id === undefined
-      ? {}
-      : { categoryId: updates.category_id?.trim() || null }),
-    ...(updates.due_time === undefined
-      ? {}
-      : { dueTime: updates.due_time?.trim() || null }),
-    ...(updates.status === undefined ? {} : { status: updates.status }),
-    ...(updates.section === undefined ? {} : { section: updates.section }),
-    ...(updates.sort_order === undefined ? {} : { sortOrder: updates.sort_order }),
-    ...(updates.project_id === undefined
-      ? {}
-      : { projectId: updates.project_id?.trim() || null }),
-  };
-  return Object.keys(defaults).length === 0 ? undefined : defaults;
-}
-
-function lifecycleMethod(
-  operation: TaskCommandType,
-): "completeOccurrence" | "reopenOccurrence" | "skipOccurrence" {
-  switch (operation) {
-    case "complete":
-      return "completeOccurrence";
-    case "reopen":
-      return "reopenOccurrence";
-    case "skip":
-      return "skipOccurrence";
-    case "edit":
-      throw new Error("Field edits use the edit command path");
-  }
-}
-
-function mapPersistenceOutcome(
-  outcome: TaskCommandPersistenceOutcome,
-  operation: TaskCommandType,
-  operationId: string,
-): TaskCommandOutcome {
-  if (outcome.status === "complete" || outcome.status === "already-applied") {
-    return {
-      status: outcome.status,
-      type: outcome.status,
-      operation,
-      operationId,
-      ...(outcome.task ? { task: outcome.task } : {}),
-    };
-  }
-  if (outcome.status === "not-found") return notFound(operation, operationId);
-  if (outcome.status === "invalid-transition") {
-    return invalidTransition(operation, operationId, outcome.reason);
-  }
-  if (outcome.status === "coverage-unavailable") {
-    return {
-      status: "coverage-unavailable",
-      type: "coverage-unavailable",
-      operation,
-      operationId,
-      reason: outcome.reason,
-    };
-  }
-  if (outcome.status !== "conflict") {
-    return invalidTransition(
-      operation,
-      operationId,
-      "Task Command persistence returned an invalid outcome",
-    );
-  }
-  return {
-    status: "conflict",
-    type: "conflict",
-    operation,
-    operationId,
-    ...(outcome.reason === undefined ? {} : { reason: outcome.reason }),
-    ...(outcome.expectedRevisionToken === undefined
-      ? {}
-      : { expectedRevisionToken: outcome.expectedRevisionToken }),
-    ...(outcome.actualRevisionToken === undefined
-      ? {}
-      : { actualRevisionToken: outcome.actualRevisionToken }),
-  };
-}
-
-function mapLifecycleFailure(
-  outcome: Exclude<LifecycleOutcome<unknown>, { status: "complete" | "already-applied" }>,
-  operation: TaskCommandType,
-  operationId: string,
-  seriesId?: string,
-  opaqueVersion = false,
-): TaskCommandFailure {
-  if (outcome.status === "not-found") return notFound(operation, operationId);
-  if (outcome.status === "invalid-transition") {
-    return invalidTransition(operation, operationId, outcome.reason);
-  }
-  if (outcome.status === "conflict") {
-    if (opaqueVersion && seriesId) {
-      return {
-        status: "conflict",
-        type: "conflict",
-        operation,
-        operationId,
-        ...(outcome.reason === undefined ? {} : { reason: outcome.reason }),
-        ...(outcome.expectedRevisionToken === undefined
-          ? {}
-          : { expectedVersion: encodeSeriesVersion(seriesId, outcome.expectedRevisionToken) }),
-        ...(outcome.actualRevisionToken === undefined
-          ? {}
-          : { actualVersion: encodeSeriesVersion(seriesId, outcome.actualRevisionToken) }),
-      };
-    }
-    return {
-      status: "conflict",
-      type: "conflict",
-      operation,
-      operationId,
-      ...(outcome.reason === undefined ? {} : { reason: outcome.reason }),
-      ...(outcome.expectedRevisionToken === undefined
-        ? {}
-        : { expectedRevisionToken: outcome.expectedRevisionToken }),
-      ...(outcome.actualRevisionToken === undefined
-        ? {}
-        : { actualRevisionToken: outcome.actualRevisionToken }),
-    };
-  }
-  if (outcome.status === "coverage-unavailable") {
-    return {
-      status: "coverage-unavailable",
-      type: "coverage-unavailable",
-      operation,
-      operationId,
-      reason: outcome.reason,
-    };
-  }
-  return invalidTransition(
-    operation,
-    operationId,
-    "Recurring task coverage is temporarily unavailable",
-  );
-}
-
-function isLifecycleSuccess(
-  outcome: LifecycleOutcome<unknown>,
-): outcome is Extract<LifecycleOutcome<unknown>, { status: "complete" | "already-applied" }> {
-  return outcome.status === "complete" || outcome.status === "already-applied";
-}
-
-function parsePersistenceOutcome(value: unknown): TaskCommandPersistenceOutcome {
-  if (!isRecord(value) || typeof value.status !== "string") {
-    throw new Error("Invalid Task Command outcome returned by the database");
-  }
-  if (value.status === "complete" || value.status === "already-applied") {
-    return {
-      status: value.status,
-      ...(value.task && isRecord(value.task) ? { task: value.task as unknown as Task } : {}),
-    };
-  }
-  if (value.status === "not-found") return { status: "not-found" };
-  if (value.status === "invalid-transition" && typeof value.reason === "string") {
-    return { status: "invalid-transition", reason: value.reason };
-  }
-  if (value.status === "conflict") {
-    return {
-      status: "conflict",
-      ...(typeof value.reason === "string" ? { reason: value.reason } : {}),
-      ...(typeof value.expectedRevisionToken === "number"
-        ? { expectedRevisionToken: value.expectedRevisionToken }
-        : {}),
-      ...(typeof value.actualRevisionToken === "number"
-        ? { actualRevisionToken: value.actualRevisionToken }
-        : {}),
-    };
-  }
-  throw new Error("Invalid Task Command outcome returned by the database");
-}
-
-function isTaskCommandType(value: unknown): value is TaskCommandType {
-  return value === "complete"
-    || value === "reopen"
-    || value === "skip"
-    || value === "edit";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function notFound(
-  operation: TaskCommandType,
-  operationId: string,
-): TaskCommandFailure {
-  return {
-    status: "not-found",
-    type: "not-found",
-    operation,
-    operationId,
-  };
-}
-
-function invalidTransition(
-  operation: TaskCommandType,
-  operationId: string,
-  reason: string,
-): TaskCommandFailure {
-  return {
-    status: "invalid-transition",
-    type: "invalid-transition",
-    operation,
-    operationId,
-    reason,
-  };
-}
-
-export function isTaskCommandSuccess(
-  outcome: TaskCommandOutcome,
-): outcome is TaskCommandSuccess {
-  return outcome.status === "complete" || outcome.status === "already-applied";
-}
-
-export function taskCommandErrorMessage(
-  outcome: Exclude<TaskCommandOutcome, TaskCommandSuccess>,
-): string {
-  switch (outcome.status) {
-    case "not-found":
-      return "Task not found";
-    case "conflict":
-      return "Task occurrence conflict";
-    case "invalid-transition":
-      return outcome.reason;
-    case "coverage-unavailable":
-      return outcome.reason;
-  }
-}
-
-export function taskCommandHttpFailure(
-  outcome: Exclude<TaskCommandOutcome, TaskCommandSuccess>,
-): { error: string; status: 400 | 404 | 409 | 503 } {
-  switch (outcome.status) {
-    case "not-found":
-      return { error: taskCommandErrorMessage(outcome), status: 404 };
-    case "conflict":
-      return { error: taskCommandErrorMessage(outcome), status: 409 };
-    case "invalid-transition":
-      return { error: taskCommandErrorMessage(outcome), status: 400 };
-    case "coverage-unavailable":
-      return { error: taskCommandErrorMessage(outcome), status: 503 };
-  }
 }
 
 /** Read a caller-supplied retry identity, with a per-request fallback. */
