@@ -100,7 +100,9 @@ behavior they exercise.
 ## Verification evidence
 
 - Full Vitest run: 500 files passed; 6,126 tests passed, 21 skipped, zero failures.
-- Full TypeScript check passed.
+- Full TypeScript check and production build passed.
+- Public Household Runway browser checks: 24 passed across desktop and mobile;
+  two authenticated-only cases skipped in the public projects.
 - Full ESLint run: zero errors; four existing warnings in unchanged files.
 - Comparing the original exported names at every changed entry path found no
   additions or removals.
@@ -112,7 +114,11 @@ behavior they exercise.
 - The static runtime import graph for app, components, and lib has no cycles
   after cleanup. The baseline had the calendar grid/current-time-marker cycle.
 - Architecture tests now inspect the extracted contracts and include the moved
-  Task command internals and all Household Runway components in their scans.
+  Task command internals and all Household Runway components and internal
+  Interview/Runtime modules in their scans.
+- The Current Profile architecture suite caches immutable source text rather than
+  rereading every file for every pattern. Its slowest check passed in 123 ms after
+  caching versus 2,260 ms beforehand on the same machine; all assertions remain.
 
 The pull request records final build, affected-suite reruns, browser results, and
 the independent standards/spec review. No new product decisions or unresolved

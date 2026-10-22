@@ -27,6 +27,7 @@ const lifecycleBoundarySources = [
   "lib/tasks/command-contract.ts",
   "lib/tasks/command-inputs.ts",
   "lib/tasks/command-outcomes.ts",
+  "lib/tasks/command-persistence.ts",
 ];
 
 describe("recurring lifecycle import boundary", () => {

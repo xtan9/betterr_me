@@ -14,8 +14,15 @@ function trackedSourceFiles(directory: string): string[] {
     .filter((path) => /\.(?:ts|tsx)$/.test(path) && existsSync(path));
 }
 
+// The checkout is immutable during these checks; read each source once per suite.
+const sourceCache = new Map<string, string>();
+
 function source(path: string): string {
-  return readFileSync(path, "utf8").replaceAll("\r\n", "\n");
+  const cached = sourceCache.get(path);
+  if (cached !== undefined) return cached;
+  const contents = readFileSync(path, "utf8").replaceAll("\r\n", "\n");
+  sourceCache.set(path, contents);
+  return contents;
 }
 
 // These are the only browser modules allowed to spell profile HTTP routes.

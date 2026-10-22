@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const root = resolve(process.cwd());
@@ -9,6 +9,17 @@ const supportedOrInternalFiles = new Set([
   "lib/finance/household-runway-interview-runtime.ts",
   "lib/finance/household-runway-react-adapter.ts",
 ]);
+
+function internalSources(pattern: RegExp): string {
+  return walk(resolve(root, "lib/finance/internal"))
+    .filter((file) => pattern.test(basename(file)))
+    .sort()
+    .map((file) => readFileSync(file, "utf8"))
+    .join("\n");
+}
+
+const interviewSources = internalSources(/^household-runway-interview(?:-(?!runtime)[\w-]+)?\.ts$/);
+const runtimeSources = internalSources(/^household-runway-(?:interview-runtime|runtime-[\w-]+)\.ts$/);
 
 describe("Household Runway Runtime import boundary", () => {
   it("retires the legacy public protocol modules and environment relay", () => {
@@ -130,10 +141,7 @@ describe("Household Runway Runtime import boundary", () => {
       resolve(root, "lib/finance/household-runway-interview-runtime.ts"),
       "utf8",
     );
-    const runtimeComposition = readFileSync(
-      resolve(root, "lib/finance/internal/household-runway-interview-runtime.ts"),
-      "utf8",
-    );
+    const runtimeComposition = runtimeSources;
     const browserFacade = readFileSync(
       resolve(root, "lib/finance/household-runway-browser-adapter.ts"),
       "utf8",
@@ -166,15 +174,8 @@ describe("Household Runway Runtime import boundary", () => {
   });
 
   it("keeps Plan Adjustment field and relative-limit policy in one private module", () => {
-    const runtime = readFileSync(
-      resolve(root, "lib/finance/internal/household-runway-interview-runtime.ts"),
-      "utf8",
-    );
-    const interview = [
-      "household-runway-interview.ts",
-      "household-runway-interview-inputs.ts",
-      "household-runway-interview-assessment.ts",
-    ].map((file) => readFileSync(resolve(root, "lib/finance/internal", file), "utf8")).join("\n");
+    const runtime = runtimeSources;
+    const interview = interviewSources;
     const assessment = readFileSync(
       resolve(root, "lib/finance/household-runway-assessment.ts"),
       "utf8",
@@ -198,15 +199,8 @@ describe("Household Runway Runtime import boundary", () => {
   });
 
   it("removes replaced Plan Adjustment helpers instead of retaining wrappers", () => {
-    const runtime = readFileSync(
-      resolve(root, "lib/finance/internal/household-runway-interview-runtime.ts"),
-      "utf8",
-    );
-    const interview = [
-      "household-runway-interview.ts",
-      "household-runway-interview-inputs.ts",
-      "household-runway-interview-assessment.ts",
-    ].map((file) => readFileSync(resolve(root, "lib/finance/internal", file), "utf8")).join("\n");
+    const runtime = runtimeSources;
+    const interview = interviewSources;
     const assessment = readFileSync(
       resolve(root, "lib/finance/household-runway-assessment.ts"),
       "utf8",
