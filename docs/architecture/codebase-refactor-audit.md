@@ -91,11 +91,22 @@ lower line counts would add navigation without isolating a responsibility.
 Managed shadcn components and generated artifacts were left under their existing
 owners.
 
-Existing focused API routes, query adapters, mobile features, scripts, CI
-workflows, and documentation did not need changes for these findings. Domain
+Existing focused API routes, query adapters, mobile features, unrelated scripts, and
+unrelated documentation did not need changes for these findings. Domain
 validators that only look similar remain separate when their error contracts or
 accepted input differ. Test scenarios and fixtures remain colocated with the
 behavior they exercise.
+
+## CI compatibility repair
+
+The PR run exposed an existing environment mismatch: ubuntu-latest selected
+Ubuntu 26.04, but the locked Playwright 1.58.1 browser registry has no downloads
+for that OS. SQL acceptance fixtures passed; browser installation failed before
+app verification began. Pin the three workflows that run Playwright (E2E,
+cross-browser smoke, and snapshot updates) to supported Ubuntu 24.04. This keeps
+the installed dependencies and all test gates intact. The extracted Current
+Profile cache also belongs to the existing settings CI ownership rule, retaining
+its full browser verification selection when it changes independently.
 
 ## Verification evidence
 

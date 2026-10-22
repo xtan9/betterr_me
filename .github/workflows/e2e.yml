@@ -39,7 +39,8 @@ jobs:
     name: E2E (${{ fromJSON(needs.changes.outputs.classification_json).labels.e2e }})
     needs: changes
     if: fromJSON(needs.changes.outputs.classification_json).suites.e2e
-    runs-on: ubuntu-latest
+    # Playwright 1.58 does not provide browsers for Ubuntu 26.04.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
 
     steps:

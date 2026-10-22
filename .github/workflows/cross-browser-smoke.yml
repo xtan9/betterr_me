@@ -16,7 +16,8 @@ permissions:
 jobs:
   smoke:
     name: Smoke (${{ matrix.project }})
-    runs-on: ubuntu-latest
+    # Keep browser jobs on an OS supported by the installed Playwright version.
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:
       fail-fast: false
