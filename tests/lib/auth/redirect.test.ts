@@ -81,6 +81,19 @@ describe("getSafeRedirectPath", () => {
     });
   });
 
+  it.each([
+    '/chat?id=conversation-1',
+    '/journal?date=2026-10-22',
+    '/calendar?view=week',
+    '/workouts',
+    '/workouts/active',
+    '/workouts/routines',
+    '/workouts/exercises/exercise-1',
+    '/projects/archived',
+    '/projects/project-1/kanban',
+  ])('returns to the established site destination %s after login', (path) => {
+    expect(getSafeRedirectPath(path)).toBe(path);
+  });
   describe("blocked paths", () => {
     it('returns "/" for /admin', () => {
       expect(getSafeRedirectPath("/admin")).toBe("/");

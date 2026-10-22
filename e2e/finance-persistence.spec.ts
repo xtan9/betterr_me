@@ -2,6 +2,9 @@ import { expect, test } from '@playwright/test';
 import { E2E_READ_ONLY } from './constants';
 
 test.describe('Authenticated finance persistence', () => {
+  // These journeys share one authenticated account and its singleton Plan.
+  // Run them in order so one test's save cannot conflict with the other's.
+  test.describe.configure({ mode: 'default' });
   test.skip(E2E_READ_ONLY, 'Finance persistence requires disposable E2E state');
 
   test.beforeEach(({}, testInfo) => {

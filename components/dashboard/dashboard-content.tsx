@@ -455,7 +455,7 @@ export function DashboardContent({ initialData }: DashboardContentProps) {
       )}
 
       {/* Main content grid */}
-      <div className="grid gap-card-gap xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-card-gap xl:grid-cols-2">
         {/* Habits Checklist */}
         <HabitChecklist
           habits={todaysHabits}

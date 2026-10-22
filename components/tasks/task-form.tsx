@@ -131,7 +131,7 @@ export function TaskForm({
         ...data,
         description: data.description || null,
       },
-      recurrence.rule ? recurrence : undefined,
+      data.due_date && recurrence.rule ? recurrence : undefined,
       expectedTaskVersion,
     );
   };

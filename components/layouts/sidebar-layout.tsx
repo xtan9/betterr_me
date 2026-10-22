@@ -68,7 +68,7 @@ export function SidebarLayout({ defaultPinned, children }: SidebarLayoutProps) {
       >
         <AppSidebar pinned={pinned} onTogglePin={handleTogglePin} onDropdownOpenChange={setDropdownOpen} />
       </div>
-      <SidebarInset>
+      <SidebarInset className="min-w-0">
         <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4 md:hidden">
           <SidebarTrigger className="-ml-1" />
           <Link href="/dashboard" className="font-display font-bold text-lg text-primary">

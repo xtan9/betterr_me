@@ -10,6 +10,10 @@ export async function updateSession(request: NextRequest) {
   // Skip middleware entirely for MCP and OAuth routes — they use Bearer token auth,
   // not cookies, and the middleware can interfere with the Authorization header.
   const path = request.nextUrl.pathname;
+  // Public amount-free analytics has its own validation and rate limiting.
+  if (path === "/api/finance/cushion/events") {
+    return supabaseResponse;
+  }
   if (
     path === "/api/mobile/assistant" ||
     path === "/api/mobile/assistant/history" ||
@@ -68,11 +72,19 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  function redirectWithSession(url: NextRequest["nextUrl"]) {
+    const response = NextResponse.redirect(url);
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      response.cookies.set(cookie);
+    });
+    return response;
+  }
+
   // Redirect authenticated users from homepage to dashboard
   if (user && request.nextUrl.pathname === "/") {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+    return redirectWithSession(url);
   }
 
   if (
@@ -88,7 +100,12 @@ export async function updateSession(request: NextRequest) {
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
-    return NextResponse.redirect(url);
+    url.search = "";
+    url.searchParams.set(
+      "next",
+      `${request.nextUrl.pathname}${request.nextUrl.search}`,
+    );
+    return redirectWithSession(url);
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is.

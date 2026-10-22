@@ -10,12 +10,21 @@ const ALLOWED_REDIRECT_PATHS = [
   "/dashboard",
   "/habits",
   "/tasks",
+  "/chat",
+  "/journal",
+  "/calendar",
+  "/workouts",
   "/finance/cushion",
   "/dashboard/settings",
   "/auth/update-password",
 ];
 
-const ALLOWED_REDIRECT_PREFIXES = ["/habits/", "/tasks/"];
+const ALLOWED_REDIRECT_PREFIXES = [
+  "/habits/",
+  "/tasks/",
+  "/workouts/",
+  "/projects/",
+];
 
 /**
  * Validate and return a safe redirect path.
