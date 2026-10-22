@@ -82,7 +82,7 @@ describe('GET /auth/callback', () => {
     const response = await GET(request);
 
     expect(response.status).toBe(307);
-    expect(response.headers.get('location')).toBe('http://localhost:3000/auth/auth-code-error');
+    expect(response.headers.get('location')).toBe('http://localhost:3000/auth/error');
     expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
   });
 
@@ -93,7 +93,7 @@ describe('GET /auth/callback', () => {
     const response = await GET(request);
 
     expect(response.status).toBe(307);
-    expect(response.headers.get('location')).toBe('http://localhost:3000/auth/auth-code-error');
+    expect(response.headers.get('location')).toBe('http://localhost:3000/auth/error');
   });
 
   it('should log error when session exchange fails', async () => {

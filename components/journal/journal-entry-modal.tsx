@@ -37,6 +37,7 @@ export function JournalEntryModal({
 }: JournalEntryModalProps) {
   const t = useTranslations();
   const { entry, error: entryError, isLoading, mutate } = useJournalEntry(date);
+  const isEntryUnavailable = isLoading || Boolean(entryError);
   const { saveStatus, scheduleSave, flushNow } = useJournalAutosave(
     entry?.id ?? null,
     date,
@@ -89,20 +90,24 @@ export function JournalEntryModal({
     }
   }, [entryError, t]);
 
-  // Reset dirty state when modal opens/date changes
+  // A newly opened date must never reuse another entry's draft.
   useEffect(() => {
     if (open) {
       setIsDirty(false);
+      contentRef.current = null;
+      setWordCount(0);
     }
   }, [open, date]);
 
-  // Sync mood and prompt from entry (runs on open and when entry loads)
+  // Load the complete entry, without replacing a draft during revalidation.
   useEffect(() => {
-    if (open) {
+    if (open && !isDirty && !isEntryUnavailable) {
+      contentRef.current = entry?.content ?? null;
+      setWordCount(entry?.word_count ?? 0);
       setMood(entry?.mood ?? null);
       setPromptKey(entry?.prompt_key ?? null);
     }
-  }, [open, entry]);
+  }, [open, entry, isDirty, isEntryUnavailable]);
 
   const handleEditorUpdate = useCallback(
     (json: Record<string, unknown>, wc: number) => {
@@ -229,13 +234,13 @@ export function JournalEntryModal({
             </div>
             <div className="flex items-center gap-2">
               <JournalSaveStatus status={saveStatus} />
-              {entry && <JournalDeleteDialog onDelete={handleDelete} />}
+              {entry && !isEntryUnavailable && <JournalDeleteDialog onDelete={handleDelete} />}
             </div>
           </div>
         </DialogHeader>
 
         {/* Mood selector and prompt trigger */}
-        <div className="flex-shrink-0 py-2 flex items-center justify-between">
+        <fieldset disabled={isEntryUnavailable} className="flex-shrink-0 py-2 flex items-center justify-between">
           <JournalMoodSelector value={mood} onChange={handleMoodChange} />
           <button
             type="button"
@@ -245,10 +250,10 @@ export function JournalEntryModal({
             <Lightbulb className="size-3.5" />
             {t("journal.prompts.trigger")}
           </button>
-        </div>
+        </fieldset>
 
         {/* Prompt banner */}
-        {promptKey && (
+        {promptKey && !isEntryUnavailable && (
           <div className="flex-shrink-0">
             <PromptBanner promptKey={promptKey} onDismiss={handlePromptDismiss} />
           </div>
@@ -256,7 +261,9 @@ export function JournalEntryModal({
 
         {/* Editor area */}
         <div className="flex-1 overflow-y-auto min-h-0">
-          {isLoading ? (
+          {entryError ? (
+            <p role="alert" className="text-body text-destructive">{t("journal.fetchError")}</p>
+          ) : isLoading ? (
             <JournalEditorSkeleton />
           ) : (
             <JournalEditorLoader
@@ -268,7 +275,7 @@ export function JournalEntryModal({
         </div>
 
         {/* Linked items */}
-        {entry && (
+        {entry && !isEntryUnavailable && (
           <div className="flex-shrink-0 py-2 space-y-2" data-testid="journal-links-section">
             <div className="flex items-center justify-between">
               <span className="text-caption font-medium text-muted-foreground">
@@ -292,7 +299,7 @@ export function JournalEntryModal({
 
         {/* Prompt browser sheet */}
         <PromptBrowserSheet
-          open={promptSheetOpen}
+          open={promptSheetOpen && !isEntryUnavailable}
           onOpenChange={setPromptSheetOpen}
           onSelect={handlePromptSelect}
           selectedKey={promptKey}

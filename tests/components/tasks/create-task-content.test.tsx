@@ -296,6 +296,36 @@ describe('CreateTaskContent', () => {
     expect(callBody.due_time).toBe('09:30:00');
   });
 
+  it('creates an undated standalone task after clearing a repeating task due date', async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ task: { id: 't1' } }),
+    } as Response);
+
+    render(<CreateTaskContent />);
+
+    await user.type(screen.getByLabelText('Title'), 'Review notes');
+    fireEvent.change(screen.getByLabelText('Due Date'), {
+      target: { value: '2026-08-01' },
+    });
+    await user.click(screen.getAllByRole('combobox').at(-1)!);
+    await user.click(await screen.findByRole('option', { name: 'Daily' }));
+    fireEvent.change(screen.getByLabelText('Due Date'), {
+      target: { value: '' },
+    });
+    expect(screen.queryByText('Repeat')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Create Task' }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    const [url, options] = vi.mocked(global.fetch).mock.calls[0];
+    expect(url).toBe('/api/tasks');
+    expect(JSON.parse(options!.body as string)).toMatchObject({
+      title: 'Review notes',
+      due_date: null,
+    });
+  });
+
   it('preserves the recurring creation operation ID when the user retries', async () => {
     vi.mocked(global.fetch)
       .mockResolvedValueOnce({

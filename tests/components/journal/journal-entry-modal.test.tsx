@@ -327,6 +327,60 @@ describe("JournalEntryModal", () => {
     ).toBeInTheDocument();
   });
 
+  it("preserves the selected entry content and word count when changing its mood after another entry", async () => {
+    mockUseJournalEntry.mockReturnValue({
+      entry: { id: "entry-1", content: { type: "doc" }, mood: 3, word_count: 0 },
+      isLoading: false,
+      mutate: mockMutate,
+    });
+    const { rerender } = render(<JournalEntryModal {...defaultProps} />);
+    fireEvent.click(screen.getByTestId("tiptap-editor"));
+    rerender(<JournalEntryModal {...defaultProps} open={false} />);
+
+    const secondContent = {
+      type: "doc",
+      content: [{ type: "paragraph", content: [{ type: "text", text: "A different day" }] }],
+    };
+    mockUseJournalEntry.mockReturnValue({
+      entry: { id: "entry-2", content: secondContent, mood: 3, word_count: 3 },
+      isLoading: false,
+      mutate: mockMutate,
+    });
+    rerender(<JournalEntryModal {...defaultProps} date="2026-02-24" />);
+    mockScheduleSave.mockClear();
+
+    fireEvent.click(screen.getByRole("radio", { name: "amazing" }));
+
+    expect(mockScheduleSave).toHaveBeenLastCalledWith(expect.objectContaining({
+      content: secondContent,
+      word_count: 3,
+      mood: 5,
+    }));
+    await waitFor(() => {
+      expect(screen.getByText('journal.wordCount:{"count":3}')).toBeInTheDocument();
+    });
+  });
+
+  it.each([
+    { isLoading: true, error: undefined },
+    { isLoading: false, error: new Error("Fetch failed") },
+  ])("blocks journal mutations while the selected date is unavailable: %j", ({ isLoading, error }) => {
+    mockUseJournalEntry.mockReturnValue({
+      entry: { id: "previous-entry", content: { type: "doc" }, mood: 3, word_count: 10 },
+      isLoading,
+      error,
+      mutate: mockMutate,
+    });
+
+    render(<JournalEntryModal {...defaultProps} date="2026-02-24" />);
+
+    expect(screen.getByRole("radio", { name: "amazing" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "journal.prompts.trigger" })).toBeDisabled();
+    expect(screen.queryByText("journal.delete")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("journal-links-section")).not.toBeInTheDocument();
+    expect(mockScheduleSave).not.toHaveBeenCalled();
+  });
+
   it("displays formatted date", () => {
     mockUseJournalEntry.mockReturnValue({
       entry: null,

@@ -19,7 +19,51 @@ async function expectNoHorizontalDocumentOverflow(page: Page) {
   expect(overflow).toBeLessThanOrEqual(1);
 }
 
+test('calendar stays within the viewport beside the pinned sidebar', async ({ page, context, baseURL }) => {
+  await context.addCookies([{
+    name: 'sidebar_pinned', value: 'true', url: baseURL!,
+  }]);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/calendar?view=week');
+  await expect(page.getByRole('button', { name: 'Today', exact: true })).toBeVisible();
+  await expect(page.getByText('8 AM', { exact: true })).toBeVisible();
+  await expectNoHorizontalDocumentOverflow(page);
+});
+
 test.describe('Responsive - Dashboard Layout', () => {
+  test('habit and task cards stay inside the mobile viewport with a long habit name', async ({ page }) => {
+    const habitName = 'E2E Test - Cross-Browser Morning Exercise and Reflection Habit';
+    await page.route('**/api/dashboard?*', (route) => route.fulfill({
+      json: {
+        habits: [{
+          id: 'mobile-layout-habit', name: habitName, frequency: { type: 'daily' },
+          status: 'active', category_id: null, current_streak: 12, best_streak: 12,
+          completed_today: false, missed_scheduled_periods: 0, absence_unit: 'days',
+          previous_streak: 0, monthly_completion_rate: 50, graduation_eligible: false,
+        }],
+        tasks_today: [], tasks_tomorrow: [], milestones_today: [],
+        stats: {
+          total_habits: 1, completed_today: 0, current_best_streak: 12,
+          total_tasks: 0, tasks_due_today: 0, tasks_completed_today: 0,
+          last_workout_at: null, week_workout_count: 0,
+        },
+      },
+    }));
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto('/dashboard');
+    await expect(page.getByRole('button', { name: habitName, exact: true })).toBeVisible();
+
+    for (const title of ["Today's Habits", "Today's Tasks"]) {
+      const card = page.locator('[data-slot="card"]').filter({
+        has: page.getByRole('heading', { name: title, exact: true }),
+      });
+      const bounds = await card.boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(376);
+    }
+  });
+
   test('stat cards should use 2-column grid on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     const dashboard = new DashboardPage(page);

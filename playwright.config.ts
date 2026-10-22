@@ -10,6 +10,8 @@ dotenv.config({ path: '.env.local' });
  */
 export default defineConfig({
   testDir: './e2e',
+  // The MCP grant profile requires its own target configuration and runner.
+  testIgnore: /mcp-access-grant-compatibility\.spec\.ts/,
   fullyParallel: !process.env.CI,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -66,7 +68,7 @@ export default defineConfig({
     {
       name: 'chromium',
       dependencies: ['setup'],
-      testIgnore: /visual-regression\.spec\.ts/,
+      testIgnore: /(?:visual-regression|mcp-access-grant-compatibility)\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], storageState: STORAGE_STATE },
     },
     {

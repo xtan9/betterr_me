@@ -15,7 +15,9 @@ describe('native Assistant history through the cookie proxy',()=>{
  it('keeps unrelated pages and lookalike history paths cookie-protected',async()=>{
   for(const path of ['/tasks','/api/mobile/assistant/history-export','/api/mobile/assistant/command-extra','/api/mobile/execution/export','/api/cron/assistant-reminders-export','/api/mobile/connections/export','/api/mobile/connections-extra','/api/mobile/planning/command-extra','/api/mobile/sleep-export']){
    const response=await updateSession(new NextRequest(`https://www.betterr.me${path}`));
-   expect(response.headers.get('location')).toBe('https://www.betterr.me/auth/login');
+   const destination = new URL(response.headers.get('location')!);
+   expect(destination.pathname).toBe('/auth/login');
+   expect(destination.searchParams.get('next')).toBe(path);
   }
  });
  it.each([
