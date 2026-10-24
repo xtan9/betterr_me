@@ -34,8 +34,8 @@ export async function readFocusHistory(request: Request, client: SupabaseClient,
     nextCursor: rows.length > query.limit ? encodeCursor(page[page.length - 1].position) : null,
   }, { headers });
 }
-export async function readHistoryBody(request: Request, headers = historyHeaders): Promise<unknown> {
-  if (Number(request.headers.get('content-length')) > MAX_UPLOAD_BYTES) return Response.json({ error: 'invalid' }, { status: 413, headers });
+export async function readHistoryBody(request: Request, headers = historyHeaders, maximumBytes = MAX_UPLOAD_BYTES): Promise<unknown> {
+  if (Number(request.headers.get('content-length')) > maximumBytes) return Response.json({ error: 'invalid' }, { status: 413, headers });
   const reader = request.body?.getReader();
   if (!reader) throw new FocusHistoryError('invalid');
   const chunks: Uint8Array[] = []; let size = 0;
@@ -43,7 +43,7 @@ export async function readHistoryBody(request: Request, headers = historyHeaders
     const { done, value } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > MAX_UPLOAD_BYTES) { await reader.cancel(); return Response.json({ error: 'invalid' }, { status: 413, headers }); }
+    if (size > maximumBytes) { await reader.cancel(); return Response.json({ error: 'invalid' }, { status: 413, headers }); }
     chunks.push(value);
   }
   let raw: unknown;

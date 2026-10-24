@@ -381,5 +381,11 @@
     "domain": "assistant",
     "role": "constrained",
     "cleanup": "transactional"
+  },
+  {
+    "path": "app_limit_continuations.sql",
+    "domain": "app-limit-history",
+    "role": "constrained",
+    "cleanup": "transactional"
   }
 ]

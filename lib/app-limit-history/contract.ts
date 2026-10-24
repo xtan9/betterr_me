@@ -8,7 +8,7 @@ const day = z.string().regex(/^(?!0000)\d{4}-\d{2}-\d{2}$/).refine(value => {
   const date = new Date(`${value}T00:00:00Z`);
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }, 'Invalid civil day');
-const snapshot = z.object({
+export const appLimitSnapshotSchema = z.object({
   label: z.string().min(1).max(100).refine(value => value.trim().length > 0).nullable(),
   day, dailyUnlocks: z.number().int().min(1).max(50), minutes: z.number().int().min(1).max(60),
   current: count, best: count, status: z.enum(['counting', 'paused', 'removed']),
@@ -20,7 +20,7 @@ export const appLimitEventSchema = z.object({
   observedAt: time, appVersion: z.string().min(1).max(64), ruleId: z.string().uuid(),
   reason: z.enum(['baseline', 'limitCreated', 'limitChanged', 'labelChanged', 'dayAdvanced', 'authorizationUnavailable',
     'authorizationDenied', 'authorizationCheckFailed', 'accountChanged', 'signedOut', 'limitRemoved', 'limitRelaxed', 'extraUnlock', 'unlocked', 'resumed']),
-  before: snapshot.nullable(), after: snapshot,
+  before: appLimitSnapshotSchema.nullable(), after: appLimitSnapshotSchema,
 }).strict().superRefine((event, context) => {
   if ((event.kind === 'app-limit-baseline') !== (event.reason === 'baseline')
     || (event.before === null) !== ['baseline', 'limitCreated'].includes(event.reason)) {

@@ -5,17 +5,19 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
+import { continuationJourney } from './app-limit-continuation-journey.mjs';
 
 // This runner never accepts a remote target or caller-supplied credentials.
 // SQL fixture policy remains in the separate constrained fixture runner.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const cli = process.env.SUPABASE_CLI ?? 'supabase';
 const psql = process.env.PSQL_BIN ?? spawnSync('which', ['psql'], { encoding: 'utf8' }).stdout?.trim();
-const appLimits = process.argv.includes('--app-limits');
+const continuations = process.argv.includes('--continuations');
+const appLimits = continuations || process.argv.includes('--app-limits');
 function check(condition, label) {
   if (!condition) throw new Error(label);
 }
-check(process.argv.slice(2).every(value => value === '--app-limits'), 'Unknown integration runner argument');
+check(process.argv.slice(2).every(value => ['--app-limits', '--continuations'].includes(value)), 'Unknown integration runner argument');
 const status = spawnSync(cli, ['status', '--output', 'json'], { cwd: root, encoding: 'utf8' });
 check(status.status === 0, 'Local Supabase must already be running');
 const local = JSON.parse(status.stdout);
@@ -90,6 +92,7 @@ async function cleanUp() {
       (select count(*) from public.profiles where id in (${ids})) +
       (select count(*) from public.focus_history_sources where user_id in (${ids})) +
       (select count(*) from public.focus_history_events where user_id in (${ids}))
+      ${continuations ? `+ (select count(*) from public.app_limit_continuations where user_id in (${ids}))` : ''}
       ${appLimits ? `+ (select count(*) from public.app_limit_history_sources where user_id in (${ids}))
         + (select count(*) from public.app_limit_history_events where user_id in (${ids}))` : ''};`;
     const result = spawnSync(psql, [local.DB_URL, '-X', '-qAt', '-v', 'ON_ERROR_STOP=1'], {
@@ -240,6 +243,7 @@ try {
     check((await request(limitsPath, a.token)).items.length === 3 && (await request(limitsPath, b.token)).items.length === 1, 'Native source identity crossed accounts');
     console.log('PASS native app-limit baseline/replay, gaps, paged reset provenance, web cookies, isolation and session-v1 compatibility');
   }
+  if (continuations) await continuationJourney({ request, token: a.token, otherToken: b.token, cleanToken: cleanClient.token, cookie, check });
 } finally {
   await cleanUp();
   console.log('PASS ephemeral Auth users, sessions and history rows removed; owned Next server stopped');
