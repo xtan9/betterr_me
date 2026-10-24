@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeEach, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ native: vi.fn(), cookie: vi.fn(), rpc: vi.fn() }));
+const mocks = vi.hoisted(() => ({ native: vi.fn(), cookie: vi.fn(), rpc: vi.fn(), logError: vi.fn() }));
+vi.mock('@/lib/logger', () => ({ log: { error: mocks.logError } }));
 vi.mock('@/lib/auth/native-request', () => ({ authenticateNativeRequest: mocks.native }));
 vi.mock('@/lib/auth/authenticated-request', () => ({ authenticateRequest: mocks.cookie }));
 import { GET, POST } from '@/app/api/mobile/focus/app-limits/continuations/route';
@@ -66,4 +67,31 @@ it('bounds input before RPC and refuses invalid server records', async () => {
   expect((await post(command)).status).toBe(503);
   mocks.native.mockResolvedValue(null); expect((await post(command)).status).toBe(401);
   mocks.cookie.mockResolvedValue({ ok: false, status: 401 }); expect((await webGET(new Request(`https://example.test/?operationId=${id(10)}`))).status).toBe(401);
+});
+
+const operations = [
+  { scope: 'confirm', invoke: () => post(command), rpc: 'app_limit_continuation_confirm', args: { p_request: command } },
+  { scope: 'read', invoke: () => GET(new Request(`https://example.test/?operationId=${id(10)}`)), rpc: 'app_limit_continuation_read', args: { p_operation: id(10), p_destination: null, p_event: null } },
+  { scope: 'read', invoke: () => webGET(new Request(`https://example.test/?destinationSourceId=${id(4)}&applyEventId=${id(6)}`)), rpc: 'app_limit_continuation_read', args: { p_operation: null, p_destination: id(4), p_event: id(6) } },
+  { scope: 'context', invoke: () => contextGET(new Request(`https://example.test/?sourceId=${id(1)}&sourceRuleId=${id(2)}&destinationSourceId=${id(4)}&destinationRuleId=${id(5)}`)), rpc: 'app_limit_continuation_context', args: { p_source: id(1), p_rule: id(2), p_destination: id(4), p_destination_rule: id(5) } },
+];
+it.each(operations)('fails $scope safely on RPC errors and keeps diagnostic bodies private', async operation => {
+  mocks.rpc.mockResolvedValue({ data: null, error: { code: 'PGRST202', message: 'private source snapshot', details: 'Bearer private-token', hint: 'private SQL' } });
+  const response = await operation.invoke();
+  expect(response.status).toBe(503); expect(await response.json()).toEqual({ error: 'unavailable' });
+  expect(mocks.rpc).toHaveBeenCalledWith(operation.rpc, operation.args);
+  expect(mocks.logError.mock.calls).toEqual([[`[app-limit-continuations.${operation.scope}] request failed`, undefined, { category: 'rpc_error', rpcCode: 'PGRST202' }]]);
+});
+
+it.each(operations)('fails $scope closed if the database returns a malformed receipt or context', async operation => {
+  mocks.rpc.mockResolvedValue({ data: { status: 'complete', ...result, receipt: { ...receipt, destination: { ...receipt.destination, selectionToken: 'private-token' } } }, error: null });
+  const response = await operation.invoke();
+  expect(response.status).toBe(503); expect(await response.json()).toEqual({ error: 'unavailable' });
+  expect(mocks.logError.mock.calls).toEqual([[`[app-limit-continuations.${operation.scope}] request failed`, undefined, { category: 'invalid_response' }]]);
+});
+it.each(operations)('reports unexpected $scope failures without exception contents', async operation => {
+  mocks.rpc.mockRejectedValueOnce(new Error('private source snapshot and Bearer private-token'));
+  const response = await operation.invoke();
+  expect(response.status).toBe(503); expect(await response.json()).toEqual({ error: 'unavailable' });
+  expect(mocks.logError.mock.calls).toEqual([[`[app-limit-continuations.${operation.scope}] request failed`, undefined, { category: 'unexpected' }]]);
 });

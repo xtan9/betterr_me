@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeEach, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ native: vi.fn(), cookie: vi.fn(), rpc: vi.fn() }));
+const mocks = vi.hoisted(() => ({ native: vi.fn(), cookie: vi.fn(), rpc: vi.fn(), logError: vi.fn() }));
+vi.mock('@/lib/logger', () => ({ log: { error: mocks.logError } }));
 vi.mock('@/lib/auth/native-request', () => ({ authenticateNativeRequest: mocks.native }));
 vi.mock('@/lib/auth/authenticated-request', () => ({ authenticateRequest: mocks.cookie }));
 import { GET, POST } from '@/app/api/mobile/focus/app-limits/history/route';
@@ -66,4 +67,31 @@ it('pages without losing source checkpoint and rejects malformed server receipts
   expect(first.items).toHaveLength(1); expect(first.items[0].acknowledgedThrough).toBe(1); expect(first.nextCursor).toBeTypeOf('string');
   mocks.rpc.mockResolvedValueOnce({ data: { status: 'complete', schemaVersion: 1, sourceId: source.id, acceptedEventIds: [], acknowledgedThrough: 1 }, error: null });
   expect((await POST(request(upload))).status).toBe(503);
+});
+
+it.each([GET, webGET])('fails a native or web read safely when the database cannot return history', async read => {
+  mocks.rpc.mockResolvedValue({ data: null, error: { code: '42501', message: 'private rule history', details: 'private-token', hint: 'private SQL' } });
+  const response = await read(new Request('https://example.test/api/focus/app-limits/history'));
+  expect(response.status).toBe(503); expect(await response.json()).toEqual({ error: 'unavailable' });
+  expect(mocks.rpc).toHaveBeenCalledWith('app_limit_history_read', { p_after: 0, p_limit: 51 });
+  expect(mocks.logError.mock.calls).toEqual([['[app-limit-history.read] request failed', undefined, { category: 'rpc_error', rpcCode: '42501' }]]);
+});
+
+const stored = { position: 1, source, event, receivedAt: 1790000070000, acknowledgedThrough: 1 };
+it.each([
+  null,
+  { status: 'complete', items: [{ ...stored, event: { ...event, after: { ...snapshot, authorizationApproved: true } } }] },
+  { status: 'complete', items: [{ ...stored, acknowledgedThrough: -1 }] },
+  { status: 'complete', items: [stored, stored] },
+])('refuses malformed history instead of exposing partial records or a false checkpoint', async data => {
+  mocks.rpc.mockResolvedValue({ data, error: null });
+  const response = await GET(new Request('https://example.test/api/focus/app-limits/history'));
+  expect(response.status).toBe(503); expect(await response.json()).toEqual({ error: 'unavailable' });
+  expect(mocks.logError.mock.calls).toEqual([['[app-limit-history.read] request failed', undefined, { category: 'invalid_response' }]]);
+});
+it('scopes upload failures without logging unexpected exception details', async () => {
+  mocks.rpc.mockRejectedValueOnce(new Error('private rule and native token'));
+  const response = await POST(request(upload));
+  expect(response.status).toBe(503); expect(await response.json()).toEqual({ error: 'unavailable' });
+  expect(mocks.logError.mock.calls).toEqual([['[app-limit-history.upload] request failed', undefined, { category: 'unexpected' }]]);
 });

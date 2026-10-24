@@ -1,3 +1,4 @@
+import { logHistoryFailure, type HistoryFailureScope } from './diagnostics';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { historyUploadSchema, MAX_UPLOAD_BYTES } from './contract';
@@ -13,8 +14,9 @@ function decodeCursor(cursor?: string): number {
   return value;
 }
 export const historyHeaders = { 'Cache-Control': 'no-store' };
-export function historyFailure(error: unknown, headers: Record<string, string> = historyHeaders) {
+export function historyFailure(error: unknown, headers: Record<string, string> = historyHeaders, scope: HistoryFailureScope = 'focus-history.read') {
   const reason = error instanceof FocusHistoryError ? error.reason : 'unavailable';
+  if (reason === 'unavailable') logHistoryFailure(scope, error instanceof FocusHistoryError ? error.diagnostic : undefined);
   return Response.json({ error: reason }, { status: { invalid: 400, conflict: 409, unauthorized: 401, unavailable: 503 }[reason], headers });
 }
 export function readHistoryQuery(request: Request) {

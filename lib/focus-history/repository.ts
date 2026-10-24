@@ -1,17 +1,20 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { rpcFailureDiagnostic, type HistoryFailureDiagnostic } from './diagnostics';
 import { acknowledgmentSchema, storedHistoryItemSchema, type HistoryUpload } from './contract';
 
 export class FocusHistoryError extends Error {
-  constructor(readonly reason: 'invalid' | 'conflict' | 'unauthorized' | 'unavailable') { super(reason); }
+  constructor(readonly reason: 'invalid' | 'conflict' | 'unauthorized' | 'unavailable', readonly diagnostic?: HistoryFailureDiagnostic) { super(reason); }
 }
 
 /** Only compose this with a verified user's client; SQL independently checks auth.uid(). */
 export function createFocusHistoryRepository(client: Pick<SupabaseClient, 'rpc'>) {
   async function call(name: string, args: Record<string, unknown>) {
     const { data, error } = await client.rpc(name, args);
-    if (error || !data) throw new FocusHistoryError('unavailable');
+    if (error) throw new FocusHistoryError('unavailable', rpcFailureDiagnostic(error));
+    if (!data) throw new FocusHistoryError('unavailable', { category: 'invalid_response' });
     if (data.status !== 'complete') throw new FocusHistoryError(
       data.status === 'conflict' || data.status === 'invalid' ? data.status : data.status === 'unauthorized' ? 'unauthorized' : 'unavailable',
+      { category: data.status === 'unavailable' ? 'unavailable' : 'invalid_response' },
     );
     return data;
   }
@@ -23,7 +26,7 @@ export function createFocusHistoryRepository(client: Pick<SupabaseClient, 'rpc'>
         || result.data.acceptedEventIds.length !== request.events.length
         || new Set(result.data.acceptedEventIds).size !== request.events.length
         || result.data.acceptedEventIds.some(id => !request.events.some(event => event.id === id))) {
-        throw new FocusHistoryError('unavailable');
+        throw new FocusHistoryError('unavailable', { category: 'invalid_response' });
       }
       return result.data;
     },
@@ -31,7 +34,7 @@ export function createFocusHistoryRepository(client: Pick<SupabaseClient, 'rpc'>
       const body = await call('focus_history_read', { p_after: after, p_limit: limit + 1 });
       const result = storedHistoryItemSchema.array().max(limit + 1).safeParse(body.items);
       if (!result.success || result.data.some((item, index) => item.position <= (index === 0 ? after : result.data[index - 1].position))) {
-        throw new FocusHistoryError('unavailable');
+        throw new FocusHistoryError('unavailable', { category: 'invalid_response' });
       }
       return result.data;
     },

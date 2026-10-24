@@ -8,5 +8,5 @@ export async function GET(request: Request) {
     const auth = await authenticateRequest(request, policy);
     if (!auth.ok) return Response.json({ error: auth.status === 401 ? 'unauthorized' : 'unavailable' }, { status: auth.status, headers: historyHeaders });
     return await readAppLimitHistory(request, auth.client);
-  } catch (error) { return historyFailure(error); }
+  } catch (error) { return historyFailure(error, historyHeaders, 'app-limit-history.read'); }
 }

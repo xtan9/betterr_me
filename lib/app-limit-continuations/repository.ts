@@ -1,17 +1,20 @@
+import { rpcFailureDiagnostic, type HistoryFailureDiagnostic } from '@/lib/focus-history/diagnostics';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { continuationContextSchema, continuationReadSchema, contextQuerySchema, receiptQuerySchema, type ContinuationConfirm } from './contract';
 export const continuationErrors = { invalid: 400, unauthorized: 401, not_found: 404, operation_conflict: 409, source_changed: 409, source_incomplete: 409,
   destination_changed: 409, destination_incomplete: 409, destination_not_pristine: 409, source_missing: 422, source_ended: 422, settings_loosened: 422, unavailable: 503 } as const;
-export class ContinuationError extends Error { constructor(readonly reason: keyof typeof continuationErrors) { super(reason); } }
+export class ContinuationError extends Error { constructor(readonly reason: keyof typeof continuationErrors, readonly diagnostic?: HistoryFailureDiagnostic) { super(reason); } }
 export function createContinuationRepository(client: Pick<SupabaseClient, 'rpc'>) {
   async function call<T>(name: string, args: Record<string, unknown>, schema: z.ZodType<T>): Promise<T> {
     const { data, error } = await client.rpc(name, args);
-    if (error || !data) throw new ContinuationError('unavailable');
+    if (error) throw new ContinuationError('unavailable', rpcFailureDiagnostic(error));
+    if (!data) throw new ContinuationError('unavailable', { category: 'invalid_response' });
     const { status, ...body } = data;
-    if (status !== 'complete') throw new ContinuationError(Object.hasOwn(continuationErrors, status) ? status as keyof typeof continuationErrors : 'unavailable');
+    if (status !== 'complete') throw new ContinuationError(Object.hasOwn(continuationErrors, status) ? status as keyof typeof continuationErrors : 'unavailable',
+      { category: status === 'unavailable' ? 'unavailable' : 'invalid_response' });
     const parsed = schema.safeParse(body);
-    if (!parsed.success) throw new ContinuationError('unavailable');
+    if (!parsed.success) throw new ContinuationError('unavailable', { category: 'invalid_response' });
     return parsed.data;
   }
   return {

@@ -1,3 +1,4 @@
+import { logHistoryFailure, type HistoryFailureScope } from '@/lib/focus-history/diagnostics';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { historyHeaders, readHistoryBody } from '@/lib/focus-history/http';
@@ -5,8 +6,9 @@ import { FocusHistoryError } from '@/lib/focus-history/repository';
 import { continuationConfirmSchema, contextQuerySchema, receiptQuerySchema } from './contract';
 import { ContinuationError, continuationErrors, createContinuationRepository } from './repository';
 export const continuationHeaders = { ...historyHeaders, 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' };
-export function continuationFailure(error: unknown, headers = historyHeaders) {
+export function continuationFailure(error: unknown, headers = historyHeaders, scope: HistoryFailureScope = 'app-limit-continuations.read') {
   const reason = error instanceof ContinuationError ? error.reason : error instanceof FocusHistoryError && ['invalid', 'unauthorized'].includes(error.reason) ? error.reason as 'invalid' | 'unauthorized' : 'unavailable';
+  if (reason === 'unavailable') logHistoryFailure(scope, error instanceof ContinuationError ? error.diagnostic : undefined);
   return Response.json({ error: reason }, { status: continuationErrors[reason], headers });
 }
 function query<T>(request: Request, schema: z.ZodType<T>): T {

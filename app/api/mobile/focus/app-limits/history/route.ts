@@ -10,12 +10,12 @@ export async function GET(request: Request) {
     const auth = await authenticateNativeRequest(request);
     if (!auth) throw new FocusHistoryError('unauthorized');
     return await readAppLimitHistory(request, auth.client, headers);
-  } catch (error) { return historyFailure(error, headers); }
+  } catch (error) { return historyFailure(error, headers, 'app-limit-history.read'); }
 }
 export async function POST(request: Request) {
   try {
     const auth = await authenticateNativeRequest(request);
     if (!auth) throw new FocusHistoryError('unauthorized');
     return await uploadAppLimitHistory(request, auth.client, headers);
-  } catch (error) { return historyFailure(error, headers); }
+  } catch (error) { return historyFailure(error, headers, 'app-limit-history.upload'); }
 }

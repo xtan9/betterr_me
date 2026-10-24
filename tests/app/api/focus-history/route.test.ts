@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { beforeEach, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ native: vi.fn(), cookie: vi.fn(), rpc: vi.fn() }));
+const mocks = vi.hoisted(() => ({ native: vi.fn(), cookie: vi.fn(), rpc: vi.fn(), logError: vi.fn() }));
+vi.mock('@/lib/logger', () => ({ log: { error: mocks.logError } }));
 vi.mock('@/lib/auth/native-request', () => ({ authenticateNativeRequest: mocks.native }));
 vi.mock('@/lib/auth/authenticated-request', () => ({ authenticateRequest: mocks.cookie }));
 import { GET, POST } from '@/app/api/mobile/focus/history/route';
@@ -95,4 +96,39 @@ it.each([
 ])('retains honest failure semantics when persistence cannot acknowledge the upload', async (result, status) => {
   mocks.rpc.mockResolvedValue(result);
   expect((await POST(request(upload))).status).toBe(status);
+});
+
+it('reports a failed history read without logging database details or user history', async () => {
+  mocks.rpc.mockResolvedValue({ data: null, error: { code: 'PGRST202', message: 'private SQL and session title', details: 'Bearer private-token', hint: owner } });
+  const response = await GET(new Request('https://betterr.me/api/mobile/focus/history'));
+  expect(response.status).toBe(503);
+  expect(await response.json()).toEqual({ error: 'unavailable' });
+  expect(mocks.rpc).toHaveBeenCalledWith('focus_history_read', { p_after: 0, p_limit: 51 });
+  expect(mocks.logError.mock.calls).toEqual([['[focus-history.read] request failed', undefined, { category: 'rpc_error', rpcCode: 'PGRST202' }]]);
+});
+
+const stored = { position: 1, source: upload.source, event, receivedAt: 1_790_000_070_000 };
+it.each([
+  null,
+  { status: 'unexpected-private-status' },
+  { status: 'complete', items: [{ ...stored, event: { ...event, session: { ...event.session, selectionToken: 'private-token' } } }] },
+  { status: 'complete', items: [stored, stored] },
+  { status: 'complete', items: [{ ...stored, position: 0 }] },
+])('fails closed when a history read returns malformed or unordered records', async data => {
+  mocks.rpc.mockResolvedValue({ data, error: null });
+  const response = await webGET(new Request('https://betterr.me/api/focus/history'));
+  expect(response.status).toBe(503); expect(await response.json()).toEqual({ error: 'unavailable' });
+  expect(mocks.logError.mock.calls).toEqual([['[focus-history.read] request failed', undefined, { category: 'invalid_response' }]]);
+});
+it('does not log arbitrary RPC codes or unexpected exception contents', async () => {
+  mocks.rpc.mockResolvedValueOnce({ data: null, error: { code: 'private-token', message: 'private-history' } });
+  const response = await POST(request(upload));
+  expect(response.status).toBe(503); expect(await response.json()).toEqual({ error: 'unavailable' });
+  mocks.cookie.mockRejectedValueOnce(new Error('Bearer private-token and private-history'));
+  const failedRead = await webGET(new Request('https://betterr.me/api/focus/history'));
+  expect(failedRead.status).toBe(503); expect(await failedRead.json()).toEqual({ error: 'unavailable' });
+  expect(mocks.logError.mock.calls).toEqual([
+    ['[focus-history.upload] request failed', undefined, { category: 'rpc_error' }],
+    ['[focus-history.read] request failed', undefined, { category: 'unexpected' }],
+  ]);
 });

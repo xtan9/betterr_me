@@ -9,12 +9,12 @@ export async function GET(request: Request) {
     const auth = await authenticateNativeRequest(request);
     if (!auth) throw new FocusHistoryError('unauthorized');
     return await readFocusHistory(request, auth.client, headers);
-  } catch (error) { return historyFailure(error, headers); }
+  } catch (error) { return historyFailure(error, headers, 'focus-history.read'); }
 }
 export async function POST(request: Request) {
   try {
     const auth = await authenticateNativeRequest(request);
     if (!auth) throw new FocusHistoryError('unauthorized');
     return await uploadFocusHistory(request, auth.client, headers);
-  } catch (error) { return historyFailure(error, headers); }
+  } catch (error) { return historyFailure(error, headers, 'focus-history.upload'); }
 }
