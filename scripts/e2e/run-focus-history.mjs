@@ -148,7 +148,7 @@ try {
       headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}),
         ...(cookie ? { Cookie: cookie } : {}) }, body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(30_000), redirect: 'manual' });
-    check(response.status === status, `${body ? 'POST' : 'GET'} ${path.split('?')[0]} expected ${status}, received ${response.status}`);
+    check((Array.isArray(status) ? status : [status]).includes(response.status), `${body ? 'POST' : 'GET'} ${path.split('?')[0]} expected ${status}, received ${response.status}`);
     check(response.headers.get('cache-control')?.includes('no-store'), 'History response must not be cached');
     return response.json();
   }

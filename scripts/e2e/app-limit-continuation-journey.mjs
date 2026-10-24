@@ -59,5 +59,31 @@ export async function continuationJourney({ request, token, otherToken, cleanTok
   const unchanged = await request(path, token, command);
   check(JSON.stringify(unchanged.receipt) === JSON.stringify(confirmed.receipt), 'Source reset rewrote confirmed independent origin');
   check(row.event.after.day === '2026-11-01' && row.event.after.current === 2, 'Continuation invented credit for the gap');
-  console.log('PASS continuation current-version review, concurrent idempotent confirmation, lost-response recovery, validated apply, clean-client/Web lineage, owner isolation and post-gap reset rejection');
+  // Confirmation and a source reset contend on the same owner lock. Either
+  // transaction may win; there must never be a receipt based on a reset prefix.
+  const racingSource = { ...source, id: randomUUID() };
+  const racingBaseline = { ...baseline, id: randomUUID(), ruleId: randomUUID() };
+  const racingReset = { ...reset, id: randomUUID(), ruleId: racingBaseline.ruleId, sequence: 2 };
+  await request(history, token, { schemaVersion: 1, source: racingSource, events: [racingBaseline] });
+  const racingCommand = { ...command, operationId: randomUUID(),
+    source: { sourceId: racingSource.id, ruleId: racingBaseline.ruleId, expectedCheckpoint: 1, expectedEvent: { eventId: racingBaseline.id, sequence: 1 } },
+    destination: { ...command.destination, source: { ...target, id: randomUUID() }, ruleId: randomUUID(), applyEventId: randomUUID() } };
+  const [raced, resetAck] = await Promise.all([
+    request(path, token, racingCommand, [200, 422]),
+    request(history, token, { schemaVersion: 1, source: racingSource, events: [racingReset] }),
+  ]);
+  check(resetAck.acknowledgedThrough === 2, 'Concurrent reset did not commit');
+  if (raced.receipt) {
+    check(raced.receipt.source.checkpoint === 1 && raced.receipt.source.event.eventId === racingBaseline.id && raced.receipt.restored.current === 2,
+      'Concurrent confirmation used inconsistent source versions');
+    const replayAfterReset = await request(path, token, racingCommand);
+    check(JSON.stringify(replayAfterReset.receipt) === JSON.stringify(raced.receipt), 'Later reset rewrote the winning confirmation');
+  } else {
+    check(raced.error === 'source_ended', 'Concurrent reset produced an unexpected outcome');
+    await request(`${path}?operationId=${racingCommand.operationId}`, token, undefined, 404);
+  }
+  const staleAfterReset = { ...racingCommand, operationId: randomUUID(), destination: { ...racingCommand.destination, applyEventId: randomUUID() } };
+  check((await request(path, token, staleAfterReset, 422)).error === 'source_ended', 'Stale confirmation succeeded after the reset won');
+  await request(`${path}?operationId=${staleAfterReset.operationId}`, token, undefined, 404);
+  console.log('PASS continuation current-version review, concurrent idempotent confirmation/reset serialization, lost-response recovery, validated apply, clean-client/Web lineage, owner isolation and post-gap reset rejection');
 }
