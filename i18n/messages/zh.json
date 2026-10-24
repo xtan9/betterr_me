@@ -1725,8 +1725,10 @@
     "limits": "应用限制",
     "emptyLimits": "尚未收到应用限制记录。",
     "readAt": "云端历史检查时间：{date}",
-    "sourceIdentity": "{platform} · 设备记录标识 {id}",
-    "unnamedLimit": "未命名限制 · {id}",
+    "sourceIdentity": "{platform} · 历史 {number}",
+    "sourceName": "{label} · 历史 {number}",
+    "namedLimit": "{label} · 限制 {number}",
+    "unnamedLimit": "未命名限制 {number}",
     "latestLoaded": "最新已载入记录：{current} 天 · 最佳：{best} 天",
     "latestConfirmed": "最新已确认记录：{current} 天 · 最佳：{best} 天",
     "status": "记录状态：{status}",
@@ -1775,7 +1777,9 @@
     "continuedDays": "续接了 {days} 天已记录天数。未知间隔未计入。",
     "sourceObservation": "来源最后记录时间：{date}",
     "confirmedAt": "续接确认时间：{date}",
-    "originIdentity": "来源设备记录 {device} · 规则 {rule}",
+    "sourcePlatform": "{label} · {platform}",
+    "unnamedSourceLimit": "未命名限制",
+    "sourceNotLoaded": "此视图尚未加载来源的历史记录。",
     "independentContinuation": "此设备独立继续计数。来源的后续变化不会改写本次确认。"
   }
 }

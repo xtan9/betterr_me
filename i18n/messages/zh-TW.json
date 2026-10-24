@@ -1725,8 +1725,10 @@
     "limits": "應用程式限制",
     "emptyLimits": "尚未收到應用程式限制記錄。",
     "readAt": "雲端歷史檢查時間：{date}",
-    "sourceIdentity": "{platform} · 裝置記錄識別碼 {id}",
-    "unnamedLimit": "未命名限制 · {id}",
+    "sourceIdentity": "{platform} · 歷史 {number}",
+    "sourceName": "{label} · 歷史 {number}",
+    "namedLimit": "{label} · 限制 {number}",
+    "unnamedLimit": "未命名限制 {number}",
     "latestLoaded": "最新已載入記錄：{current} 天 · 最佳：{best} 天",
     "latestConfirmed": "最新已確認記錄：{current} 天 · 最佳：{best} 天",
     "status": "記錄狀態：{status}",
@@ -1775,7 +1777,9 @@
     "continuedDays": "續接了 {days} 天已記錄天數。未知間隔未計入。",
     "sourceObservation": "來源最後記錄時間：{date}",
     "confirmedAt": "續接確認時間：{date}",
-    "originIdentity": "來源裝置記錄 {device} · 規則 {rule}",
+    "sourcePlatform": "{label} · {platform}",
+    "unnamedSourceLimit": "未命名限制",
+    "sourceNotLoaded": "此檢視尚未載入來源的歷史記錄。",
     "independentContinuation": "此裝置獨立繼續計數。來源的後續變化不會改寫本次確認。"
   }
 }

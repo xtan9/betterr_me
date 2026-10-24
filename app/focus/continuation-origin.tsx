@@ -5,11 +5,11 @@ import { useTranslations } from 'next-intl';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { continuationReadSchema } from '@/lib/app-limit-continuations/contract';
-import { useHistoryDate } from './history-format';
+import { useHistoryDate, useHistoryNames } from './history-format';
 import type { Limit } from './recorded-history-lists';
 
-export function ContinuationOrigin({ item, onUnauthorized }: { item: Limit; onUnauthorized: () => void }) {
-  const t = useTranslations('focus'); const date = useHistoryDate();
+export function ContinuationOrigin({ item, originNumbers, onUnauthorized }: { item: Limit; originNumbers: (sourceId: string, ruleId: string) => { history: number; rule: number } | undefined; onUnauthorized: () => void }) {
+  const t = useTranslations('focus'); const date = useHistoryDate(); const names = useHistoryNames();
   const [state, setState] = useState<'idle' | 'loading' | 'missing' | 'error' | z.infer<typeof continuationReadSchema>>('idle');
   const request = useRef<{ generation: number; controller?: AbortController }>({ generation: 0 });
   useEffect(() => () => { ++request.current.generation; request.current.controller?.abort(); }, []);
@@ -34,14 +34,20 @@ export function ContinuationOrigin({ item, onUnauthorized }: { item: Limit; onUn
       setState(value);
     } catch { if (generation === request.current.generation) setState('error'); }
   }
-  if (typeof state === 'object') return <aside className="rounded-lg bg-muted p-3 space-y-2 text-sm">
-    <p className="font-medium">{t('continuedFrom', { device: state.receipt.source.source.label, rule: state.receipt.source.snapshot.label ?? t('unnamedLimit', { id: state.receipt.source.ruleId.slice(-8) }) })}</p>
-    <p>{t('continuedDays', { days: state.receipt.restored.current })}</p>
-    <p>{t('sourceObservation', { date: date(state.receipt.source.observedAt) })}</p>
-    <p>{t('confirmedAt', { date: date(state.receipt.confirmedAt) })}</p>
-    <p className="break-all text-muted-foreground">{t('originIdentity', { device: state.receipt.source.source.id, rule: state.receipt.source.ruleId })}</p>
-    <p className="text-muted-foreground">{t('independentContinuation')}</p>
-  </aside>;
+  if (typeof state === 'object') {
+    const origin = state.receipt.source;
+    const numbers = originNumbers(origin.source.id, origin.ruleId);
+    const device = numbers ? names.source(origin.source.label, numbers.history) : t('sourcePlatform', { label: origin.source.label, platform: names.platform(origin.source.platform) });
+    const rule = numbers ? names.rule(origin.snapshot.label, numbers.rule) : origin.snapshot.label ?? t('unnamedSourceLimit');
+    return <aside className="rounded-lg bg-muted p-3 space-y-2 text-sm">
+      <p className="font-medium">{t('continuedFrom', { device, rule })}</p>
+      <p>{t('continuedDays', { days: state.receipt.restored.current })}</p>
+      <p>{t('sourceObservation', { date: date(state.receipt.source.observedAt) })}</p>
+      <p>{t('confirmedAt', { date: date(state.receipt.confirmedAt) })}</p>
+      {!numbers && <p className="text-muted-foreground">{t('sourceNotLoaded')}</p>}
+      <p className="text-muted-foreground">{t('independentContinuation')}</p>
+    </aside>;
+  }
   if (state === 'missing') return <p className="text-sm text-muted-foreground">{t('noContinuation')}</p>;
   return <div className="space-y-2">{state === 'error' && <p role="alert" className="text-sm">{t('lineageError')}</p>}
     <Button variant="outline" size="sm" disabled={state === 'loading'} onClick={() => void read()}>{t(state === 'error' ? 'retryLineage' : state === 'loading' ? 'loading' : 'viewOrigin')}</Button>

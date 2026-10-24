@@ -1725,8 +1725,10 @@
     "limits": "App limits",
     "emptyLimits": "No app-limit records received yet.",
     "readAt": "Cloud history checked: {date}",
-    "sourceIdentity": "{platform} · Device journal {id}",
-    "unnamedLimit": "Unnamed limit · {id}",
+    "sourceIdentity": "{platform} · History {number}",
+    "sourceName": "{label} · History {number}",
+    "namedLimit": "{label} · Limit {number}",
+    "unnamedLimit": "Unnamed limit {number}",
     "latestLoaded": "Latest loaded observation: {current} days · Best: {best} days",
     "latestConfirmed": "Latest confirmed observation: {current} days · Best: {best} days",
     "status": "Recorded status: {status}",
@@ -1775,7 +1777,9 @@
     "continuedDays": "{days} recorded days continued. Unobserved gaps were not credited.",
     "sourceObservation": "Source last observed: {date}",
     "confirmedAt": "Continuation confirmed: {date}",
-    "originIdentity": "Source journal {device} · Rule {rule}",
+    "sourcePlatform": "{label} · {platform}",
+    "unnamedSourceLimit": "Unnamed limit",
+    "sourceNotLoaded": "This source history is not loaded in this view.",
     "independentContinuation": "This device continues independently. Later source changes do not rewrite this confirmation."
   }
 }

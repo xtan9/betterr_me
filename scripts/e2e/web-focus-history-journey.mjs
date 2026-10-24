@@ -35,7 +35,7 @@ export async function webFocusHistoryJourney({ origin, api, anonKey, createUser,
   const baseline = { schemaVersion: 1, id: randomUUID(), sequence: 1, kind: 'app-limit-baseline', observedAt: 1792864500000, appVersion: '1.0', ruleId: randomUUID(), reason: 'baseline', before: null, after: snapshot };
   const limitsPath = '/api/mobile/focus/app-limits/history';
   await request(limitsPath, native.token, { schemaVersion: 1, source: phone, events: [baseline] });
-  const replacement = { id: randomUUID(), label: 'Replacement iPhone', platform: 'ios' };
+  const replacement = { id: randomUUID(), label: 'UAT iPhone', platform: 'ios' };
   const command = { schemaVersion: 1, operationId: randomUUID(), source: { sourceId: phone.id, ruleId: baseline.ruleId, expectedCheckpoint: 1, expectedEvent: { eventId: baseline.id, sequence: 1 } },
     destination: { source: replacement, ruleId: randomUUID(), expectedCheckpoint: 0, expectedRuleEvent: null, applyEventId: randomUUID(), label: 'Continued Social', dailyUnlocks: 2, minutes: 5 } };
   await request('/api/mobile/focus/app-limits/continuations', native.token, command);
@@ -45,7 +45,8 @@ export async function webFocusHistoryJourney({ origin, api, anonKey, createUser,
   const reset = { ...baseline, id: randomUUID(), sequence: 2, kind: 'app-limit-change', reason: 'extraUnlock', observedAt: 1792800000000, before: snapshot,
     after: { ...snapshot, current: 0, status: 'counting', overridesToday: 1 } };
   const unnamed = { ...baseline, id: randomUUID(), sequence: 3, ruleId: randomUUID(), after: { ...snapshot, label: null } };
-  await request(limitsPath, native.token, { schemaVersion: 1, source: phone, events: [reset, unnamed] });
+  const anotherUnnamed = { ...unnamed, id: randomUUID(), sequence: 4, ruleId: randomUUID() };
+  await request(limitsPath, native.token, { schemaVersion: 1, source: phone, events: [reset, unnamed, anotherUnnamed] });
   const task = (await cookieRequest('/api/tasks', 'POST', { title: 'Preserved planner task', status: 'todo', priority: 1 }, 201)).task;
   rows.tasks.push(task.id);
   const conversation = (await cookieRequest('/api/conversations', 'POST', {}, 201)).conversation;
@@ -73,6 +74,8 @@ export async function webFocusHistoryJourney({ origin, api, anonKey, createUser,
     await expect(page.getByText('Last paged work', { exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'UAT Mac', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Load more', exact: true })).toHaveCount(0);
+    check(!/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(await page.getByRole('tabpanel').evaluate(node => node.outerHTML)), 'Session UI exposes an internal ID');
+    await page.getByRole('heading', { name: 'Focus history', exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: resolve(artifacts, 'sessions.png') });
     await page.route('**/api/focus/history?*', route => route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"unavailable"}' }));
     await page.getByRole('button', { name: 'Refresh', exact: true }).click();
@@ -83,14 +86,16 @@ export async function webFocusHistoryJourney({ origin, api, anonKey, createUser,
     await page.getByRole('button', { name: 'Retry', exact: true }).click();
     await expect(historyError).toHaveCount(0);
     await page.getByRole('tab', { name: 'App limits', exact: true }).click();
-    const original = page.getByRole('region', { name: `UAT iPhone · ${phone.id}`, exact: true });
+    const original = page.getByRole('region', { name: 'UAT iPhone · History 1', exact: true });
     await expect(original.getByText('Latest confirmed observation: 0 days · Best: 4 days', { exact: true })).toBeVisible();
     await expect(original.getByText('Streak: 2 → 0 days', { exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: `Unnamed limit · ${unnamed.ruleId.slice(-8)}`, exact: true })).toBeVisible();
-    const continued = page.getByRole('region', { name: `Replacement iPhone · ${replacement.id}`, exact: true });
+    await expect(original.getByRole('heading', { name: 'Unnamed limit 2', exact: true })).toBeVisible();
+    await expect(original.getByRole('heading', { name: 'Unnamed limit 3', exact: true })).toBeVisible();
+    const continued = page.getByRole('region', { name: 'UAT iPhone · History 2', exact: true });
     await expect(continued.getByText('Latest confirmed observation: 2 days · Best: 4 days', { exact: true })).toBeVisible();
     await continued.getByRole('button', { name: 'View continuation source' }).click();
-    await expect(continued.getByText('Continued from UAT iPhone · Social', { exact: true })).toBeVisible();
+    await expect(continued.getByText('Continued from UAT iPhone · History 1 · Social · Limit 1', { exact: true })).toBeVisible();
+    check(!/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(await page.getByRole('tabpanel').evaluate(node => node.outerHTML)), 'App-limit UI or lineage exposes an internal ID');
     await page.screenshot({ path: resolve(artifacts, 'app-limits.png'), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByRole('heading', { name: 'Focus history', exact: true })).toBeVisible();
