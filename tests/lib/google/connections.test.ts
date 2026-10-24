@@ -39,7 +39,7 @@ describe('Google read-only connections', () => {
     await expect(service.finish('user-b', start.state, 'code')).rejects.toMatchObject({ reason: 'invalid' });
     expect(send).not.toHaveBeenCalled();
     const result = await service.finish(owner, start.state, 'code');
-    expect(result).toEqual({ service: 'gmail', status: 'connected', email: 'a@example.com', selectedCalendars: [] });
+    expect(result).toEqual({ service: 'gmail', status: 'connected', email: 'a@example.com', selectedCalendars: [], revision: expect.any(String) });
     expect((await db.get(owner, 'gmail'))?.credential).not.toContain('refresh-secret');
     await expect(service.finish(owner, start.state, 'code')).rejects.toMatchObject({ reason: 'invalid' });
     expect(send).toHaveBeenCalledTimes(2);
@@ -74,6 +74,25 @@ describe('Google read-only connections', () => {
     expect(queries).toHaveLength(1); expect(String(queries[0][0])).toContain('/chosen/events');
     expect(new URL(String(queries[0][0])).searchParams.get('singleEvents')).toBe('true');
     expect(queries[0][1]?.method).toBe('GET');
+  });
+  it('stamps an empty calendar range with the exact selected source and rejects selection changes during its read', async () => {
+    const db = store();
+    const send = vi.fn().mockResolvedValueOnce(json({ ...tokens, scope: 'openid email https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/calendar.calendarlist.readonly' })).mockResolvedValueOnce(json({ sub: 'google-a', email: 'a@example.com', email_verified: true }));
+    const service = new GoogleConnections(db, config, send), reads = new GoogleReads(service), start = await service.start(owner, 'calendar');
+    await service.finish(owner, start.state, 'code');
+    send.mockImplementation(async (url: string) => url.endsWith('/token') ? json({ access_token: 'refreshed' }) : url.includes('/calendarList') ? json({ items: [{ id: 'chosen', accessRole: 'owner' }] }) : json({ items: [] }));
+    const selected = await reads.selectCalendars(owner, ['chosen']);
+    const result = await reads.eventSnapshot(owner, '2026-09-25T00:00:00Z', '2026-09-26T00:00:00Z');
+    expect(result).toEqual({ events: [], source: { email: 'a@example.com', selectedCalendars: ['chosen'], revision: selected.revision }, start: '2026-09-25T00:00:00.000Z', end: '2026-09-26T00:00:00.000Z', fetchedAt: expect.any(String) });
+    expect(JSON.stringify(result)).not.toMatch(/secret|credential|google-a/);
+    send.mockImplementation(async (url: string) => {
+      if (url.endsWith('/token')) return json({ access_token: 'refreshed' });
+      if (url.includes('/calendarList')) return json({ items: [{ id: 'chosen', accessRole: 'owner' }] });
+      const record = (await db.get(owner, 'calendar'))!;
+      await db.save({ ...record, revision: 'changed', selectedCalendars: ['other'] }, record.revision);
+      return json({ items: [] });
+    });
+    await expect(reads.eventSnapshot(owner, '2026-09-25T00:00:00Z', '2026-09-26T00:00:00Z')).rejects.toMatchObject({ reason: 'conflict' });
   });
   it('reads relevant plain-text mail without fetching attachments and marks incomplete search results', async () => {
     const db = store(), send = vi.fn().mockResolvedValueOnce(json(tokens)).mockResolvedValueOnce(json({ sub: 'google-a', email: 'a@example.com', email_verified: true }));
