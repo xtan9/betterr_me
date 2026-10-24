@@ -1,23 +1,26 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:net';
+import { closeSync, mkdirSync, openSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { continuationJourney } from './app-limit-continuation-journey.mjs';
+import { webFocusHistoryJourney } from './web-focus-history-journey.mjs';
 
 // This runner never accepts a remote target or caller-supplied credentials.
 // SQL fixture policy remains in the separate constrained fixture runner.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const cli = process.env.SUPABASE_CLI ?? 'supabase';
 const psql = process.env.PSQL_BIN ?? spawnSync('which', ['psql'], { encoding: 'utf8' }).stdout?.trim();
-const continuations = process.argv.includes('--continuations');
+const withWeb = process.argv.includes('--web');
+const continuations = withWeb || process.argv.includes('--continuations');
 const appLimits = continuations || process.argv.includes('--app-limits');
 function check(condition, label) {
   if (!condition) throw new Error(label);
 }
-check(process.argv.slice(2).every(value => ['--app-limits', '--continuations'].includes(value)), 'Unknown integration runner argument');
+check(process.argv.slice(2).every(value => ['--app-limits', '--continuations', '--web'].includes(value)), 'Unknown integration runner argument');
 const status = spawnSync(cli, ['status', '--output', 'json'], { cwd: root, encoding: 'utf8' });
 check(status.status === 0, 'Local Supabase must already be running');
 const local = JSON.parse(status.stdout);
@@ -29,11 +32,26 @@ check(database.hostname === '127.0.0.1' && database.port === '54322' && database
 check(typeof local.ANON_KEY === 'string' && typeof local.SERVICE_ROLE_KEY === 'string', 'Local CLI credentials unavailable');
 check(psql?.startsWith('/') && spawnSync(psql, ['--version']).status === 0,
   'An absolute psql path is required for read-only local cleanup verification');
+if (withWeb) {
+  // Legacy Web tables relied on Supabase's ambient grants, unlike the explicit
+  // history migrations. Check the local bootstrap; never silently broaden ACLs.
+  const preflight = spawnSync(psql, [local.DB_URL, '-X', '-qAt', '-v', 'ON_ERROR_STOP=1'], {
+    input: `select count(*)=4 and bool_and(c.relrowsecurity
+      and has_table_privilege('authenticated',c.oid,'SELECT') and has_table_privilege('authenticated',c.oid,'INSERT')
+      and has_table_privilege('authenticated',c.oid,'UPDATE') and has_table_privilege('authenticated',c.oid,'DELETE'))
+      from pg_class c join pg_namespace n on n.oid=c.relnamespace
+      where n.nspname='public' and c.relname in ('tasks','profiles','conversations','chat_messages');`,
+    encoding: 'utf8', env: { PATH: '/usr/bin:/bin', LANG: 'C' },
+  });
+  check(preflight.status === 0 && preflight.stdout.trim() === 't',
+    'Local Web compatibility bootstrap is missing: the four legacy Web tables need their existing authenticated DML grants with RLS enabled. See docs/web-focus-history-verification.md; this runner never grants hosted or local permissions.');
+}
 
 const authOptions = { persistSession: false, autoRefreshToken: false };
 const admin = createClient(api.origin, local.SERVICE_ROLE_KEY, { auth: authOptions });
 const users = [];
 const sessions = new Map();
+const webRows = { tasks: [], conversations: [] };
 let child;
 let stopped = false;
 
@@ -85,6 +103,7 @@ async function cleanUp() {
     // Use the already-guarded disposable database only for cleanup inspection;
     // setup/deletion stays in Auth admin, and all history writes use user HTTP.
     check(users.every(user => /^[0-9a-f-]{36}$/i.test(user.id)), 'Invalid test identity');
+    check(webRows.conversations.every(id => /^[0-9a-f-]{36}$/i.test(id)), 'Invalid test conversation identity');
     const ids = users.map(user => `'${user.id}'::uuid`).join(',');
     const query = `select
       (select count(*) from auth.users where id in (${ids})) +
@@ -92,6 +111,9 @@ async function cleanUp() {
       (select count(*) from public.profiles where id in (${ids})) +
       (select count(*) from public.focus_history_sources where user_id in (${ids})) +
       (select count(*) from public.focus_history_events where user_id in (${ids}))
+      ${withWeb ? `+ (select count(*) from public.tasks where user_id in (${ids}))
+        + (select count(*) from public.conversations where user_id in (${ids}))
+        ${webRows.conversations.length ? `+ (select count(*) from public.chat_messages where conversation_id in (${webRows.conversations.map(id => `'${id}'::uuid`).join(',')}))` : ''}` : ''}
       ${continuations ? `+ (select count(*) from public.app_limit_continuations where user_id in (${ids}))` : ''}
       ${appLimits ? `+ (select count(*) from public.app_limit_history_sources where user_id in (${ids}))
         + (select count(*) from public.app_limit_history_events where user_id in (${ids}))` : ''};`;
@@ -109,12 +131,15 @@ try {
   const origin = `http://127.0.0.1:${port}`;
   // Only this child receives the local public configuration. No service key,
   // hosted variables or user credentials are given to Next or written to disk.
+  mkdirSync(resolve(root, '.artifacts'), { recursive: true });
+  const serverLog = withWeb ? openSync(resolve(root, '.artifacts/focus-history-server.log'), 'w') : null;
   child = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'dev', '--webpack', '--hostname', '127.0.0.1', '--port', String(port)], {
     cwd: root,
     env: { PATH: `${dirname(process.execPath)}:/usr/bin:/bin`, HOME: process.env.HOME,
       NEXT_TELEMETRY_DISABLED: '1', NEXT_PUBLIC_SUPABASE_URL: api.origin, NEXT_PUBLIC_SUPABASE_ANON_KEY: local.ANON_KEY },
-    stdio: ['ignore', 'ignore', 'ignore'],
+    stdio: ['ignore', serverLog ?? 'ignore', serverLog ?? 'ignore'],
   });
+  if (serverLog !== null) closeSync(serverLog);
   let ready = false;
   for (let attempt = 0; attempt < 90; attempt++) {
     check(child.exitCode === null, 'Isolated Next server exited');
@@ -244,6 +269,7 @@ try {
     console.log('PASS native app-limit baseline/replay, gaps, paged reset provenance, web cookies, isolation and session-v1 compatibility');
   }
   if (continuations) await continuationJourney({ request, token: a.token, otherToken: b.token, cleanToken: cleanClient.token, cookie, check });
+  if (withWeb) await webFocusHistoryJourney({ origin, api: api.origin, anonKey: local.ANON_KEY, createUser, signIn, request, check, root, rows: webRows });
 } finally {
   await cleanUp();
   console.log('PASS ephemeral Auth users, sessions and history rows removed; owned Next server stopped');
