@@ -1,6 +1,7 @@
 {
   "common": {
     "nav": {
+      "focus": "专注",
       "getStarted": "开始使用",
       "signIn": "登录",
       "signOut": "退出登录",
@@ -1701,5 +1702,80 @@
       "gifCount": "{count} 个运动有 GIF",
       "syncingLong": "正在同步运动并下载 GIF，可能需要几分钟..."
     }
+  },
+  "focus": {
+    "initialReadError": "暂时无法获取历史，请重试。",
+    "title": "专注历史",
+    "subtitle": "查看各设备记录的已完成专注和应用限制。",
+    "cloudLimits": "此页面无法看到尚未上传的变化。设备记录可能已过时；授权、解锁和运行中的计时器仍由各设备管理。",
+    "unlinkedSession": "专注时段",
+    "sessionSummary": "专注 {minutes} 分钟 · 完成 {rounds} 轮",
+    "completedAt": "完成时间：{date}",
+    "observedAt": "设备记录时间：{date}",
+    "receivedAt": "云端接收时间：{date}",
+    "refresh": "刷新",
+    "loading": "正在载入历史…",
+    "readError": "无法刷新历史。仍显示先前接收的记录。",
+    "retry": "重试",
+    "emptySessions": "尚未收到已完成的专注记录。",
+    "partial": "云端还有更多记录。此处展示最新已载入的记录。",
+    "loadMore": "载入更多",
+    "signIn": "重新登录",
+    "sessions": "已完成专注",
+    "limits": "应用限制",
+    "emptyLimits": "尚未收到应用限制记录。",
+    "readAt": "云端历史检查时间：{date}",
+    "sourceIdentity": "{platform} · 设备记录标识 {id}",
+    "unnamedLimit": "未命名限制 · {id}",
+    "latestLoaded": "最新已载入记录：{current} 天 · 最佳：{best} 天",
+    "latestConfirmed": "最新已确认记录：{current} 天 · 最佳：{best} 天",
+    "status": "记录状态：{status}",
+    "gap": "缺少更早的设备记录。已收到此条记录，但历史尚不完整。",
+    "baseline": "导入时的记录。更早的变化和清零原因未知。",
+    "streakChange": "连续天数：{before} → {after} 天",
+    "changeDetails": "变化前后",
+    "statuses": {
+      "counting": "计数中",
+      "paused": "已暂停",
+      "removed": "已移除"
+    },
+    "fields": {
+      "label": "名称",
+      "day": "设备日期",
+      "current": "连续天数",
+      "best": "最佳天数",
+      "dailyUnlocks": "每日解锁次数",
+      "minutes": "每次解锁分钟",
+      "usedToday": "已用解锁次数",
+      "overridesToday": "额外解锁次数",
+      "status": "状态"
+    },
+    "reasons": {
+      "baseline": "导入记录",
+      "limitCreated": "创建限制",
+      "limitChanged": "修改限制",
+      "labelChanged": "修改名称",
+      "dayAdvanced": "进入新一天",
+      "authorizationUnavailable": "授权不可用",
+      "authorizationDenied": "授权被拒绝",
+      "authorizationCheckFailed": "授权检查失败",
+      "accountChanged": "账号切换",
+      "signedOut": "已退出登录",
+      "limitRemoved": "移除限制",
+      "limitRelaxed": "增加解锁额度",
+      "extraUnlock": "额外解锁",
+      "unlocked": "解锁",
+      "resumed": "恢复计数"
+    },
+    "viewOrigin": "查看续接来源",
+    "retryLineage": "重试续接详情",
+    "lineageError": "暂时无法获取续接详情。",
+    "noContinuation": "此变化没有已记录的续接来源。",
+    "continuedFrom": "续接自 {device} · {rule}",
+    "continuedDays": "续接了 {days} 天已记录天数。未知间隔未计入。",
+    "sourceObservation": "来源最后记录时间：{date}",
+    "confirmedAt": "续接确认时间：{date}",
+    "originIdentity": "来源设备记录 {device} · 规则 {rule}",
+    "independentContinuation": "此设备独立继续计数。来源的后续变化不会改写本次确认。"
   }
 }
