@@ -88,33 +88,41 @@ it('separates device/rule streaks, orders by source sequence despite clock skew,
   fetcher.mockImplementation(async input => String(input).includes('app-limits') ? page([baseline, reset, unnamed, other]) : page([]));
   const user = userEvent.setup(); mount();
   await user.click(screen.getByRole('tab', { name: 'App limits' }));
-  const social = within(await screen.findByRole('region', { name: `My iPhone · ${id(1)}` })).getByRole('region', { name: `Social · ${id(10)}` });
+  const social = within(await screen.findByRole('region', { name: 'My iPhone · History 1' })).getByRole('region', { name: 'Social · Limit 1' });
   expect(within(social).getByText('Latest confirmed observation: 0 days · Best: 4 days')).toBeVisible();
   expect(within(social).getByText('Extra unlock')).toBeVisible();
   expect(within(social).getByText('Streak: 2 → 0 days')).toBeVisible();
-  expect(screen.getByRole('heading', { name: `Unnamed limit · ${id(11).slice(-8)}` })).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Unnamed limit 2' })).toBeVisible();
   expect(screen.getByText(/Earlier device records are missing/)).toBeVisible();
   expect(screen.queryByText(/6 days|8 days/)).not.toBeInTheDocument();
 });
 
 it('resolves a continued origin from the history row alone and retries unavailable lineage without hiding history', async () => {
   const applied = { ...limit(2), event: { ...limit(2).event, kind: 'app-limit-change', reason: 'limitCreated' } };
-  const origin = device(30, 'Previous iPhone');
+  const origin = device(30);
   const receipt = { schemaVersion: 1, operationId: id(40), confirmedAt: 1792864400000,
-    source: { source: origin, ruleId: id(31), checkpoint: 9, event: { eventId: id(32), sequence: 9 }, snapshot, observedAt: 1792000000000, receivedAt: 1792000010000 },
+    source: { source: origin, ruleId: id(31), checkpoint: 9, event: { eventId: id(32), sequence: 9 }, snapshot: { ...snapshot, label: null }, observedAt: 1792000000000, receivedAt: 1792000010000 },
     destination: { source: applied.source, ruleId: id(10), expectedCheckpoint: 1, expectedRuleEvent: null, applyEventId: id(2), label: 'Social', dailyUnlocks: 3, minutes: 5 }, restored: { current: 2, best: 4 } };
   let attempts = 0;
   fetcher.mockImplementation(async input => {
     if (String(input).includes('/continuations?')) return ++attempts === 1 ? new Response(null, { status: 503 }) : Response.json({ schemaVersion: 1, receipt, application: { state: 'recorded', eventId: id(2), sequence: 2, receivedAt: 1792864800000 } });
-    return String(input).includes('app-limits') ? page([applied]) : page([]);
+    const originRecords = [limit(8, 30, origin), limit(9, 31, origin)].map(record => ({ ...record, event: { ...record.event, after: { ...snapshot, label: null } } }));
+    return String(input).includes('app-limits') ? String(input).includes('after=') ? page(originRecords) : page([applied], 'more-limits') : page([]);
   });
-  const user = userEvent.setup(); mount();
+  const user = userEvent.setup(); const view = mount();
   await user.click(screen.getByRole('tab', { name: 'App limits' }));
   await user.click(await screen.findByRole('button', { name: 'View continuation source' }));
   expect(await screen.findByText('Continuation details are unavailable.')).toBeVisible();
   expect(screen.getByText('Limit created')).toBeVisible();
   await user.click(screen.getByRole('button', { name: 'Retry continuation details' }));
-  expect(await screen.findByText('Continued from Previous iPhone · Social')).toBeVisible();
+  expect(await screen.findByText('Continued from My iPhone · iOS · Unnamed limit')).toBeVisible();
+  expect(screen.getByText('This source history is not loaded in this view.')).toBeVisible();
+  expect(view.container.innerHTML).not.toMatch(/a0000000-0000-4000-8000-/);
+  await user.click(screen.getByRole('button', { name: 'Load more' }));
+  expect(await screen.findByText('Continued from My iPhone · History 2 · Unnamed limit 2')).toBeVisible();
+  expect(within(screen.getByRole('region', { name: 'My iPhone · History 2' })).getByRole('heading', { name: 'Unnamed limit 2' })).toBeVisible();
+  expect(screen.queryByText('This source history is not loaded in this view.')).not.toBeInTheDocument();
+  expect(view.container.innerHTML).not.toMatch(/a0000000-0000-4000-8000-/);
   expect(screen.getByText('2 recorded days continued. Unobserved gaps were not credited.')).toBeVisible();
   expect(screen.queryByRole('button', { name: /restore|apply|unlock/i })).not.toBeInTheDocument();
 });
@@ -142,4 +150,22 @@ it('treats a legacy event without lineage as ordinary history, not a failed rest
   await user.click(await screen.findByRole('button', { name: 'View continuation source' }));
   expect(await screen.findByText('No recorded continuation for this change.')).toBeVisible();
   expect(screen.getByText('Limit created')).toBeVisible();
+});
+
+it('distinguishes same-label device histories and unnamed limits without exposing IDs, keeping names stable as pages append', async () => {
+  const unnamed = (value: number, rule: number) => ({ ...limit(value, rule), event: { ...limit(value, rule).event, after: { ...snapshot, label: null } } });
+  fetcher.mockImplementation(async input => String(input).includes('app-limits') ? page([unnamed(1, 10), unnamed(2, 11)])
+    : String(input).includes('after=') ? page([session(4, device(5))]) : page([session(2), session(3, device(4))], 'next'));
+  const user = userEvent.setup(); const view = mount();
+  const first = await screen.findByRole('region', { name: 'My iPhone · History 1' });
+  expect(within(first).getByText('Completed work 2')).toBeVisible();
+  expect(within(screen.getByRole('region', { name: 'My iPhone · History 2' })).getByText('Completed work 3')).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Load more' }));
+  expect(within(await screen.findByRole('region', { name: 'My iPhone · History 3' })).getByText('Completed work 4')).toBeVisible();
+  expect(within(screen.getByRole('region', { name: 'My iPhone · History 1' })).getByText('Completed work 2')).toBeVisible();
+  expect(view.container.innerHTML).not.toMatch(/a0000000-0000-4000-8000-/);
+  await user.click(screen.getByRole('tab', { name: 'App limits' }));
+  expect(await screen.findByRole('heading', { name: 'Unnamed limit 1' })).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Unnamed limit 2' })).toBeVisible();
+  expect(view.container.innerHTML).not.toMatch(/a0000000-0000-4000-8000-/);
 });

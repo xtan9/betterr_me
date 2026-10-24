@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 import { z } from 'zod';
 import { storedHistoryItemSchema } from '@/lib/focus-history/contract';
 import { storedAppLimitItemSchema } from '@/lib/app-limit-history/contract';
-import { useHistoryDate } from './history-format';
+import { useHistoryDate, useHistoryNames } from './history-format';
 import { ContinuationOrigin } from './continuation-origin';
 
 export const sessionSchema = storedHistoryItemSchema.omit({ position: true });
@@ -19,20 +19,22 @@ function groups<T extends Recorded>(items: T[]) {
     const group = sources.get(key) ?? { source: item.source, items: [] as T[] };
     group.items.push(item); sources.set(key, group);
   }
-  return [...sources.values()].sort((a, b) => a.source.label.localeCompare(b.source.label) || a.source.id.localeCompare(b.source.id));
+  // Receipt pages append in order, so an earlier history keeps its readable number.
+  return [...sources.values()].map((group, index) => ({ ...group, ordinal: index + 1 }));
 }
-function DeviceHeading({ source }: { source: Recorded['source'] }) {
+function DeviceHeading({ source, ordinal }: { source: Recorded['source']; ordinal: number }) {
   const t = useTranslations('focus');
-  return <header><h2 className="text-section-heading">{source.label}</h2><p className="text-xs text-muted-foreground break-all">{t('sourceIdentity', { platform: source.platform, id: source.id })}</p></header>;
+  const names = useHistoryNames();
+  return <header><h2 className="text-section-heading">{source.label}</h2><p className="text-xs text-muted-foreground">{t('sourceIdentity', { platform: names.platform(source.platform), number: ordinal })}</p></header>;
 }
 function ObservationDates({ item }: { item: Recorded }) {
   const t = useTranslations('focus'); const date = useHistoryDate();
   return <div className="text-sm text-muted-foreground space-y-1"><p>{t('observedAt', { date: date(item.event.observedAt) })}</p><p>{t('receivedAt', { date: date(item.receivedAt) })}</p></div>;
 }
 export function SessionList({ items }: { items: Session[] }) {
-  const t = useTranslations('focus'); const date = useHistoryDate();
-  return groups(items).map(({ source, items: records }) => <section key={source.id} className="space-y-4" aria-label={`${source.label} · ${source.id}`}>
-    <DeviceHeading source={source} />
+  const t = useTranslations('focus'); const date = useHistoryDate(); const names = useHistoryNames();
+  return groups(items).map(({ source, ordinal, items: records }) => <section key={source.id} className="space-y-4" aria-label={names.source(source.label, ordinal)}>
+    <DeviceHeading source={source} ordinal={ordinal} />
     {records.sort((a, b) => b.event.sequence - a.event.sequence).map(item => <article key={item.event.id} className="rounded-xl border p-4 space-y-2">
       <h3 className="font-medium">{item.event.session.link?.title || t('unlinkedSession')}</h3>
       {item.event.session.link?.projectName && <p>{item.event.session.link.projectName}</p>}
@@ -44,19 +46,26 @@ export function SessionList({ items }: { items: Session[] }) {
   </section>);
 }
 export function LimitList({ items, partial, onUnauthorized }: { items: Limit[]; partial: boolean; onUnauthorized: () => void }) {
-  const t = useTranslations('focus');
-  return groups(items).map(({ source, items: records }) => {
+  const t = useTranslations('focus'); const names = useHistoryNames();
+  const histories = groups(items);
+  function originNumbers(sourceId: string, ruleId: string) {
+    const history = histories.find(group => group.source.id.toLowerCase() === sourceId.toLowerCase());
+    if (!history) return;
+    const ruleIndex = [...new Set(history.items.map(item => item.event.ruleId.toLowerCase()))].indexOf(ruleId.toLowerCase());
+    return ruleIndex < 0 ? undefined : { history: history.ordinal, rule: ruleIndex + 1 };
+  }
+  return histories.map(({ source, ordinal, items: records }) => {
     const rules = new Map<string, Limit[]>();
     for (const item of records) { const key = item.event.ruleId.toLowerCase(); rules.set(key, [...(rules.get(key) ?? []), item]); }
     const checkpoint = Math.max(...records.map(item => item.acknowledgedThrough));
-    return <section key={source.id} className="space-y-4" aria-label={`${source.label} · ${source.id}`}>
-      <DeviceHeading source={source} />
-      {[...rules.entries()].map(([ruleId, changes]) => {
+    return <section key={source.id} className="space-y-4" aria-label={names.source(source.label, ordinal)}>
+      <DeviceHeading source={source} ordinal={ordinal} />
+      {[...rules.entries()].map(([ruleId, changes], ruleIndex) => {
         changes.sort((a, b) => b.event.sequence - a.event.sequence);
         const latest = changes[0];
-        const label = latest.event.after.label ?? t('unnamedLimit', { id: ruleId.slice(-8) });
+        const label = names.rule(latest.event.after.label, ruleIndex + 1);
         const unconfirmed = latest.event.sequence > checkpoint;
-        return <section key={ruleId} className="rounded-xl border p-4 space-y-4" aria-label={`${label} · ${ruleId}`}>
+        return <section key={ruleId} className="rounded-xl border p-4 space-y-4" aria-label={label}>
           <header className="space-y-1"><h3 className="font-medium">{label}</h3>
             <p>{t(partial || unconfirmed ? 'latestLoaded' : 'latestConfirmed', { current: latest.event.after.current, best: latest.event.after.best })}</p>
             <p className="text-sm text-muted-foreground">{t('status', { status: t(`statuses.${latest.event.after.status}`) })}</p>
@@ -73,7 +82,7 @@ export function LimitList({ items, partial, onUnauthorized }: { items: Limit[]; 
                 {(['label', 'day', 'current', 'best', 'dailyUnlocks', 'minutes', 'usedToday', 'overridesToday', 'status'] as const).map(field => <div key={field} className="contents"><dt>{t(`fields.${field}`)}</dt><dd className="break-words">{field === 'status' ? `${item.event.before ? t(`statuses.${item.event.before.status}`) : '—'} → ${t(`statuses.${item.event.after.status}`)}` : `${item.event.before?.[field] ?? '—'} → ${item.event.after[field] ?? '—'}`}</dd></div>)}
               </dl>
             </details>
-            {['limitCreated', 'resumed'].includes(item.event.reason) && <ContinuationOrigin item={item} onUnauthorized={onUnauthorized} />}
+            {['limitCreated', 'resumed'].includes(item.event.reason) && <ContinuationOrigin item={item} originNumbers={originNumbers} onUnauthorized={onUnauthorized} />}
           </li>)}</ol>
         </section>;
       })}
