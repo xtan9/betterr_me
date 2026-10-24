@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { beforeEach, expect, it, vi } from 'vitest';
-const m = vi.hoisted(() => ({ auth: vi.fn(), config: vi.fn(), start: vi.fn(), finish: vi.fn(), disconnect: vi.fn(), list: vi.fn(), log: vi.fn() }));
+const m = vi.hoisted(() => ({ auth: vi.fn(), config: vi.fn(), start: vi.fn(), finish: vi.fn(), disconnect: vi.fn(), list: vi.fn(), read: vi.fn(), provider: vi.fn(), log: vi.fn() }));
 vi.mock('@/lib/auth/native-request', () => ({ authenticateNativeRequest: m.auth }));
-vi.mock('@/lib/google/runtime', () => ({ googleConfig: m.config, googleRuntime: () => ({ start: m.start, finish: m.finish, disconnect: m.disconnect, store: { list: m.list } }) }));
+vi.mock('@/lib/google/runtime', () => ({ googleConfig: m.config, googleRuntime: () => ({ start: m.start, finish: m.finish, disconnect: m.disconnect, store: { list: m.list }, read: m.read, provider: m.provider }) }));
 vi.mock('@/lib/logger', () => ({ log: { error: m.log } }));
 import { GET, POST } from '@/app/api/mobile/connections/route';
 import { GET as callback } from '@/app/api/mobile/connections/callback/route';
@@ -25,7 +25,7 @@ it('returns only public connection fields and never provider credentials', async
   m.list.mockResolvedValue([{ service: 'gmail', status: 'connected', email: 'owner@example.com', selectedCalendars: [], credential: 'secret', subject: 'subject', revision: 'revision' }]);
   const response = await GET(new Request('https://backend.test/api/mobile/connections'));
   expect(response.headers.get('cache-control')).toBe('no-store');
-  expect(await response.json()).toEqual({ configured: true, connections: [{ service: 'gmail', status: 'connected', email: 'owner@example.com', selectedCalendars: [] }] });
+  expect(await response.json()).toEqual({ configured: true, connections: [{ service: 'gmail', status: 'connected', email: 'owner@example.com', selectedCalendars: [], revision: 'revision' }] });
 });
 it('sanitizes failures in responses and logs', async () => {
   m.start.mockRejectedValue(new Error('secret-token-and-provider-body'));
@@ -41,4 +41,17 @@ it('callback only redirects to the fixed app and performs no token exchange', ()
   expect(url.searchParams.get('state')).toBe(state); expect(url.searchParams.get('code')).toBe('secret-code');
   expect(m.finish).not.toHaveBeenCalled(); expect(response.headers.get('referrer-policy')).toBe('no-referrer');
   expect(callback(new Request('https://backend.test/api/mobile/connections/callback?state=bad')).status).toBe(400);
+});
+
+it('returns the empty event range and its atomic source identity through the authenticated native route', async () => {
+  m.read.mockImplementation(async (owner, service, operation) => {
+    expect(owner).toBe('verified-owner'); expect(service).toBe('calendar');
+    return operation({ service, status: 'connected', email: 'owner@example.com', selectedCalendars: ['work'], revision: 'selection-2', subject: 'private-subject', credential: 'private-credential' }, 'private-access');
+  });
+  m.provider.mockImplementation(async url => url.includes('/calendarList') ? { items: [{ id: 'work', accessRole: 'reader' }] } : { items: [] });
+  const response = await GET(new Request('https://backend.test/api/mobile/connections?action=events&start=2026-10-24T00:00:00Z&end=2026-10-25T00:00:00Z'));
+  expect(response.status).toBe(200);
+  const body = await response.json();
+  expect(body).toEqual({ events: [], source: { email: 'owner@example.com', selectedCalendars: ['work'], revision: 'selection-2' }, start: '2026-10-24T00:00:00.000Z', end: '2026-10-25T00:00:00.000Z', fetchedAt: expect.any(String) });
+  expect(JSON.stringify(body)).not.toContain('private-');
 });

@@ -8,7 +8,7 @@ const scopes = {
 };
 const allowedScopes = new Set([...scopes.gmail, ...scopes.calendar, 'profile', 'https://www.googleapis.com/auth/userinfo.email', 'https://www.googleapis.com/auth/userinfo.profile']);
 const digest = (text: string) => createHash('sha256').update(text).digest('base64url');
-export const publicConnection = ({ service, status, email, selectedCalendars }: ConnectionRecord): GoogleConnection => ({ service, status, email, selectedCalendars });
+export const publicConnection = ({ service, status, email, selectedCalendars, revision }: ConnectionRecord): GoogleConnection => ({ service, status, email, selectedCalendars, revision });
 
 export class GoogleConnections {
   private readonly deadline = Date.now() + 45000;
