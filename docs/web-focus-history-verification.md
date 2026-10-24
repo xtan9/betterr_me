@@ -16,7 +16,9 @@ Created/resumed rule changes can resolve their continued origin using only the h
 
 The public React page tests use real UI components and translations, with HTTP and Auth as the external boundaries. Each behavior was introduced through a failing public test, followed by the production slice. Seven cases cover device grouping, paged retry/deduplication, old-account response fencing, signout, source-sequence ordering under clock skew, independent/unlabeled rules, sequence gaps, lineage retry, ordinary event lineage absence, empty/unavailable and expired-session behavior.
 
-Source TypeScript and scoped ESLint passed before browser compilation. The complete Vitest run passed 498 files / 6,203 tests; 6 pre-existing environment-gated files / 21 tests were skipped. No required T7 case is skipped. Sidebar and locale parity tests pass. After the real Tasks UI compiled its existing routes, Next's generated route check exposed a baseline optional `GET(request = ...)` signature in `app/api/categories/route.ts`; the coordinating task is handling that separate prerequisite. Generated output has not been deleted to hide the failure. Final integrated typecheck remains pending that fix.
+The complete Vitest run passed 498 files / 6,203 tests; 6 pre-existing environment-gated files / 21 tests were skipped. No required T7 case is skipped. Sidebar and locale parity tests pass.
+
+After the real Tasks UI compiled its existing routes, Next's generated route check exposed a pre-existing optional `GET(request = ...)` signature in `app/api/categories/route.ts`. A separate integration repair makes its Request argument required, matching the Request Next already supplies. No test caller omitted the argument. TypeScript now passes with the actual generated output retained, scoped ESLint passes, and the follow-up auth/route classification/write-inventory/Focus UI run passes 61 tests. No generated checks were deleted or excluded, and no category runtime policy was changed.
 
 ## Guarded real Web journey
 
