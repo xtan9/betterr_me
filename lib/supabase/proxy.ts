@@ -7,8 +7,9 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
-  // Skip middleware entirely for MCP and OAuth routes — they use Bearer token auth,
-  // not cookies, and the middleware can interfere with the Authorization header.
+  // These routes perform their own authentication and return API errors rather
+  // than browser redirects. Native routes verify bearer tokens; web Focus history
+  // verifies its cookie session inside the route.
   const path = request.nextUrl.pathname;
   if (
     path === "/api/mobile/assistant" ||
@@ -22,6 +23,8 @@ export async function updateSession(request: NextRequest) {
     path === "/api/mobile/connections/callback" ||
     path === "/api/mobile/execution" ||
     path === "/api/mobile/execution/settings" ||
+    path === "/api/mobile/focus/history" ||
+    path === "/api/focus/history" ||
     path === "/api/cron/assistant-reminders" ||
     path.startsWith("/mcp") ||
     path.startsWith("/.well-known") ||

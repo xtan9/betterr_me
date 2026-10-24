@@ -12,6 +12,7 @@ const apiRoot = join(process.cwd(), "app", "api");
  * Keep this list narrow and reviewed whenever a route is added.
  */
 const deliberateAuthExceptions: Record<string, string> = {
+  "mobile/focus/history/route.ts": "authenticateNativeRequest verifies native bearer owner; owner RLS history and private transactional immutable receipts, no cookie fallback",
   "mobile/sleep/route.ts": "authenticateNativeRequest verifies native bearer owner; owner RLS reads and service-only atomic sleep commands after fresh calendar conflict verification",
   "mobile/connections/route.ts": "authenticateNativeRequest verifies native bearer owner before server-only encrypted Google storage; no cookie fallback",
   "mobile/connections/callback/route.ts": "public redirect-only OAuth callback, fixed native destination; no token exchange or mutation until native bearer and one-time state verification",
