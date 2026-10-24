@@ -37,7 +37,7 @@ describe("Constrained SQL fixture policy", () => {
     expect(runnerScript).toContain(
       "auth_admin_database_url=\"${CONSTRAINED_SQL_FIXTURE_AUTH_ADMIN_DATABASE_URL:-postgresql://supabase_admin:postgres@127.0.0.1:54322/postgres}\"",
     );
-    expect(runnerScript).toContain('psql "$auth_admin_database_url"');
+    expect(runnerScript).toContain('"$psql_binary" "$auth_admin_database_url"');
     expect(runnerScript).toContain(
       "alter extension dblink set schema extensions",
     );

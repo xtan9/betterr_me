@@ -41,7 +41,8 @@ esac
 
 node scripts/ci/sql-fixture-registry.mjs --validate
 plan_output="$(node scripts/ci/sql-fixture-registry.mjs "${registry_args[@]}")"
-mapfile -t plan <<<"$plan_output"
+plan=()
+while IFS= read -r item; do plan+=("$item"); done <<<"$plan_output"
 
 if $list_only; then
   printf '%s\n' "${plan[@]}"
@@ -54,6 +55,14 @@ for command in psql pg_dump; do
     exit 1
   fi
 done
+psql_binary="$(command -v psql)"
+pg_dump_binary="$(command -v pg_dump)"
+for executable in "$psql_binary" "$pg_dump_binary"; do
+  if [[ "$executable" != /* || ! -x "$executable" ]]; then
+    echo "SQL fixture runner requires an absolute executable path" >&2
+    exit 1
+  fi
+done
 
 safe_path='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
 safe_home="$(mktemp -d)"
@@ -63,11 +72,11 @@ mkdir -p "$results_root"
 snapshot_database() {
   local destination="$1"
   env -i PATH="$safe_path" HOME="$safe_home" LANG=C \
-    pg_dump "$database_url" --schema-only --no-owner \
+    "$pg_dump_binary" "$database_url" --schema-only --no-owner \
     | sed '/^\\restrict /d;/^\\unrestrict /d;/^-- Dumped from database version/d;/^-- Dumped by pg_dump version/d' \
     >"${destination}.schema"
   env -i PATH="$safe_path" HOME="$safe_home" LANG=C \
-    pg_dump "$database_url" --data-only --no-owner --column-inserts \
+    "$pg_dump_binary" "$database_url" --data-only --no-owner --column-inserts \
     | sed '/^\\restrict /d;/^\\unrestrict /d;/^-- Dumped from database version/d;/^-- Dumped by pg_dump version/d' \
     >"${destination}.data"
 }
@@ -75,7 +84,7 @@ snapshot_database() {
 capture_database_outcome() {
   local destination="$1"
   if ! env -i PATH="$safe_path" HOME="$safe_home" LANG=C \
-    psql "$database_url" -X -qAt -v ON_ERROR_STOP=1 \
+    "$psql_binary" "$database_url" -X -qAt -v ON_ERROR_STOP=1 \
       -c "select json_build_object('database', current_database(), 'user', current_user, 'server', inet_server_addr(), 'port', inet_server_port())" \
       >"$destination" 2>/dev/null; then
     printf '{"status":"unavailable"}\n' >"$destination"
@@ -102,7 +111,7 @@ for item in "${plan[@]}"; do
       2>&1 | tee "$result_directory/output.log"
   else
     env -i PATH="$safe_path" HOME="$safe_home" LANG=C \
-      psql "$database_url" -X -v ON_ERROR_STOP=1 -f "$fixture_path" \
+      "$psql_binary" "$database_url" -X -v ON_ERROR_STOP=1 -f "$fixture_path" \
       2>&1 | tee "$result_directory/output.log"
   fi
   fixture_status=${PIPESTATUS[0]}
