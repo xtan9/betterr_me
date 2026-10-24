@@ -15,6 +15,7 @@ import {
   PanelLeftClose,
   PanelLeft,
   Shield,
+  Timer,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -64,6 +65,12 @@ const mainNavItems = [
     icon: ListChecks,
     labelKey: "tasks",
     match: (p: string) => p.startsWith("/tasks"),
+  },
+  {
+    href: "/focus",
+    icon: Timer,
+    labelKey: "focus",
+    match: (p: string) => p.startsWith("/focus"),
   },
   {
     href: "/journal",

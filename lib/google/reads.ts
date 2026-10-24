@@ -44,6 +44,9 @@ export class GoogleReads {
     return publicConnection(next);
   }
   async events(userId: string, start: string, end: string): Promise<GoogleEvent[]> {
+    return (await this.eventSnapshot(userId, start, end)).events;
+  }
+  async eventSnapshot(userId: string, start: string, end: string) {
     validRange(start, end);
     return this.connections.read(userId, 'calendar', async (record, token) => {
       if (!record.selectedCalendars.length) throw new GoogleConnectionError('select-calendars');
@@ -64,7 +67,9 @@ export class GoogleReads {
           events.push({ id: `google:${encodeURIComponent(id)}:${event.id}`, calendarId: id, calendarTitle: calendar.summary || id, title: event.summary || '(Untitled)', start: eventStart, end: eventEnd, allDay: !!event.start?.date, url: sourceLink(event.htmlLink, 'calendar.google.com'), busy: event.transparency !== 'transparent' });
         }
       }
-      return events.sort((a, b) => a.start.localeCompare(b.start) || a.id.localeCompare(b.id));
+      return { events: events.sort((a, b) => a.start.localeCompare(b.start) || a.id.localeCompare(b.id)),
+        source: { email: record.email, selectedCalendars: [...record.selectedCalendars].sort(), revision: record.revision },
+        start: new Date(start).toISOString(), end: new Date(end).toISOString(), fetchedAt: new Date().toISOString() };
     });
   }
   async mail(userId: string, query: string): Promise<{ messages: GoogleMail[]; more: boolean }> {

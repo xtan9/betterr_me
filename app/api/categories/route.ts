@@ -20,7 +20,7 @@ const WRITE_REQUEST_POLICY = {
  * GET /api/categories
  * Get categories for the authenticated user (lazy-seeds defaults on first call)
  */
-export async function GET(request: Request = new Request('http://localhost')) {
+export async function GET(request: Request) {
   try {
     const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
     if (!auth.ok) {

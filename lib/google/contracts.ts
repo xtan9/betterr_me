@@ -6,6 +6,7 @@ export type GoogleConnection = {
   status: ConnectionStatus;
   email: string | null;
   selectedCalendars: string[];
+  revision?: string;
 };
 export type ConnectionRecord = GoogleConnection & {
   userId: string; revision: string; subject: string | null; credential: string | null;

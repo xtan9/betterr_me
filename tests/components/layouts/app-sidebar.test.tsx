@@ -112,11 +112,11 @@ describe("AppSidebar", () => {
     });
   });
 
-  it("renders logo link + 8 nav items as links", () => {
+  it("renders logo link + 9 nav items as links", () => {
     render(<AppSidebar {...defaultProps} />);
 
     const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(9); // 1 logo + 8 nav
+    expect(links).toHaveLength(10); // 1 logo + 9 nav
   });
 
   it("renders correct hrefs for logo and all nav items", () => {
@@ -128,10 +128,11 @@ describe("AppSidebar", () => {
     expect(links[2]).toHaveAttribute("href", "/finance/cushion");
     expect(links[3]).toHaveAttribute("href", "/habits");
     expect(links[4]).toHaveAttribute("href", "/tasks");
-    expect(links[5]).toHaveAttribute("href", "/journal");
-    expect(links[6]).toHaveAttribute("href", "/workouts");
-    expect(links[7]).toHaveAttribute("href", "/calendar");
-    expect(links[8]).toHaveAttribute("href", "/chat");
+    expect(links[5]).toHaveAttribute("href", "/focus");
+    expect(links[6]).toHaveAttribute("href", "/journal");
+    expect(links[7]).toHaveAttribute("href", "/workouts");
+    expect(links[8]).toHaveAttribute("href", "/calendar");
+    expect(links[9]).toHaveAttribute("href", "/chat");
   });
 
   it("renders i18n translation keys as labels", () => {
@@ -297,9 +298,9 @@ describe("AppSidebar", () => {
       render(<AppSidebar {...defaultProps} />);
 
       const links = screen.getAllByRole("link");
-      // logo=0, dashboard=1, finance=2, habits=3, tasks=4, journal=5, workouts=6, calendar=7, chat=8
-      expect(links[7]).toHaveAttribute("href", "/calendar");
-      expect(links[8]).toHaveAttribute("href", "/chat");
+      // logo=0, dashboard=1, finance=2, habits=3, tasks=4, focus=5, journal=6, workouts=7, calendar=8, chat=9
+      expect(links[8]).toHaveAttribute("href", "/calendar");
+      expect(links[9]).toHaveAttribute("href", "/chat");
     });
   });
 

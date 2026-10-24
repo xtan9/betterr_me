@@ -45,6 +45,14 @@ afterEach(() => {
 });
 
 describe("SQL fixture registry", () => {
+  it("lists a constrained fixture with the system Bash used on macOS", () => {
+    const result = spawnSync("/bin/bash", ["scripts/ci/run-sql-fixtures.sh", "--domain", "focus-history", "--list"], { cwd: process.cwd(), encoding: "utf8" });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout.trim()).toBe("focus_history.sql\tfocus-history\tconstrained\ttransactional");
+    const constrained = spawnSync("/bin/bash", ["scripts/ci/run-constrained-sql-fixtures.sh", "--fixture", "supabase/tests/focus_history.sql", "--list"], { cwd: process.cwd(), encoding: "utf8" });
+    expect(constrained.status, constrained.stderr).toBe(0);
+    expect(constrained.stdout.trim()).toBe("supabase/tests/focus_history.sql");
+  });
   it("registers the personal-records and finance RLS group as one targeted fixture", () => {
     const repositoryRoot = path.resolve(__dirname, "../..");
     const registry = loadSqlFixtureRegistry(repositoryRoot);

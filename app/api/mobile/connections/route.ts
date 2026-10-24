@@ -34,7 +34,7 @@ export async function GET(request: Request) {
     if (action === 'status') return reply({ configured: true, connections: (await connections.store.list(auth.userId)).map(publicConnection) });
     if (action === 'calendars') return reply({ calendars: await reads.calendars(auth.userId) });
     const start = z.string().datetime({ offset: true }).parse(url.searchParams.get('start')), end = z.string().datetime({ offset: true }).parse(url.searchParams.get('end'));
-    return reply({ events: await reads.events(auth.userId, start, end), fetchedAt: new Date().toISOString() });
+    return reply(await reads.eventSnapshot(auth.userId, start, end));
   } catch (error) { return error instanceof z.ZodError ? reply({ error: 'invalid' }, 400) : failure(error); }
 }
 export async function POST(request: Request) {

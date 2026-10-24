@@ -36,7 +36,8 @@ while (( $# > 0 )); do
   esac
 done
 
-mapfile -d '' fixtures < <(
+fixtures=()
+while IFS= read -r -d '' fixture; do fixtures+=("$fixture"); done < <(
   find supabase/tests -maxdepth 1 -type f -name '*.sql' -print0 | sort -z
 )
 
@@ -66,13 +67,18 @@ if (( ${#selected[@]} == 0 )) && ! $bootstrap_only; then
 fi
 
 safe_path='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+psql_binary="$(command -v psql)"
+if [[ "$psql_binary" != /* || ! -x "$psql_binary" ]]; then
+  echo "SQL fixture runner requires an absolute psql executable path" >&2
+  exit 1
+fi
 safe_home="$(mktemp -d)"
 trap 'rm -rf -- "$safe_home"' EXIT
 runner_password='sql-fixture-disposable-only'
 runner_database_url="postgresql://sql_fixture_test:${runner_password}@127.0.0.1:54322/postgres"
 
 if ! $skip_bootstrap; then
-env -i PATH="$safe_path" HOME="$safe_home" LANG=C psql "$database_url" \
+env -i PATH="$safe_path" HOME="$safe_home" LANG=C "$psql_binary" "$database_url" \
   -v ON_ERROR_STOP=1 \
   -v runner_password="$runner_password" <<'SQL'
 do $block$
@@ -174,7 +180,7 @@ $block$;
 SQL
 
 env -i PATH="$safe_path" HOME="$safe_home" LANG=C \
-  psql "$auth_admin_database_url" -v ON_ERROR_STOP=1 <<'SQL'
+  "$psql_binary" "$auth_admin_database_url" -v ON_ERROR_STOP=1 <<'SQL'
 create extension if not exists dblink with schema extensions;
 grant usage on schema extensions to sql_fixture_test;
 
@@ -475,5 +481,5 @@ fi
 for fixture in "${selected[@]}"; do
   echo "Running constrained SQL fixture: $fixture"
   env -i PATH="$safe_path" HOME="$safe_home" LANG=C \
-    psql "$runner_database_url" -v ON_ERROR_STOP=1 -f "$fixture"
+    "$psql_binary" "$runner_database_url" -v ON_ERROR_STOP=1 -f "$fixture"
 done
