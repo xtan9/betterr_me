@@ -37,4 +37,12 @@ It includes the existing T1 and T2 journeys, then creates independent ephemeral 
 
 Twenty-four public route tests verify adapters, query/body bounds and strictness, missing lineage, malformed server data, auth failures, and actionable errors. TypeScript, scoped ESLint and delivery write-inventory checks pass. Local security/performance advisors report no app-limit findings (five security and 123 performance warnings are unrelated baseline issues).
 
+Integration `36847fa8` subsequently passed a clean `supabase db reset --local
+--no-seed`. The migration ledger contains `20261024190712`, `20261024194415` and
+`20261024200918`. All registered Focus/app-limit constrained SQL fixtures passed
+with zero schema/data residue, followed by all eight actual HTTP acceptance groups
+and ephemeral-account cleanup. Evidence: `/tmp/betterr-data-reliability-t3-reset.log`,
+`/tmp/betterr-data-reliability-t3-sql.log`, `/tmp/betterr-data-reliability-t3-http.log`
+and `.artifacts/sql-fixtures/app_limit_continuations/`. No hosted database changed.
+
 After merging backend integration `ed345550` (including the Google snapshot companion), the complete Vitest run passed 497 files / 6,196 tests, with 6 existing environment-gated files / 21 tests skipped. No required continuation test is skipped.
