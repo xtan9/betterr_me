@@ -10,9 +10,14 @@ did not exist. The pinned Supabase CLI generated
 `20261024194415_app_limit_history.sql`, which was applied once to the disposable
 database at `127.0.0.1:54322` using `psql`. It contains only additive app-limit
 tables/functions/policies/indexes and reuses existing strict scalar helpers.
-No hosted migration, production data change or stack reset was performed for T2.
-The T2 migration ledger entry is not marked; clean integrated migration replay
-remains a release/integration check.
+After integration, the task-owned local stack was reset with the pinned CLI's
+`db reset --local --no-seed`. All migrations replayed successfully and the ledger
+contains both `20261024190712` and `20261024194415`. The canonical Focus and
+app-limit SQL fixtures passed again with no database residue, followed by all
+seven real HTTP acceptance groups and zero ephemeral-account residue. No hosted
+migration or production data change has been performed. Local replay logs are
+`/tmp/betterr-data-reliability-local-reset.log` and
+`/tmp/betterr-data-reliability-sql.log`.
 
 `bash scripts/ci/run-sql-fixtures.sh --domain app-limit-history` passes through the
 registered constrained role with fixture and cleanup status zero. It verifies:
