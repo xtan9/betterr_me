@@ -6,7 +6,7 @@ This is the backup portion of [mobile T8 #406](https://github.com/xtan9/betterr_
 
 - Implemented and tested: explicit encrypted export, authenticated inspection, isolated local restore, owner-data/lineage verification and explicit retention.
 - Default destination: `~/Library/Application Support/betterrme/backups`, owner-only directory. No production export has been performed. There is no configured backup schedule, managed paid backup service, off-site destination or off-site credential.
-- Default retention: exports retain all completed files. After a restore check, explicitly run `prune --keep 7` to retain the seven newest authenticated exports for one database source and encryption key. Nothing is deleted automatically. Mixed keys/sources, tampering or unsupported files abort pruning before deletion.
+- Default retention: exports retain all completed files. After a restore check, explicitly run `prune --keep 7` to retain the seven newest authenticated exports for one database source and encryption key. Nothing is deleted automatically. Source identity includes the PostgreSQL routing username as well as host, port and database, so projects sharing a Supabase pooler endpoint remain separate. Mixed keys/sources, tampering or unsupported/legacy source identities abort pruning before deletion.
 - Encryption key: a separate owner-only 32-byte file, outside every Git checkout and outside the backup directory. No production key was created by this verification. Keep a recoverable copy in an authorized password/secret manager; a key only on the same machine does not protect against machine loss. Off-site file/key recovery and recurring execution remain pending.
 - Hosted deployment, integrated mobile/Web UAT and physical Screen Time checks belong to the parent delivery matrix. This document does not close those gates.
 
@@ -62,7 +62,7 @@ The JSON response identifies the completed encrypted file. It means an export co
 node scripts/backup/database-backup.mjs inspect --key-file "$backup_key_file" --input "$backup_file"
 ```
 
-For restore verification, set `BETTERR_RESTORE_ADMIN_URL` to the owned local Supabase **postgres** database on `127.0.0.1:54322` (or `localhost:54322`). The tool creates a fresh `betterr_restore_<random-id>` database from `template0`; it accepts no target database option and never overwrites `postgres` or a supplied database. Wrong keys/corruption are rejected before a database is created. Failed restore/verification removes only its newly created database. A killed process can leave its fresh restore database; identify it by the recorded random name before cleanup.
+For restore verification, set `BETTERR_RESTORE_ADMIN_URL` to the owned local Supabase **postgres** database on `127.0.0.1:54322` (or `localhost:54322`). The tool creates a fresh `betterr_restore_<random-id>` database from `template0`; it accepts no target database option and never overwrites `postgres` or a supplied database. Wrong keys/corruption are rejected before a database is created. Restore prints the planned random database name to stderr before creation. Failed restore/verification removes only that database; a cleanup failure reports the exact name and requires manual inspection. A killed process can also leave this database; use the recorded name for cleanup.
 
 ```sh
 node scripts/backup/database-backup.mjs restore-local --key-file "$backup_key_file" --input "$backup_file"
@@ -100,4 +100,8 @@ Passed:
 
 A recurring backup, off-site copy, production export, full-provider disaster recovery and the complete T8 client matrix remain unverified until their separate prerequisites and acceptance evidence exist.
 
-Backend regression checks passed 498 Vitest files / 6,198 tests (21 existing environment-gated skips), followed by the final three-case CLI security suite. TypeScript, scoped ESLint and diff checks passed. The successful fixture drill used PostgreSQL 15.8 with 15.19 clients; it is evidence for these application tables and compatible local prerequisites, not a claim that an arbitrary hosted Supabase project can be recreated unchanged.
+Final backend regression checks passed 498 Vitest files / 6,202 tests (21 existing environment-gated skips), including all six public CLI security tests. TypeScript, scoped ESLint and diff checks passed. The successful fixture drill used PostgreSQL 15.8 with 15.19 clients; it is evidence for these application tables and compatible local prerequisites, not a claim that an arbitrary hosted Supabase project can be recreated unchanged.
+
+Independent Standards and Spec reviews reproduced a pooler-source collision; the fixed source fingerprint includes the routing username and retention refuses legacy identities. Standards review also found a checkout-root output guard and hidden cleanup-failure gap; public CLI red/green tests now cover both. Envelope sizing accounts for the full authenticated header, encrypted manifest and tag before publishing an archive.
+
+Review closure: the independent Standards reviewer reported all three operational findings resolved and no residual blocker; the independent Spec reviewer confirmed the mixed-project retention fix and no residual scope blocker. Reviews used separate agents, sequentially because only one agent slot was available. The broader production/off-site/scheduled/native/Web gates above remain separate.

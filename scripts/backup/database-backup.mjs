@@ -19,7 +19,7 @@ function externalPath(path) {
   check(typeof path === 'string' && isAbsolute(path), 'Use an absolute path outside the repository.');
   const full = resolve(path);
   check(full !== repository && !full.startsWith(`${repository}/`), 'Backup files and keys must stay outside the repository.');
-  for (let parent = dirname(full); parent !== dirname(parent); parent = dirname(parent)) {
+  for (let parent = full; parent !== dirname(parent); parent = dirname(parent)) {
     check(!existsSync(join(parent, '.git')), 'Backup files and keys must stay outside every Git checkout.');
   }
   return full;
@@ -97,7 +97,8 @@ async function exportDatabase(key, directory) {
   const dumpMajor = Number(dumpVersion.match(/(\d+)\./)?.[1]);
   check(dumpMajor === Number(sourceInventory.serverVersion.split('.')[0]), 'Use pg_dump binaries matching the source PostgreSQL major version.');
   const manifest = { format: 'pg_dump-custom', ...sourceInventory, dumpVersion, dumpMajor,
-    sourceId: createHash('sha256').update(JSON.stringify([env.PGHOST, env.PGPORT, env.PGDATABASE])).digest('hex'),
+    sourceIdentityVersion: 1,
+    sourceId: createHash('sha256').update(JSON.stringify([env.PGHOST, env.PGPORT, env.PGDATABASE, env.PGUSER])).digest('hex'),
     inventoryObservedAt: new Date().toISOString(), excludedSchemas, excludedTableData,
     ownership: 'reassigned-to-restoring-role', grants: 'preserved-existing-roles-required',
     excludedResources: ['Storage object bytes', 'cluster roles/passwords', 'OAuth/provider and hosting settings', 'Vault/pgsodium encryption roots', 'application encryption keys', 'WAL/PITR'] };
@@ -113,7 +114,7 @@ async function exportDatabase(key, directory) {
   try {
     async function* encrypted() {
       yield prefix; yield cipher.update(metadata); let bytes = 0;
-      for await (const chunk of child.stdout) { bytes += chunk.length; check(bytes <= limit - 100_000, 'Archive exceeds the supported 512 MiB recovery limit.'); yield cipher.update(chunk); }
+      for await (const chunk of child.stdout) { bytes += chunk.length; check(bytes <= limit - prefix.length - metadata.length - 16, 'Archive exceeds the supported 512 MiB recovery limit.'); yield cipher.update(chunk); }
       check(await done, 'pg_dump failed; no completed backup was published.');
       yield cipher.final(); yield cipher.getAuthTag();
     }
@@ -154,15 +155,20 @@ async function restoreLocal(backup) {
   const targetVersion = await execute('psql', psqlArgs, env, 'show server_version;');
   const restoreVersion = await execute('pg_restore', ['--version'], env);
   check(Number(targetVersion.split('.')[0]) === backup.manifest.dumpMajor && Number(restoreVersion.match(/(\d+)\./)?.[1]) === backup.manifest.dumpMajor, 'Use a disposable database and restore binaries matching the archive PostgreSQL major version.');
-  await execute('psql', psqlArgs, env, `create database "${database}" template template0;`);
+  console.error(JSON.stringify({ status: 'planned-local-restore', database }));
   try {
+    await execute('psql', psqlArgs, env, `create database "${database}" template template0;`);
     const target = { ...env, PGDATABASE: database };
     await execute('pg_restore', ['--dbname', database, '--no-owner', '--single-transaction', '--exit-on-error', '--no-password', '--no-publications', '--no-subscriptions'], target, backup.archive);
     const actual = await inventory(target);
     check(JSON.stringify(actual.tables) === JSON.stringify(backup.manifest.tables), 'Restored table inventory differs; owned restore database will be removed.');
     return { status: 'restored-local', database, tables: actual.tables.length, schemas: actual.schemas, sourceExportId: backup.header.id,
       remaining: 'Verify application reads and owner isolation, then remove this owned restore database. No hosted service was restored.' };
-  } catch (error) { await execute('psql', psqlArgs, env, `drop database "${database}" with(force);`).catch(() => {}); throw error; }
+  } catch (error) {
+    try { await execute('psql', psqlArgs, env, `drop database if exists "${database}" with(force);`); }
+    catch { throw new BackupError(`${error instanceof BackupError ? error.message : 'Restore failed.'} Cleanup failed for owned database ${database}; inspect and remove only this database manually.`); }
+    throw error;
+  }
 }
 async function prune(key, directory, keep) {
   check(Number.isInteger(keep) && keep >= 1 && keep <= 1000, 'Retention must keep 1 to 1000 authenticated backups.');
@@ -171,7 +177,8 @@ async function prune(key, directory, keep) {
   for (const name of await readdir(directory)) {
     if (!name.endsWith('.brmebak')) continue;
     const file = join(directory, name), backup = await decrypt(key, file);
-    try { check(Number.isFinite(Date.parse(backup.header.createdAt)), 'Invalid backup timestamp.'); files.push({ file, createdAt: backup.header.createdAt, sourceId: backup.manifest.sourceId }); }
+    try { check(backup.manifest.sourceIdentityVersion === 1 && typeof backup.manifest.sourceId === 'string', 'Retention requires verified database routing identity; older exports are preserved.');
+      check(Number.isFinite(Date.parse(backup.header.createdAt)), 'Invalid backup timestamp.'); files.push({ file, createdAt: backup.header.createdAt, sourceId: backup.manifest.sourceId }); }
     finally { backup.clear(); }
   }
   check(new Set(files.map(file => file.sourceId)).size <= 1, 'Keep backups for different database sources in separate retention directories.');
