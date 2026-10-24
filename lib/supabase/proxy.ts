@@ -25,6 +25,8 @@ export async function updateSession(request: NextRequest) {
     path === "/api/mobile/execution/settings" ||
     path === "/api/mobile/focus/history" ||
     path === "/api/focus/history" ||
+    path === "/api/mobile/focus/app-limits/history" ||
+    path === "/api/focus/app-limits/history" ||
     path === "/api/cron/assistant-reminders" ||
     path.startsWith("/mcp") ||
     path.startsWith("/.well-known") ||
