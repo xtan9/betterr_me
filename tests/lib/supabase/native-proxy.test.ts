@@ -29,6 +29,8 @@ describe('API routes through the cookie proxy',()=>{
   ['/api/mobile/sleep','GET'],['/api/mobile/sleep','POST'],['/api/mobile/sleep','OPTIONS'],
   ['/api/mobile/focus/history','GET'],['/api/mobile/focus/history','POST'],['/api/mobile/focus/history','OPTIONS'],
   ['/api/focus/history','GET'],
+  ['/api/mobile/focus/app-limits/history','GET'],['/api/mobile/focus/app-limits/history','POST'],['/api/mobile/focus/app-limits/history','OPTIONS'],
+  ['/api/focus/app-limits/history','GET'],
  ])('delegates %s %s to its own route authentication',async(path,method)=>{
   const response=await updateSession(new NextRequest(`https://www.betterr.me${path}`,{method}));
   expect(response.headers.get('location')).toBeNull();expect(response.headers.get('x-middleware-next')).toBe('1');expect(mocks.create).not.toHaveBeenCalled();

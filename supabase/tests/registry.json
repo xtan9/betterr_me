@@ -1,4 +1,5 @@
 [
+  {"path":"app_limit_history.sql","domain":"app-limit-history","role":"constrained","cleanup":"transactional"},
   {"path":"focus_history.sql","domain":"focus-history","role":"constrained","cleanup":"transactional"},
   {"path":"routine_day_periods.sql","domain":"mobile-planner","role":"constrained","cleanup":"transactional"},
   {"path":"sleep_preset.sql","domain":"mobile-planner","role":"admin","cleanup":"transactional","adminReason":"Exercises service-only sleep commands after external-calendar attestation; legacy write bypass and owner-read assertions run as authenticated."},

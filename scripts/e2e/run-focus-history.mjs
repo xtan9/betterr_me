@@ -11,9 +11,11 @@ import { createServerClient } from '@supabase/ssr';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const cli = process.env.SUPABASE_CLI ?? 'supabase';
 const psql = process.env.PSQL_BIN ?? spawnSync('which', ['psql'], { encoding: 'utf8' }).stdout?.trim();
+const appLimits = process.argv.includes('--app-limits');
 function check(condition, label) {
   if (!condition) throw new Error(label);
 }
+check(process.argv.slice(2).every(value => value === '--app-limits'), 'Unknown integration runner argument');
 const status = spawnSync(cli, ['status', '--output', 'json'], { cwd: root, encoding: 'utf8' });
 check(status.status === 0, 'Local Supabase must already be running');
 const local = JSON.parse(status.stdout);
@@ -87,7 +89,9 @@ async function cleanUp() {
       (select count(*) from auth.sessions where user_id in (${ids})) +
       (select count(*) from public.profiles where id in (${ids})) +
       (select count(*) from public.focus_history_sources where user_id in (${ids})) +
-      (select count(*) from public.focus_history_events where user_id in (${ids}));`;
+      (select count(*) from public.focus_history_events where user_id in (${ids}))
+      ${appLimits ? `+ (select count(*) from public.app_limit_history_sources where user_id in (${ids}))
+        + (select count(*) from public.app_limit_history_events where user_id in (${ids}))` : ''};`;
     const result = spawnSync(psql, [local.DB_URL, '-X', '-qAt', '-v', 'ON_ERROR_STOP=1'], {
       input: query, encoding: 'utf8', env: { PATH: '/usr/bin:/bin', LANG: 'C' },
     });
@@ -140,7 +144,7 @@ try {
     const response = await fetch(`${origin}${path}`, { method: body ? 'POST' : 'GET',
       headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}),
         ...(cookie ? { Cookie: cookie } : {}) }, body: body ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(30_000) });
+      signal: AbortSignal.timeout(30_000), redirect: 'manual' });
     check(response.status === status, `${body ? 'POST' : 'GET'} ${path.split('?')[0]} expected ${status}, received ${response.status}`);
     check(response.headers.get('cache-control')?.includes('no-store'), 'History response must not be cached');
     return response.json();
@@ -198,6 +202,44 @@ try {
   check(restored.every(item => Object.keys(item.event.session).sort().join(',')
     === ['id', 'startedAt', 'endedAt', 'completedRounds', 'settings', 'link', 'segments'].sort().join(',')), 'History contains active native state');
   console.log('PASS cross-account isolation, forged-owner denial and native-state rejection');
+  if (appLimits) {
+    const limitsPath = '/api/mobile/focus/app-limits/history';
+    const nativeSource = { ...source, id: randomUUID(), label: 'Independent native journal' };
+    const snapshot = { label: null, day: '2026-10-24', dailyUnlocks: 3, minutes: 5,
+      current: 2, best: 4, status: 'paused', usedToday: 1, overridesToday: 0 };
+    const baseline = { schemaVersion: 1, id: randomUUID(), sequence: 1, kind: 'app-limit-baseline',
+      observedAt: 1790000060000, appVersion: '0.1.0', ruleId: randomUUID(), reason: 'baseline', before: null, after: snapshot };
+    const advanced = { ...baseline, id: randomUUID(), sequence: 2, kind: 'app-limit-change', reason: 'dayAdvanced',
+      before: snapshot, after: { ...snapshot, current: 3, status: 'counting', day: '2026-10-25', usedToday: 0 } };
+    const reset = { ...advanced, id: randomUUID(), sequence: 3, reason: 'extraUnlock', before: advanced.after,
+      after: { ...advanced.after, current: 0, overridesToday: 1 } };
+    const send = records => ({ schemaVersion: 1, source: nativeSource, events: records });
+    await request(limitsPath, a.token, send([baseline])); // Discard receipt, then replay.
+    check((await request(limitsPath, a.token, send([baseline]))).acknowledgedThrough === 1, 'Native baseline replay failed');
+    check((await request(limitsPath, a.token, send([reset]))).acknowledgedThrough === 1, 'Native gap acknowledged');
+    const gapped = await request(limitsPath, a.token);
+    check(gapped.items.length === 2 && gapped.items[1].event.after.current === 0
+      && gapped.items[1].acknowledgedThrough === 1, 'Unconfirmed reset/checkpoint provenance lost');
+    check((await request(limitsPath, a.token, send([advanced]))).acknowledgedThrough === 3, 'Native checkpoint did not advance');
+    const page = await request(`${limitsPath}?limit=1`, cleanClient.token);
+    check(page.items.length === 1 && page.nextCursor && page.items[0].acknowledgedThrough === 3, 'Native clean-client paging failed');
+    const next = await request(`${limitsPath}?after=${encodeURIComponent(page.nextCursor)}&limit=1`, cleanClient.token);
+    check(next.items[0].event.sequence === 3 && next.items[0].event.after.current === 0, 'Latest confirmed reset omitted');
+    const limitsWeb = await request('/api/focus/app-limits/history', null, undefined, 200, cookie);
+    check(limitsWeb.items.length === 3, 'Cookie app-limit history diverged');
+    check((await request(native, a.token)).items.length === 3, 'Native events leaked into session v1');
+    check((await request(limitsPath, b.token)).items.length === 0, 'Foreign native history exposed');
+    await request(limitsPath, a.token, send([{ ...baseline, observedAt: 1 }]), 409);
+    await request(limitsPath, b.token, { ...send([baseline]), owner: owner.id }, 400);
+    for (const field of ['selectionTokens', 'authorizationApproved', 'activeGrant', 'monitorRegistration']) {
+      await request(limitsPath, a.token, send([{ ...baseline, after: { ...snapshot, [field]: true } }]), 400);
+    }
+    const directLimits = await b.client.from('app_limit_history_events').select('id').eq('user_id', owner.id);
+    check(!directLimits.error && directLimits.data.length === 0, 'Direct native history RLS failed');
+    await request(limitsPath, b.token, send([baseline]));
+    check((await request(limitsPath, a.token)).items.length === 3 && (await request(limitsPath, b.token)).items.length === 1, 'Native source identity crossed accounts');
+    console.log('PASS native app-limit baseline/replay, gaps, paged reset provenance, web cookies, isolation and session-v1 compatibility');
+  }
 } finally {
   await cleanUp();
   console.log('PASS ephemeral Auth users, sessions and history rows removed; owned Next server stopped');

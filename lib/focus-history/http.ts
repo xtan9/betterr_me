@@ -4,7 +4,7 @@ import { historyUploadSchema, MAX_UPLOAD_BYTES } from './contract';
 import { createFocusHistoryRepository, FocusHistoryError } from './repository';
 
 const querySchema = z.object({ after: z.string().min(1).max(100).optional(), limit: z.coerce.number().int().min(1).max(100).default(50) }).strict();
-const encodeCursor = (position: number) => Buffer.from(`v1:${position}`).toString('base64url');
+export const encodeCursor = (position: number) => Buffer.from(`v1:${position}`).toString('base64url');
 function decodeCursor(cursor?: string): number {
   if (!cursor) return 0;
   const decoded = Buffer.from(cursor, 'base64url').toString('utf8');
@@ -17,20 +17,24 @@ export function historyFailure(error: unknown, headers: Record<string, string> =
   const reason = error instanceof FocusHistoryError ? error.reason : 'unavailable';
   return Response.json({ error: reason }, { status: { invalid: 400, conflict: 409, unauthorized: 401, unavailable: 503 }[reason], headers });
 }
-export async function readFocusHistory(request: Request, client: SupabaseClient, headers = historyHeaders) {
+export function readHistoryQuery(request: Request) {
   const params = new URL(request.url).searchParams;
   if ([...params.keys()].some(key => params.getAll(key).length !== 1)) throw new FocusHistoryError('invalid');
   const query = querySchema.safeParse(Object.fromEntries(params));
   if (!query.success) throw new FocusHistoryError('invalid');
-  const rows = await createFocusHistoryRepository(client).read(decodeCursor(query.data.after), query.data.limit);
-  const page = rows.slice(0, query.data.limit);
+  return { after: decodeCursor(query.data.after), limit: query.data.limit };
+}
+export async function readFocusHistory(request: Request, client: SupabaseClient, headers = historyHeaders) {
+  const query = readHistoryQuery(request);
+  const rows = await createFocusHistoryRepository(client).read(query.after, query.limit);
+  const page = rows.slice(0, query.limit);
   return Response.json({
     schemaVersion: 1,
     items: page.map(({ position: _position, ...item }) => item),
-    nextCursor: rows.length > query.data.limit ? encodeCursor(page[page.length - 1].position) : null,
+    nextCursor: rows.length > query.limit ? encodeCursor(page[page.length - 1].position) : null,
   }, { headers });
 }
-export async function uploadFocusHistory(request: Request, client: SupabaseClient, headers = historyHeaders) {
+export async function readHistoryBody(request: Request, headers = historyHeaders): Promise<unknown> {
   if (Number(request.headers.get('content-length')) > MAX_UPLOAD_BYTES) return Response.json({ error: 'invalid' }, { status: 413, headers });
   const reader = request.body?.getReader();
   if (!reader) throw new FocusHistoryError('invalid');
@@ -44,6 +48,11 @@ export async function uploadFocusHistory(request: Request, client: SupabaseClien
   }
   let raw: unknown;
   try { raw = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw new FocusHistoryError('invalid'); }
+  return raw;
+}
+export async function uploadFocusHistory(request: Request, client: SupabaseClient, headers = historyHeaders) {
+  const raw = await readHistoryBody(request, headers);
+  if (raw instanceof Response) return raw;
   const parsed = historyUploadSchema.safeParse(raw);
   if (!parsed.success) throw new FocusHistoryError('invalid');
   return Response.json(await createFocusHistoryRepository(client).upload(parsed.data), { headers });
