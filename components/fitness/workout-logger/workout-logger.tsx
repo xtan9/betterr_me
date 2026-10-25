@@ -78,8 +78,8 @@ export function WorkoutLogger() {
         restTimer.start(restTimerSeconds);
       }
     } catch (error) {
-      log.error("Failed to complete set", error);
-      toast.error(t("completeSetError"));
+      log.error("[workouts] Failed to complete set", error);
+      throw error;
     }
   };
 
@@ -114,7 +114,7 @@ export function WorkoutLogger() {
             }}
             onUpdateSet={async (setId, updates) => {
               try { await actions.updateSet(exercise.id, setId, updates); }
-              catch (error) { log.error("Failed to update set", error); toast.error(t("updateSetError")); }
+              catch (error) { log.error("[workouts] Failed to update set", error); throw error; }
             }}
             onDeleteSet={async (setId) => {
               try { await actions.deleteSet(exercise.id, setId); }

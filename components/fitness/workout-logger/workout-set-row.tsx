@@ -119,8 +119,8 @@ export function WorkoutSetRow({
     if (!weightInput.edited || !weightInput.valid) return;
     const kg = weightInput.anchorKg;
     if (kg !== set.weight_kg) {
-      void update({ weight_kg: kg }).catch(() => toast.error(t("updateSetError")));
-    }
+      void update({ weight_kg: kg }).then(weightInput.acknowledge, () => toast.error(t("updateSetError")));
+    } else weightInput.acknowledge();
   }, [weightInput, set.weight_kg, update, t]);
 
   const handleRepsBlur = useCallback(() => {
@@ -178,6 +178,7 @@ export function WorkoutSetRow({
       try {
         if (Object.keys(changes).length) await update(changes);
         else await writes.current;
+        weightInput.acknowledge();
         await onComplete();
       } catch { toast.error(t("completeSetError")); }
       finally { setCompleting(false); }

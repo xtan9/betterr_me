@@ -20,7 +20,7 @@ type RoutineExerciseWithExercise = RoutineExercise & { exercise: Exercise };
 
 interface RoutineExerciseListProps {
   exercises: RoutineExerciseWithExercise[];
-  onUpdate: (reId: string, updates: Record<string, unknown>) => void;
+  onUpdate: (reId: string, updates: Record<string, unknown>) => void | Promise<void>;
   onRemove: (reId: string) => void;
   weightUnit: WeightUnit;
 }
@@ -33,7 +33,7 @@ function RoutineExerciseRow({
   weightUnit,
 }: {
   re: RoutineExerciseWithExercise;
-  onUpdate: (reId: string, updates: Record<string, unknown>) => void;
+  onUpdate: (reId: string, updates: Record<string, unknown>) => void | Promise<void>;
   onRemove: (reId: string) => void;
   weightUnit: WeightUnit;
 }) {
@@ -108,9 +108,12 @@ function RoutineExerciseRow({
                 value={weight.value}
                 onChange={(e) => weight.change(e.target.value)}
                 onBlur={() => {
-                  if (weight.edited && weight.valid && weight.anchorKg !== re.target_weight_kg) {
-                    onUpdate(re.id, { target_weight_kg: weight.anchorKg });
-                  }
+                  if (!weight.edited || !weight.valid) return;
+                  if (weight.anchorKg === re.target_weight_kg) { weight.acknowledge(); return; }
+                  const saving = onUpdate(re.id, { target_weight_kg: weight.anchorKg });
+                  // The form owns save-error presentation; failed edits stay retryable.
+                  if (saving) void saving.then(weight.acknowledge, () => {});
+                  else weight.acknowledge();
                 }}
                 className="h-7 w-16 text-caption"
                 placeholder="0"

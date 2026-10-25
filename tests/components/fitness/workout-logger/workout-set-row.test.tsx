@@ -62,6 +62,64 @@ const previousSet = {
 } satisfies WorkoutSet;
 
 describe("WorkoutSetRow Fitness Weight Unit presentation", () => {
+  it("uses a later authoritative same-id load after saving without writing the old draft back", async () => {
+    const saved: Array<number | null | undefined> = [];
+    function Workflow() {
+      const [stored, setStored] = useState<WorkoutSet>({ ...set });
+      return <>
+        <WorkoutSetRow set={stored} exerciseType="weight_reps" weightUnit="kg" previousSet={null}
+          onUpdate={async updates => { saved.push(updates.weight_kg); setStored(current => ({ ...current, ...updates })); }}
+          onDelete={async () => {}} onComplete={async () => {}} />
+        <button onClick={() => setStored(current => ({ ...current, weight_kg: 30 }))}>Refresh accepted record</button>
+        <output role="status">{stored.weight_kg} kg</output>
+      </>;
+    }
+    render(<Workflow />);
+    const input = screen.getByRole("textbox", { name: "weight (kg)" });
+    fireEvent.change(input, { target: { value: "20" } });
+    await act(async () => { fireEvent.blur(input); });
+    expect(screen.getByRole("status")).toHaveTextContent("20 kg");
+    fireEvent.click(screen.getByRole("button", { name: "Refresh accepted record" }));
+    expect(input).toHaveValue("30");
+    await act(async () => { fireEvent.blur(input); });
+    expect(screen.getByRole("status")).toHaveTextContent("30 kg");
+    expect(saved).toEqual([20]);
+  });
+
+  it.each(["12.", "12.5"])("keeps newer %s input in its authored unit when an older save is acknowledged", async (newer) => {
+    let accept!: () => void;
+    const held = new Promise<void>(resolve => { accept = resolve; });
+    const saved: unknown[] = [];
+    function Workflow() {
+      const [stored, setStored] = useState<WorkoutSet>({ ...set });
+      const [unit, setUnit] = useState<"kg" | "lbs">("kg");
+      return <>
+        <WorkoutSetRow set={stored} exerciseType="weight_reps" weightUnit={unit} previousSet={null}
+          onUpdate={async updates => {
+            saved.push(updates);
+            if (saved.length === 1) await held;
+            setStored(current => ({ ...current, ...updates }));
+          }} onDelete={async () => {}} onComplete={async () => {}} />
+        <button onClick={() => setUnit("lbs")}>Prefer pounds</button>
+        <output role="status">{stored.weight_kg} kg</output>
+      </>;
+    }
+    render(<Workflow />);
+    const input = screen.getByRole("textbox", { name: "weight (kg)" });
+    fireEvent.change(input, { target: { value: "20" } });
+    fireEvent.blur(input);
+    await waitFor(() => expect(saved).toEqual([{ weight_kg: 20 }]));
+    fireEvent.change(input, { target: { value: "12." } });
+    fireEvent.click(screen.getByRole("button", { name: "Prefer pounds" }));
+    fireEvent.change(input, { target: { value: newer } });
+    await act(async () => { accept(); await held; });
+    expect(screen.getByRole("status")).toHaveTextContent("20 kg");
+    expect(screen.getByRole("textbox", { name: "weight (kg)" })).toHaveValue(newer);
+    await act(async () => { fireEvent.blur(input); });
+    expect(saved).toEqual(newer === "12." ? [{ weight_kg: 20 }] : [{ weight_kg: 20 }, { weight_kg: 12.5 }]);
+    expect(screen.getByRole("status")).toHaveTextContent(newer === "12." ? "20 kg" : "12.5 kg");
+  });
+
   it("retains the edited load after a failed write and retries before completion", async () => {
     let stored: WorkoutSet = { ...set };
     let fail = true;
