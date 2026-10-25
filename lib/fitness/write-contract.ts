@@ -70,7 +70,7 @@ export interface WorkoutExerciseMutationRecord {
   exerciseId: string;
   sortOrder: number;
   notes: string | null;
-  restTimerSeconds: number;
+  restTimerSeconds: number | null;
   createdAt: string;
 }
 
@@ -186,6 +186,7 @@ export type WorkoutInvalidTransitionOutcome = {
 };
 
 export type WorkoutTerminalPersistenceOutcome =
+  | WorkoutInvalidOutcome
   | { type: "transitioned"; workout: WorkoutMutationRecord }
   | { type: "already-applied"; workout: WorkoutMutationRecord }
   | WorkoutNotFoundOutcome

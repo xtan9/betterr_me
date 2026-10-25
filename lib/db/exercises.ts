@@ -22,11 +22,13 @@ export class ExercisesDB {
   constructor(private supabase: SupabaseClient) {}
 
   /** Get all exercises visible to the user (presets + custom). RLS handles visibility. */
-  async getAllExercises(): Promise<Exercise[]> {
-    const { data, error } = await this.supabase
+  async getAllExercises(userId?: string): Promise<Exercise[]> {
+    let query = this.supabase
       .from("exercises")
       .select("*, exercise_media(gif_url, thumbnail_url, instructions, alternative_names, exercisedb_id, media_status)")
       .order("name", { ascending: true });
+    if (userId) query = query.or(`user_id.is.null,user_id.eq.${userId}`);
+    const { data, error } = await query;
     if (error) { log.error("Failed to get exercises", error); throw error; }
     return data ?? [];
   }

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { userWorkoutRpc, type WorkoutRpc } from "./workout-rpc";
 import { z } from "zod";
 import {
   EQUIPMENT,
@@ -59,7 +60,7 @@ const routineWithExercisesSchema = z.object({
       target_weight_kg: z.number().nullable(),
       target_duration_seconds: z.number().nullable(),
       target_distance_meters: z.number().nullable(),
-      rest_timer_seconds: z.number(),
+      rest_timer_seconds: z.number().nullable(),
       notes: z.string().nullable(),
       created_at: z.string(),
       exercise: exerciseSchema,
@@ -74,13 +75,14 @@ const routineWithExercisesSchema = z.object({
 export class SupabaseRoutineWorkoutStore
   implements RoutineWorkoutStore, WorkoutRoutineStore
 {
-  constructor(private supabase: SupabaseClient) {}
+  private readonly rpc: WorkoutRpc;
+  constructor(supabase: SupabaseClient, rpc?: WorkoutRpc) { this.rpc = rpc ?? userWorkoutRpc(supabase); }
 
   async createSession(
     userId: string,
     input: RoutineWorkoutSessionInput,
   ): Promise<WorkoutWithExercises> {
-    const { data, error } = await this.supabase.rpc(
+    const { data, error } = await this.rpc(
       "start_workout_from_routine",
       {
         p_user_id: userId,
@@ -100,7 +102,7 @@ export class SupabaseRoutineWorkoutStore
     userId: string,
     input: WorkoutRoutineInput,
   ): Promise<RoutineWithExercises> {
-    const { data, error } = await this.supabase.rpc(
+    const { data, error } = await this.rpc(
       "save_workout_as_routine",
       {
         p_user_id: userId,

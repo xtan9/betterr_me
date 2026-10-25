@@ -1,3 +1,4 @@
+import { visibleExerciseEntries } from "@/lib/fitness/exercise-visibility";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Routine,
@@ -42,13 +43,12 @@ export class RoutinesDB {
     // Reshape nested fields to match TypeScript types
     return (data ?? []).map((r: Record<string, unknown>) => ({
       ...r,
-      exercises: (
-        (r.routine_exercises as Record<string, unknown>[]) ?? []
-      ).map((re: Record<string, unknown>) => ({
+      routine_exercises: visibleExerciseEntries(r.routine_exercises, userId),
+      exercises: visibleExerciseEntries(r.routine_exercises, userId).map((re: Record<string, unknown>) => ({
         ...re,
         exercise: re.exercise,
       })),
-    })) as RoutineWithExercises[];
+    })) as unknown as RoutineWithExercises[];
   }
 
   /**
@@ -88,9 +88,8 @@ export class RoutinesDB {
     // Reshape nested fields to match TypeScript types
     return {
       ...data,
-      exercises: (
-        (data.routine_exercises as Record<string, unknown>[]) ?? []
-      ).map((re: Record<string, unknown>) => ({
+      routine_exercises: visibleExerciseEntries(data.routine_exercises, userId),
+      exercises: visibleExerciseEntries(data.routine_exercises, userId).map((re: Record<string, unknown>) => ({
         ...re,
         exercise: re.exercise,
       })),
@@ -193,7 +192,7 @@ export class RoutinesDB {
       target_weight_kg?: number | null;
       target_duration_seconds?: number | null;
       target_distance_meters?: number | null;
-      rest_timer_seconds?: number;
+      rest_timer_seconds?: number | null;
       notes?: string | null;
     }
   ): Promise<RoutineExercise> {
@@ -224,7 +223,7 @@ export class RoutinesDB {
         target_weight_kg: data.target_weight_kg ?? null,
         target_duration_seconds: data.target_duration_seconds ?? null,
         target_distance_meters: data.target_distance_meters ?? null,
-        rest_timer_seconds: data.rest_timer_seconds ?? 90,
+        rest_timer_seconds: data.rest_timer_seconds === undefined ? 90 : data.rest_timer_seconds,
         notes: data.notes ?? null,
       })
       .select()
@@ -249,7 +248,7 @@ export class RoutinesDB {
       target_weight_kg?: number | null;
       target_duration_seconds?: number | null;
       target_distance_meters?: number | null;
-      rest_timer_seconds?: number;
+      rest_timer_seconds?: number | null;
       notes?: string | null;
       sort_order?: number;
     }

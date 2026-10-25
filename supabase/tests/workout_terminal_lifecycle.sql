@@ -89,6 +89,15 @@ values
     null
   );
 
+-- Completion fixtures now include a performed set; historical zero-set rows
+-- are covered separately by the pre-migration preservation rehearsal.
+insert into public.workout_exercises(workout_id,exercise_id,sort_order)
+ select w.id,e.id,0 from public.workouts w cross join public.exercises e
+ where w.id in ('64700000-0000-0000-0000-000000000401','64700000-0000-0000-0000-000000000402')
+ and e.catalog_key='strength.barbell-bench-press.v1';
+insert into public.workout_sets(workout_exercise_id,set_number,set_type,weight_kg,reps,is_completed)
+select id,1,'warmup',0,1,true from public.workout_exercises where workout_id in ('64700000-0000-0000-0000-000000000401','64700000-0000-0000-0000-000000000402');
+
 select set_config(
   'request.jwt.claim.sub',
   '64700000-0000-0000-0000-000000000002',
@@ -277,6 +286,12 @@ begin
     'in_progress',
     null
   );
+
+  insert into public.workout_exercises(workout_id,exercise_id,sort_order)
+    select '64700000-0000-0000-0000-000000000405',id,0 from public.exercises
+    where catalog_key='strength.barbell-bench-press.v1';
+  insert into public.workout_sets(workout_exercise_id,set_number,is_completed)
+  select id,1,true from public.workout_exercises where workout_id='64700000-0000-0000-0000-000000000405';
 
   -- A failure in the same terminal write rolls back status and completion
   -- metadata together. A NULL title violates the NOT NULL constraint after

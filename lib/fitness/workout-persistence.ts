@@ -1,6 +1,7 @@
 /** Maps workout commands and typed outcomes to the existing Supabase operations. */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { userWorkoutRpc, type WorkoutRpc } from "./workout-rpc";
 
 import type { Workout, RoutineWithExercises, WorkoutWithExercises } from "@/lib/db/types";
 
@@ -44,10 +45,10 @@ export class SupabaseWorkoutStartPersistence
   private readonly routines: RoutinesDB;
   private readonly routineConversion: RoutineToWorkoutConversion;
 
-  constructor(private readonly supabase: SupabaseClient) {
+  constructor(private readonly supabase: SupabaseClient, rpc?: WorkoutRpc) {
     this.routines = new RoutinesDB(supabase);
     this.routineConversion = new RoutineToWorkoutConversion(
-      new SupabaseRoutineWorkoutStore(supabase),
+      new SupabaseRoutineWorkoutStore(supabase, rpc),
     );
   }
 
@@ -208,7 +209,7 @@ function mapStoredWorkoutExercise(
     exerciseId: storedString(row, "exercise_id", "workout exercise"),
     sortOrder: storedNumber(row, "sort_order", "workout exercise"),
     notes: storedNullableString(row, "notes", "workout exercise"),
-    restTimerSeconds: storedNumber(row, "rest_timer_seconds", "workout exercise"),
+    restTimerSeconds: storedNullableNumber(row, "rest_timer_seconds", "workout exercise"),
     createdAt: storedString(row, "created_at", "workout exercise"),
   };
 }
@@ -260,6 +261,7 @@ function mapStoredMutationOutcome(
 
 function mapStoredTerminalOutcome(value: unknown): WorkoutTerminalPersistenceOutcome {
   const outcome = storedObject(value, "workout terminal outcome");
+  if (outcome.type === "invalid" && typeof outcome.field === "string" && typeof outcome.message === "string") return { type: "invalid", field: outcome.field, message: outcome.message };
   if (outcome.type === "not-found") return { type: "not-found" };
   if (
     (outcome.type === "transitioned" || outcome.type === "already-applied") &&
@@ -299,12 +301,12 @@ function mapStoredRemovalOutcome(value: unknown): unknown {
 }
 
 async function callWorkoutMutation<T>(
-  supabase: SupabaseClient,
+  rpc: WorkoutRpc,
   functionName: string,
   args: Record<string, unknown>,
   map: (value: unknown) => T,
 ): Promise<T> {
-  const { data, error } = await supabase.rpc(functionName, args);
+  const { data, error } = await rpc(functionName, args);
   if (error) throw error;
   return map(data);
 }
@@ -352,7 +354,8 @@ function toStoredWorkoutSetChanges(
 export class SupabaseWorkoutMutationPersistence
   implements WorkoutMutationPersistence
 {
-  constructor(private readonly supabase: SupabaseClient) {}
+  private readonly rpc: WorkoutRpc;
+  constructor(supabase: SupabaseClient, rpc?: WorkoutRpc) { this.rpc = rpc ?? userWorkoutRpc(supabase); }
 
   updateWorkout(
     userId: string,
@@ -360,7 +363,7 @@ export class SupabaseWorkoutMutationPersistence
     changes: WorkoutDetailChanges,
   ): Promise<WorkoutUpdatePersistenceOutcome> {
     return callWorkoutMutation(
-      this.supabase,
+      this.rpc,
       "update_active_workout",
       {
         p_user_id: userId,
@@ -378,7 +381,7 @@ export class SupabaseWorkoutMutationPersistence
     changes: WorkoutDetailChanges,
   ): Promise<WorkoutTerminalPersistenceOutcome> {
     return callWorkoutMutation(
-      this.supabase,
+      this.rpc,
       "complete_workout_atomically",
       {
         p_user_id: userId,
@@ -396,7 +399,7 @@ export class SupabaseWorkoutMutationPersistence
     changes: WorkoutDetailChanges,
   ): Promise<WorkoutTerminalPersistenceOutcome> {
     return callWorkoutMutation(
-      this.supabase,
+      this.rpc,
       "discard_workout_atomically",
       {
         p_user_id: userId,
@@ -414,7 +417,7 @@ export class SupabaseWorkoutMutationPersistence
     restTimerSeconds?: number,
   ): Promise<WorkoutExerciseAddPersistenceOutcome> {
     return callWorkoutMutation(
-      this.supabase,
+      this.rpc,
       "add_active_workout_exercise",
       {
         p_user_id: userId,
@@ -433,7 +436,7 @@ export class SupabaseWorkoutMutationPersistence
     changes: WorkoutExerciseChanges,
   ): Promise<WorkoutExerciseUpdatePersistenceOutcome> {
     return callWorkoutMutation(
-      this.supabase,
+      this.rpc,
       "update_active_workout_exercise",
       {
         p_user_id: userId,
@@ -451,7 +454,7 @@ export class SupabaseWorkoutMutationPersistence
     workoutExerciseId: string,
   ): Promise<WorkoutExerciseRemovePersistenceOutcome> {
     return callWorkoutMutation(
-      this.supabase,
+      this.rpc,
       "remove_active_workout_exercise",
       {
         p_user_id: userId,
@@ -469,7 +472,7 @@ export class SupabaseWorkoutMutationPersistence
     changes: WorkoutSetChanges,
   ): Promise<WorkoutSetAddPersistenceOutcome> {
     return callWorkoutMutation(
-      this.supabase,
+      this.rpc,
       "add_active_workout_set",
       {
         p_user_id: userId,
@@ -489,7 +492,7 @@ export class SupabaseWorkoutMutationPersistence
     changes: WorkoutSetChanges,
   ): Promise<WorkoutSetUpdatePersistenceOutcome> {
     return callWorkoutMutation(
-      this.supabase,
+      this.rpc,
       "update_active_workout_set",
       {
         p_user_id: userId,
@@ -509,7 +512,7 @@ export class SupabaseWorkoutMutationPersistence
     setId: string,
   ): Promise<WorkoutSetRemovePersistenceOutcome> {
     return callWorkoutMutation(
-      this.supabase,
+      this.rpc,
       "remove_active_workout_set",
       {
         p_user_id: userId,

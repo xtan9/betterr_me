@@ -54,6 +54,13 @@ function findTool(name: string) {
 }
 
 describe("workoutTools", () => {
+  it("keeps read-only trusted MCP principals from starting or completing workouts", async () => {
+    const ctx = makeCtx({ principal: { type: "user", userId: "user-123", credential: "mcp" }, permissions: ["read"] } as Partial<ToolContext>);
+    await expect(findTool("startWorkout").execute({}, ctx)).rejects.toThrow("Write permission required");
+    await expect(findTool("completeWorkout").execute({ workoutId: "w1" }, ctx)).rejects.toThrow("Write permission required");
+    expect(mockStartWorkout).not.toHaveBeenCalled();
+    expect(mockCompleteWorkout).not.toHaveBeenCalled();
+  });
   beforeEach(() => vi.clearAllMocks());
 
   it("returns 8 tool definitions", () => {
@@ -198,7 +205,7 @@ describe("workoutTools", () => {
       { workoutId: "w1" },
       ctx,
     );
-    expect(mockGetWorkoutWithExercises).toHaveBeenCalledWith("w1");
+    expect(mockGetWorkoutWithExercises).toHaveBeenCalledWith("w1", "user-123");
     expect(result).toEqual({ id: "w1", exercises: [] });
   });
 

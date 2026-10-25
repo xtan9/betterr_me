@@ -60,6 +60,10 @@ describe("toKg", () => {
 });
 
 describe("formatWeight", () => {
+  it("marks an unrepresentable aggregate or unit conversion unavailable", () => {
+    expect(formatWeight(Infinity, "kg")).toBe("—");
+    expect(formatWeight(Number.MAX_VALUE, "lbs")).toBe("—");
+  });
   it("returns formatted string with kg suffix", () => {
     expect(formatWeight(100, "kg")).toBe("100 kg");
   });

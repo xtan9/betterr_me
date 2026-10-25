@@ -99,7 +99,7 @@ function RoutineExerciseRow({
           <span className="truncate text-body font-medium">
             {re.exercise.name}
           </span>
-          {re.rest_timer_seconds > 0 && (
+          {re.rest_timer_seconds !== null && re.rest_timer_seconds > 0 && (
             <span className="text-caption text-muted-foreground shrink-0 ml-2">
               {re.rest_timer_seconds}s {t("rest")}
             </span>

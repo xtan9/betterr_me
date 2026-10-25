@@ -1,3 +1,4 @@
+import type { WorkoutRpc } from "./workout-rpc";
 /** Workout commands and their production composition; callers keep one mutation interface. */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -416,9 +417,9 @@ export function toWorkoutSetResponse(set: WorkoutSetMutationRecord) {
   };
 }
 
-export function createWorkoutWrites(supabase: SupabaseClient): WorkoutWrites {
-  const starts = new SupabaseWorkoutStartPersistence(supabase);
-  const mutations = new SupabaseWorkoutMutationPersistence(supabase);
+export function createWorkoutWrites(supabase: SupabaseClient, rpc?: WorkoutRpc): WorkoutWrites {
+  const starts = new SupabaseWorkoutStartPersistence(supabase, rpc);
+  const mutations = new SupabaseWorkoutMutationPersistence(supabase, rpc);
   return new WorkoutWrites({
     startBlank: starts.startBlank.bind(starts),
     getRoutine: starts.getRoutine.bind(starts),

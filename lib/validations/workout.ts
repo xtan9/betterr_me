@@ -42,8 +42,8 @@ export const workoutSetCreateSchema = z.object({
   set_type: z
     .enum(SET_TYPES)
     .default("normal"),
-  weight_kg: z.number().min(0).max(99999.99).nullable().optional(),
-  reps: z.number().int().min(0).max(9999).nullable().optional(),
+  weight_kg: z.number().finite().min(0).nullable().optional(),
+  reps: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).nullable().optional(),
   duration_seconds: z.number().int().min(0).max(86400).nullable().optional(),
   distance_meters: z.number().min(0).max(999999.99).nullable().optional(),
   rpe: z.number().int().min(1).max(10).nullable().optional(),
@@ -54,8 +54,8 @@ export const workoutSetCreateSchema = z.object({
 export const workoutSetUpdateSchema = z
   .object({
     set_type: z.enum(SET_TYPES).optional(),
-    weight_kg: z.number().min(0).max(99999.99).nullable().optional(),
-    reps: z.number().int().min(0).max(9999).nullable().optional(),
+    weight_kg: z.number().finite().min(0).nullable().optional(),
+    reps: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).nullable().optional(),
     duration_seconds: z
       .number()
       .int()

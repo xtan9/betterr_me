@@ -12,7 +12,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useExerciseHistory } from "@/lib/hooks/use-exercise-history";
-import { displayWeight } from "@/lib/fitness/units";
+import { displayWeight, finiteAggregate } from "@/lib/fitness/units";
 import type { WeightUnit } from "@/lib/db/types";
 
 type DateRange = "1m" | "3m" | "6m" | "all";
@@ -62,11 +62,11 @@ export function ExerciseProgressChart({
       }),
       weight:
         entry.best_set_weight_kg != null
-          ? displayWeight(entry.best_set_weight_kg, weightUnit)
+          ? finiteAggregate(displayWeight(entry.best_set_weight_kg, weightUnit))
           : null,
       volume:
         entry.total_volume != null
-          ? Math.round(displayWeight(entry.total_volume, weightUnit))
+          ? finiteAggregate(Math.round(displayWeight(entry.total_volume, weightUnit)))
           : null,
     }));
   }, [filteredData, weightUnit]);

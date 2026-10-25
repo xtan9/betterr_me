@@ -69,10 +69,10 @@ export function WorkoutHistoryCard({
             <span>{t("exercises", { count: workout.exerciseCount })}</span>
             <span className="text-border">|</span>
             <span>{t("setsCount", { count: workout.totalSets })}</span>
-            {workout.totalVolume > 0 && (
+            {(workout.totalVolume === null || workout.totalVolume > 0) && (
               <>
                 <span className="text-border">|</span>
-                <span>{formatWeight(workout.totalVolume, weightUnit)}</span>
+                <span>{workout.totalVolume === null ? "—" : formatWeight(workout.totalVolume, weightUnit)}</span>
               </>
             )}
           </div>

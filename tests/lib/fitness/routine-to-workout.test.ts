@@ -322,9 +322,9 @@ describe("RoutineToWorkoutConversion.start", () => {
   it.each([
     ["target_sets above 20", { target_sets: 21 }],
     ["negative target reps", { target_reps: -1 }],
-    ["target reps above 9999", { target_reps: 10_000 }],
+    ["unsafe target reps", { target_reps: Number.MAX_SAFE_INTEGER + 1 }],
     ["negative target weight", { target_weight_kg: -0.01 }],
-    ["target weight above 99999.99", { target_weight_kg: 100_000 }],
+    ["non-finite target weight", { target_weight_kg: Infinity }],
     ["negative target duration", { target_duration_seconds: -1 }],
     ["target duration above 86400", { target_duration_seconds: 86_401 }],
     ["negative target distance", { target_distance_meters: -0.01 }],

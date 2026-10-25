@@ -4,6 +4,8 @@ import type { AuthenticatedRecurringTaskPrincipal } from "@/lib/recurring-tasks"
 
 export interface ToolContext {
   userId: string;
+  /** Verified MCP scopes; cookie chat has its own write authentication. */
+  permissions?: readonly string[];
   supabase: SupabaseClient;
   date: string; // YYYY-MM-DD, user's local date
   timezone: string; // e.g. "America/Toronto"
