@@ -50,6 +50,22 @@ test.describe('Workout completion journey', () => {
   test('rejects an empty finish, then saves and reads back a performed workout', async ({ page }) => {
     const workoutTitle = RUN_CONTEXT.ownedName('Workout Completion');
 
+    // Other journeys share this run's account and may have saved pounds.
+    // Establish the input unit through Settings before asserting canonical kg.
+    await page.goto('/dashboard/settings');
+    const kilograms = page.getByRole('radio', { name: 'Kilograms (kg)', exact: true });
+    await expect(kilograms).toBeVisible();
+    await kilograms.click();
+    await expect(kilograms).toBeChecked();
+    const saveUnit = page.getByRole('button', { name: 'Save', exact: true }).nth(1);
+    if (await saveUnit.isEnabled()) {
+      const saveResponsePromise = page.waitForResponse((response) => response.request().method() === 'POST'
+        && new URL(response.url()).pathname === '/api/preferences/fitness');
+      await saveUnit.click();
+      expect((await saveResponsePromise).status()).toBe(200);
+      await expect(page.getByRole('button', { name: 'Saved', exact: true })).toBeVisible();
+    }
+
     await page.goto('/workouts');
 
     const startResponsePromise = page.waitForResponse((response) => (
@@ -125,6 +141,7 @@ test.describe('Workout completion journey', () => {
     const setPath = `${setsPath}/${set.id}`;
     const fields = page.getByRole('spinbutton');
     await expect(fields).toHaveCount(2);
+    await expect(page.getByText('KG', { exact: true })).toBeVisible();
     const weightResponsePromise = page.waitForResponse((response) => response.request().method() === 'PATCH'
       && new URL(response.url()).pathname === setPath);
     await fields.nth(0).fill('20');
