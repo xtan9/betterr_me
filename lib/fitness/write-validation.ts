@@ -276,12 +276,12 @@ export function normalizeWorkoutSetChanges(
     changes.setType = value.setType;
   }
   if (hasDefinedValue(value, "weightKg")) {
-    const weight = normalizeNumberChange(value.weightKg, "weightKg", { maximum: 99999.99 });
+    const weight = normalizeNumberChange(value.weightKg, "weightKg", { maximum: Number.MAX_VALUE });
     if (!weight.ok) return weight;
     changes.weightKg = weight.value;
   }
   if (hasDefinedValue(value, "reps")) {
-    const reps = normalizeNumberChange(value.reps, "reps", { integer: true, maximum: 9999 });
+    const reps = normalizeNumberChange(value.reps, "reps", { integer: true, maximum: Number.MAX_SAFE_INTEGER });
     if (!reps.ok) return reps;
     changes.reps = reps.value;
   }

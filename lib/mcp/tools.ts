@@ -48,6 +48,7 @@ export function registerTools(server: McpServer): void {
 
     return {
       userId,
+      permissions: (extra.authInfo as { scopes?: string[] } | undefined)?.scopes ?? [],
       supabase,
       date: today,
       timezone: "UTC",

@@ -18,5 +18,10 @@ export function toKg(value: number, unit: WeightUnitPreference): number {
 /** Format weight with unit suffix for display. */
 export function formatWeight(kg: number, unit: WeightUnitPreference): string {
   const display = displayWeight(kg, unit);
-  return `${display} ${unit}`;
+  return Number.isFinite(display) ? `${display} ${unit}` : "—";
+}
+
+/** Unrepresentable derived totals remain unavailable; the performed values are intact. */
+export function finiteAggregate(value: number): number | null {
+  return Number.isFinite(value) ? value : null;
 }

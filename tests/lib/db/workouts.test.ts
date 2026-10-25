@@ -33,6 +33,36 @@ describe("WorkoutsDB", () => {
     restoreMockSupabaseThen();
   });
 
+  it("reads the captured native definition after the live catalog is renamed", async () => {
+    const definition = { catalogKey: 'strength.barbell-bench-press.v1', name: { en: 'Recorded bench', zh: '已记录卧推' }, equipment: 'barbell', mode: 'weight_reps', convention: 'barbell-total' };
+    const live = { id: EXERCISE_ID, name: 'Renamed live definition', equipment: 'barbell', exercise_type: 'weight_reps' };
+    mockSupabaseClient.setMockResponse({ id: WORKOUT_ID, user_id: USER_ID, native_completion: { version: 1, exercises: [{ id: 'we-1', definition }] }, workout_exercises: [{ id: 'we-1', exercise_id: EXERCISE_ID, exercise: live, sets: [] }] });
+    const result = await workoutsDB.getWorkoutWithExercises(WORKOUT_ID, USER_ID);
+    expect(result?.exercises[0].exercise).toMatchObject({ id: EXERCISE_ID, name: 'Recorded bench', equipment: 'barbell', exercise_type: 'weight_reps' });
+    expect(result?.exercises[0]).toMatchObject({ recorded_definition: definition, live_exercise: live });
+    mockSupabaseClient.expectQuery({ method: 'eq', args: ['user_id', USER_ID] });
+  });
+  it("does not expose a foreign custom reference through a service-backed owned workout read", async () => {
+    mockSupabaseClient.setMockResponse({ id: WORKOUT_ID, user_id: USER_ID, workout_exercises: [{ id: 'legacy-cross-owner-entry', exercise: { id: 'private-id', user_id: 'another-owner', name: 'Private definition' }, sets: [] }] });
+    const result = await workoutsDB.getWorkoutWithExercises(WORKOUT_ID, USER_ID);
+    expect(result?.exercises).toEqual([]);
+    expect(JSON.stringify(result)).not.toContain('Private definition');
+  });
+
+  it("does not silently replace an unsupported recorded document with live catalog facts", async () => {
+    mockSupabaseClient.setMockResponse({ id: WORKOUT_ID, native_completion: { version: 2 }, workout_exercises: [{ id: "entry", exercise: { name: "Current catalog" }, sets: [] }] });
+    await expect(workoutsDB.getWorkoutWithExercises(WORKOUT_ID, USER_ID)).rejects.toThrow("Unsupported recorded workout definition");
+  });
+
+  it("keeps raw large values while making overflowing history aggregates unavailable", async () => {
+    const sets = [{ weight_kg: Number.MAX_VALUE, reps: 2, is_completed: true, set_type: "normal" }];
+    mockSupabaseClient.setMockResponse([{ id: WORKOUT_ID, workout_exercises: [{ exercise: { name: "Bench" }, sets }] }]);
+    expect((await workoutsDB.getWorkoutsWithSummary(USER_ID))[0].totalVolume).toBeNull();
+    mockSupabaseClient.setMockResponse([{ workout: { id: WORKOUT_ID, started_at: "2026-10-25" }, sets }]);
+    const history = await workoutsDB.getExerciseHistory(EXERCISE_ID, USER_ID);
+    expect(history[0]).toMatchObject({ best_set_weight_kg: Number.MAX_VALUE, best_set_reps: 2, total_volume: null });
+  });
+
   // ===========================================================================
   // getActiveWorkout
   // ===========================================================================
@@ -633,7 +663,7 @@ describe("WorkoutsDB", () => {
         *,
         workout_exercises (
           id,
-          exercise:exercises (name),
+          exercise:exercises (name, user_id),
           sets:workout_sets (weight_kg, reps, is_completed, set_type)
         )
       `,

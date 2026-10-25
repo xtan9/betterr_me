@@ -36,7 +36,7 @@ describe("Workout start mutation architecture boundaries", () => {
     const tools = source("lib/ai/tools/workouts.ts");
     const start = section(tools, 'name: "startWorkout"', 'name: "completeWorkout"');
 
-    expect(start).toContain("createWorkoutWrites(ctx.supabase).start");
+    expect(start).toContain("assistantWorkoutWrites(ctx).start");
     expect(start).toContain("Always confirm with the user first");
     expect(start).not.toMatch(/new WorkoutsDB|\.startWorkout\(/);
   });

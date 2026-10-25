@@ -162,8 +162,8 @@ describe("workoutSetCreateSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects weight_kg above maximum", () => {
-    const result = workoutSetCreateSchema.safeParse({ weight_kg: 100000 });
+  it("rejects non-finite weight_kg", () => {
+    const result = workoutSetCreateSchema.safeParse({ weight_kg: Infinity });
     expect(result.success).toBe(false);
   });
 
@@ -182,8 +182,8 @@ describe("workoutSetCreateSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects reps above maximum", () => {
-    const result = workoutSetCreateSchema.safeParse({ reps: 10000 });
+  it("rejects unsafe repetitions", () => {
+    const result = workoutSetCreateSchema.safeParse({ reps: Number.MAX_SAFE_INTEGER + 1 });
     expect(result.success).toBe(false);
   });
 

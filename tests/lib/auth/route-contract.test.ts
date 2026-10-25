@@ -12,6 +12,7 @@ const apiRoot = join(process.cwd(), "app", "api");
  * Keep this list narrow and reviewed whenever a route is added.
  */
 const deliberateAuthExceptions: Record<string, string> = {
+  "mobile/train/completions/route.ts": "authenticateNativeRequest verifies captured user JWT; owner-checked atomic completion, immutable receipt and projection; no cookie or service fallback",
   "mobile/focus/app-limits/continuations/route.ts": "authenticateNativeRequest verifies bearer owner; immutable version-checked continuation receipts with owner RLS, no cookie fallback",
   "mobile/focus/app-limits/continuations/context/route.ts": "authenticateNativeRequest verifies bearer owner; owner RLS current journal versions only, no cookie fallback",
   "mobile/focus/app-limits/history/route.ts": "authenticateNativeRequest verifies bearer owner; sanitized immutable native journal commands and owner RLS history, no cookie fallback",

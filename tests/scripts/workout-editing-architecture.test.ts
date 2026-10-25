@@ -51,7 +51,7 @@ describe("Active workout editing architecture boundaries", () => {
     const tools = source("lib/ai/tools/workouts.ts");
     const completion = section(tools, 'name: "completeWorkout"', 'name: "getWorkoutDetails"');
 
-    expect(completion).toContain("createWorkoutWrites(ctx.supabase).complete");
+    expect(completion).toContain("assistantWorkoutWrites(ctx).complete");
     expect(completion).not.toMatch(/\.updateWorkout\(/);
   });
 

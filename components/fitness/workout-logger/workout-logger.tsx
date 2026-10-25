@@ -124,7 +124,7 @@ export function WorkoutLogger() {
               handleCompleteSet(
                 exercise.id,
                 setId,
-                exercise.rest_timer_seconds
+                exercise.rest_timer_seconds ?? 0
               )
             }
             onUpdateNotes={async (notes) => {

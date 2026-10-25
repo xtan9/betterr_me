@@ -20,6 +20,7 @@ export function computePersonalRecords(
   );
 
   let bestWeight: { value: number; date: string } | null = null;
+  let volumeUnavailable = false;
   let bestVolume: { value: number; date: string } | null = null;
   let bestReps: { value: number; date: string } | null = null;
   let bestDuration: { value: number; date: string } | null = null;
@@ -34,7 +35,8 @@ export function computePersonalRecords(
     }
 
     const volume = (set.weight_kg ?? 0) * (set.reps ?? 0);
-    if (volume > 0 && (!bestVolume || volume > bestVolume.value)) {
+    if (!Number.isFinite(volume)) volumeUnavailable = true;
+    if (Number.isFinite(volume) && volume > 0 && (!bestVolume || volume > bestVolume.value)) {
       bestVolume = { value: volume, date: set.workout_started_at };
     }
 
@@ -62,7 +64,7 @@ export function computePersonalRecords(
     exercise_id: exerciseId,
     best_weight_kg: bestWeight?.value ?? null,
     best_reps: bestReps?.value ?? null,
-    best_volume: bestVolume?.value ?? null,
+    best_volume: volumeUnavailable ? null : bestVolume?.value ?? null,
     best_duration_seconds: bestDuration?.value ?? null,
     achieved_at:
       bestWeight?.date ??
@@ -120,7 +122,7 @@ export function isNewPR(
   // Volume PR — only for weight+reps exercises
   if (fields.showWeight && fields.showReps) {
     const volume = (set.weight_kg ?? 0) * (set.reps ?? 0);
-    if (volume > 0) {
+    if (Number.isFinite(volume) && volume > 0) {
       result.isVolumePR =
         currentPR?.best_volume == null || volume > currentPR.best_volume;
     }

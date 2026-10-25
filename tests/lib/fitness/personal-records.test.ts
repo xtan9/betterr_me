@@ -25,6 +25,13 @@ const makeSet = (
 });
 
 describe("computePersonalRecords", () => {
+  it("does not invent a finite volume record when a performed set overflows", () => {
+    const set = makeSet({ weight_kg: Number.MAX_VALUE, reps: 2 });
+    const record = computePersonalRecords("ex-1", [makeSet({ weight_kg: 10, reps: 2 }), set]);
+    expect(record.best_weight_kg).toBe(Number.MAX_VALUE);
+    expect(record.best_volume).toBeNull();
+    expect(isNewPR(set, "weight_reps", null).isVolumePR).toBe(false);
+  });
   describe("empty sets", () => {
     it("returns all-null PRs when given an empty array", () => {
       const result = computePersonalRecords("ex-1", []);

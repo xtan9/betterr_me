@@ -1,3 +1,6 @@
+import { finiteAggregate } from "@/lib/fitness/units";
+import { visibleExerciseEntries } from "@/lib/fitness/exercise-visibility";
+import { recordedDefinition, recordedExercise } from "@/lib/fitness/recorded-definition";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Workout,
@@ -22,7 +25,7 @@ export interface WorkoutSummary {
   duration_seconds: number | null;
   exerciseCount: number;
   exerciseNames: string[];
-  totalVolume: number;
+  totalVolume: number | null;
   totalSets: number;
 }
 
@@ -64,7 +67,8 @@ export class WorkoutsDB {
     // Reshape nested fields to match TypeScript types
     return {
       ...data,
-      exercises: (data.workout_exercises ?? []).map(
+      workout_exercises: visibleExerciseEntries(data.workout_exercises, userId),
+      exercises: visibleExerciseEntries(data.workout_exercises, userId).map(
         (we: Record<string, unknown>) => ({
           ...we,
           exercise: we.exercise,
@@ -83,9 +87,10 @@ export class WorkoutsDB {
    * Returns null if not found (PGRST116).
    */
   async getWorkoutWithExercises(
-    workoutId: string
+    workoutId: string,
+    userId?: string,
   ): Promise<WorkoutWithExercises | null> {
-    const { data, error } = await this.supabase
+    let query = this.supabase
       .from("workouts")
       .select(
         `
@@ -97,8 +102,9 @@ export class WorkoutsDB {
         )
       `
       )
-      .eq("id", workoutId)
-      .order("sort_order", {
+      .eq("id", workoutId);
+    if (userId) query = query.eq("user_id", userId);
+    const { data, error } = await query.order("sort_order", {
         referencedTable: "workout_exercises",
         ascending: true,
       })
@@ -113,10 +119,10 @@ export class WorkoutsDB {
     // Reshape nested fields to match TypeScript types
     return {
       ...data,
-      exercises: (data.workout_exercises ?? []).map(
+      workout_exercises: visibleExerciseEntries(data.workout_exercises, userId),
+      exercises: visibleExerciseEntries(data.workout_exercises, userId).map(
         (we: Record<string, unknown>) => ({
-          ...we,
-          exercise: we.exercise,
+          ...recordedExercise(data.native_completion, we),
           sets: ((we.sets as Record<string, unknown>[]) ?? []).sort(
             (a: Record<string, unknown>, b: Record<string, unknown>) =>
               (a.set_number as number) - (b.set_number as number)
@@ -213,7 +219,7 @@ export class WorkoutsDB {
         *,
         workout_exercises (
           id,
-          exercise:exercises (name),
+          exercise:exercises (name, user_id),
           sets:workout_sets (weight_kg, reps, is_completed, set_type)
         )
       `
@@ -229,7 +235,7 @@ export class WorkoutsDB {
     }
 
     return (data ?? []).map((w: Record<string, unknown>) => {
-      const exercises = (w.workout_exercises as Record<string, unknown>[]) ?? [];
+      const exercises = visibleExerciseEntries(w.workout_exercises, userId);
       return {
         id: w.id as string,
         title: w.title as string,
@@ -241,10 +247,10 @@ export class WorkoutsDB {
         exerciseNames: exercises
           .map(
             (we) =>
-              (we.exercise as { name: string } | null)?.name
+              recordedDefinition(w.native_completion, we.id)?.name.en ?? (we.exercise as { name: string } | null)?.name
           )
           .filter(Boolean) as string[],
-        totalVolume: exercises.reduce((sum: number, we) => {
+        totalVolume: finiteAggregate(exercises.reduce((sum: number, we) => {
           const sets = (we.sets as Record<string, unknown>[]) ?? [];
           return (
             sum +
@@ -258,7 +264,7 @@ export class WorkoutsDB {
                 0
               )
           );
-        }, 0),
+        }, 0)),
         totalSets: exercises.reduce((sum: number, we) => {
           const sets = (we.sets as Record<string, unknown>[]) ?? [];
           return (
@@ -334,7 +340,7 @@ export class WorkoutsDB {
         workout_id: workout.id,
         best_set_weight_kg: weights.length > 0 ? Math.max(...weights) : null,
         best_set_reps: reps.length > 0 ? Math.max(...reps) : null,
-        total_volume: completedNormal.length > 0 ? volume : null,
+        total_volume: completedNormal.length > 0 ? finiteAggregate(volume) : null,
         total_sets: completedNormal.length,
       };
     });

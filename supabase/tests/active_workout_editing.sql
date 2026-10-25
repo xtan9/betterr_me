@@ -174,7 +174,7 @@ values
     'normal',
     40,
     8,
-    false,
+    true,
     null
   );
 

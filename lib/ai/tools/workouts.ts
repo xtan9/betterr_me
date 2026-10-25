@@ -1,7 +1,7 @@
+import { assistantWorkoutWrites } from "@/lib/fitness/assistant-workouts";
 import { z } from "zod";
 import { WorkoutsDB, ExercisesDB, RoutinesDB } from "@/lib/db";
 import {
-  createWorkoutWrites,
   toWorkoutResponse,
   type WorkoutStartOutcome,
   type WorkoutStartSource,
@@ -62,7 +62,7 @@ export function workoutTools(): ToolDefinition[] {
         const source: WorkoutStartSource = params.routineId === undefined
           ? { type: "blank", title: params.name }
           : { type: "routine", routineId: params.routineId };
-        const outcome = await createWorkoutWrites(ctx.supabase).start({
+        const outcome = await assistantWorkoutWrites(ctx).start({
           userId: ctx.userId,
           source,
         });
@@ -77,7 +77,7 @@ export function workoutTools(): ToolDefinition[] {
         notes: z.string().optional().describe("Notes about the workout"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const outcome = await createWorkoutWrites(ctx.supabase).complete({
+        const outcome = await assistantWorkoutWrites(ctx).complete({
           userId: ctx.userId,
           workoutId: params.workoutId,
           notes: params.notes ?? null,
@@ -98,7 +98,7 @@ export function workoutTools(): ToolDefinition[] {
       }),
       execute: async (params, ctx: ToolContext) => {
         const db = new WorkoutsDB(ctx.supabase);
-        const workout = await db.getWorkoutWithExercises(params.workoutId);
+        const workout = await db.getWorkoutWithExercises(params.workoutId, ctx.userId);
         if (!workout) return { error: "Workout not found" };
         return workout;
       },
@@ -109,7 +109,7 @@ export function workoutTools(): ToolDefinition[] {
       parameters: z.object({}),
       execute: async (_params, ctx: ToolContext) => {
         const db = new ExercisesDB(ctx.supabase);
-        return db.getAllExercises();
+        return db.getAllExercises(ctx.userId);
       },
     },
     {

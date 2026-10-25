@@ -20,8 +20,8 @@ export const routineUpdateSchema = z
 export const routineExerciseAddSchema = z.object({
   exercise_id: z.string().uuid(),
   target_sets: z.number().int().min(1).max(20).default(3),
-  target_reps: z.number().int().min(0).max(9999).nullable().optional(),
-  target_weight_kg: z.number().min(0).max(99999.99).nullable().optional(),
+  target_reps: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).nullable().optional(),
+  target_weight_kg: z.number().finite().min(0).nullable().optional(),
   target_duration_seconds: z
     .number()
     .int()
@@ -35,7 +35,7 @@ export const routineExerciseAddSchema = z.object({
     .max(999999.99)
     .nullable()
     .optional(),
-  rest_timer_seconds: z.number().int().min(0).max(600).default(90),
+  rest_timer_seconds: z.number().int().min(0).max(600).nullable().default(90),
   notes: z.string().max(2000).nullable().optional(),
 });
 
@@ -43,8 +43,8 @@ export const routineExerciseAddSchema = z.object({
 export const routineExerciseUpdateSchema = z
   .object({
     target_sets: z.number().int().min(1).max(20).optional(),
-    target_reps: z.number().int().min(0).max(9999).nullable().optional(),
-    target_weight_kg: z.number().min(0).max(99999.99).nullable().optional(),
+    target_reps: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).nullable().optional(),
+    target_weight_kg: z.number().finite().min(0).nullable().optional(),
     target_duration_seconds: z
       .number()
       .int()
@@ -58,7 +58,7 @@ export const routineExerciseUpdateSchema = z
       .max(999999.99)
       .nullable()
       .optional(),
-    rest_timer_seconds: z.number().int().min(0).max(600).optional(),
+    rest_timer_seconds: z.number().int().min(0).max(600).nullable().optional(),
     notes: z.string().max(2000).nullable().optional(),
     sort_order: z.number().optional(),
   })

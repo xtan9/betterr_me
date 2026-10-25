@@ -13,7 +13,7 @@ export interface RoutineExerciseInput {
   targetWeightKg?: number | null;
   targetDurationSeconds?: number | null;
   targetDistanceMeters?: number | null;
-  restTimerSeconds?: number;
+  restTimerSeconds?: number | null;
   notes?: string | null;
 }
 
@@ -23,7 +23,7 @@ export interface RoutineExerciseChanges {
   targetWeightKg?: number | null;
   targetDurationSeconds?: number | null;
   targetDistanceMeters?: number | null;
-  restTimerSeconds?: number;
+  restTimerSeconds?: number | null;
   notes?: string | null;
   sortOrder?: number;
 }

@@ -166,6 +166,13 @@ class InMemoryRoutineWorkoutStore implements RoutineWorkoutStore {
 }
 
 describe("WorkoutToRoutineConversion.save", () => {
+  it("preserves native precision and unknown rest when saving performed results as a routine", async () => {
+    const store = new InMemoryWorkoutRoutineStore();
+    const entry = workoutExercise(BENCH_PRESS_ID, "weight_reps", 0, [workoutSet(BENCH_PRESS_ID, 1, { weight_kg: 0.123, reps: Number.MAX_SAFE_INTEGER })]);
+    entry.rest_timer_seconds = null;
+    await new WorkoutToRoutineConversion(store).save("user-1", "Exact native results", workoutWith([entry]));
+    expect(store.input?.exercises[0]).toMatchObject({ target_weight_kg: 0.123, target_reps: 9007199254740991, rest_timer_seconds: null });
+  });
   it("sorts exercises and infers one reusable target from completed normal sets", async () => {
     const store = new InMemoryWorkoutRoutineStore();
     const workout = workoutWith([
