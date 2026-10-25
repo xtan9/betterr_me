@@ -1,6 +1,6 @@
 import { authenticateNativeRequest } from '@/lib/auth/native-request';
 import { log } from '@/lib/logger';
-import { trainCompletionEnvelopeSchema, trainCompletionProtocolSchema } from '@/lib/validations/train-completion';
+import { trainCompletionEnvelopeSchema, trainCompletionProtocolSchema } from '@/lib/validations/workout-completion';
 
 const headers = { 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const failure = (code: string, status: number) => Response.json({ protocolVersion: 1, error: { code } }, { status, headers });
