@@ -104,7 +104,7 @@ backend unit/build checks alone do not establish those gates.
 Coordinated authenticated proof passed 12 cases on 2026-10-25: five-mode mobile
 upload, unchanged #415 reader/renderer, process interruption/retry, old v1 worker
 upload followed by current upgrade/unit change/retry, owner and fresh-install
-isolation, 30 mixed legacy/v1/v2 rows over two pages with tied timestamps, captured
+isolation, 24 mixed legacy/v1/v2 rows over two pages with tied timestamps, captured
 versus live names after a preset rename, and owned delete/retry returning the
 original receipt without resurrection. The initial pagination run exposed a
 missing legacy control fixture; adding an ordinary owned legacy completion
@@ -112,7 +112,7 @@ resolved that test setup gap without changing guards. Exact preset metadata was
 restored; generated users, sessions, fitness rows and temporary credentials were
 removed. Native Form/gesture/appearance acceptance is still a separate mobile gate.
 
-Final local backend validation: 501 Vitest suites / 6,305 tests passed (21
+Final local backend validation at `c2d0a47e`: 505 Vitest suites / 6,320 tests passed (21
 explicit live/integration skips); all 84 SQL fixtures passed without residue;
 TypeScript and delivery-write inventory passed. ESLint had zero errors and four
 pre-existing unrelated warnings. Chromium authentication, preference presentation
