@@ -73,10 +73,11 @@ export function WorkoutLogger() {
     restTimerSeconds: number
   ) => {
     try {
-      await actions.completeSet(workoutExerciseId, setId);
+      const accepted = await actions.completeSet(workoutExerciseId, setId);
       if (restTimerSeconds > 0) {
         restTimer.start(restTimerSeconds);
       }
+      return accepted;
     } catch (error) {
       log.error("[workouts] Failed to complete set", error);
       throw error;

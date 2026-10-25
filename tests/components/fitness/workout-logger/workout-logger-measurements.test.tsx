@@ -77,11 +77,13 @@ describe("WorkoutLogger measurement writes through the actual SWR hook", () => {
     expect(requests).toEqual(failure === "measurement" ? [{ weight_kg: 0.45359237 }] : [{ weight_kg: 0.45359237 }, { is_completed: true }]);
     expect(complete).toBeDisabled();
     expect(acceptedCompletions).toEqual([]);
+    expect(screen.queryByText("New PR!")).not.toBeInTheDocument();
     await act(async () => { rejectFirst(); await heldFailure; });
     await waitFor(() => expect(complete).toBeEnabled());
     expect(stored.exercises[0].sets[0]).toMatchObject({ weight_kg: failure === "measurement" ? 10 : 0.45359237, is_completed: false });
     expect(acceptedCompletions).toEqual([]);
     expect(complete).not.toBeChecked();
+    expect(screen.queryByText("New PR!")).not.toBeInTheDocument();
     expect(input).toHaveValue("1");
     expect(toast.error).toHaveBeenCalledExactlyOnceWith("Failed to complete set");
 
@@ -92,6 +94,7 @@ describe("WorkoutLogger measurement writes through the actual SWR hook", () => {
       : [{ weight_kg: 0.45359237 }, { is_completed: true }, { is_completed: true }]);
     await waitFor(() => expect(complete).toBeChecked());
     expect(input).toHaveValue("1");
+    expect(screen.getByRole("status")).toHaveTextContent("Bench Press — Weight PR: 1 lbs");
     expect(loadWorkoutFromStorage()?.exercises[0].sets[0]).toMatchObject({ weight_kg: 0.45359237, reps: 5, is_completed: true });
   });
 });
