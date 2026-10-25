@@ -31,6 +31,7 @@ beforeEach(() => {
   });
 });
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   localStorage.clear();
 });
@@ -435,84 +436,121 @@ it("changes reviewed muscle metadata without normalizing an untouched unusual le
   expect(row.name).toBe("  Legacy spelling  ");
 });
 
-it("retains a definitively rejected proposal across remount until explicit review creates a new CAS operation", async () => {
-  const row = customRow();
-  const requests: { operationId: string; command: Record<string, unknown> }[] =
-    [];
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (_url: string, init?: RequestInit) => {
-      if (!init?.method)
-        return Response.json({
-          ownerId: owner,
-          exercises: [row],
-          customExercises: { contractVersion: 1, ready: true },
-        });
-      const request = JSON.parse(String(init.body));
-      requests.push(request);
-      if (requests.length === 1) {
-        row.name = "Remote name";
-        row.version = "2";
-        return Response.json(
-          {
-            protocolVersion: 1,
-            error: { code: "version_conflict" },
-            rejection: {
-              operationId: request.operationId,
-              operation: "update-metadata",
-              ownerId: owner,
-              exerciseId: row.id,
-              rejectedAt: "2026-10-25T10:00:00Z",
-              code: "version_conflict",
-              current: accepted(request, row).receipt.definition,
+it.each([false, true])(
+  "retains a reviewed replacement across remount when its final journal pointer write fails: %s",
+  async (failPointer) => {
+    const row = customRow();
+    const requests: {
+      operationId: string;
+      command: Record<string, unknown>;
+    }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        if (!init?.method)
+          return Response.json({
+            ownerId: owner,
+            exercises: [row],
+            customExercises: { contractVersion: 1, ready: true },
+          });
+        const request = JSON.parse(String(init.body));
+        requests.push(request);
+        if (requests.length === 1) {
+          row.name = "Remote name";
+          row.version = "2";
+          return Response.json(
+            {
+              protocolVersion: 1,
+              error: { code: "version_conflict" },
+              rejection: {
+                operationId: request.operationId,
+                operation: "update-metadata",
+                ownerId: owner,
+                exerciseId: row.id,
+                rejectedAt: "2026-10-25T10:00:00Z",
+                code: "version_conflict",
+                current: accepted(request, row).receipt.definition,
+              },
             },
-          },
-          { status: 409 },
-        );
-      }
-      row.name = request.command.patch.name;
-      row.version = "3";
-      return Response.json(accepted(request, row));
-    }),
-  );
-  const view = mount();
-  const user = userEvent.setup();
-  await screen.findByRole("heading", { name: row.name });
-  await user.click(screen.getByRole("button", { name: "Actions" }));
-  await user.click(
-    await screen.findByRole("menuitem", { name: "Edit Exercise" }),
-  );
-  let dialog = await screen.findByRole("dialog");
-  fireEvent.change(within(dialog).getByRole("textbox", { name: "Name" }), {
-    target: { value: "Reviewed proposal" },
-  });
-  await user.click(
-    within(dialog).getByRole("button", { name: "Save Changes" }),
-  );
-  await screen.findAllByText(messages.exercises.reviewConflict);
-  view.unmount();
-  mount();
-  await screen.findByRole("heading", { name: "Remote name" });
-  expect(requests).toHaveLength(1);
-  await user.click(
-    screen.getByRole("button", { name: messages.exercises.reviewProposal }),
-  );
-  dialog = await screen.findByRole("dialog");
-  expect(within(dialog).getByRole("textbox", { name: "Name" })).toHaveValue(
-    "Reviewed proposal",
-  );
-  await user.click(
-    within(dialog).getByRole("button", {
-      name: messages.exercises.applyReviewed,
-    }),
-  );
-  await screen.findByRole("heading", { name: "Reviewed proposal" });
-  expect(requests).toHaveLength(2);
-  expect(requests[1].operationId).not.toBe(requests[0].operationId);
-  expect(requests[1].command).toEqual({
-    kind: "update-metadata",
-    exerciseId: row.id,
-    expectedVersion: "2",
-    patch: { name: "Reviewed proposal" },
-  });
-});
+            { status: 409 },
+          );
+        }
+        row.name = request.command.patch.name;
+        row.version = "3";
+        return Response.json(accepted(request, row));
+      }),
+    );
+    let view = mount();
+    const user = userEvent.setup();
+    await screen.findByRole("heading", { name: row.name });
+    await user.click(screen.getByRole("button", { name: "Actions" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Edit Exercise" }),
+    );
+    let dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Name" }), {
+      target: { value: "Reviewed proposal" },
+    });
+    await user.click(
+      within(dialog).getByRole("button", { name: "Save Changes" }),
+    );
+    await screen.findAllByText(messages.exercises.reviewConflict);
+    view.unmount();
+    view = mount();
+    await screen.findByRole("heading", { name: "Remote name" });
+    expect(requests).toHaveLength(1);
+    await user.click(
+      screen.getByRole("button", { name: messages.exercises.reviewProposal }),
+    );
+    dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("textbox", { name: "Name" })).toHaveValue(
+      "Reviewed proposal",
+    );
+    let savedReplacement: (typeof requests)[number] | undefined;
+    if (failPointer) {
+      const originalSet = Storage.prototype.setItem;
+      vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (
+        this: Storage,
+        key,
+        value,
+      ) {
+        if (key === `train:exercise-command-active:${owner}`) {
+          savedReplacement = JSON.parse(
+            localStorage.getItem(`train:exercise-command:${owner}:${value}`)!,
+          ).request;
+          throw new Error("Final pointer write failed");
+        }
+        originalSet.call(this, key, value);
+      });
+    }
+    await user.click(
+      within(dialog).getByRole("button", {
+        name: messages.exercises.applyReviewed,
+      }),
+    );
+    if (failPointer) {
+      expect(savedReplacement).toBeDefined();
+      expect(requests).toHaveLength(1);
+      vi.restoreAllMocks();
+      view.unmount();
+      mount();
+      await screen.findByText(messages.exercises.pendingCommand);
+      expect(
+        screen.getByRole("button", { name: messages.exercises.createCustom }),
+      ).toBeDisabled();
+      await user.click(
+        screen.getByRole("button", { name: messages.exercises.retryCommand }),
+      );
+    }
+    await screen.findByRole("heading", { name: "Reviewed proposal" });
+    expect(requests).toHaveLength(2);
+    expect(requests[1].operationId).not.toBe(requests[0].operationId);
+    if (failPointer) expect(requests[1]).toEqual(savedReplacement);
+    expect(requests[1].command).toEqual({
+      kind: "update-metadata",
+      exerciseId: row.id,
+      expectedVersion: "2",
+      patch: { name: "Reviewed proposal" },
+    });
+  },
+);

@@ -75,9 +75,7 @@ function save(record: ExerciseJournal) {
   );
   window.dispatchEvent(new Event(event));
 }
-export function currentExerciseCommand(owner: string): ExerciseJournal | null {
-  const id = localStorage.getItem(activeKey(owner));
-  if (!id) return null;
+function readJournal(owner: string, id: string): ExerciseJournal {
   const raw = localStorage.getItem(prefix(owner) + id);
   if (!raw) throw new Error("invalid_command_journal");
   const parsed = journalSchema.safeParse(JSON.parse(raw));
@@ -89,6 +87,34 @@ export function currentExerciseCommand(owner: string): ExerciseJournal | null {
     !exerciseCommandEnvelopeSchema.safeParse(record.request).success
   )
     throw new Error("invalid_command_journal");
+  return record;
+}
+function sameTarget(
+  left: Record<string, unknown>,
+  right: Record<string, unknown>,
+) {
+  return (
+    left.kind === right.kind &&
+    (left.kind === "create" || left.exerciseId === right.exerciseId)
+  );
+}
+export function currentExerciseCommand(owner: string): ExerciseJournal | null {
+  const id = localStorage.getItem(activeKey(owner));
+  if (!id) return null;
+  let record = readJournal(owner, id);
+  const visited = new Set([id]);
+  // The predecessor's replacement link commits before the active pointer.
+  // Follow that durable link after interruption, without clearing unknown work
+  // or requiring another storage write merely to read the saved intention.
+  while (record.state === "superseded") {
+    const nextId = record.replacementOperationId!;
+    if (visited.has(nextId)) throw new Error("invalid_command_journal");
+    const replacement = readJournal(owner, nextId);
+    if (!sameTarget(record.request.command, replacement.request.command))
+      throw new Error("invalid_command_journal");
+    visited.add(nextId);
+    record = replacement;
+  }
   return record;
 }
 export function prepareExerciseCommand(
@@ -130,6 +156,8 @@ export function resolveExerciseRejection(
     operationId: crypto.randomUUID(),
     command: replacement,
   };
+  if (!sameTarget(current.request.command, replacement))
+    throw new Error("invalid_replacement");
   // Store the new request before resolving its predecessor; a failed storage
   // write retains the original rejected proposal instead of losing it.
   save({ ownerId: owner, request, state: "pending" });

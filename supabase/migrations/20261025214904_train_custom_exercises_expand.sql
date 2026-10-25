@@ -263,6 +263,7 @@ revoke all on function fitness_private.completed_exercise_reference(jsonb,uuid) 
 create or replace function fitness_private.valid_recorded_completion(doc jsonb) returns boolean
 language plpgsql stable set search_path=pg_catalog,public as $$
 declare entry jsonb; definition jsonb; item jsonb; performed jsonb; identifiers uuid[]:='{}'::uuid[]; identity uuid; started timestamptz; ended timestamptz;
+  canonical_custom_uuid constant text:='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
   instant_pattern constant text := '^[0-9]{4}-[0-9]{2}-[0-9]{2}T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]{1,6})?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$';
 begin
  if doc->'version'='1'::jsonb then return fitness_private.valid_native_completion(doc); end if;
@@ -296,6 +297,7 @@ begin
        or not fitness_private.exact_keys(definition->'reference',array['kind','exerciseId','ownerId'])
        or definition->'reference'->>'kind' is distinct from 'custom'
        or not coalesce(fitness_private.valid_uuid(definition->'reference'->'exerciseId') and fitness_private.valid_uuid(definition->'reference'->'ownerId'),false)
+       or not coalesce(definition->'reference'->>'exerciseId' ~ canonical_custom_uuid and definition->'reference'->>'ownerId' ~ canonical_custom_uuid,false)
        or definition->'reference'->>'ownerId' is distinct from doc->>'ownerId'
        or jsonb_typeof(definition->'name') is distinct from 'string'
        or not coalesce(definition->>'equipment' in ('barbell','dumbbell','machine','bodyweight','kettlebell','band','cable','other','none'),false)

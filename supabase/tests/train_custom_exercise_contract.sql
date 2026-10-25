@@ -86,13 +86,14 @@ reset role;
 select set_config('request.jwt.claims','{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated"}',true);
 set local role authenticated;
 do $$
-declare equipment text; mode text; convention text; definition_id uuid; workout_id uuid; result jsonb; definition jsonb; measure jsonb; document jsonb;
+declare equipment text; mode text; convention text; definition_id uuid; workout_id uuid; result jsonb; definition jsonb; measure jsonb; document jsonb; noncanonical jsonb;
 begin
  foreach equipment in array array['barbell','dumbbell','machine','bodyweight','kettlebell','band','cable','other','none'] loop
   foreach mode in array array['weight_reps','bodyweight_reps','weighted_bodyweight','assisted_bodyweight','duration'] loop
    convention:=case mode when 'weight_reps' then case equipment when 'barbell' then 'barbell-total' when 'dumbbell' then 'per-dumbbell' else 'selected-load' end
      when 'bodyweight_reps' then 'bodyweight-repetitions' when 'weighted_bodyweight' then 'added-load' when 'assisted_bodyweight' then 'assistance' else 'seconds' end;
    definition_id:=gen_random_uuid(); workout_id:=gen_random_uuid();
+   if equipment='barbell' and mode='weight_reps' then definition_id:='abcdefab-1111-4111-8111-abcdefabcdef'; end if;
    result:=public.execute_train_exercise_command(jsonb_build_object('protocolVersion',1,'operationId',definition_id,'command',jsonb_build_object('kind','create','definition',
      jsonb_build_object('name',equipment||' '||mode,'equipment',equipment,'mode',mode,'convention',convention,'primaryMuscle','other','secondaryMuscles','[]'::jsonb))));
    if result->>'status'<>'accepted' or result->'receipt'->'definition'->>'convention' is distinct from convention then raise exception 'Independent matrix choice failed: % % %',equipment,mode,result; end if;
@@ -104,6 +105,11 @@ begin
      'durationSeconds',300,'timezone','UTC','workoutDay','2026-10-25','planId',null,'exercises',jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'definition',definition,
        'sets',jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'performed',measure)))));
    set constraints all deferred;
+   if equipment='barbell' and mode='weight_reps' then
+     noncanonical:=jsonb_set(document,'{exercises,0,definition,reference,exerciseId}',to_jsonb(upper(definition_id::text)));
+     if public.upload_completed_workout(workout_id,noncanonical)->>'status'<>'invalid_completion' then raise exception 'Noncanonical custom identity entered unreadable history'; end if;
+     if exists(select 1 from public.workouts where id=workout_id) or exists(select 1 from public.train_completion_receipts where operation_id=workout_id) then raise exception 'Invalid custom identity left an outcome'; end if;
+   end if;
    if public.upload_completed_workout(workout_id,document)->>'status'<>'accepted' then raise exception 'Custom completion failed: % %',equipment,mode; end if;
    set constraints all immediate;
    if not exists(select 1 from public.workouts where id=workout_id and recorded_completion=document and native_completion is null) then raise exception 'Custom captured facts changed'; end if;
