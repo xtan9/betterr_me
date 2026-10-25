@@ -290,8 +290,8 @@ begin
   insert into public.workout_exercises(workout_id,exercise_id,sort_order)
     select '64700000-0000-0000-0000-000000000405',id,0 from public.exercises
     where catalog_key='strength.barbell-bench-press.v1';
-  insert into public.workout_sets(workout_exercise_id,set_number,is_completed)
-  select id,1,true from public.workout_exercises where workout_id='64700000-0000-0000-0000-000000000405';
+  insert into public.workout_sets(workout_exercise_id,set_number,weight_kg,reps,is_completed)
+  select id,1,20,5,true from public.workout_exercises where workout_id='64700000-0000-0000-0000-000000000405';
 
   -- A failure in the same terminal write rolls back status and completion
   -- metadata together. A NULL title violates the NOT NULL constraint after

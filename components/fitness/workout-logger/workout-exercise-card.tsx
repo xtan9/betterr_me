@@ -321,7 +321,8 @@ function SetColumnHeaders({
     >
       <span>{t("set")}</span>
       <span>{t("previous")}</span>
-      {fields.showWeight && <span>{weightUnit.toUpperCase()}</span>}
+      {fields.showWeight && <span>{exerciseType === "assisted_bodyweight" ? `${t("assistance")} (${weightUnit})`
+        : exerciseType === "weighted_bodyweight" ? `${t("addedLoad")} (${weightUnit})` : weightUnit.toUpperCase()}</span>}
       {fields.showReps && <span>{t("reps")}</span>}
       {fields.showDuration && <span>{t("duration")}</span>}
       {fields.showDistance && <span>{t("distance")}</span>}

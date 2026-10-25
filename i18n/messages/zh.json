@@ -34,8 +34,13 @@
       "themeSystem": "跟随系统",
       "loading": "加载中...",
       "profileError": "个人资料不可用",
-      "signOutError": "退出登录失败"
-    },
+      "signOutError": "退出登录失败",
+    "measurementInvalid": "请输入完整有效的测量值。",
+    "inputUnitKept": "未完成的输入仍以 {unit} 为单位。",
+    "addedLoad": "额外负重",
+    "assistance": "辅助重量",
+    "recordedUnavailable": "此训练采用当前无法读取的记录格式。请更新应用以查看已记录的详情。"
+  },
     "cancel": "取消",
     "footer": {
       "product": "产品",
@@ -1396,7 +1401,9 @@
     "loadError": "加载训练计划失败",
     "addExerciseError": "添加动作失败",
     "updateExerciseError": "更新动作失败",
-    "removeExerciseError": "删除动作失败"
+    "removeExerciseError": "删除动作失败",
+    "measurementInvalid": "请输入完整有效的测量值。",
+    "inputUnitKept": "未完成的输入仍以 {unit} 为单位。"
   },
   "financeCushion": {
     "title": "财务安全缓冲",

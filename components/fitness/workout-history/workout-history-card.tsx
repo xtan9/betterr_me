@@ -65,17 +65,17 @@ export function WorkoutHistoryCard({
           </p>
 
           {/* Bottom row: stats */}
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
-            <span>{t("exercises", { count: workout.exerciseCount })}</span>
+          {workout.recordedStatus === 'unsupported' ? <p className="mt-2 text-body text-muted-foreground">{t('recordedUnavailable')}</p> : <div className="mt-2 flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
+            {workout.exerciseCount !== null && <span>{t("exercises", { count: workout.exerciseCount })}</span>}
             <span className="text-border">|</span>
-            <span>{t("setsCount", { count: workout.totalSets })}</span>
+            {workout.totalSets !== null && <span>{t("setsCount", { count: workout.totalSets })}</span>}
             {(workout.totalVolume === null || workout.totalVolume > 0) && (
               <>
                 <span className="text-border">|</span>
                 <span>{workout.totalVolume === null ? "—" : formatWeight(workout.totalVolume, weightUnit)}</span>
               </>
             )}
-          </div>
+          </div>}
 
           {/* Exercise names */}
           {workout.exerciseNames.length > 0 && (

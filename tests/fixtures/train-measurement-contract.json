@@ -1,0 +1,279 @@
+{
+  "description": "Agreed #416 canonical examples; proposed source fixture, not execution evidence",
+  "protocolVersion": 1,
+  "operationId": "44444444-4444-4444-8444-444444444444",
+  "completion": {
+    "version": 2,
+    "id": "44444444-4444-4444-8444-444444444444",
+    "ownerId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "sourceId": "33333333-3333-4333-8333-333333333333",
+    "startedAt": "2026-10-25T06:55:00.000Z",
+    "completedAt": "2026-10-25T07:05:00.000Z",
+    "durationSeconds": 600,
+    "timezone": "America/Los_Angeles",
+    "workoutDay": "2026-10-24",
+    "planId": null,
+    "exercises": [
+      {
+        "id": "20000000-0000-4000-8000-000000000001",
+        "definition": {
+          "catalogKey": "strength.barbell-bench-press.v1",
+          "name": {
+            "en": "Barbell Bench Press",
+            "zh": "杠铃卧推"
+          },
+          "equipment": "barbell",
+          "mode": "weight_reps",
+          "convention": "barbell-total"
+        },
+        "sets": [
+          {
+            "id": "10000000-0000-4000-8000-000000000001",
+            "performed": {
+              "mode": "weight_reps",
+              "weightKg": 0.123,
+              "reps": 5,
+              "kind": "working"
+            }
+          }
+        ]
+      },
+      {
+        "id": "20000000-0000-4000-8000-000000000002",
+        "definition": {
+          "catalogKey": "strength.push-up.v1",
+          "name": {
+            "en": "Push-up",
+            "zh": "俯卧撑"
+          },
+          "equipment": "bodyweight",
+          "mode": "bodyweight_reps",
+          "convention": "bodyweight-repetitions"
+        },
+        "sets": [
+          {
+            "id": "10000000-0000-4000-8000-000000000002",
+            "performed": {
+              "mode": "bodyweight_reps",
+              "reps": 8,
+              "kind": "warmup"
+            }
+          }
+        ]
+      },
+      {
+        "id": "20000000-0000-4000-8000-000000000003",
+        "definition": {
+          "catalogKey": "strength.weighted-pull-up.v1",
+          "name": {
+            "en": "Weighted Pull-up",
+            "zh": "负重引体向上"
+          },
+          "equipment": "bodyweight",
+          "mode": "weighted_bodyweight",
+          "convention": "added-load"
+        },
+        "sets": [
+          {
+            "id": "10000000-0000-4000-8000-000000000003",
+            "performed": {
+              "mode": "weighted_bodyweight",
+              "addedWeightKg": 0.45359237,
+              "reps": 6,
+              "kind": "working"
+            }
+          }
+        ]
+      },
+      {
+        "id": "20000000-0000-4000-8000-000000000004",
+        "definition": {
+          "catalogKey": "strength.machine-assisted-pull-up.v1",
+          "name": {
+            "en": "Machine-assisted Pull-up",
+            "zh": "器械辅助引体向上"
+          },
+          "equipment": "machine",
+          "mode": "assisted_bodyweight",
+          "convention": "assistance"
+        },
+        "sets": [
+          {
+            "id": "10000000-0000-4000-8000-000000000004",
+            "performed": {
+              "mode": "assisted_bodyweight",
+              "assistanceKg": 0,
+              "reps": 5,
+              "kind": "warmup"
+            }
+          }
+        ]
+      },
+      {
+        "id": "20000000-0000-4000-8000-000000000005",
+        "definition": {
+          "catalogKey": "strength.plank.v1",
+          "name": {
+            "en": "Plank",
+            "zh": "平板支撑"
+          },
+          "equipment": "bodyweight",
+          "mode": "duration",
+          "convention": "seconds"
+        },
+        "sets": [
+          {
+            "id": "10000000-0000-4000-8000-000000000005",
+            "performed": {
+              "mode": "duration",
+              "durationSeconds": 90,
+              "kind": "working"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "loadGrammar": "^(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[eE][+-]?\\d+)?$",
+  "rawMaxLength": 128,
+  "exactLbKgRatio": "0.45359237",
+  "integerGrammar": "^\\d+$",
+  "integerMeaning": "leading zeros accepted; positive safe-integer reps; duration1..86400; exponents rejected",
+  "loadCases": [
+    {
+      "text": "0",
+      "unit": "kg",
+      "anchorKg": 0
+    },
+    {
+      "text": "0.123",
+      "unit": "kg",
+      "anchorKg": 0.123
+    },
+    {
+      "text": "1",
+      "unit": "lbs",
+      "anchorKg": 0.45359237
+    },
+    {
+      "text": "2.5",
+      "unit": "lbs",
+      "anchorKg": 1.133980925
+    },
+    {
+      "text": "2.2046226218487757",
+      "unit": "lbs",
+      "anchorKg": 1
+    },
+    {
+      "text": ".5",
+      "unit": "kg",
+      "anchorKg": 0.5
+    },
+    {
+      "text": "000.500",
+      "unit": "kg",
+      "anchorKg": 0.5
+    },
+    {
+      "text": "5e-324",
+      "unit": "kg",
+      "anchorKg": 5e-324
+    },
+    {
+      "text": "1e-323",
+      "unit": "lbs",
+      "anchorKg": 5e-324
+    },
+    {
+      "text": "1.7976931348623157e308",
+      "unit": "kg",
+      "anchorKg": 1.7976931348623157e+308
+    },
+    {
+      "text": "3e308",
+      "unit": "lbs",
+      "anchorKg": 1.36077711e+308
+    },
+    {
+      "text": "",
+      "unit": "kg",
+      "anchorKg": null
+    },
+    {
+      "text": ".",
+      "unit": "kg",
+      "anchorKg": null
+    },
+    {
+      "text": "12.",
+      "unit": "kg",
+      "anchorKg": null
+    },
+    {
+      "text": "12x",
+      "unit": "kg",
+      "anchorKg": null
+    },
+    {
+      "text": "+5",
+      "unit": "kg",
+      "anchorKg": null
+    },
+    {
+      "text": "-0",
+      "unit": "kg",
+      "anchorKg": null
+    },
+    {
+      "text": " 5",
+      "unit": "kg",
+      "anchorKg": null
+    },
+    {
+      "text": "5 ",
+      "unit": "kg",
+      "anchorKg": null
+    },
+    {
+      "text": "1e",
+      "unit": "kg",
+      "anchorKg": null
+    },
+    {
+      "text": "1,000",
+      "unit": "kg",
+      "anchorKg": null
+    },
+    {
+      "text": "1e-400",
+      "unit": "kg",
+      "anchorKg": null
+    },
+    {
+      "text": "1e309",
+      "unit": "kg",
+      "anchorKg": null
+    }
+  ],
+  "inputExample": {
+    "mode": "weighted_bodyweight",
+    "kind": "working",
+    "load": {
+      "text": "1",
+      "unit": "lbs",
+      "anchorKg": 0.45359237
+    },
+    "reps": "6"
+  },
+  "invalidInputExample": {
+    "mode": "assisted_bodyweight",
+    "kind": "warmup",
+    "load": {
+      "text": "12.",
+      "unit": "kg",
+      "anchorKg": null
+    },
+    "reps": "5"
+  }
+}

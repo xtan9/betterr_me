@@ -100,6 +100,10 @@ export function workoutTools(): ToolDefinition[] {
         const db = new WorkoutsDB(ctx.supabase);
         const workout = await db.getWorkoutWithExercises(params.workoutId, ctx.userId);
         if (!workout) return { error: "Workout not found" };
+        if (workout.recordedStatus === "unsupported") return {
+          id: workout.id, recordedStatus: "unsupported",
+          error: "This recorded workout format cannot be read by this version. Update before interpreting its exercises or sets.",
+        };
         return workout;
       },
     },

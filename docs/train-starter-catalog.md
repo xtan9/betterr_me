@@ -6,8 +6,7 @@ that resolves to the existing shared catalog when completed synchronization is
 added in #415. Seeded exercise UUIDs were generated per database; they cannot be
 invented or copied between environments.
 
-`exercises.catalog_key` is nullable and unique. Only existing built-in rows may
-have a key. Custom exercises and unselected built-ins retain null. The migration
+`exercises.catalog_key` is nullable and unique. Only built-in rows may have a key. Custom exercises and unselected built-ins retain null. The migration
 matches the twelve approved name/equipment/weight-reps tuples exactly, aborts if
 any match is missing or ambiguous, and leaves every exercise UUID intact. A
 read-only production audit found exactly one row for every tuple. Keys are
@@ -47,3 +46,20 @@ change adds no synchronization endpoint and changes no authorization grants.
   catalog migration was applied with `psql --single-transaction`; the planning
   migration was not replayed, and unrelated migration history was not repaired.
   Production's planning migration was separately verified by its deployment.
+
+## Full starter catalog (#416)
+
+The twelve original keys and UUIDs are retained. The additive measurement
+migration assigns keys to six existing audited presets: Push-up, Pull-up, Dip,
+Bodyweight Squat, Plank and Jump Rope. The first four use bodyweight repetitions;
+Plank and Jump Rope use manually entered duration. Four distinct new public
+presets receive database-generated UUIDs: Weighted Pull-up, Weighted Dip,
+Machine-assisted Pull-up and Machine-assisted Dip. They have separate keys and
+recording meanings; weighted variants use bodyweight equipment/added load, while
+assisted variants use machine equipment/positive assistance.
+
+The migration requires exactly one matching name/equipment/mode tuple for each
+existing preset, fails on ambiguous keys, and never invents cross-environment
+UUIDs. The production preflight found all six existing tuples and none of the
+four new tuples. No exercise media is introduced. See [measurement semantics and
+compatibility](train-measurements.md) for the v2 snapshot and verification.

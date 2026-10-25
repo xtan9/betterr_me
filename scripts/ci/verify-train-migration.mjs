@@ -74,6 +74,42 @@ try {
     select count(*) from ((select * from preservation_before except all select * from after_rows)
       union all (select * from after_rows except all select * from preservation_before)) differences;`);
   if (different !== '0') throw new Error('Migration changed a legacy identity, value or null');
+  const contract = JSON.parse(readFileSync(resolve(root, 'tests/fixtures/train-measurement-contract.json'), 'utf8'));
+  const v1 = structuredClone(contract.completion);
+  v1.version = 1; v1.ownerId = '64150000-0000-4000-8000-000000000001'; v1.exercises = [v1.exercises[0]];
+  delete v1.exercises[0].sets[0].performed.mode;
+  query(database, `set request.jwt.claims='{"sub":"64150000-0000-4000-8000-000000000001","role":"authenticated"}';
+    do $$ begin
+      if public.upload_completed_workout('${v1.id}', '${JSON.stringify(v1).replaceAll("'", "''")}'::jsonb)->>'status'<>'accepted' then
+        raise exception 'V1 preservation control did not upload'; end if;
+    end $$;
+    create table measurement_before as select 'exercises' as kind,to_jsonb(t) as row from exercises t
+      union all select 'workouts',to_jsonb(t) from workouts t
+      union all select 'workout_exercises',to_jsonb(t) from workout_exercises t
+      union all select 'workout_sets',to_jsonb(t) from workout_sets t
+      union all select 'routines',to_jsonb(t) from routines t
+      union all select 'routine_exercises',to_jsonb(t) from routine_exercises t
+      union all select 'train_completion_receipts',to_jsonb(t) from train_completion_receipts t;`);
+  query(database, `begin; ${migration('20261025154855_train_measurement_completion.sql')} commit;`);
+  const measurementDifferences = query(database, `with after_rows as (
+    select 'exercises' as kind,case when (t.catalog_key,b.row->>'name') in (
+      ('strength.push-up.v1','Push-up'),('strength.pull-up.v1','Pull-up'),('strength.dip.v1','Dip'),
+      ('strength.bodyweight-squat.v1','Bodyweight Squat'),('strength.plank.v1','Plank'),('strength.jump-rope.v1','Jump Rope')
+    ) and b.row->'catalog_key'='null'::jsonb
+      then to_jsonb(t)||jsonb_build_object('catalog_key',b.row->'catalog_key','updated_at',b.row->'updated_at')
+      else to_jsonb(t) end as row
+    from exercises t join measurement_before b on b.kind='exercises' and b.row->>'id'=t.id::text
+    union all select 'workouts',to_jsonb(t)-'recorded_completion' from workouts t
+    union all select 'workout_exercises',to_jsonb(t) from workout_exercises t
+    union all select 'workout_sets',to_jsonb(t) from workout_sets t
+    union all select 'routines',to_jsonb(t) from routines t
+    union all select 'routine_exercises',to_jsonb(t) from routine_exercises t
+    union all select 'train_completion_receipts',to_jsonb(t) from train_completion_receipts t)
+    select count(*) from ((select * from measurement_before except all select * from after_rows)
+      union all (select * from after_rows except all select * from measurement_before)) differences;`);
+  if (measurementDifferences !== '0') throw new Error('Measurement migration changed legacy or v1 records/receipts');
+  if (query(database, `select (select count(*) from exercises)-(select count(*) from measurement_before where kind='exercises')`) !== '4') throw new Error('Unexpected catalog identity addition');
+  if (query(database, `select count(*) from exercises where catalog_key is not null`) !== '22') throw new Error('Starter catalog is incomplete');
   query(database, `set request.jwt.claims='{"sub":"64150000-0000-4000-8000-000000000001","role":"authenticated"}';
     set role authenticated;
     do $$declare result jsonb; begin
@@ -81,7 +117,7 @@ try {
       if result->>'type'<>'already-applied' then raise exception 'Legacy zero-set completion lost its terminal readback'; end if;
       update workout_sets set rpe=7 where reps=-1;
     end$$;`);
-  console.log(`PASS historical DDL → 8 modes/custom/null/zero/deferred fields + 10,032 sets → full migration, ${elapsed} ms; exact rows unchanged; legacy invalid measures remain editable without coercion`);
+  console.log(`PASS historical DDL → 8 modes/custom/null/zero/deferred fields + 10,032 sets → 415 migration, ${elapsed} ms → 416 migration + accepted v1 receipt preservation; exact rows unchanged; legacy invalid measures remain editable without coercion`);
 } finally {
   if (created) query('postgres', `drop database ${database};`);
 }

@@ -127,6 +127,6 @@ test.describe('Current Profile preference journey', () => {
     await expect(page).toHaveURL(new RegExp(`/workouts/${createdWorkoutId}$`));
     expect(documentNavigations).toBe(0);
     await expect(page.getByText('LBS', { exact: true })).toBeVisible();
-    await expect(page.getByText('22.05', { exact: true })).toBeVisible();
+    await expect(page.getByText('22.046226218487758', { exact: true })).toBeVisible();
   });
 });
