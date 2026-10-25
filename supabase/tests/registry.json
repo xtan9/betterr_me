@@ -1,121 +1,29 @@
 [
-  {
-    "path": "app_limit_history.sql",
-    "domain": "app-limit-history",
-    "role": "constrained",
-    "cleanup": "transactional"
-  },
-  {
-    "path": "focus_history.sql",
-    "domain": "focus-history",
-    "role": "constrained",
-    "cleanup": "transactional"
-  },
-  {
-    "path": "routine_day_periods.sql",
-    "domain": "mobile-planner",
-    "role": "constrained",
-    "cleanup": "transactional"
-  },
-  {
-    "path": "sleep_preset.sql",
-    "domain": "mobile-planner",
-    "role": "admin",
-    "cleanup": "transactional",
-    "adminReason": "Exercises service-only sleep commands after external-calendar attestation; legacy write bypass and owner-read assertions run as authenticated."
-  },
-  {
-    "path": "assistant_availability_monitor.sql",
-    "domain": "assistant-monitor",
-    "role": "admin",
-    "cleanup": "transactional",
-    "adminReason": "Registers only fixture synthetic identities in the private operator registry and ages synthetic history; all quota, cleanup, and authorization assertions run as authenticated or anon."
-  },
-  {
-    "path": "task_planned_period.sql",
-    "domain": "tasks",
-    "role": "constrained",
-    "cleanup": "transactional"
-  },
-  {
-    "path": "task_planned_date.sql",
-    "domain": "tasks",
-    "role": "constrained",
-    "cleanup": "transactional"
-  },
-  {
-    "path": "task_steps.sql",
-    "domain": "tasks",
-    "role": "constrained",
-    "cleanup": "transactional"
-  },
-  {
-    "path": "item_deletion_restoration.sql",
-    "domain": "tasks",
-    "role": "admin",
-    "cleanup": "transactional",
-    "adminReason": "Seeds pre-migration archived state by disabling only the new lifecycle guards, then verifies restoration preserves project completion after ordinary edits."
-  },
-  {
-    "path": "item_deletion.sql",
-    "domain": "tasks",
-    "role": "constrained",
-    "cleanup": "transactional"
-  },
-  {
-    "path": "mobile_routine_overnight.sql",
-    "domain": "mobile-planner",
-    "role": "constrained",
-    "cleanup": "transactional"
-  },
+  {"path":"planned_training_occurrences.sql","domain":"mobile-planner","role":"constrained","cleanup":"transactional"},
+  {"path":"app_limit_history.sql","domain":"app-limit-history","role":"constrained","cleanup":"transactional"},
+  {"path":"focus_history.sql","domain":"focus-history","role":"constrained","cleanup":"transactional"},
+  {"path":"routine_day_periods.sql","domain":"mobile-planner","role":"constrained","cleanup":"transactional"},
+  {"path":"sleep_preset.sql","domain":"mobile-planner","role":"admin","cleanup":"transactional","adminReason":"Exercises service-only sleep commands after external-calendar attestation; legacy write bypass and owner-read assertions run as authenticated."},
+  {"path":"assistant_availability_monitor.sql","domain":"assistant-monitor","role":"admin","cleanup":"transactional","adminReason":"Registers only fixture synthetic identities in the private operator registry and ages synthetic history; all quota, cleanup, and authorization assertions run as authenticated or anon."},
+  {"path":"task_planned_period.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
+  {"path":"task_planned_date.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
+  {"path":"task_steps.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
+  {"path":"item_deletion_restoration.sql","domain":"tasks","role":"admin","cleanup":"transactional","adminReason":"Seeds pre-migration archived state by disabling only the new lifecycle guards, then verifies restoration preserves project completion after ordinary edits."},
+  {"path":"item_deletion.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
+  {"path":"mobile_routine_overnight.sql","domain":"mobile-planner","role":"constrained","cleanup":"transactional"},
   {
     "path": "mobile_routine_series.sql",
     "domain": "mobile-planner",
     "role": "constrained",
     "cleanup": "transactional"
   },
-  {
-    "path": "assistant_multiday_planning.sql",
-    "domain": "tasks",
-    "role": "constrained",
-    "cleanup": "transactional"
-  },
-  {
-    "path": "assistant_multiday_conflicts.sql",
-    "domain": "tasks",
-    "role": "constrained",
-    "cleanup": "transactional"
-  },
-  {
-    "path": "assistant_memory_lifecycle.sql",
-    "domain": "tasks",
-    "role": "constrained",
-    "cleanup": "transactional"
-  },
-  {
-    "path": "assistant_orchestrator_memory.sql",
-    "domain": "tasks",
-    "role": "constrained",
-    "cleanup": "transactional"
-  },
-  {
-    "path": "mobile_tasks_collection.sql",
-    "domain": "tasks",
-    "role": "constrained",
-    "cleanup": "transactional"
-  },
-  {
-    "path": "mobile_guided_planning.sql",
-    "domain": "tasks",
-    "role": "constrained",
-    "cleanup": "transactional"
-  },
-  {
-    "path": "mobile_ai_capture.sql",
-    "domain": "tasks",
-    "role": "constrained",
-    "cleanup": "transactional"
-  },
+  {"path":"assistant_multiday_planning.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
+  {"path":"assistant_multiday_conflicts.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
+  {"path":"assistant_memory_lifecycle.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
+  {"path":"assistant_orchestrator_memory.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
+  {"path":"mobile_tasks_collection.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
+  {"path":"mobile_guided_planning.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
+  {"path":"mobile_ai_capture.sql","domain":"tasks","role":"constrained","cleanup":"transactional"},
   {
     "path": "mobile_confirmed_bookings.sql",
     "domain": "tasks",
@@ -478,12 +386,6 @@
   {
     "path": "app_limit_continuations.sql",
     "domain": "app-limit-history",
-    "role": "constrained",
-    "cleanup": "transactional"
-  },
-  {
-    "path": "planned_training_occurrences.sql",
-    "domain": "planner",
     "role": "constrained",
     "cleanup": "transactional"
   }
