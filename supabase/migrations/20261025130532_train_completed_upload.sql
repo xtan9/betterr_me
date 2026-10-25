@@ -50,6 +50,7 @@ $$;
 create function fitness_private.valid_native_completion(doc jsonb) returns boolean
 language plpgsql stable set search_path=pg_catalog,public as $$
 declare entry jsonb; definition jsonb; item jsonb; performed jsonb; identifiers uuid[]:='{}'; identity uuid; started timestamptz; ended timestamptz;
+  instant_pattern constant text := '^[0-9]{4}-[0-9]{2}-[0-9]{2}T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]{1,6})?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$';
 begin
  if not fitness_private.exact_keys(doc,array['version','id','ownerId','sourceId','startedAt','completedAt','durationSeconds','timezone','workoutDay','planId','exercises'])
    or doc->'version' is distinct from '1'::jsonb
@@ -60,8 +61,15 @@ begin
    or jsonb_typeof(doc->'planId') not in ('null','string')
    or jsonb_typeof(doc->'exercises') is distinct from 'array' then return false; end if;
  if jsonb_array_length(doc->'exercises')=0 then return false; end if;
+ -- PostgreSQL's permissive parser also accepts relative dates, leap seconds,
+ -- rolling 24:00 and POSIX zones. Those must not enter a native Date/Intl reader.
+ -- Retain the original strings, including IANA links and explicit UTC offsets.
+ if doc->>'startedAt' !~ instant_pattern or doc->>'completedAt' !~ instant_pattern
+   or doc->>'workoutDay' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+   or not exists(select 1 from pg_timezone_names where lower(name)=lower(doc->>'timezone')
+     and name !~ '^(posix|right)/' and name not in ('Factory','localtime','posixrules')) then return false; end if;
  started:=(doc->>'startedAt')::timestamptz; ended:=(doc->>'completedAt')::timestamptz;
- if not isfinite(started) or not isfinite(ended) or to_char(started at time zone (doc->>'timezone'),'YYYY-MM-DD') is distinct from doc->>'workoutDay' then return false; end if;
+ if not isfinite(started) or not isfinite(ended) or to_char(started at time zone (doc->>'timezone'),'FMYYYY-MM-DD') is distinct from doc->>'workoutDay' then return false; end if;
  for entry in select value from jsonb_array_elements(doc->'exercises') loop
    if not fitness_private.exact_keys(entry,array['id','definition','sets']) or not coalesce(fitness_private.valid_uuid(entry->'id'),false)
      or jsonb_typeof(entry->'sets') is distinct from 'array' then return false; end if;

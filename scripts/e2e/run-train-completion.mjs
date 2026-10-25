@@ -132,6 +132,42 @@ try {
   check(ready, 'Isolated Next did not become ready');
   const a = await account(); const b = await account();
   const active = (await request('/api/workouts', a, { title: 'Existing Web active' }, 201, true)).workout;
+  const forbidden = completion(a);
+  Object.defineProperty(forbidden.completion, '__proto__', { value: { mustRemainJsonData: true }, enumerable: true });
+  check((await request(endpoint, a, forbidden, 422)).error.code === 'invalid_completion', 'Transport stripped a forbidden document key into an accepted completion');
+  const forbiddenRows = await a.client.from('workouts').select('id').eq('id', forbidden.operationId);
+  check(!forbiddenRows.error && !forbiddenRows.data.length, 'Forbidden JSON key left a workout');
+  for (const patch of [
+    { completedAt: 'tomorrow' }, { completedAt: '2026-10-25' }, { startedAt: '2026-10-25T10:00:00' },
+    { completedAt: '2026-10-25T23:59:60Z' }, { completedAt: '2026-10-25T24:00:00Z' },
+    { completedAt: '2026-02-29T10:00:00Z' }, { completedAt: '294000-01-01T00:00:00Z' },
+    { timezone: 'UTC+1' }, { timezone: 'PST' }, { timezone: 'Factory' }, { timezone: 'posix/UTC' },
+  ]) {
+    const invalid = completion(a); Object.assign(invalid.completion, patch);
+    check((await request(endpoint, a, invalid, 422)).error.code === 'invalid_completion', 'Unreadable temporal document was acknowledged');
+    const rows = await a.client.from('workouts').select('id').eq('id', invalid.operationId);
+    const receipts = await a.client.from('train_completion_receipts').select('operation_id').eq('operation_id', invalid.operationId);
+    check(!rows.error && !receipts.error && !rows.data.length && !receipts.data.length, 'Rejected time left history or a receipt');
+  }
+  const temporalReadbacks = [];
+  for (const patch of [
+    { startedAt: '2024-02-29T23:59:59.123Z', completedAt: '2024-03-01T00:00:00Z', timezone: 'UTC', workoutDay: '2024-02-29' },
+    { startedAt: '2026-11-01T01:30:00-04:00', completedAt: '2026-11-01T01:30:00-05:00', timezone: 'US/Eastern', workoutDay: '2026-11-01' },
+    { timezone: 'Asia/Katmandu' }, { timezone: 'america/los_angeles' }, { timezone: 'Etc/GMT+12', workoutDay: '2026-10-24' },
+  ]) {
+    const value = completion(a); Object.assign(value.completion, patch);
+    const receipt = await request(endpoint, a, value);
+    check(isDeepStrictEqual(await request(endpoint, a, value), receipt), 'Temporal retry changed its receipt');
+    const raw = await a.client.from('workouts').select('started_at,completed_at,native_completion').eq('id', value.operationId).single();
+    check(!raw.error && isDeepStrictEqual(raw.data.native_completion, value.completion)
+      && Date.parse(raw.data.started_at) === Date.parse(value.completion.startedAt)
+      && Date.parse(raw.data.completed_at) === Date.parse(value.completion.completedAt), 'Explicit instant changed during readback');
+    check(new Intl.DateTimeFormat('en-CA', { timeZone: raw.data.native_completion.timezone, year: 'numeric', month: '2-digit', day: '2-digit' })
+      .format(new Date(raw.data.native_completion.startedAt)) === raw.data.native_completion.workoutDay, 'Native Intl cannot read recorded timezone/day');
+    temporalReadbacks.push(raw.data.native_completion);
+  }
+  writeFileSync(resolve(root, '.artifacts/train-415-temporal-readback.json'), JSON.stringify(temporalReadbacks));
+  console.log('PASS temporal rejection without writes; explicit instants, leap day, DST offsets and IANA aliases roundtrip unchanged');
   const frozen = completion(a);
   const receipts = await Promise.all(Array.from({ length: 4 }, () => request(endpoint, a, frozen)));
   check(receipts.every(value => JSON.stringify(value) === JSON.stringify(receipts[0])), 'Concurrent retry receipt changed');

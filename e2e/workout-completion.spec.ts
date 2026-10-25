@@ -47,7 +47,7 @@ test.describe('Workout completion journey', () => {
     if (signOutError) throw new Error(`workout cleanup sign-out failed: ${signOutError.message}`);
   });
 
-  test('saves, finishes, and reads back a completed workout', async ({ page }) => {
+  test('rejects an empty finish, then saves and reads back a performed workout', async ({ page }) => {
     const workoutTitle = RUN_CONTEXT.ownedName('Workout Completion');
 
     await page.goto('/workouts');
@@ -91,6 +91,57 @@ test.describe('Workout completion journey', () => {
 
     await page.reload();
     await expect(page.getByRole('button', { name: workoutTitle, exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Finish', exact: true }).click();
+    const emptyDialog = page.getByRole('alertdialog');
+    const emptyResponsePromise = page.waitForResponse((response) => (
+      response.request().method() === 'PATCH'
+      && new URL(response.url()).pathname === `/api/workouts/${workoutId}`
+    ));
+    await emptyDialog.getByRole('button', { name: 'Finish Workout', exact: true }).click();
+    const emptyResponse = await emptyResponsePromise;
+    expect(emptyResponse.status()).toBe(400);
+    expect(await emptyResponse.json()).toEqual({ error: 'Complete at least one set before finishing', field: 'sets' });
+    await expect(page.getByText('Failed to finish workout', { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole('button', { name: workoutTitle, exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Add Exercise', exact: true }).click();
+    const picker = page.getByRole('dialog');
+    await picker.getByPlaceholder('Search exercises...').fill('Barbell Bench Press');
+    const exerciseResponsePromise = page.waitForResponse((response) => response.request().method() === 'POST'
+      && new URL(response.url()).pathname === `/api/workouts/${workoutId}/exercises`);
+    await picker.getByRole('button', { name: /^Barbell Bench Press/ }).click();
+    const exerciseResponse = await exerciseResponsePromise;
+    expect(exerciseResponse.status()).toBe(201);
+    const { exercise } = await exerciseResponse.json() as { exercise: { id: string } };
+    const setsPath = `/api/workouts/${workoutId}/exercises/${exercise.id}/sets`;
+    const addSetResponsePromise = page.waitForResponse((response) => response.request().method() === 'POST'
+      && new URL(response.url()).pathname === setsPath);
+    await page.getByRole('button', { name: '+ Add Set', exact: true }).click();
+    const addSetResponse = await addSetResponsePromise;
+    expect(addSetResponse.status()).toBe(201);
+    const { set } = await addSetResponse.json() as { set: { id: string } };
+    const setPath = `${setsPath}/${set.id}`;
+    const fields = page.getByRole('spinbutton');
+    await expect(fields).toHaveCount(2);
+    const weightResponsePromise = page.waitForResponse((response) => response.request().method() === 'PATCH'
+      && new URL(response.url()).pathname === setPath);
+    await fields.nth(0).fill('20');
+    await fields.nth(1).focus();
+    expect((await weightResponsePromise).status()).toBe(200);
+    const repsResponsePromise = page.waitForResponse((response) => response.request().method() === 'PATCH'
+      && new URL(response.url()).pathname === setPath);
+    await fields.nth(1).fill('5');
+    await fields.nth(1).press('Tab');
+    expect((await repsResponsePromise).status()).toBe(200);
+    const performedResponsePromise = page.waitForResponse((response) => response.request().method() === 'PATCH'
+      && new URL(response.url()).pathname === setPath);
+    await page.getByRole('checkbox').check();
+    const performedResponse = await performedResponsePromise;
+    expect(performedResponse.status()).toBe(200);
+    expect((await performedResponse.json()).set).toMatchObject({ id: set.id, weight_kg: 20, reps: 5, is_completed: true });
+    await expect(page.getByRole('checkbox')).toBeChecked();
 
     await page.getByRole('button', { name: 'Finish', exact: true }).click();
     const finishDialog = page.getByRole('alertdialog');
