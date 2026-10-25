@@ -34,13 +34,8 @@
       "themeSystem": "System",
       "loading": "Loading...",
       "profileError": "Profile unavailable",
-      "signOutError": "Sign out failed",
-    "measurementInvalid": "Enter a complete, valid measurement.",
-    "inputUnitKept": "Unfinished input stays in {unit}.",
-    "addedLoad": "Added load",
-    "assistance": "Assistance",
-    "recordedUnavailable": "This workout uses a recording format that cannot be read here. Update the app to view its recorded details."
-  },
+      "signOutError": "Sign out failed"
+    },
     "cancel": "Cancel",
     "footer": {
       "product": "Product",
@@ -1328,7 +1323,12 @@
     "updateRestTimerError": "Failed to update rest timer",
     "removeExerciseError": "Failed to remove exercise",
     "addExerciseError": "Failed to add exercise",
-    "startError": "Failed to start workout"
+    "startError": "Failed to start workout",
+    "measurementInvalid": "Enter a complete, valid measurement.",
+    "inputUnitKept": "Unfinished input stays in {unit}.",
+    "addedLoad": "Added load",
+    "assistance": "Assistance",
+    "recordedUnavailable": "This workout uses a recording format that cannot be read here. Update the app to view its recorded details."
   },
   "routines": {
     "title": "Routines",

@@ -34,13 +34,8 @@
       "themeSystem": "跟随系统",
       "loading": "加载中...",
       "profileError": "个人资料不可用",
-      "signOutError": "退出登录失败",
-    "measurementInvalid": "请输入完整有效的测量值。",
-    "inputUnitKept": "未完成的输入仍以 {unit} 为单位。",
-    "addedLoad": "额外负重",
-    "assistance": "辅助重量",
-    "recordedUnavailable": "此训练采用当前无法读取的记录格式。请更新应用以查看已记录的详情。"
-  },
+      "signOutError": "退出登录失败"
+    },
     "cancel": "取消",
     "footer": {
       "product": "产品",
@@ -1328,7 +1323,12 @@
     "updateRestTimerError": "更新休息计时器失败",
     "removeExerciseError": "移除动作失败",
     "addExerciseError": "添加动作失败",
-    "startError": "开始训练失败"
+    "startError": "开始训练失败",
+    "measurementInvalid": "请输入完整有效的测量值。",
+    "inputUnitKept": "未完成的输入仍以 {unit} 为单位。",
+    "addedLoad": "额外负重",
+    "assistance": "辅助重量",
+    "recordedUnavailable": "此训练采用当前无法读取的记录格式。请更新应用以查看已记录的详情。"
   },
   "routines": {
     "title": "训练计划",
