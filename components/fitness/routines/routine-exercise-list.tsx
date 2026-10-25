@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EXERCISE_FIELD_MAP } from "@/lib/fitness/exercise-fields";
-import { displayWeight, toKg } from "@/lib/fitness/units";
+import { useWeightInput } from "@/components/fitness/use-weight-input";
+import { parseWholeInput } from "@/lib/fitness/measurement-input";
 import type {
   RoutineExercise,
   Exercise,
@@ -42,20 +43,7 @@ function RoutineExerciseRow({
 
   // Local state for blur-commit pattern
   const [sets, setSets] = useState(String(re.target_sets));
-  const [weightInput, setWeightInput] = useState<{
-    unit: WeightUnit;
-    canonicalKg: number | null;
-    value: string;
-  }>();
-  const storedWeight =
-    re.target_weight_kg !== null
-      ? String(displayWeight(re.target_weight_kg, weightUnit))
-      : "";
-  const weight =
-    weightInput?.unit === weightUnit &&
-    weightInput.canonicalKg === re.target_weight_kg
-      ? weightInput.value
-      : storedWeight;
+  const weight = useWeightInput(re.id, re.target_weight_kg, weightUnit);
   const [reps, setReps] = useState(
     re.target_reps !== null ? String(re.target_reps) : ""
   );
@@ -66,30 +54,13 @@ function RoutineExerciseRow({
   );
 
   const handleBlur = useCallback(
-    (field: string, value: string) => {
-      const num = value === "" ? null : Number(value);
-      if (num !== null && isNaN(num)) return;
-
-      switch (field) {
-        case "target_sets":
-          if (num !== null && num >= 1) {
-            onUpdate(re.id, { target_sets: num });
-          }
-          break;
-        case "target_weight_kg":
-          onUpdate(re.id, {
-            target_weight_kg: num !== null ? toKg(num, weightUnit) : null,
-          });
-          break;
-        case "target_reps":
-          onUpdate(re.id, { target_reps: num });
-          break;
-        case "target_duration_seconds":
-          onUpdate(re.id, { target_duration_seconds: num });
-          break;
-      }
+    (field: "target_sets" | "target_reps" | "target_duration_seconds", value: string) => {
+      const num = parseWholeInput(value, field === "target_sets" ? 1 : 0,
+        field === "target_sets" ? 20 : field === "target_duration_seconds" ? 86400 : Number.MAX_SAFE_INTEGER);
+      if (num === undefined || field === "target_sets" && num === null || num === re[field]) return;
+      onUpdate(re.id, { [field]: num });
     },
-    [re.id, onUpdate, weightUnit]
+    [re, onUpdate]
   );
 
   return (
@@ -127,24 +98,25 @@ function RoutineExerciseRow({
           {fieldConfig.showWeight && (
             <div className="flex items-center gap-1">
               <Label className="text-caption text-muted-foreground">
-                {weightUnit}
+                {weight.unit}
               </Label>
               <Input
-                type="number"
-                min={0}
-                step="0.5"
-                value={weight}
-                onChange={(e) =>
-                  setWeightInput({
-                    unit: weightUnit,
-                    canonicalKg: re.target_weight_kg,
-                    value: e.target.value,
-                  })
-                }
-                onBlur={() => handleBlur("target_weight_kg", weight)}
+                type="text"
+                inputMode="decimal"
+                aria-label={`${t("targetWeight")} (${weight.unit})`}
+                aria-invalid={!weight.valid}
+                value={weight.value}
+                onChange={(e) => weight.change(e.target.value)}
+                onBlur={() => {
+                  if (weight.edited && weight.valid && weight.anchorKg !== re.target_weight_kg) {
+                    onUpdate(re.id, { target_weight_kg: weight.anchorKg });
+                  }
+                }}
                 className="h-7 w-16 text-caption"
                 placeholder="0"
               />
+              {weight.unit !== weightUnit && <p className="text-caption text-muted-foreground">{t("inputUnitKept", { unit: weight.unit })}</p>}
+              {!weight.valid && <p className="text-caption text-destructive">{t("measurementInvalid")}</p>}
             </div>
           )}
 
@@ -155,8 +127,10 @@ function RoutineExerciseRow({
                 {t("repsLabel")}
               </Label>
               <Input
-                type="number"
-                min={0}
+                type="text"
+                inputMode="numeric"
+                aria-label={t("targetReps")}
+                aria-invalid={parseWholeInput(reps, 0, Number.MAX_SAFE_INTEGER) === undefined}
                 value={reps}
                 onChange={(e) => setReps(e.target.value)}
                 onBlur={() => handleBlur("target_reps", reps)}
@@ -173,8 +147,10 @@ function RoutineExerciseRow({
                 {t("durationLabel")}
               </Label>
               <Input
-                type="number"
-                min={0}
+                type="text"
+                inputMode="numeric"
+                aria-label={t("targetDuration")}
+                aria-invalid={parseWholeInput(duration, 0, 86400) === undefined}
                 value={duration}
                 onChange={(e) => setDuration(e.target.value)}
                 onBlur={() => handleBlur("target_duration_seconds", duration)}

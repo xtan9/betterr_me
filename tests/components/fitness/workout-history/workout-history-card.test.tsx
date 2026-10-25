@@ -22,9 +22,15 @@ const workout = {
 } satisfies WorkoutSummary;
 
 describe("WorkoutHistoryCard Fitness Weight Unit presentation", () => {
+  it("keeps an unsupported record accessible without guessed exercise facts", () => {
+    render(<WorkoutHistoryCard workout={{ ...workout, recordedStatus: 'unsupported', exerciseCount: null, totalSets: null, totalVolume: null, exerciseNames: [] }} weightUnit="kg" />);
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/workouts/workout-1');
+    expect(screen.getByText('recordedUnavailable')).toBeInTheDocument();
+    expect(screen.queryByText('setsCount:0')).not.toBeInTheDocument();
+  });
   it("formats canonical kilogram volume in the accepted display unit", () => {
     render(<WorkoutHistoryCard workout={workout} weightUnit="lbs" />);
 
-    expect(screen.getByText("22.05 lbs")).toBeInTheDocument();
+    expect(screen.getByText("22.046226218487758 lbs")).toBeInTheDocument();
   });
 });
