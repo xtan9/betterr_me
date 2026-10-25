@@ -42,6 +42,7 @@ export function computePersonalRecords(
     }
 
     if (
+      set.measurement_mode !== 'assisted_bodyweight' &&
       set.reps != null &&
       set.reps > 0 &&
       (!bestReps || set.reps > bestReps.value)
@@ -91,7 +92,7 @@ export interface PRCheckResult {
  * Uses EXERCISE_FIELD_MAP to determine which PR types are relevant
  * per exercise type:
  * - weight_reps / weighted_bodyweight: weight + volume PRs
- * - assisted_bodyweight: repetitions only; counterweight is not lifted load
+ * - assisted_bodyweight: unavailable without grouping by assistance level
  * - bodyweight_reps: reps PR only
  * - duration / duration_weight: duration PR (+ weight for duration_weight)
  * - distance_duration: duration PR
@@ -131,7 +132,7 @@ export function isNewPR(
   }
 
   // Reps PR — only if the exercise tracks reps
-  if (fields.showReps && set.reps != null && set.reps > 0) {
+  if (exerciseType !== 'assisted_bodyweight' && fields.showReps && set.reps != null && set.reps > 0) {
     result.isRepsPR =
       currentPR?.best_reps == null || set.reps > currentPR.best_reps;
   }

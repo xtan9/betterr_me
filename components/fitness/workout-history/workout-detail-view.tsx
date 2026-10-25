@@ -275,7 +275,7 @@ function SetRow({
       prBadges.push("weight");
     }
     if (
-      fields.showReps &&
+      exerciseType !== 'assisted_bodyweight' && fields.showReps &&
       set.reps != null &&
       set.reps > 0 &&
       records.best_reps != null &&

@@ -45,8 +45,9 @@ Loads are finite nonnegative JS numbers, reps are positive safe integers, and
 manual durations are whole seconds from 1 through 86,400. The workout's elapsed
 duration is a separate fact. Distance, RPE, rest and entry notes remain unknown
 NULL in native projections. No timer or rest workflow is introduced. Assistance
-is retained as a fact but contributes neither lifted-load volume nor weight/volume
-personal records; repetitions remain readable.
+is retained as a fact but contributes neither lifted-load volume nor generic
+weight, volume, or repetition personal records. Repetitions remain readable;
+ranking them would require comparing the same assistance level.
 
 New or changed completed Web sets obey the same required measurements for these
 five modes. Drafts may remain incomplete. The existing active-workout commands

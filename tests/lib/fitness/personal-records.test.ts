@@ -343,10 +343,10 @@ describe("isNewPR", () => {
       expect(result.isDurationPR).toBe(false);
     });
 
-    it("assisted_bodyweight type with null currentPR: weight and reps true", () => {
+    it("assisted_bodyweight has no generic PR without a comparable assistance level", () => {
       const set = makeWorkoutSet({ weight_kg: 10, reps: 8, is_completed: true });
       const result = isNewPR(set, "assisted_bodyweight", null);
-      expect(result.isRepsPR).toBe(true);
+      expect(result).toEqual({ isWeightPR: false, isVolumePR: false, isRepsPR: false, isDurationPR: false });
     });
 
     it("distance_duration type with null currentPR: duration true", () => {

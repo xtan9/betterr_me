@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { workoutTools } from '@/lib/ai/tools/workouts';
 import type { ToolContext } from '@/lib/ai/tools/types';
 import { WorkoutToRoutineConversion } from '@/lib/fitness/routine-workout-conversion';
-import { computePersonalRecords } from '@/lib/fitness/personal-records';
+import { computePersonalRecords, isNewPR } from '@/lib/fitness/personal-records';
 import { WorkoutsDB } from '@/lib/db/workouts';
 import contract from '@/tests/fixtures/train-measurement-contract.json';
 import { mockSupabaseClient } from '../../setup';
@@ -55,7 +55,31 @@ describe('recorded workout readback', () => {
     mockSupabaseClient.setMockResponse([historyRow]);
     const sets = await db().getExerciseSets('reference-3', completion.ownerId);
     expect(sets[0]).toMatchObject({ weight_kg: 100, reps: 10, measurement_mode: 'assisted_bodyweight' });
-    expect(computePersonalRecords('reference-3', sets)).toMatchObject({ best_weight_kg: null, best_volume: null, best_reps: 10 });
+    expect(computePersonalRecords('reference-3', sets)).toMatchObject({ best_weight_kg: null, best_volume: null, best_reps: null });
+  });
+
+  it('does not rank assisted repetitions across assistance levels and still recognizes bodyweight repetitions', async () => {
+    const history = [
+      { weight_kg: 10, reps: 5, workout_started_at: '2026-10-24T07:00:00Z' },
+      { weight_kg: 100, reps: 10, workout_started_at: '2026-10-25T07:00:00Z' },
+    ].map(({ workout_started_at, ...values }) => ({
+      id: 'assisted-entry', exercise: { user_id: null, exercise_type: 'assisted_bodyweight' },
+      sets: [{ ...recordedRow().workout_exercises[3].sets[0], ...values, set_type: 'normal' }],
+      workout: { id: workout_started_at, user_id: completion.ownerId, started_at: workout_started_at,
+        status: 'completed', native_completion: null, recorded_completion: null },
+    }));
+    mockSupabaseClient.setMockResponse(history);
+    const sets = await db().getExerciseSets('reference-3', completion.ownerId);
+    expect(sets.map(set => [set.weight_kg, set.reps, set.measurement_mode])).toEqual([
+      [10, 5, 'assisted_bodyweight'], [100, 10, 'assisted_bodyweight'],
+    ]);
+    const previous = computePersonalRecords('reference-3', sets.slice(0, 1));
+    expect(computePersonalRecords('reference-3', sets)).toMatchObject({ best_weight_kg: null, best_volume: null, best_reps: null, achieved_at: null });
+    expect(isNewPR(sets[1], 'assisted_bodyweight', previous)).toEqual({ isWeightPR: false, isVolumePR: false, isRepsPR: false, isDurationPR: false });
+    const bodyweight = sets.map(set => ({ ...set, weight_kg: null, measurement_mode: 'bodyweight_reps' }));
+    expect(computePersonalRecords('bodyweight', bodyweight).best_reps).toBe(10);
+    expect(isNewPR(bodyweight[1], 'bodyweight_reps', computePersonalRecords('bodyweight', bodyweight.slice(0, 1))).isRepsPR).toBe(true);
+    mockSupabaseClient.expectQuery({ table: 'workout_exercises', method: 'eq', args: ['workout.user_id', completion.ownerId] });
   });
 
   it.each([
