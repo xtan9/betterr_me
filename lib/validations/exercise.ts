@@ -19,4 +19,8 @@ export const exerciseUpdateSchema = exerciseFormSchema
     message: "At least one field must be provided",
   });
 
+// Maintenance validates a name only when the user changes that field. Reading
+// an unusual/empty legacy name must not normalize it during a muscle edit.
+export const exerciseMetadataFormSchema = exerciseFormSchema.extend({ name: z.string() });
+
 export type ExerciseFormValues = z.infer<typeof exerciseFormSchema>;

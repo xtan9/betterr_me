@@ -40,13 +40,14 @@ const { mockUseExercises } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/hooks/use-exercises", () => ({
-  useExercises: mockUseExercises,
+  useExercises: (...args: unknown[]) => ({ownerId:"64181000-0000-4000-8000-000000000001",canCreate:true,journal:null,...mockUseExercises(...args)}),
 }));
 
 function makeExercise(overrides: Partial<Exercise> = {}): Exercise {
   return {
     id: "ex-1",
-    user_id: null,
+    user_id: "64181000-0000-4000-8000-000000000001",
+    version: "1",
     name: "Bench Press",
     muscle_group_primary: "chest",
     muscle_groups_secondary: [],
@@ -70,6 +71,7 @@ describe("ExerciseLibrary", () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
+    localStorage.clear();
   });
 
   it("renders loading skeletons while exercises are loading", () => {
@@ -191,9 +193,9 @@ describe("ExerciseLibrary", () => {
     });
   });
 
-  it("opens the delete confirmation and calls DELETE on confirm", async () => {
+  it("opens the archive confirmation and sends a versioned command", async () => {
     const mutate = vi.fn();
-    const custom = makeExercise({ id: "c1", name: "Custom Row", is_custom: true });
+    const custom = makeExercise({ id: "64181000-0000-4000-8000-000000000010", name: "Custom Row", is_custom: true });
     mockUseExercises.mockReturnValue({
       exercises: [custom],
       error: undefined,
@@ -201,9 +203,12 @@ describe("ExerciseLibrary", () => {
       mutate,
     });
 
-    (global.fetch as any).mockResolvedValue({
-      ok: true,
-      json: async () => ({}),
+    (global.fetch as any).mockImplementation(async (_url:string,init:RequestInit)=>{
+      const request=JSON.parse(String(init.body));
+      return Response.json({protocolVersion:1,receipt:{operationId:request.operationId,operation:"archive",ownerId:custom.user_id,
+        exerciseId:custom.id,acceptedAt:"2026-10-25T10:00:00Z",definition:{id:custom.id,ownerId:custom.user_id,name:custom.name,
+          equipment:custom.equipment,mode:custom.exercise_type,convention:null,primaryMuscle:custom.muscle_group_primary,
+          secondaryMuscles:custom.muscle_groups_secondary,archivedAt:"2026-10-25T10:00:00Z",version:"2",createdAt:null,updatedAt:null}}});
     });
     const user = userEvent.setup();
 
@@ -212,31 +217,31 @@ describe("ExerciseLibrary", () => {
     // Open card action menu
     await user.click(screen.getByRole("button", { name: /actions/i }));
     const deleteItem = await screen.findByRole("menuitem", {
-      name: /deleteExercise/,
+      name: /archiveExercise/,
     });
     await user.click(deleteItem);
 
     // Alert dialog shows
     expect(
-      await screen.findByText("deleteConfirmTitle")
+      await screen.findByRole("heading",{name:"archiveExercise"})
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "deleteConfirm" }));
+    await user.click(screen.getByRole("button", { name: "archiveExercise" }));
 
     await waitFor(() =>
       expect(global.fetch).toHaveBeenCalledWith(
-        "/api/exercises/c1",
-        expect.objectContaining({ method: "DELETE" })
+        "/api/exercises/commands",
+        expect.objectContaining({ method: "POST" })
       )
     );
     await waitFor(() =>
-      expect(toastSuccess).toHaveBeenCalledWith("deleteSuccess")
+      expect(toastSuccess).toHaveBeenCalledWith("archiveSuccess")
     );
     expect(mutate).toHaveBeenCalled();
   });
 
-  it("shows error toast when delete fails", async () => {
-    const custom = makeExercise({ id: "c1", name: "Custom Row", is_custom: true });
+  it("shows a sanitized error when archive remains unconfirmed", async () => {
+    const custom = makeExercise({ id: "64181000-0000-4000-8000-000000000010", name: "Custom Row", is_custom: true });
     mockUseExercises.mockReturnValue({
       exercises: [custom],
       error: undefined,
@@ -253,16 +258,16 @@ describe("ExerciseLibrary", () => {
     render(<ExerciseLibrary />);
     await user.click(screen.getByRole("button", { name: /actions/i }));
     const deleteItem = await screen.findByRole("menuitem", {
-      name: /deleteExercise/,
+      name: /archiveExercise/,
     });
     await user.click(deleteItem);
-    await user.click(screen.getByRole("button", { name: "deleteConfirm" }));
+    await user.click(screen.getByRole("button", { name: "archiveExercise" }));
 
-    await waitFor(() => expect(toastError).toHaveBeenCalledWith("nope"));
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("commandFailed"));
   });
 
   it("opens the edit form when edit menuitem is clicked on a custom exercise", async () => {
-    const custom = makeExercise({ id: "c1", name: "Row Variant", is_custom: true });
+    const custom = makeExercise({ id: "64181000-0000-4000-8000-000000000010", name: "Row Variant", is_custom: true });
     mockUseExercises.mockReturnValue({
       exercises: [custom],
       error: undefined,
@@ -294,8 +299,8 @@ describe("ExerciseLibrary", () => {
     });
   });
 
-  it("cancels delete without calling DELETE", async () => {
-    const custom = makeExercise({ id: "c1", is_custom: true });
+  it("cancels archive without creating an operation", async () => {
+    const custom = makeExercise({ id: "64181000-0000-4000-8000-000000000010", is_custom: true });
     mockUseExercises.mockReturnValue({
       exercises: [custom],
       error: undefined,
@@ -307,7 +312,7 @@ describe("ExerciseLibrary", () => {
     render(<ExerciseLibrary />);
     await user.click(screen.getByRole("button", { name: /actions/i }));
     const deleteItem = await screen.findByRole("menuitem", {
-      name: /deleteExercise/,
+      name: /archiveExercise/,
     });
     await user.click(deleteItem);
 

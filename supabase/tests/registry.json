@@ -393,5 +393,8 @@
   {"path":"train_mcp_bridge.sql","domain":"workouts","role":"admin","cleanup":"transactional","adminReason":"Creates disposable synthetic users and verifies service-only MCP execution, explicit reference authority and transaction-local principal restoration as service_role."},
   {"path":"train_completion_upload.sql","domain":"workouts","role":"constrained","cleanup":"transactional"},
   {"path":"train_measurement_upload.sql","domain":"workouts","role":"constrained","cleanup":"transactional"},
+  {"path":"train_custom_exercises_expand.sql","domain":"workouts","role":"constrained","cleanup":"transactional"},
+  {"path":"train_custom_exercise_contract.sql","domain":"workouts","role":"admin","cleanup":"transactional","adminReason":"Rehearses the separate private rollout gate and ordinary privilege contraction inside one rollback, then verifies authenticated commands, custom upload ownership, immutable meaning and profile cascade."},
+  {"path":"train_custom_exercise_commands.sql","domain":"workouts","role":"constrained","cleanup":"transactional"},
   {"path":"train_measurement_writes.sql","domain":"workouts","role":"constrained","cleanup":"transactional"}
 ]

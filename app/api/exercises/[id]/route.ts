@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
+import {
+  authenticateRequest,
+  cookieRouteErrorMessage,
+} from "@/lib/auth/authenticated-request";
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { ExercisesDB } from "@/lib/db/exercises";
-import { validateRequestBody } from "@/lib/validations/api";
-import { exerciseUpdateSchema } from "@/lib/validations/exercise";
+import {
+  executeExerciseCommand,
+  exerciseFailure,
+  exerciseUnavailable,
+} from "@/lib/fitness/exercise-commands";
 import { log } from "@/lib/logger";
 
 const READ_REQUEST_POLICY = {
@@ -22,7 +28,7 @@ const WRITE_REQUEST_POLICY = {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -33,15 +39,18 @@ export async function GET(
         { status: auth.status },
       );
     }
-    const { client: supabase } = auth;
+    const {
+      client: supabase,
+      principal: { userId },
+    } = auth;
 
     const exercisesDB = new ExercisesDB(supabase);
-    const exercise = await exercisesDB.getExercise(id);
+    const exercise = await exercisesDB.getExercise(id, userId);
 
     if (!exercise) {
       return NextResponse.json(
         { error: "Exercise not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -50,114 +59,42 @@ export async function GET(
     log.error("GET /api/exercises/[id] error", error);
     return NextResponse.json(
       { error: "Failed to fetch exercise" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
-/**
- * PATCH /api/exercises/[id]
- * Update a custom exercise. Preset exercises cannot be modified (RLS enforces).
- */
+/** Legacy route locations share the command contract; unversioned writes fail. */
+async function command(
+  request: NextRequest,
+  params: Promise<{ id: string }>,
+  kinds: readonly string[],
+) {
+  try {
+    const { id } = await params;
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) return exerciseFailure("unauthenticated", auth.status);
+    if (request.headers.get("X-Train-Owner") !== auth.principal.userId)
+      return exerciseFailure("unauthenticated", 403);
+    return await executeExerciseCommand(
+      request,
+      auth.client,
+      auth.principal.userId,
+      { id, kinds },
+    );
+  } catch {
+    return exerciseUnavailable("unexpected_exception");
+  }
+}
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  try {
-    const { id } = await params;
-    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
-    if (!auth.ok) {
-      return NextResponse.json(
-        { error: cookieRouteErrorMessage(auth) },
-        { status: auth.status },
-      );
-    }
-    const { client: supabase } = auth;
-
-    const body = await request.json();
-    const validation = validateRequestBody(body, exerciseUpdateSchema);
-    if (!validation.success) return validation.response;
-
-    const exercisesDB = new ExercisesDB(supabase);
-    const exercise = await exercisesDB.updateExercise(id, validation.data);
-
-    return NextResponse.json({ exercise });
-  } catch (error: unknown) {
-    log.error("PATCH /api/exercises/[id] error", error);
-
-    // RLS prevents updating preset exercises — surfaces as PGRST116 (no rows returned)
-    const code =
-      error && typeof error === "object" && "code" in error
-        ? (error as { code: string }).code
-        : undefined;
-    if (code === "PGRST116") {
-      return NextResponse.json(
-        { error: "Cannot modify preset exercises" },
-        { status: 403 }
-      );
-    }
-
-    return NextResponse.json(
-      { error: "Failed to update exercise" },
-      { status: 500 }
-    );
-  }
+  return command(request, params, ["update-metadata", "restore"]);
 }
-
-/**
- * DELETE /api/exercises/[id]
- * Delete a custom exercise. Preset exercises cannot be deleted (RLS enforces).
- */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  try {
-    const { id } = await params;
-    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
-    if (!auth.ok) {
-      return NextResponse.json(
-        { error: cookieRouteErrorMessage(auth) },
-        { status: auth.status },
-      );
-    }
-    const { client: supabase } = auth;
-
-    const exercisesDB = new ExercisesDB(supabase);
-    await exercisesDB.deleteExercise(id);
-
-    return new NextResponse(null, { status: 204 });
-  } catch (error: unknown) {
-    log.error("DELETE /api/exercises/[id] error", error);
-
-    const message = error instanceof Error ? error.message : String(error);
-
-    // FK violation — exercise used in workouts
-    if (message.includes("used in workouts")) {
-      return NextResponse.json(
-        {
-          error:
-            "This exercise has been used in workouts and cannot be deleted.",
-        },
-        { status: 409 }
-      );
-    }
-
-    // RLS prevents deleting preset exercises — check for no rows affected
-    const code =
-      error && typeof error === "object" && "code" in error
-        ? (error as { code: string }).code
-        : undefined;
-    if (code === "PGRST116") {
-      return NextResponse.json(
-        { error: "Cannot delete preset exercises" },
-        { status: 403 }
-      );
-    }
-
-    return NextResponse.json(
-      { error: "Failed to delete exercise" },
-      { status: 500 }
-    );
-  }
+  return command(request, params, ["archive"]);
 }

@@ -11,7 +11,7 @@ begin
   set local role authenticated;
   task := public.task_capture_command('create',gen_random_uuid(),null,null,'{"title":"Original title"}')->'task';
   event := public.calendar_capture_command('create',gen_random_uuid(),null,null,jsonb_build_object('title','Tomorrow',
-    'start_date',tomorrow::date,'start_time',to_char(tomorrow,'HH24:MI:SS'),'end_date',tomorrow::date,
+    'start_date',tomorrow::date,'start_time',to_char(tomorrow,'HH24:MI:SS'),'end_date',(tomorrow+interval '1 hour')::date,
     'end_time',to_char(tomorrow+interval '1 hour','HH24:MI:SS'),'timezone','UTC','task_id',task->>'id','is_protected',false))->'event';
   perform public.update_calendar_event_with_reminders(owner_id,(event->>'id')::uuid,'{}',
     '[{"reminder_type":"relative","relative_minutes":10,"channels":["push"]},{"reminder_type":"relative","relative_minutes":20,"channels":["push"]}]');
@@ -55,7 +55,7 @@ begin
   reset role;
   insert into public.categories(id,user_id,name,color) values(category_id,owner_id,'Temporary','#123456');
   insert into public.calendar_events(user_id,title,task_id,category_id,start_date,start_time,end_date,end_time,timezone,app_owned,is_protected)
-    values(owner_id,'Released category',(task->>'id')::uuid,category_id,tomorrow::date,tomorrow::time,tomorrow::date,(tomorrow+interval '1 hour')::time,'UTC',true,false);
+    values(owner_id,'Released category',(task->>'id')::uuid,category_id,tomorrow::date,tomorrow::time,(tomorrow+interval '1 hour')::date,(tomorrow+interval '1 hour')::time,'UTC',true,false);
   set local role authenticated;
   preview := public.planner_completion_preview((task->>'id')::uuid);
   result := public.planner_command(jsonb_build_object('operation','complete','operationId',gen_random_uuid(),'taskId',task->>'id','expectedVersion',task->>'version','plan',preview->'plan'));

@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
+import {
+  authenticateRequest,
+  cookieRouteErrorMessage,
+} from "@/lib/auth/authenticated-request";
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { ExercisesDB } from "@/lib/db/exercises";
-import { validateRequestBody } from "@/lib/validations/api";
-import { exerciseFormSchema } from "@/lib/validations/exercise";
+import {
+  executeExerciseCommand,
+  exerciseCapabilities,
+  exerciseFailure,
+  exerciseUnavailable,
+} from "@/lib/fitness/exercise-commands";
 import { log } from "@/lib/logger";
 
 const READ_REQUEST_POLICY = {
@@ -20,7 +27,7 @@ const WRITE_REQUEST_POLICY = {
  * GET /api/exercises
  * Get all exercises visible to the authenticated user (presets + custom).
  */
-export async function GET(request: Request = new Request("http://localhost")) {
+export async function GET(request: Request) {
   try {
     const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
     if (!auth.ok) {
@@ -29,17 +36,34 @@ export async function GET(request: Request = new Request("http://localhost")) {
         { status: auth.status },
       );
     }
-    const { client: supabase } = auth;
+    const {
+      client: supabase,
+      principal: { userId },
+    } = auth;
 
     const exercisesDB = new ExercisesDB(supabase);
-    const exercises = await exercisesDB.getAllExercises();
-
-    return NextResponse.json({ exercises });
+    const scope = new URL(request.url).searchParams.get("archived");
+    if (scope !== null && scope !== "all")
+      return exerciseFailure("invalid_request", 400);
+    const exercises = await exercisesDB.getAllExercises(
+      userId,
+      scope === "all",
+    );
+    const capabilities = await exerciseCapabilities(supabase);
+    if (!capabilities.ok) return capabilities.response;
+    return NextResponse.json(
+      {
+        ownerId: userId,
+        exercises,
+        customExercises: capabilities.value.customExercises,
+      },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   } catch (error) {
     log.error("GET /api/exercises error", error);
     return NextResponse.json(
       { error: "Failed to fetch exercises" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -57,21 +81,18 @@ export async function POST(request: NextRequest) {
         { status: auth.status },
       );
     }
-    const { principal: { userId }, client: supabase } = auth;
+    const {
+      principal: { userId },
+      client: supabase,
+    } = auth;
 
-    const body = await request.json();
-    const validation = validateRequestBody(body, exerciseFormSchema);
-    if (!validation.success) return validation.response;
-
-    const exercisesDB = new ExercisesDB(supabase);
-    const exercise = await exercisesDB.createExercise(userId, validation.data);
-
-    return NextResponse.json({ exercise }, { status: 201 });
+    if (request.headers.get("X-Train-Owner") !== userId)
+      return exerciseFailure("unauthenticated", 403);
+    return await executeExerciseCommand(request, supabase, userId, {
+      kinds: ["create"],
+    });
   } catch (error) {
-    log.error("POST /api/exercises error", error);
-    return NextResponse.json(
-      { error: "Failed to create exercise" },
-      { status: 500 }
-    );
+    void error;
+    return exerciseUnavailable("unexpected_exception");
   }
 }

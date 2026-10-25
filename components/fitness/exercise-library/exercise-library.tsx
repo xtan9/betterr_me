@@ -2,7 +2,7 @@
 
 import { selectExercises } from "@/lib/fitness/exercise-selection";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Plus, Dumbbell } from "lucide-react";
@@ -23,10 +23,24 @@ import { ExerciseCard } from "./exercise-card";
 import { ExerciseFilterBar } from "./exercise-filter-bar";
 import { ExerciseForm } from "./exercise-form";
 import type { Exercise, MuscleGroup, Equipment } from "@/lib/db/types";
+import {
+  prepareExerciseCommand,
+  resolveExerciseRejection,
+  sendExerciseCommand,
+} from "@/lib/fitness/exercise-command-client";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export function ExerciseLibrary() {
   const t = useTranslations("exercises");
-  const { exercises, error, isLoading, mutate } = useExercises();
+  const { exercises, error, isLoading, mutate, ownerId, canCreate, journal } =
+    useExercises({ includeArchived: true });
+  const ownerRef = useRef(ownerId);
+  useEffect(() => {
+    ownerRef.current = ownerId;
+  }, [ownerId]);
+  const [archiveScope, setArchiveScope] = useState("active");
+  const [variation, setVariation] = useState<Exercise | null>(null);
+  const [isRetrying, setIsRetrying] = useState(false);
 
   // Filter state
   const [search, setSearch] = useState("");
@@ -39,40 +53,47 @@ export function ExerciseLibrary() {
 
   // Delete confirmation state
   const [deletingExercise, setDeletingExercise] = useState<Exercise | null>(
-    null
+    null,
   );
   const [isDeleting, setIsDeleting] = useState(false);
   const { filteredExercises, groupedExercises } = useMemo(
-    () => selectExercises(exercises, { search, muscleGroup, equipment }),
-    [exercises, search, muscleGroup, equipment],
+    () =>
+      selectExercises(
+        exercises.filter((exercise) =>
+          archiveScope === "archived"
+            ? !!exercise.archived_at
+            : !exercise.archived_at,
+        ),
+        { search, muscleGroup, equipment },
+      ),
+    [exercises, search, muscleGroup, equipment, archiveScope],
   );
 
-
   const handleEdit = (exercise: Exercise) => {
+    setVariation(null);
     setEditingExercise(exercise);
     setIsFormOpen(true);
   };
 
   const handleDelete = async () => {
-    if (!deletingExercise) return;
+    if (!deletingExercise || !ownerId || !deletingExercise.version) return;
 
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/exercises/${deletingExercise.id}`, {
-        method: "DELETE",
+      const request = prepareExerciseCommand(ownerId, {
+        kind: deletingExercise.archived_at ? "restore" : "archive",
+        exerciseId: deletingExercise.id,
+        expectedVersion: deletingExercise.version,
       });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.error ?? "Failed to delete exercise");
-      }
-
-      toast.success(t("deleteSuccess"));
+      await sendExerciseCommand(ownerId, request);
+      if (ownerRef.current !== ownerId) return;
+      toast.success(
+        t(deletingExercise.archived_at ? "restoreSuccess" : "archiveSuccess"),
+      );
       mutate();
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to delete exercise";
-      toast.error(message);
+      void error;
+      if (ownerRef.current === ownerId) toast.error(t("commandFailed"));
     } finally {
       setIsDeleting(false);
       setDeletingExercise(null);
@@ -83,6 +104,7 @@ export function ExerciseLibrary() {
     setIsFormOpen(open);
     if (!open) {
       setEditingExercise(null);
+      setVariation(null);
     }
   };
 
@@ -120,72 +142,216 @@ export function ExerciseLibrary() {
     <div className="flex flex-col gap-section-gap">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-page-title tracking-tight">{t("title")}</h1>
-        <Button onClick={() => setIsFormOpen(true)} size="sm">
+        <Button
+          onClick={() => {
+            setVariation(null);
+            setEditingExercise(null);
+            setIsFormOpen(true);
+          }}
+          size="sm"
+          disabled={
+            !canCreate ||
+            !!(journal && ["pending", "rejected"].includes(journal.state))
+          }
+        >
           <Plus className="mr-2 h-4 w-4" />
           {t("createCustom")}
         </Button>
       </div>
-
-      <ExerciseFilterBar
-        search={search}
-        onSearchChange={setSearch}
-        muscleGroup={muscleGroup}
-        onMuscleGroupChange={setMuscleGroup}
-        equipment={equipment}
-        onEquipmentChange={setEquipment}
-      />
-
-      {filteredExercises.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Dumbbell className="text-muted-foreground mb-4 h-12 w-12" />
-          <h3 className="text-section-heading font-medium">{t("noResults")}</h3>
-          <p className="text-muted-foreground mt-1 text-body">
-            {t("noResultsDescription")}
+      {!canCreate && (
+        <p role="status" className="text-muted-foreground">
+          {t("creationUnavailable")}
+        </p>
+      )}
+      {journal && ["pending", "rejected"].includes(journal.state) && (
+        <div role="status" className="space-y-2">
+          <p>
+            {t(
+              journal.state === "pending" ? "pendingCommand" : "reviewConflict",
+            )}
           </p>
-        </div>
-      ) : (
-        <div className="space-y-8">
-          {Array.from(groupedExercises.entries()).map(
-            ([group, groupExercises]) => (
-              <section key={group}>
-                <h2 className="text-muted-foreground mb-3 text-body font-semibold uppercase tracking-wider">
-                  {t(`muscleGroups.${group}`)} ({groupExercises.length})
-                </h2>
-                <div className="grid gap-card-gap sm:grid-cols-2 lg:grid-cols-3">
-                  {groupExercises.map((exercise) => (
-                    <ExerciseCard
-                      key={exercise.id}
-                      exercise={exercise}
-                      onEdit={handleEdit}
-                      onDelete={setDeletingExercise}
-                    />
-                  ))}
-                </div>
-              </section>
-            )
+          {journal.state === "pending" ? (
+            <Button
+              disabled={isRetrying}
+              onClick={async () => {
+                if (!ownerId) return;
+                setIsRetrying(true);
+                try {
+                  await sendExerciseCommand(ownerId, journal.request);
+                  if (ownerRef.current === ownerId) await mutate();
+                } catch {
+                  if (ownerRef.current === ownerId)
+                    toast.error(t("commandFailed"));
+                } finally {
+                  setIsRetrying(false);
+                }
+              }}
+            >
+              {t("retryCommand")}
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (ownerId) resolveExerciseRejection(ownerId);
+                  mutate();
+                }}
+              >
+                {t("keepCurrent")}
+              </Button>
+              {journal.rejection?.current &&
+              ["archive", "restore"].includes(
+                String(journal.request.command.kind),
+              ) ? (
+                <>
+                  <p>
+                    {t("currentName", { name: journal.rejection.current.name })}
+                  </p>
+                  <Button
+                    disabled={isRetrying}
+                    onClick={async () => {
+                      if (!ownerId || !journal.rejection?.current) return;
+                      setIsRetrying(true);
+                      try {
+                        const request = resolveExerciseRejection(ownerId, {
+                          ...journal.request.command,
+                          expectedVersion: journal.rejection.current.version,
+                        })!;
+                        await sendExerciseCommand(ownerId, request);
+                        if (ownerRef.current === ownerId) await mutate();
+                      } catch {
+                        if (ownerRef.current === ownerId)
+                          toast.error(t("commandFailed"));
+                      } finally {
+                        setIsRetrying(false);
+                      }
+                    }}
+                  >
+                    {t("applyReviewed")}
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  onClick={() => {
+                    const target = exercises.find(
+                      (exercise) =>
+                        exercise.id === journal.request.command.exerciseId,
+                    );
+                    if (target) {
+                      setEditingExercise(target);
+                      setVariation(null);
+                      setIsFormOpen(true);
+                    } else if (journal.request.command.kind === "create") {
+                      setEditingExercise(null);
+                      setVariation(null);
+                      setIsFormOpen(true);
+                    }
+                  }}
+                >
+                  {t("reviewProposal")}
+                </Button>
+              )}
+            </>
           )}
         </div>
       )}
+      <Tabs value={archiveScope} onValueChange={setArchiveScope}>
+        <TabsList>
+          <TabsTrigger value="active">{t("activeLibrary")}</TabsTrigger>
+          <TabsTrigger value="archived">{t("archivedLibrary")}</TabsTrigger>
+        </TabsList>
+        <TabsContent value={archiveScope} className="space-y-4">
+          <ExerciseFilterBar
+            search={search}
+            onSearchChange={setSearch}
+            muscleGroup={muscleGroup}
+            onMuscleGroupChange={setMuscleGroup}
+            equipment={equipment}
+            onEquipmentChange={setEquipment}
+          />
+
+          {filteredExercises.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <Dumbbell className="text-muted-foreground mb-4 h-12 w-12" />
+              <h3 className="text-section-heading font-medium">
+                {t("noResults")}
+              </h3>
+              <p className="text-muted-foreground mt-1 text-body">
+                {t("noResultsDescription")}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-8">
+              {Array.from(groupedExercises.entries()).map(
+                ([group, groupExercises]) => (
+                  <section key={group}>
+                    <h2 className="text-muted-foreground mb-3 text-body font-semibold uppercase tracking-wider">
+                      {t(`muscleGroups.${group}`)} ({groupExercises.length})
+                    </h2>
+                    <div className="grid gap-card-gap sm:grid-cols-2 lg:grid-cols-3">
+                      {groupExercises.map((exercise) => (
+                        <ExerciseCard
+                          key={exercise.id}
+                          exercise={exercise}
+                          onEdit={handleEdit}
+                          onDelete={setDeletingExercise}
+                          onCreateVariation={
+                            canCreate
+                              ? (exercise) => {
+                                  setEditingExercise(null);
+                                  setVariation(exercise);
+                                  setIsFormOpen(true);
+                                }
+                              : undefined
+                          }
+                        />
+                      ))}
+                    </div>
+                  </section>
+                ),
+              )}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
       <ExerciseForm
-        key={editingExercise?.id ?? "new"}
-        open={isFormOpen}
+        key={`${ownerId}:${editingExercise?.id ?? variation?.id ?? "new"}:${variation ? "variation" : "edit"}`}
+        open={
+          isFormOpen &&
+          (!editingExercise || editingExercise.user_id === ownerId) &&
+          (!variation || variation.user_id === ownerId)
+        }
         onOpenChange={handleFormClose}
         exercise={editingExercise ?? undefined}
         onSaved={handleSaved}
+        ownerId={ownerId ?? undefined}
+        canCreate={canCreate}
+        variation={variation ?? undefined}
       />
 
       <AlertDialog
-        open={!!deletingExercise}
+        open={!!deletingExercise && deletingExercise.user_id === ownerId}
         onOpenChange={(open) => {
           if (!open) setDeletingExercise(null);
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t("deleteConfirmTitle")}</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t(
+                deletingExercise?.archived_at
+                  ? "restoreExercise"
+                  : "archiveExercise",
+              )}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {t("deleteConfirmDescription")}
+              {t(
+                deletingExercise?.archived_at
+                  ? "restoreDescription"
+                  : "archiveDescription",
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -197,7 +363,11 @@ export function ExerciseLibrary() {
               disabled={isDeleting}
               className="bg-destructive text-white hover:bg-destructive/90"
             >
-              {t("deleteConfirm")}
+              {t(
+                deletingExercise?.archived_at
+                  ? "restoreExercise"
+                  : "archiveExercise",
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

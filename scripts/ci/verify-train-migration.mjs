@@ -117,7 +117,52 @@ try {
       if result->>'type'<>'already-applied' then raise exception 'Legacy zero-set completion lost its terminal readback'; end if;
       update workout_sets set rpe=7 where reps=-1;
     end$$;`);
-  console.log(`PASS historical DDL → 8 modes/custom/null/zero/deferred fields + 10,032 sets → 415 migration, ${elapsed} ms → 416 migration + accepted v1 receipt preservation; exact rows unchanged; legacy invalid measures remain editable without coercion`);
+  const v2 = structuredClone(contract.completion);
+  v2.id = randomUUID(); v2.ownerId = v1.ownerId; v2.sourceId = randomUUID();
+  for (const entry of v2.exercises) {
+    entry.id = randomUUID();
+    for (const set of entry.sets) set.id = randomUUID();
+  }
+  query(database, `set request.jwt.claims='{"sub":"${v1.ownerId}","role":"authenticated"}';
+    do $$ begin
+      if public.upload_completed_workout('${v2.id}', '${JSON.stringify(v2).replaceAll("'", "''")}'::jsonb)->>'status'<>'accepted' then
+        raise exception 'V2 preservation control did not upload'; end if;
+    end $$;
+    insert into exercises(user_id,name,muscle_group_primary,muscle_groups_secondary,equipment,exercise_type,is_custom,created_at,updated_at)
+      values('${v1.ownerId}','','other',null,'band','duration_weight',true,null,null);
+    insert into exercise_media(exercise_id,gif_url,thumbnail_url,instructions,alternative_names,source,fetched_at,created_at)
+      select id,'https://example.test/existing.gif',null,array['Existing instructions'],array['Legacy alias'],'legacy-source',null,null
+      from exercises where is_custom and name='';
+    insert into exercise_name_mappings(exercise_id,our_name,matched_name,match_confidence,created_at)
+      select id,'Original mapping',null,0.123,null from exercises where is_custom and name='';
+    create table custom_before as select 'exercises' as kind,to_jsonb(t) as row from exercises t
+      union all select 'exercise_media',to_jsonb(t) from exercise_media t
+      union all select 'exercise_name_mappings',to_jsonb(t) from exercise_name_mappings t
+      union all select 'workouts',to_jsonb(t) from workouts t
+      union all select 'workout_exercises',to_jsonb(t) from workout_exercises t
+      union all select 'workout_sets',to_jsonb(t) from workout_sets t
+      union all select 'routines',to_jsonb(t) from routines t
+      union all select 'routine_exercises',to_jsonb(t) from routine_exercises t
+      union all select 'train_completion_receipts',to_jsonb(t) from train_completion_receipts t;`);
+  query(database, `begin; ${migration('20261025214904_train_custom_exercises_expand.sql')} commit;`);
+  const customDifferences = query(database, `with after_rows as (
+    select 'exercises' as kind,to_jsonb(t)-'version'-'archived_at'-'measurement_convention' as row from exercises t
+    union all select 'exercise_media',to_jsonb(t) from exercise_media t
+    union all select 'exercise_name_mappings',to_jsonb(t) from exercise_name_mappings t
+    union all select 'workouts',to_jsonb(t) from workouts t
+    union all select 'workout_exercises',to_jsonb(t) from workout_exercises t
+    union all select 'workout_sets',to_jsonb(t) from workout_sets t
+    union all select 'routines',to_jsonb(t) from routines t
+    union all select 'routine_exercises',to_jsonb(t) from routine_exercises t
+    union all select 'train_completion_receipts',to_jsonb(t) from train_completion_receipts t)
+    select count(*) from ((select * from custom_before except all select * from after_rows)
+      union all (select * from after_rows except all select * from custom_before)) differences;`);
+  if (customDifferences !== '0') throw new Error('Custom expansion changed legacy metadata/media, v1/v2 authority or first receipts');
+  if (query(database, `select count(*) from exercises where version<>1 or archived_at is not null or measurement_convention is not null`) !== '0') {
+    throw new Error('Custom expansion invented historical meaning, version or archive state');
+  }
+  if (query(database, `select ready from fitness_private.custom_exercise_rollout`) !== 'f') throw new Error('Expansion prematurely activated the custom contract');
+  console.log(`PASS historical DDL → 8 modes/custom/null/zero/deferred fields + 10,032 sets → 415 migration, ${elapsed} ms → 416 migration → 418 expansion; exact legacy rows/media and accepted v1/v2 captures/receipts unchanged; old invalid measures remain editable; custom readiness remains false`);
 } finally {
   if (created) query('postgres', `drop database ${database};`);
 }
