@@ -430,6 +430,8 @@ export interface ExerciseMedia {
 
 export interface Exercise {
   id: string;
+  /** Portable built-in identity; custom and older responses may omit it. */
+  catalog_key?: string | null;
   user_id: string | null; // NULL for preset exercises
   name: string;
   muscle_group_primary: MuscleGroup;
@@ -444,13 +446,13 @@ export interface Exercise {
 
 export type ExerciseInsert = Omit<
   Exercise,
-  "id" | "created_at" | "updated_at"
+  "id" | "created_at" | "updated_at" | "catalog_key"
 > & {
   id?: string;
 };
 
 export type ExerciseUpdate = Partial<
-  Omit<Exercise, "id" | "user_id" | "created_at" | "updated_at" | "is_custom">
+  Omit<Exercise, "id" | "user_id" | "created_at" | "updated_at" | "is_custom" | "catalog_key">
 >;
 
 export interface ExerciseFilters {
