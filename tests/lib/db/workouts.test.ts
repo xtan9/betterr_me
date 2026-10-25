@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import contract from "@/tests/fixtures/train-measurement-contract.json";
 import { WorkoutsDB } from "@/lib/db/workouts";
 import { mockSupabaseClient } from "../../setup";
 import {
@@ -36,11 +37,16 @@ describe("WorkoutsDB", () => {
   it("reads the captured native definition after the live catalog is renamed", async () => {
     const definition = { catalogKey: 'strength.barbell-bench-press.v1', name: { en: 'Recorded bench', zh: '已记录卧推' }, equipment: 'barbell', mode: 'weight_reps', convention: 'barbell-total' };
     const live = { id: EXERCISE_ID, name: 'Renamed live definition', equipment: 'barbell', exercise_type: 'weight_reps' };
-    mockSupabaseClient.setMockResponse({ id: WORKOUT_ID, user_id: USER_ID, native_completion: { version: 1, exercises: [{ id: 'we-1', definition }] }, workout_exercises: [{ id: 'we-1', exercise_id: EXERCISE_ID, exercise: live, sets: [] }] });
-    const result = await workoutsDB.getWorkoutWithExercises(WORKOUT_ID, USER_ID);
+    const original = contract.completion;
+    const completed = { ...original, version: 1, exercises: [{ ...original.exercises[0], definition,
+      sets: [{ id: original.exercises[0].sets[0].id, performed: { weightKg: 0.123, reps: 5, kind: 'working' } }] }] };
+    mockSupabaseClient.setMockResponse({ id: original.id, user_id: original.ownerId, status: 'completed', started_at: original.startedAt,
+      completed_at: original.completedAt, duration_seconds: 600, native_completion: completed,
+      workout_exercises: [{ id: completed.exercises[0].id, exercise_id: EXERCISE_ID, exercise: live, sets: [{ id: completed.exercises[0].sets[0].id }] }] });
+    const result = await workoutsDB.getWorkoutWithExercises(original.id, original.ownerId);
     expect(result?.exercises[0].exercise).toMatchObject({ id: EXERCISE_ID, name: 'Recorded bench', equipment: 'barbell', exercise_type: 'weight_reps' });
     expect(result?.exercises[0]).toMatchObject({ recorded_definition: definition, live_exercise: live });
-    mockSupabaseClient.expectQuery({ method: 'eq', args: ['user_id', USER_ID] });
+    mockSupabaseClient.expectQuery({ method: 'eq', args: ['user_id', original.ownerId] });
   });
   it("does not expose a foreign custom reference through a service-backed owned workout read", async () => {
     mockSupabaseClient.setMockResponse({ id: WORKOUT_ID, user_id: USER_ID, workout_exercises: [{ id: 'legacy-cross-owner-entry', exercise: { id: 'private-id', user_id: 'another-owner', name: 'Private definition' }, sets: [] }] });
@@ -51,7 +57,7 @@ describe("WorkoutsDB", () => {
 
   it("does not silently replace an unsupported recorded document with live catalog facts", async () => {
     mockSupabaseClient.setMockResponse({ id: WORKOUT_ID, native_completion: { version: 2 }, workout_exercises: [{ id: "entry", exercise: { name: "Current catalog" }, sets: [] }] });
-    await expect(workoutsDB.getWorkoutWithExercises(WORKOUT_ID, USER_ID)).rejects.toThrow("Unsupported recorded workout definition");
+    await expect(workoutsDB.getWorkoutWithExercises(WORKOUT_ID, USER_ID)).resolves.toMatchObject({ recordedStatus: 'unsupported', exercises: [] });
   });
 
   it("keeps raw large values while making overflowing history aggregates unavailable", async () => {
@@ -395,7 +401,7 @@ describe("WorkoutsDB", () => {
       ];
       queueThenResponses([{ data: rows, error: null }]);
 
-      const result = await workoutsDB.getPreviousSets(EXERCISE_ID);
+      const result = await workoutsDB.getPreviousSets(EXERCISE_ID, USER_ID);
 
       expect(result).toHaveLength(2);
       expect(result[0].id).toBe("s-new-1");
@@ -414,9 +420,10 @@ describe("WorkoutsDB", () => {
           method: "select",
           args: [
             `
-        workout_id,
+        id, workout_id,
+        exercise:exercises (user_id, exercise_type),
         sets:workout_sets (*),
-        workout:workouts!inner (started_at, status)
+        workout:workouts!inner (id, user_id, started_at, completed_at, duration_seconds, status, native_completion, recorded_completion)
       `,
           ],
         },
@@ -430,6 +437,7 @@ describe("WorkoutsDB", () => {
           method: "eq",
           args: ["workout.status", "completed"],
         },
+        { table: "workout_exercises", method: "eq", args: ["workout.user_id", USER_ID] },
         {
           table: "workout_exercises",
           method: "order",
@@ -445,14 +453,14 @@ describe("WorkoutsDB", () => {
     it("returns [] when data is null", async () => {
       queueThenResponses([{ data: null, error: null }]);
 
-      const result = await workoutsDB.getPreviousSets(EXERCISE_ID);
+      const result = await workoutsDB.getPreviousSets(EXERCISE_ID, USER_ID);
       expect(result).toEqual([]);
     });
 
     it("returns [] when data array is empty", async () => {
       queueThenResponses([{ data: [], error: null }]);
 
-      const result = await workoutsDB.getPreviousSets(EXERCISE_ID);
+      const result = await workoutsDB.getPreviousSets(EXERCISE_ID, USER_ID);
       expect(result).toEqual([]);
     });
 
@@ -474,7 +482,7 @@ describe("WorkoutsDB", () => {
         },
       ]);
 
-      const result = await workoutsDB.getPreviousSets(EXERCISE_ID);
+      const result = await workoutsDB.getPreviousSets(EXERCISE_ID, USER_ID);
       expect(result).toEqual([]);
     });
 
@@ -482,7 +490,7 @@ describe("WorkoutsDB", () => {
       const dbError = { code: "PGRST500", message: "prev failed" };
       queueThenResponses([{ data: null, error: dbError }]);
 
-      await expect(workoutsDB.getPreviousSets(EXERCISE_ID)).rejects.toEqual(
+      await expect(workoutsDB.getPreviousSets(EXERCISE_ID, USER_ID)).rejects.toEqual(
         dbError,
       );
       expect(log.error).toHaveBeenCalledWith(
@@ -557,6 +565,7 @@ describe("WorkoutsDB", () => {
         started_at: "2026-02-28T10:00:00Z",
         completed_at: "2026-02-28T11:00:00Z",
         duration_seconds: 3600,
+        recordedStatus: "legacy",
         exerciseCount: 2,
         exerciseNames: ["Bench Press", "Incline Press"],
         // 80*10 + 60*8 + 50*12 = 800 + 480 + 600 = 1880
@@ -663,8 +672,8 @@ describe("WorkoutsDB", () => {
         *,
         workout_exercises (
           id,
-          exercise:exercises (name, user_id),
-          sets:workout_sets (weight_kg, reps, is_completed, set_type)
+          exercise:exercises (name, user_id, exercise_type),
+          sets:workout_sets (id, weight_kg, reps, is_completed, set_type)
         )
       `,
         ],
@@ -981,9 +990,10 @@ describe("WorkoutsDB", () => {
         method: "select",
         args: [
           `
-        workout_id,
-        sets:workout_sets (weight_kg, reps, duration_seconds, is_completed, set_type),
-        workout:workouts!inner (id, started_at, status, user_id)
+        id, workout_id,
+        exercise:exercises (user_id, exercise_type),
+        sets:workout_sets (id, weight_kg, reps, duration_seconds, is_completed, set_type),
+        workout:workouts!inner (id, user_id, started_at, completed_at, duration_seconds, status, native_completion, recorded_completion)
       `,
         ],
       });
@@ -1204,8 +1214,10 @@ describe("WorkoutsDB", () => {
           method: "select",
           args: [
             `
+        id,
+        exercise:exercises (user_id, exercise_type),
         sets:workout_sets (*),
-        workout:workouts!inner (started_at, status, user_id)
+        workout:workouts!inner (id, user_id, started_at, completed_at, duration_seconds, status, native_completion, recorded_completion)
       `,
           ],
         },

@@ -257,7 +257,7 @@ export class WorkoutToRoutineConversion {
         "Workout cannot be converted to a routine with the requested name",
       );
     }
-    if (!isRecord(workout) || !Array.isArray(workout.exercises)) {
+    if (!isRecord(workout) || !Array.isArray(workout.exercises) || workout.recordedStatus === 'unsupported') {
       throw new UnsupportedWorkoutDataError(
         "Workout contains unsupported source data",
       );

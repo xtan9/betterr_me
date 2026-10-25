@@ -3,7 +3,24 @@ import {
   displayWeight,
   toKg,
   formatWeight,
+  parseLoadInput,
+  weightInputText,
 } from "@/lib/fitness/units";
+import contract from "@/tests/fixtures/train-measurement-contract.json";
+
+describe("faithful measurement entry", () => {
+  it.each(contract.loadCases)("keeps canonical meaning for $text $unit", ({ text, unit, anchorKg }) => {
+    expect(parseLoadInput(text, unit as "kg" | "lbs")).toBe(anchorKg);
+  });
+  it("keeps positive underflow invalid even when the decimal exponent is beyond the arithmetic range", () => {
+    expect(parseLoadInput(`1e-${"9".repeat(100)}`, "kg")).toBeNull();
+  });
+  it("shows tiny and large recorded values in pounds without inventing zero or Infinity", () => {
+    expect(weightInputText(5e-324, "lbs")).toBe("1.1023113109243879e-323");
+    expect(formatWeight(Number.MAX_VALUE, "lbs")).toBe("3.9632349522597034e+308 lbs");
+    expect(formatWeight(0.123, "lbs")).toBe("0.27116858248739942 lbs");
+  });
+});
 
 describe("displayWeight", () => {
   it("returns value as-is for kg unit", () => {
@@ -11,14 +28,12 @@ describe("displayWeight", () => {
     expect(displayWeight(75.5, "kg")).toBe(75.5);
   });
 
-  it("converts kg to lbs correctly (100 kg → 220.46 lbs)", () => {
-    expect(displayWeight(100, "lbs")).toBe(220.46);
+  it("converts kilograms using the exact pound ratio", () => {
+    expect(displayWeight(100, "lbs")).toBe(220.46226218487757);
   });
 
-  it("rounds to 2 decimal places", () => {
-    const result = displayWeight(1, "lbs");
-    const decimals = result.toString().split(".")[1];
-    expect(decimals === undefined || decimals.length <= 2).toBe(true);
+  it("retains a fractional display instead of rounding measurements to two decimal places", () => {
+    expect(displayWeight(1, "lbs")).toBe(2.2046226218487757);
   });
 
   it("returns 0 for zero kg with kg unit", () => {
@@ -36,18 +51,16 @@ describe("toKg", () => {
     expect(toKg(75.5, "kg")).toBe(75.5);
   });
 
-  it("converts lbs to kg correctly (100 lbs → 45.36 kg)", () => {
-    expect(toKg(100, "lbs")).toBe(45.36);
+  it("converts pounds with their exact canonical meaning", () => {
+    expect(toKg(100, "lbs")).toBe(45.359237);
   });
 
   it("keeps pounds input canonical in kilograms for storage", () => {
-    expect(toKg(50, "lbs")).toBe(22.68);
+    expect(toKg(50, "lbs")).toBe(22.6796185);
   });
 
-  it("rounds to 2 decimal places", () => {
-    const result = toKg(1, "lbs");
-    const decimals = result.toString().split(".")[1];
-    expect(decimals === undefined || decimals.length <= 2).toBe(true);
+  it("keeps the complete canonical fraction for one pound", () => {
+    expect(toKg(1, "lbs")).toBe(0.45359237);
   });
 
   it("returns 0 for zero with kg unit", () => {
@@ -60,16 +73,15 @@ describe("toKg", () => {
 });
 
 describe("formatWeight", () => {
-  it("marks an unrepresentable aggregate or unit conversion unavailable", () => {
+  it("marks an unrepresentable aggregate unavailable", () => {
     expect(formatWeight(Infinity, "kg")).toBe("—");
-    expect(formatWeight(Number.MAX_VALUE, "lbs")).toBe("—");
   });
   it("returns formatted string with kg suffix", () => {
     expect(formatWeight(100, "kg")).toBe("100 kg");
   });
 
   it("returns formatted string with lbs suffix", () => {
-    expect(formatWeight(100, "lbs")).toBe("220.46 lbs");
+    expect(formatWeight(100, "lbs")).toBe("220.46226218487758 lbs");
   });
 
   it("includes the display value and unit for arbitrary weight", () => {
@@ -79,11 +91,11 @@ describe("formatWeight", () => {
 });
 
 describe("round-trip conversion", () => {
-  it("toKg(displayWeight(x, lbs), lbs) ≈ x within rounding tolerance", () => {
+  it("numeric chart conversions stay within floating point precision", () => {
     const testValues = [100, 75, 50, 1, 0.5];
     for (const x of testValues) {
       const converted = toKg(displayWeight(x, "lbs"), "lbs");
-      expect(Math.abs(converted - x)).toBeLessThanOrEqual(0.01);
+      expect(Math.abs(converted - x)).toBeLessThanOrEqual(1e-12);
     }
   });
 

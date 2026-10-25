@@ -391,5 +391,7 @@
   },
   {"path":"fitness_catalog_keys.sql","domain":"workouts","role":"constrained","cleanup":"transactional"},
   {"path":"train_mcp_bridge.sql","domain":"workouts","role":"admin","cleanup":"transactional","adminReason":"Creates disposable synthetic users and verifies service-only MCP execution, explicit reference authority and transaction-local principal restoration as service_role."},
-  {"path":"train_completion_upload.sql","domain":"workouts","role":"constrained","cleanup":"transactional"}
+  {"path":"train_completion_upload.sql","domain":"workouts","role":"constrained","cleanup":"transactional"},
+  {"path":"train_measurement_upload.sql","domain":"workouts","role":"constrained","cleanup":"transactional"},
+  {"path":"train_measurement_writes.sql","domain":"workouts","role":"constrained","cleanup":"transactional"}
 ]

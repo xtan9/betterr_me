@@ -25,7 +25,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { toast } from "sonner";
-import type { WorkoutSetUpdate, WeightUnit, ExerciseType } from "@/lib/db/types";
+import type { WorkoutSet, WorkoutSetUpdate, WeightUnit, ExerciseType } from "@/lib/db/types";
 import { EXERCISE_FIELD_MAP } from "@/lib/fitness/exercise-fields";
 import { isNewPR, type PRCheckResult } from "@/lib/fitness/personal-records";
 import { useExerciseRecords } from "@/lib/hooks/use-exercise-history";
@@ -40,7 +40,7 @@ interface WorkoutExerciseCardProps {
   onAddSet: () => Promise<void>;
   onUpdateSet: (setId: string, updates: WorkoutSetUpdate) => Promise<void>;
   onDeleteSet: (setId: string) => Promise<void>;
-  onCompleteSet: (setId: string) => Promise<void>;
+  onCompleteSet: (setId: string) => Promise<WorkoutSet>;
   onUpdateNotes: (notes: string) => Promise<void>;
   onUpdateRestTimer: (seconds: number) => Promise<void>;
   onRemoveExercise: () => Promise<void>;
@@ -76,13 +76,11 @@ export function WorkoutExerciseCard({
   // Skip PR detection when records fetch fails to avoid false-positive banners
   const { records: currentPR, error: recordsError } = useExerciseRecords(exerciseInfo.id);
 
-  // Wrap onCompleteSet to check for PR before the async mutation (snapshot value before async mutation)
+  // Only the accepted completion can establish a record; typed edits may still be saving.
   const handleCompleteSetWithPR = useCallback(
     async (setId: string) => {
-      // Capture set data BEFORE the async mutation
-      const completedSet = exercise.sets.find((s) => s.id === setId);
-      if (completedSet && !recordsError) {
-        const setSnapshot = { ...completedSet, is_completed: true };
+      const setSnapshot = await onCompleteSet(setId);
+      if (!recordsError) {
         const prResult: PRCheckResult = isNewPR(
           setSnapshot,
           exerciseInfo.exercise_type,
@@ -113,11 +111,8 @@ export function WorkoutExerciseCard({
           });
         }
       }
-
-      // Fire the actual completion (async mutation)
-      await onCompleteSet(setId);
     },
-    [exercise.sets, exerciseInfo.exercise_type, currentPR, recordsError, onCompleteSet]
+    [exerciseInfo.exercise_type, currentPR, recordsError, onCompleteSet]
   );
 
   const handleNotesBlur = () => {
@@ -321,7 +316,8 @@ function SetColumnHeaders({
     >
       <span>{t("set")}</span>
       <span>{t("previous")}</span>
-      {fields.showWeight && <span>{weightUnit.toUpperCase()}</span>}
+      {fields.showWeight && <span>{exerciseType === "assisted_bodyweight" ? `${t("assistance")} (${weightUnit})`
+        : exerciseType === "weighted_bodyweight" ? `${t("addedLoad")} (${weightUnit})` : weightUnit.toUpperCase()}</span>}
       {fields.showReps && <span>{t("reps")}</span>}
       {fields.showDuration && <span>{t("duration")}</span>}
       {fields.showDistance && <span>{t("distance")}</span>}

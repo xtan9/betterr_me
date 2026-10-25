@@ -13,7 +13,7 @@ import { EXERCISE_FIELD_MAP } from "@/lib/fitness/exercise-fields";
  */
 export function computePersonalRecords(
   exerciseId: string,
-  allSets: Array<WorkoutSet & { workout_started_at: string }>
+  allSets: Array<WorkoutSet & { workout_started_at: string; measurement_mode?: string }>
 ): PersonalRecord {
   const completedNormal = allSets.filter(
     (s) => s.is_completed && s.set_type === "normal"
@@ -27,6 +27,7 @@ export function computePersonalRecords(
 
   for (const set of completedNormal) {
     if (
+      set.measurement_mode !== 'assisted_bodyweight' &&
       set.weight_kg != null &&
       set.weight_kg > 0 &&
       (!bestWeight || set.weight_kg > bestWeight.value)
@@ -34,13 +35,14 @@ export function computePersonalRecords(
       bestWeight = { value: set.weight_kg, date: set.workout_started_at };
     }
 
-    const volume = (set.weight_kg ?? 0) * (set.reps ?? 0);
+    const volume = set.measurement_mode === 'assisted_bodyweight' ? 0 : (set.weight_kg ?? 0) * (set.reps ?? 0);
     if (!Number.isFinite(volume)) volumeUnavailable = true;
     if (Number.isFinite(volume) && volume > 0 && (!bestVolume || volume > bestVolume.value)) {
       bestVolume = { value: volume, date: set.workout_started_at };
     }
 
     if (
+      set.measurement_mode !== 'assisted_bodyweight' &&
       set.reps != null &&
       set.reps > 0 &&
       (!bestReps || set.reps > bestReps.value)
@@ -89,7 +91,8 @@ export interface PRCheckResult {
  * Check if a completed set beats any existing personal records.
  * Uses EXERCISE_FIELD_MAP to determine which PR types are relevant
  * per exercise type:
- * - weight_reps / weighted_bodyweight / assisted_bodyweight: weight + volume PRs
+ * - weight_reps / weighted_bodyweight: weight + volume PRs
+ * - assisted_bodyweight: unavailable without grouping by assistance level
  * - bodyweight_reps: reps PR only
  * - duration / duration_weight: duration PR (+ weight for duration_weight)
  * - distance_duration: duration PR
@@ -110,17 +113,17 @@ export function isNewPR(
     isDurationPR: false,
   };
 
-  if (!set.is_completed) return result;
+  if (!set.is_completed || set.set_type !== 'normal') return result;
 
   // Weight PR — only if the exercise tracks weight
-  if (fields.showWeight && set.weight_kg != null && set.weight_kg > 0) {
+  if (exerciseType !== 'assisted_bodyweight' && fields.showWeight && set.weight_kg != null && set.weight_kg > 0) {
     result.isWeightPR =
       currentPR?.best_weight_kg == null ||
       set.weight_kg > currentPR.best_weight_kg;
   }
 
   // Volume PR — only for weight+reps exercises
-  if (fields.showWeight && fields.showReps) {
+  if (exerciseType !== 'assisted_bodyweight' && fields.showWeight && fields.showReps) {
     const volume = (set.weight_kg ?? 0) * (set.reps ?? 0);
     if (Number.isFinite(volume) && volume > 0) {
       result.isVolumePR =
@@ -129,7 +132,7 @@ export function isNewPR(
   }
 
   // Reps PR — only if the exercise tracks reps
-  if (fields.showReps && set.reps != null && set.reps > 0) {
+  if (exerciseType !== 'assisted_bodyweight' && fields.showReps && set.reps != null && set.reps > 0) {
     result.isRepsPR =
       currentPR?.best_reps == null || set.reps > currentPR.best_reps;
   }

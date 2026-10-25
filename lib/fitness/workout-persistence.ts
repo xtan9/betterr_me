@@ -243,6 +243,9 @@ function mapStoredMutationOutcome(
   mapRecord: (value: unknown) => unknown,
 ): unknown {
   const outcome = storedObject(value, "workout mutation outcome");
+  if (outcome.type === "invalid" && typeof outcome.field === "string" && typeof outcome.message === "string") {
+    return { type: "invalid", field: outcome.field, message: outcome.message };
+  }
   if (outcome.type === "not-found") return { type: "not-found" };
   if (
     outcome.type === "invalid-transition" &&

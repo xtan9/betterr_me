@@ -101,6 +101,13 @@ describe("SupabaseWorkoutMutationPersistence", () => {
     );
   });
 
+  it("preserves authoritative set measurement rejection as a typed outcome", async () => {
+    const invalid = { type: "invalid", field: "measurements", message: "Enter complete, valid measurements before completing this set" };
+    rpc.mockResolvedValue({ data: invalid, error: null });
+    await expect(persistence.addWorkoutSet("user-1", "workout-1", "workout-exercise-1", { isCompleted: true })).resolves.toEqual(invalid);
+    await expect(persistence.updateWorkoutSet("user-1", "workout-1", "workout-exercise-1", "set-1", { reps: 0 })).resolves.toEqual(invalid);
+  });
+
   it("uses narrow active-workout capabilities for nested add/update/remove operations", async () => {
     rpc
       .mockResolvedValueOnce({ data: { type: "added", exercise: exerciseRow }, error: null })

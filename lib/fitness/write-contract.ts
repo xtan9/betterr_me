@@ -224,17 +224,20 @@ export type WorkoutSetPersistenceOutcome =
   | { type: "updated"; set: WorkoutSetMutationRecord }
   | { type: "removed" }
   | WorkoutNotFoundOutcome
-  | WorkoutInvalidTransitionOutcome;
+  | WorkoutInvalidTransitionOutcome
+  | WorkoutInvalidOutcome;
 
 export type WorkoutSetAddPersistenceOutcome =
   | { type: "added"; set: WorkoutSetMutationRecord }
   | WorkoutNotFoundOutcome
-  | WorkoutInvalidTransitionOutcome;
+  | WorkoutInvalidTransitionOutcome
+  | WorkoutInvalidOutcome;
 
 export type WorkoutSetUpdatePersistenceOutcome =
   | { type: "updated"; set: WorkoutSetMutationRecord }
   | WorkoutNotFoundOutcome
-  | WorkoutInvalidTransitionOutcome;
+  | WorkoutInvalidTransitionOutcome
+  | WorkoutInvalidOutcome;
 
 export type WorkoutSetRemovePersistenceOutcome =
   | { type: "removed" }

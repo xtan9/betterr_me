@@ -1,7 +1,7 @@
 # Completed Train synchronization
 
 Backend companion to [mobile #415](https://github.com/xtan9/betterr_me_mobile/issues/415).
-The native draft remains local. Finishing freezes one v1 completion; uploading it creates a completed workout and its performed rows atomically. It never occupies or replaces the account's existing Web active workout.
+The native draft remains local. Finishing freezes one versioned completion; uploading it creates a completed workout and its performed rows atomically. It never occupies or replaces the account's existing Web active workout.
 
 ## Wire and persistence
 
@@ -14,11 +14,11 @@ The native draft remains local. Finishing freezes one v1 completion; uploading i
       lock owner + create-completed + operationId
       existing identical document → original receipt
       existing changed document → conflict
-      validate v1 + resolve public catalog references
+      validate supported completion version + resolve public catalog references
       insert completed workout + ordered entries + performed sets + receipt
 ```
 
-The v1 document is the mobile `CompletedWorkout`: identity, owner, installation source, start/end timestamps, recorded duration, timezone/day, opaque `planId`, ordered entries with captured bilingual definition/equipment/mode/load convention, and ordered performed sets with canonical kg, repetitions and warmup/working kind. Each entry and set has its own UUID. The initial operation ID equals the completion/workout ID; retries never replace IDs or mutate the frozen payload.
+The original v1 document is the mobile `CompletedWorkout`: identity, owner, installation source, start/end timestamps, recorded duration, timezone/day, opaque `planId`, ordered entries with captured bilingual definition/equipment/mode/load convention, and ordered performed sets with canonical kg, repetitions and warmup/working kind. Each entry and set has its own UUID. The initial operation ID equals the completion/workout ID; retries never replace IDs or mutate the frozen payload.
 
 The Zod transport schema validates the envelope while preserving the opaque completion object, including forbidden keys for authoritative rejection. SQL requires explicit ISO instants with a UTC/offset suffix, Gregorian dates, and a named IANA zone or link from the installed timezone catalog. PostgreSQL-only relative dates, POSIX expressions, synthetic zone aliases, leap seconds and rolling `24:00` are rejected before any write. Original valid strings remain unchanged; the recorded day must agree with the start in its named zone. This protects direct RPC callers as well as HTTP callers. The mobile-generated millisecond UTC format remains valid.
 
@@ -53,7 +53,7 @@ The client retains its local completion and exact pending upload until it valida
 
 Unexpected HTTP infrastructure failures log only a fixed `[train]` classification (`rpc_error`, `invalid_rpc_response`, or `unexpected_exception`). Request bodies, JWTs, exception text and untrusted RPC diagnostics are excluded.
 
-`workouts.native_completion` is nullable JSONB. Existing rows remain NULL. A native row retains the exact accepted document, and normalized rows preserve the actual server exercise UUIDs. The captured definition is the history authority after live catalog renames. Native PostgREST `SELECT *` reads expose the raw document; Web/Assistant detail and summaries use its captured definition while retaining `live_exercise` and `recorded_definition` separately. Unsupported recorded versions fail explicitly rather than silently rebuilding history from today's catalog.
+`workouts.native_completion` is nullable JSONB reserved for v1. #416 adds the mutually exclusive `recorded_completion` column for v2 and later supported versions; see [measurement compatibility](train-measurements.md). Existing legacy rows remain NULL in both columns. A native row retains the exact accepted document, and normalized rows preserve the actual server exercise UUIDs. The captured definition is the history authority after live catalog renames. Native PostgREST `SELECT *` reads expose the raw document; Web/Assistant detail and summaries use its captured definition while retaining `live_exercise` and `recorded_definition` separately. Unsupported or malformed selected authorities retain their history row with an explicit unavailable status and no interpreted exercises, sets or aggregates. One unsupported row does not reject a page or fall back to today's catalog.
 
 `planId` is frozen, unverified provenance only. It is never cast to `routine_id`, used to read a plan, or treated as association/fulfillment authority. #422 must separately validate the owned training occurrence/series/schedule before linking. This upload performs no planner command.
 
@@ -64,7 +64,7 @@ Unexpected HTTP infrastructure failures log only a fixed `[train]` classificatio
 - A new completion requires at least one performed set; a warmup-only completion is valid. Existing zero-set completed history remains readable and its idempotent terminal response remains unchanged. The Web terminal command returns a typed invalid outcome for a new empty completion.
 - Workout kg and routine target kg widen from `NUMERIC(7,2)` to unconstrained `NUMERIC`; reps/target reps and workout duration widen to `BIGINT`. No legacy identity, null, value or deferred field is backfilled or coerced. Forward inputs are checked before integer casts. `0.123` and every accepted safe-integer repetition survive upload → read → save-as-routine → restart.
 - All eight legacy measurement modes, deferred duration/distance/RPE fields, order, notes, rest nulls and existing set kinds remain. Save-as-routine still selects its existing representative normal set. Warmup-only history does not invent a reusable working set. Unknown rest remains NULL and starts no timer.
-- Raw large finite numbers are retained; non-finite derived totals are unavailable (`null` aggregate / “—” display), never zero or an infinite personal record. Existing Web pound-input rounding is unchanged and is not used by upload or routine copying.
+- Raw large finite numbers are retained; non-finite derived totals are unavailable (`null` aggregate / “—” display), never zero or an infinite personal record. The #416 Web input path uses the exact international pound and a retained canonical anchor; generated display values never replace untouched saved values.
 - The trusted MCP adapter carries the existing verified owner and scopes. `write` is required for start/complete. Its service-only, statically enumerated bridge checks routine/workout/reference ownership, temporarily supplies the verified subject to the original `auth.uid()`-checked RPC, and restores both request claim settings after success and exceptions. It does not change the shared client's headers, loosen ordinary RPC owner checks or offer generic impersonation. Workout/catalog/routine service reads explicitly exclude foreign custom definitions.
 - Service table/function grants mirror the read-only audited deployed legacy ACLs, now explicit for new environments. Receipt writes remain private. The one admin SQL fixture is explicitly trusted because it tests service-only behavior; arbitrary fixtures still cannot escalate the constrained runner.
 

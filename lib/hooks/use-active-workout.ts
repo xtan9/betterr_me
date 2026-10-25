@@ -46,12 +46,12 @@ export interface UseActiveWorkoutActions {
     workoutExerciseId: string,
     setId: string,
     updates: WorkoutSetUpdate
-  ) => Promise<void>;
+  ) => Promise<WorkoutSet | undefined>;
   deleteSet: (workoutExerciseId: string, setId: string) => Promise<void>;
   completeSet: (
     workoutExerciseId: string,
     setId: string
-  ) => Promise<void>;
+  ) => Promise<WorkoutSet>;
   updateExerciseNotes: (
     workoutExerciseId: string,
     notes: string
@@ -263,7 +263,7 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
         },
       };
 
-      await mutate(
+      const accepted = await mutate(
         async () => {
           const res = await fetch(
             `/api/workouts/${workout.id}/exercises/${workoutExerciseId}/sets/${setId}`,
@@ -294,6 +294,8 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
         },
         { optimisticData: optimistic, revalidate: false }
       );
+      return accepted?.workout?.exercises.find(entry => entry.id === workoutExerciseId)
+        ?.sets.find(set => set.id === setId);
     },
     [workout, mutate, persistToStorage]
   );
@@ -336,8 +338,10 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
   // completeSet — shortcut for updateSet with is_completed: true
   // ---------------------------------------------------------------------------
   const completeSet = useCallback(
-    async (workoutExerciseId: string, setId: string): Promise<void> => {
-      await updateSet(workoutExerciseId, setId, { is_completed: true });
+    async (workoutExerciseId: string, setId: string): Promise<WorkoutSet> => {
+      const accepted = await updateSet(workoutExerciseId, setId, { is_completed: true });
+      if (!accepted?.is_completed) throw new Error("Set completion was not accepted");
+      return accepted;
     },
     [updateSet]
   );

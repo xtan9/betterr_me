@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { createServer } from 'node:net';
-import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isDeepStrictEqual } from 'node:util';
 import { dirname, resolve } from 'node:path';
@@ -31,6 +31,7 @@ const sql = input => {
 const auth = { persistSession: false, autoRefreshToken: false };
 const admin = createClient(local.API_URL, local.SERVICE_ROLE_KEY, { auth });
 const users = [];
+const catalogRestorations = [];
 const secretsDirectory = mkdtempSync(resolve(tmpdir(), 'train-415-'));
 let child;
 let origin;
@@ -84,7 +85,17 @@ async function mcp(user, name, args, scopes = ['read', 'write']) {
   return value.result;
 }
 const parsedTool = result => JSON.parse(result.content[0].text);
+function restoreCatalog() {
+  for (const row of catalogRestorations.splice(0)) {
+    sql(`begin; alter table public.exercises disable trigger update_exercises_updated_at;
+      update public.exercises set name='${row.name.replaceAll("'", "''")}',updated_at='${row.updated_at}' where id='${row.id}';
+      alter table public.exercises enable trigger update_exercises_updated_at; commit;`);
+    const restored = JSON.parse(sql(`select row_to_json(t) from (select id,name,updated_at from public.exercises where id='${row.id}') t;`));
+    check(isDeepStrictEqual(restored, row), 'Catalog restoration changed metadata');
+  }
+}
 async function cleanup() {
+  restoreCatalog();
   if (child && child.exitCode === null) {
     child.kill('SIGTERM');
     await Promise.race([new Promise(done => child.once('exit', done)), new Promise(done => setTimeout(done, 5000))]);
@@ -226,6 +237,67 @@ try {
   check(parsedTool(await mcp(a, 'completeWorkout', { workoutId: mcpStarted.id })).error === 'Complete at least one set before finishing', 'MCP empty completion accepted');
   check(!(await a.client.from('workout_sets').update({ is_completed: true }).eq('id', mcpStarted.exercises[0].sets[0].id)).error, 'Preparing performed Web set failed');
   check(parsedTool(await mcp(a, 'completeWorkout', { workoutId: mcpStarted.id })).status === 'completed', 'Trusted MCP completion failed');
+  const joint = JSON.parse(readFileSync(resolve(root, 'tests/fixtures/train-measurement-contract.json'), 'utf8'));
+  function measurementCompletion(allWorking = false) {
+    const value = structuredClone(joint.completion);
+    value.id = randomUUID(); value.ownerId = a.id; value.sourceId = randomUUID();
+    for (const entry of value.exercises) {
+      entry.id = randomUUID();
+      for (const set of entry.sets) { set.id = randomUUID(); if (allWorking) set.performed.kind = 'working'; }
+    }
+    return { protocolVersion: 1, operationId: value.id, completion: value };
+  }
+  const measured = measurementCompletion();
+  const measuredReceipt = await request(endpoint, a, measured);
+  check(isDeepStrictEqual(await request(endpoint, a, measured), measuredReceipt), 'V2 retry changed its accepted receipt');
+  await request(endpoint, b, measured, 403);
+  const measuredRaw = await a.client.from('workouts').select('native_completion,recorded_completion').eq('id', measured.operationId).single();
+  check(!measuredRaw.error && measuredRaw.data.native_completion === null && isDeepStrictEqual(measuredRaw.data.recorded_completion, measured.completion), 'V2 did not retain exactly one frozen authority');
+  const projection = await a.client.from('workout_exercises').select('sort_order,sets:workout_sets(weight_kg,reps,duration_seconds,set_type,is_completed,distance_meters,rpe)').eq('workout_id', measured.operationId).order('sort_order');
+  check(!projection.error && isDeepStrictEqual(projection.data.map(entry => {
+    const set = entry.sets[0]; return [set.weight_kg,set.reps,set.duration_seconds,set.set_type,set.is_completed,set.distance_meters,set.rpe];
+  }), [[0.123,5,null,'normal',true,null,null],[null,8,null,'warmup',true,null,null],[0.45359237,6,null,'normal',true,null,null],[0,5,null,'warmup',true,null,null],[null,null,90,'normal',true,null,null]]), 'V2 normalized projection lost exact meaning');
+  for (const value of [0, Number.MIN_VALUE, Number.MAX_VALUE]) {
+    const edge = measurementCompletion(); edge.completion.exercises[0].sets[0].performed.weightKg = value;
+    edge.completion.exercises[1].sets[0].performed.reps = Number.MAX_SAFE_INTEGER;
+    await request(endpoint, a, edge);
+    const raw = await a.client.from('workout_sets').select('weight_kg').eq('id', edge.completion.exercises[0].sets[0].id).single();
+    check(!raw.error && raw.data.weight_kg === value, 'V2 finite canonical load changed');
+  }
+  const unsupported = measurementCompletion(); unsupported.completion.version = 99;
+  check((await request(endpoint, a, unsupported, 422)).error.code === 'invalid_completion', 'Unsupported writer was acknowledged');
+  const catalogBefore = JSON.parse(sql(`select row_to_json(t) from (select id,name,updated_at from public.exercises where catalog_key='strength.weighted-pull-up.v1') t;`));
+  catalogRestorations.push(catalogBefore);
+  sql(`update public.exercises set name='Renamed after recorded measurement' where id='${catalogBefore.id}';`);
+  const measuredWeb = (await request(`/api/workouts/${measured.operationId}`, a, undefined, 200, true)).workout;
+  const measuredMcp = parsedTool(await mcp(a, 'getWorkoutDetails', { workoutId: measured.operationId }));
+  for (const readback of [measuredWeb, measuredMcp]) {
+    check(readback.recordedStatus === 'recorded' && isDeepStrictEqual(readback.recorded_completion, measured.completion), 'Web/Assistant changed the v2 document');
+    check(readback.exercises[2].exercise.name === 'Weighted Pull-up' && readback.exercises[2].live_exercise.name === 'Renamed after recorded measurement'
+      && readback.exercises[2].recorded_definition.convention === 'added-load' && readback.exercises[2].sets[0].weight_kg === 0.45359237, 'Captured definition was rebuilt from live catalog');
+  }
+  check((await b.client.from('workouts').select('id').eq('id', measured.operationId)).data.length === 0, 'V2 read crossed owners');
+  check(parsedTool(await mcp(b, 'getWorkoutDetails', { workoutId: measured.operationId })).error === 'Workout not found', 'V2 MCP crossed owners');
+  restoreCatalog();
+  const reusable = measurementCompletion(true); await request(endpoint, a, reusable);
+  const fiveRoutine = (await request(`/api/workouts/${reusable.operationId}/save-as-routine`, a, { name: 'Exact five-mode targets' }, 201, true)).routine;
+  const targets = [[0.123,5,null],[null,8,null],[0.45359237,6,null],[0,5,null],[null,null,90]];
+  check(isDeepStrictEqual(fiveRoutine.exercises.map(entry => [entry.target_weight_kg,entry.target_reps,entry.target_duration_seconds]), targets), 'Five-mode routine conversion changed targets');
+  const webFive = (await request('/api/workouts', a, { routine_id: fiveRoutine.id }, 201, true)).workout;
+  check(isDeepStrictEqual(webFive.exercises.map(entry => [entry.sets[0].weight_kg,entry.sets[0].reps,entry.sets[0].duration_seconds]), targets), 'Five-mode Web restart changed targets');
+  const previousRead = (await request('/api/workouts/active', a, undefined, 200, true)).workout;
+  check(previousRead.exercises[2].previousSets.some(set => set.weight_kg === 0.45359237 && set.reps === 6)
+    && previousRead.exercises[4].previousSets.some(set => set.duration_seconds === 90 && set.weight_kg === null), 'Active Web suggestions lost readable v2 facts');
+  const bodyweightPath = `/api/workouts/${webFive.id}/exercises/${webFive.exercises[1].id}/sets`;
+  check((await request(bodyweightPath, a, { is_completed: true }, 400, true)).field === 'measurements', 'Web completed a blank set');
+  const durationEntry = webFive.exercises[4];
+  check((await request(`/api/workouts/${webFive.id}/exercises/${durationEntry.id}/sets/${durationEntry.sets[0].id}`, a, { duration_seconds: 0, is_completed: true }, 400, true, 'PATCH')).field === 'measurements', 'Web completed zero duration');
+  for (const entry of webFive.exercises) {
+    const performed = await request(`/api/workouts/${webFive.id}/exercises/${entry.id}/sets/${entry.sets[0].id}`, a, { is_completed: true }, 200, true, 'PATCH');
+    check(performed.set.is_completed, 'Valid Web measurement did not become performed');
+  }
+  check((await request(`/api/workouts/${webFive.id}`, a, { status: 'completed' }, 200, true, 'PATCH')).workout.status === 'completed', 'Five-mode Web finish failed');
+  console.log('PASS v2 five modes/exact numbers/exclusive authority; cookie/MCP captured rename readback; routine targets; Web performed validation; catalog restored exactly');
   check(!(await a.client.from('workouts').delete().eq('id', frozen.operationId)).error, 'Authorized native history deletion failed');
   check(JSON.stringify(await request(endpoint, a, frozen)) === JSON.stringify(receipts[0]), 'Deletion changed retained receipt');
   check((await a.client.from('workouts').select('id').eq('id', frozen.operationId)).data.length === 0, 'Retry resurrected deleted history');

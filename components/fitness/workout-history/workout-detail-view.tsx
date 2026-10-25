@@ -15,7 +15,7 @@ import type {
   WeightUnit,
   ExerciseType,
 } from "@/lib/db/types";
-import { displayWeight, formatWeight } from "@/lib/fitness/units";
+import { weightInputText, formatWeight } from "@/lib/fitness/units";
 import { EXERCISE_FIELD_MAP } from "@/lib/fitness/exercise-fields";
 import { useExerciseRecords } from "@/lib/hooks/use-exercise-history";
 import { ExerciseProgressChart } from "@/components/fitness/progress/exercise-progress-chart";
@@ -45,12 +45,12 @@ function SummaryStats({
   const totalVolume = workout.exercises.reduce(
     (sum, ex) =>
       sum +
-      ex.sets
+      (ex.exercise.exercise_type === 'assisted_bodyweight' ? 0 : ex.sets
         .filter((s) => s.is_completed)
         .reduce(
           (v, s) => v + ((s.weight_kg ?? 0) * (s.reps ?? 0)),
           0
-        ),
+        )),
     0
   );
 
@@ -211,7 +211,8 @@ function SetHeaders({
       className={`grid ${gridClass} items-center gap-1 px-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1`}
     >
       <span>{t("set")}</span>
-      {fields.showWeight && <span>{weightUnit.toUpperCase()}</span>}
+      {fields.showWeight && <span>{exerciseType === "assisted_bodyweight" ? `${t("assistance")} (${weightUnit})`
+        : exerciseType === "weighted_bodyweight" ? `${t("addedLoad")} (${weightUnit})` : weightUnit.toUpperCase()}</span>}
       {fields.showReps && <span>{t("reps")}</span>}
       {fields.showDuration && <span>{t("duration")}</span>}
       {fields.showDistance && <span>{t("distance")}</span>}
@@ -265,7 +266,7 @@ function SetRow({
   const prBadges: string[] = [];
   if (!recordsLoading && records && set.is_completed && set.set_type === "normal") {
     if (
-      fields.showWeight &&
+      exerciseType !== 'assisted_bodyweight' && fields.showWeight &&
       set.weight_kg != null &&
       set.weight_kg > 0 &&
       records.best_weight_kg != null &&
@@ -274,7 +275,7 @@ function SetRow({
       prBadges.push("weight");
     }
     if (
-      fields.showReps &&
+      exerciseType !== 'assisted_bodyweight' && fields.showReps &&
       set.reps != null &&
       set.reps > 0 &&
       records.best_reps != null &&
@@ -292,7 +293,7 @@ function SetRow({
       prBadges.push("duration");
     }
     if (
-      fields.showWeight &&
+      exerciseType !== 'assisted_bodyweight' && fields.showWeight &&
       fields.showReps &&
       set.weight_kg != null &&
       set.reps != null
@@ -316,7 +317,7 @@ function SetRow({
       {fields.showWeight && (
         <span>
           {set.weight_kg != null
-            ? displayWeight(set.weight_kg, weightUnit)
+            ? weightInputText(set.weight_kg, weightUnit)
             : "\u2014"}
         </span>
       )}
@@ -365,6 +366,7 @@ export function WorkoutDetailView({
   weightUnit,
 }: WorkoutDetailViewProps) {
   const t = useTranslations("workouts");
+  if (workout.recordedStatus === 'unsupported') return <p role="status">{t('recordedUnavailable')}</p>;
 
   return (
     <div className="flex flex-col gap-card-gap">

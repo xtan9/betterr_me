@@ -12,7 +12,7 @@ begin
    'strength.barbell-row.v1','strength.dumbbell-row.v1','strength.overhead-press.v1','strength.dumbbell-shoulder-press.v1',
    'strength.machine-chest-press.v1','strength.leg-press.v1','strength.lat-pulldown.v1','strength.seated-cable-row.v1')) <> 12
  then raise exception 'Starter catalog is incomplete'; end if;
- if exists(select 1 from public.exercises where catalog_key is not null and (user_id is not null or is_custom or exercise_type <> 'weight_reps'))
+ if exists(select 1 from public.exercises where catalog_key is not null and (user_id is not null or is_custom or exercise_type not in ('weight_reps','bodyweight_reps','weighted_bodyweight','assisted_bodyweight','duration')))
  then raise exception 'Catalog keys changed ownership or recording mode'; end if;
  if not exists(select 1 from public.exercises where catalog_key='strength.barbell-bench-press.v1' and name='Barbell Bench Press' and equipment='barbell')
    or not exists(select 1 from public.exercises where catalog_key='strength.dumbbell-bench-press.v1' and name='Dumbbell Bench Press' and equipment='dumbbell')

@@ -1323,7 +1323,12 @@
     "updateRestTimerError": "更新休息計時器失敗",
     "removeExerciseError": "移除動作失敗",
     "addExerciseError": "新增動作失敗",
-    "startError": "開始訓練失敗"
+    "startError": "開始訓練失敗",
+    "measurementInvalid": "請輸入完整有效的測量值。",
+    "inputUnitKept": "未完成的輸入仍以 {unit} 為單位。",
+    "addedLoad": "額外負重",
+    "assistance": "輔助重量",
+    "recordedUnavailable": "此訓練採用目前無法讀取的記錄格式。請更新應用程式以查看已記錄的詳情。"
   },
   "routines": {
     "title": "訓練計畫",
@@ -1396,7 +1401,9 @@
     "loadError": "載入訓練計畫失敗",
     "addExerciseError": "新增動作失敗",
     "updateExerciseError": "更新動作失敗",
-    "removeExerciseError": "移除動作失敗"
+    "removeExerciseError": "移除動作失敗",
+    "measurementInvalid": "請輸入完整有效的測量值。",
+    "inputUnitKept": "未完成的輸入仍以 {unit} 為單位。"
   },
   "financeCushion": {
     "title": "財務安全緩衝",

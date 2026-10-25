@@ -47,7 +47,8 @@ test.describe('Workout completion journey', () => {
     if (signOutError) throw new Error(`workout cleanup sign-out failed: ${signOutError.message}`);
   });
 
-  test('rejects an empty finish, then saves and reads back a performed workout', async ({ page }) => {
+  test('rejects an empty finish, preserves exact unit changes, then reads back a performed workout', async ({ page }) => {
+    test.setTimeout(120000);
     const workoutTitle = RUN_CONTEXT.ownedName('Workout Completion');
 
     // Other journeys share this run's account and may have saved pounds.
@@ -139,25 +140,57 @@ test.describe('Workout completion journey', () => {
     expect(addSetResponse.status()).toBe(201);
     const { set } = await addSetResponse.json() as { set: { id: string } };
     const setPath = `${setsPath}/${set.id}`;
-    const fields = page.getByRole('spinbutton');
-    await expect(fields).toHaveCount(2);
+    const weightField = page.getByRole('textbox', { name: 'Weight (kg)', exact: true });
+    const repsField = page.getByRole('textbox', { name: 'Reps', exact: true });
+    await expect(weightField).toBeVisible();
+    await expect(repsField).toBeVisible();
     await expect(page.getByText('KG', { exact: true })).toBeVisible();
     const weightResponsePromise = page.waitForResponse((response) => response.request().method() === 'PATCH'
       && new URL(response.url()).pathname === setPath);
-    await fields.nth(0).fill('20');
-    await fields.nth(1).focus();
+    await weightField.fill('0.123');
+    await repsField.focus();
     expect((await weightResponsePromise).status()).toBe(200);
     const repsResponsePromise = page.waitForResponse((response) => response.request().method() === 'PATCH'
       && new URL(response.url()).pathname === setPath);
-    await fields.nth(1).fill('5');
-    await fields.nth(1).press('Tab');
+    await repsField.fill('5');
+    await repsField.press('Tab');
     expect((await repsResponsePromise).status()).toBe(200);
+    // Preference changes use the real Settings UI. Untouched generated text
+    // must never overwrite the already saved canonical kilogram anchor.
+    async function chooseUnit(unit: 'kg' | 'lbs') {
+      await page.goto('/dashboard/settings');
+      await page.getByRole('radio', { name: unit === 'kg' ? 'Kilograms (kg)' : 'Pounds (lbs)', exact: true }).click();
+      const saved = page.waitForResponse(response => response.request().method() === 'POST'
+        && new URL(response.url()).pathname === '/api/preferences/fitness');
+      await page.getByRole('button', { name: 'Save', exact: true }).nth(1).click();
+      expect((await saved).status()).toBe(200);
+      await page.goto('/workouts/active');
+    }
+    await chooseUnit('lbs');
+    const poundsField = page.getByRole('textbox', { name: 'Weight (lbs)', exact: true });
+    await expect(poundsField).toHaveValue('0.27116858248739942');
+    await poundsField.focus(); await repsField.focus();
+    let exactRead = await page.request.get(`/api/workouts/${workoutId}`);
+    expect(exactRead.status()).toBe(200);
+    expect((await exactRead.json()).workout.exercises[0].sets[0].weight_kg).toBe(0.123);
+    await chooseUnit('kg');
+    await expect(weightField).toHaveValue('0.123');
+    await weightField.focus(); await repsField.focus();
+    exactRead = await page.request.get(`/api/workouts/${workoutId}`);
+    expect((await exactRead.json()).workout.exercises[0].sets[0].weight_kg).toBe(0.123);
+    await chooseUnit('lbs');
+    const authoredPound = page.waitForResponse(response => response.request().method() === 'PATCH'
+      && new URL(response.url()).pathname === setPath);
+    await poundsField.fill('1'); await repsField.focus();
+    const authoredResponse = await authoredPound;
+    expect(authoredResponse.status()).toBe(200);
+    expect((await authoredResponse.json()).set.weight_kg).toBe(0.45359237);
     const performedResponsePromise = page.waitForResponse((response) => response.request().method() === 'PATCH'
       && new URL(response.url()).pathname === setPath);
     await page.getByRole('checkbox').check();
     const performedResponse = await performedResponsePromise;
     expect(performedResponse.status()).toBe(200);
-    expect((await performedResponse.json()).set).toMatchObject({ id: set.id, weight_kg: 20, reps: 5, is_completed: true });
+    expect((await performedResponse.json()).set).toMatchObject({ id: set.id, weight_kg: 0.45359237, reps: 5, is_completed: true });
     await expect(page.getByRole('checkbox')).toBeChecked();
 
     await page.getByRole('button', { name: 'Finish', exact: true }).click();

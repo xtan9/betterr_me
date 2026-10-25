@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -20,7 +20,9 @@ import type {
   WeightUnit,
 } from "@/lib/db/types";
 import { EXERCISE_FIELD_MAP } from "@/lib/fitness/exercise-fields";
-import { displayWeight, toKg, formatWeight } from "@/lib/fitness/units";
+import { formatWeight } from "@/lib/fitness/units";
+import { useWeightInput } from "@/components/fitness/use-weight-input";
+import { parseWholeInput } from "@/lib/fitness/measurement-input";
 
 // ---------------------------------------------------------------------------
 // Set type configuration
@@ -63,21 +65,27 @@ export function WorkoutSetRow({
 }: WorkoutSetRowProps) {
   const t = useTranslations("workouts");
   const fields = EXERCISE_FIELD_MAP[exerciseType];
+  const supportedMeasurement = ["weight_reps", "bodyweight_reps", "weighted_bodyweight", "assisted_bodyweight", "duration"].includes(exerciseType);
+  const minimumDuration = exerciseType === "duration" ? 1 : 0;
   const typeConfig = SET_TYPE_CONFIG[set.set_type];
   const [typeOpen, setTypeOpen] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const writes = useRef<Promise<void>>(Promise.resolve());
+  const pending = useRef<{ key: string; promise: Promise<void> } | null>(null);
+  const update = useCallback((updates: WorkoutSetUpdate) => {
+    const key = JSON.stringify(updates);
+    if (pending.current?.key === key) return pending.current.promise;
+    const promise = writes.current.catch(() => {}).then(() => onUpdate(updates));
+    const request = { key, promise };
+    pending.current = request;
+    writes.current = promise;
+    const settle = () => { if (pending.current === request) pending.current = null; };
+    void promise.then(settle, settle);
+    return promise;
+  }, [onUpdate]);
 
   // Local state for inputs to allow fast typing (optimistic blur-on-commit updates)
-  const [weightInput, setWeightInput] = useState<{
-    unit: WeightUnit;
-    canonicalKg: number | null;
-    value: string;
-  }>();
-  const storedWeight =
-    set.weight_kg != null ? String(displayWeight(set.weight_kg, weightUnit)) : "";
-  const localWeight =
-    weightInput?.unit === weightUnit && weightInput.canonicalKg === set.weight_kg
-      ? weightInput.value
-      : storedWeight;
+  const weightInput = useWeightInput(set.id, set.weight_kg, weightUnit);
   const [localReps, setLocalReps] = useState(
     set.reps != null ? String(set.reps) : ""
   );
@@ -108,57 +116,74 @@ export function WorkoutSetRow({
   // ---------------------------------------------------------------------------
 
   const handleWeightBlur = useCallback(() => {
-    const parsed = parseFloat(localWeight);
-    const kg = isNaN(parsed) ? null : toKg(parsed, weightUnit);
+    if (!weightInput.edited || !weightInput.valid) return;
+    const kg = weightInput.anchorKg;
     if (kg !== set.weight_kg) {
-      void onUpdate({ weight_kg: kg }).catch(() => toast.error(t("updateSetError")));
-    }
-  }, [localWeight, weightUnit, set.weight_kg, onUpdate, t]);
+      void update({ weight_kg: kg }).then(weightInput.acknowledge, () => toast.error(t("updateSetError")));
+    } else weightInput.acknowledge();
+  }, [weightInput, set.weight_kg, update, t]);
 
   const handleRepsBlur = useCallback(() => {
-    const parsed = parseInt(localReps, 10);
-    const value = isNaN(parsed) ? null : parsed;
+    const value = parseWholeInput(localReps, 1, Number.MAX_SAFE_INTEGER);
+    if (value === undefined) return;
     if (value !== set.reps) {
-      void onUpdate({ reps: value }).catch(() => toast.error(t("updateSetError")));
+      void update({ reps: value }).catch(() => toast.error(t("updateSetError")));
     }
-  }, [localReps, set.reps, onUpdate, t]);
+  }, [localReps, set.reps, update, t]);
 
   const handleDurationBlur = useCallback(() => {
-    const parsed = parseInt(localDuration, 10);
-    const value = isNaN(parsed) ? null : parsed;
+    const value = parseWholeInput(localDuration, minimumDuration, 86400);
+    if (value === undefined) return;
     if (value !== set.duration_seconds) {
-      void onUpdate({ duration_seconds: value }).catch(() => toast.error(t("updateSetError")));
+      void update({ duration_seconds: value }).catch(() => toast.error(t("updateSetError")));
     }
-  }, [localDuration, set.duration_seconds, onUpdate, t]);
+  }, [localDuration, minimumDuration, set.duration_seconds, update, t]);
 
   const handleDistanceBlur = useCallback(() => {
     const parsed = parseFloat(localDistance);
     const value = isNaN(parsed) ? null : parsed;
     if (value !== set.distance_meters) {
-      void onUpdate({ distance_meters: value }).catch(() => toast.error(t("updateSetError")));
+      void update({ distance_meters: value }).catch(() => toast.error(t("updateSetError")));
     }
-  }, [localDistance, set.distance_meters, onUpdate, t]);
+  }, [localDistance, set.distance_meters, update, t]);
 
   const handleSetTypeChange = useCallback(
     (newType: SetType) => {
       setTypeOpen(false);
       if (newType !== set.set_type) {
-        void onUpdate({ set_type: newType }).catch(() => toast.error(t("updateSetError")));
+        void update({ set_type: newType }).catch(() => toast.error(t("updateSetError")));
       }
     },
-    [set.set_type, onUpdate, t]
+    [set.set_type, update, t]
   );
 
-  const handleCheckChange = useCallback(
-    (checked: boolean) => {
-      if (checked) {
-        void onComplete().catch(() => toast.error(t("completeSetError")));
-      } else {
-        void onUpdate({ is_completed: false }).catch(() => toast.error(t("updateSetError")));
-      }
-    },
-    [onComplete, onUpdate, t]
-  );
+  const handleCheckChange = (checked: boolean) => {
+    if (!checked) {
+      void update({ is_completed: false }).catch(() => toast.error(t("updateSetError")));
+      return;
+    }
+    const reps = parseWholeInput(localReps, 1, Number.MAX_SAFE_INTEGER);
+    const duration = parseWholeInput(localDuration, minimumDuration, 86400);
+    if (supportedMeasurement && (fields.showWeight && (!weightInput.valid || weightInput.anchorKg === null)
+      || fields.showReps && reps == null || fields.showDuration && duration == null)) {
+      toast.error(t("measurementInvalid"));
+      return;
+    }
+    const changes: WorkoutSetUpdate = {};
+    if (fields.showWeight && weightInput.edited && weightInput.valid && weightInput.anchorKg !== set.weight_kg) changes.weight_kg = weightInput.anchorKg;
+    if (fields.showReps && reps !== undefined && reps !== set.reps) changes.reps = reps;
+    if (fields.showDuration && duration !== undefined && duration !== set.duration_seconds) changes.duration_seconds = duration;
+    setCompleting(true);
+    void (async () => {
+      try {
+        if (Object.keys(changes).length) await update(changes);
+        else await writes.current;
+        weightInput.acknowledge();
+        await onComplete();
+      } catch { toast.error(t("completeSetError")); }
+      finally { setCompleting(false); }
+    })();
+  };
 
   // ---------------------------------------------------------------------------
   // Previous values display
@@ -178,6 +203,7 @@ export function WorkoutSetRow({
         <PopoverTrigger asChild>
           <button
             type="button"
+            disabled={completing}
             className={`flex h-7 w-9 items-center justify-center rounded text-caption font-semibold ${typeConfig.color}`}
           >
             {typeConfig.shortLabel || set.set_number}
@@ -219,28 +245,33 @@ export function WorkoutSetRow({
 
       {/* Weight input */}
       {fields.showWeight && (
+        <div>
         <Input
-          type="number"
+          type="text"
           inputMode="decimal"
-          value={localWeight}
-          onChange={(e) =>
-            setWeightInput({
-              unit: weightUnit,
-              canonicalKg: set.weight_kg,
-              value: e.target.value,
-            })
-          }
+          disabled={completing}
+          aria-label={`${t(exerciseType === "assisted_bodyweight" ? "assistance" : exerciseType === "weighted_bodyweight" ? "addedLoad" : "weight")} (${weightInput.unit})`}
+          aria-invalid={!weightInput.valid}
+          value={weightInput.value}
+          onChange={(e) => weightInput.change(e.target.value)}
           onBlur={handleWeightBlur}
           placeholder="-"
           className="h-8 text-center text-caption [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
+        <span className="text-caption text-muted-foreground">{weightInput.unit}</span>
+        {weightInput.unit !== weightUnit && <p className="text-caption text-muted-foreground">{t("inputUnitKept", { unit: weightInput.unit })}</p>}
+        {!weightInput.valid && <p className="text-caption text-destructive">{t("measurementInvalid")}</p>}
+        </div>
       )}
 
       {/* Reps input */}
       {fields.showReps && (
         <Input
-          type="number"
+          type="text"
           inputMode="numeric"
+          disabled={completing}
+          aria-label={t("reps")}
+          aria-invalid={parseWholeInput(localReps, 1, Number.MAX_SAFE_INTEGER) === undefined}
           value={localReps}
           onChange={(e) => setLocalReps(e.target.value)}
           onBlur={handleRepsBlur}
@@ -252,8 +283,11 @@ export function WorkoutSetRow({
       {/* Duration input */}
       {fields.showDuration && (
         <Input
-          type="number"
+          type="text"
           inputMode="numeric"
+          disabled={completing}
+          aria-label={t("duration")}
+          aria-invalid={parseWholeInput(localDuration, minimumDuration, 86400) === undefined}
           value={localDuration}
           onChange={(e) => setLocalDuration(e.target.value)}
           onBlur={handleDurationBlur}
@@ -267,6 +301,7 @@ export function WorkoutSetRow({
         <Input
           type="number"
           inputMode="decimal"
+          disabled={completing}
           value={localDistance}
           onChange={(e) => setLocalDistance(e.target.value)}
           onBlur={handleDistanceBlur}
@@ -279,6 +314,8 @@ export function WorkoutSetRow({
       <div className="flex items-center justify-center">
         <Checkbox
           checked={set.is_completed}
+          disabled={completing}
+          aria-label={t("complete")}
           onCheckedChange={handleCheckChange}
           className="h-5 w-5"
         />

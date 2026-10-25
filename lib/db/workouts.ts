@@ -1,6 +1,6 @@
 import { finiteAggregate } from "@/lib/fitness/units";
 import { visibleExerciseEntries } from "@/lib/fitness/exercise-visibility";
-import { recordedDefinition, recordedExercise } from "@/lib/fitness/recorded-definition";
+import { recordedDefinition, recordedExercise, selectRecordedCompletion, historyMeasurementMode, type RecordedStatus } from "@/lib/fitness/recorded-definition";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Workout,
@@ -23,10 +23,11 @@ export interface WorkoutSummary {
   started_at: string;
   completed_at: string | null;
   duration_seconds: number | null;
-  exerciseCount: number;
+  recordedStatus?: RecordedStatus;
+  exerciseCount: number | null;
   exerciseNames: string[];
   totalVolume: number | null;
-  totalSets: number;
+  totalSets: number | null;
 }
 
 /** CRUD for workouts. RLS handles user scoping. */
@@ -64,11 +65,13 @@ export class WorkoutsDB {
       throw error;
     }
 
-    // Reshape nested fields to match TypeScript types
+    // Decode once; an unsupported recorded row never becomes live legacy facts.
+    const selected = selectRecordedCompletion(data);
     return {
       ...data,
-      workout_exercises: visibleExerciseEntries(data.workout_exercises, userId),
-      exercises: visibleExerciseEntries(data.workout_exercises, userId).map(
+      recordedStatus: selected.status,
+      workout_exercises: selected.status === 'unsupported' ? [] : visibleExerciseEntries(data.workout_exercises, userId),
+      exercises: selected.status === 'unsupported' ? [] : visibleExerciseEntries(data.workout_exercises, userId).map(
         (we: Record<string, unknown>) => ({
           ...we,
           exercise: we.exercise,
@@ -116,13 +119,15 @@ export class WorkoutsDB {
       throw error;
     }
 
-    // Reshape nested fields to match TypeScript types
+    // Decode once; an unsupported recorded row never becomes live legacy facts.
+    const selected = selectRecordedCompletion(data);
     return {
       ...data,
-      workout_exercises: visibleExerciseEntries(data.workout_exercises, userId),
-      exercises: visibleExerciseEntries(data.workout_exercises, userId).map(
+      recordedStatus: selected.status,
+      workout_exercises: selected.status === 'unsupported' ? [] : visibleExerciseEntries(data.workout_exercises, userId),
+      exercises: selected.status === 'unsupported' ? [] : visibleExerciseEntries(data.workout_exercises, userId).map(
         (we: Record<string, unknown>) => ({
-          ...recordedExercise(data.native_completion, we),
+          ...recordedExercise(selected, we),
           sets: ((we.sets as Record<string, unknown>[]) ?? []).sort(
             (a: Record<string, unknown>, b: Record<string, unknown>) =>
               (a.set_number as number) - (b.set_number as number)
@@ -163,18 +168,20 @@ export class WorkoutsDB {
    * Provides previous workout values alongside active set inputs.
    * Returns empty array if no previous workout found.
    */
-  async getPreviousSets(exerciseId: string): Promise<WorkoutSet[]> {
+  async getPreviousSets(exerciseId: string, userId: string): Promise<WorkoutSet[]> {
     const { data, error } = await this.supabase
       .from("workout_exercises")
       .select(
         `
-        workout_id,
+        id, workout_id,
+        exercise:exercises (user_id, exercise_type),
         sets:workout_sets (*),
-        workout:workouts!inner (started_at, status)
+        workout:workouts!inner (id, user_id, started_at, completed_at, duration_seconds, status, native_completion, recorded_completion)
       `
       )
       .eq("exercise_id", exerciseId)
       .eq("workout.status", "completed")
+      .eq("workout.user_id", userId)
       .order("started_at", { referencedTable: "workouts", ascending: false })
       .limit(5);
 
@@ -186,7 +193,9 @@ export class WorkoutsDB {
     if (!data || data.length === 0) return [];
 
     // Sort by workout started_at descending, take the most recent
-    const sorted = [...data].sort(
+    const readable = visibleExerciseEntries(data, userId).filter(row => historyMeasurementMode(row) !== null);
+    if (readable.length === 0) return [];
+    const sorted = readable.sort(
       (a: Record<string, unknown>, b: Record<string, unknown>) => {
         const aWorkout = a.workout as { started_at: string };
         const bWorkout = b.workout as { started_at: string };
@@ -219,8 +228,8 @@ export class WorkoutsDB {
         *,
         workout_exercises (
           id,
-          exercise:exercises (name, user_id),
-          sets:workout_sets (weight_kg, reps, is_completed, set_type)
+          exercise:exercises (name, user_id, exercise_type),
+          sets:workout_sets (id, weight_kg, reps, is_completed, set_type)
         )
       `
       )
@@ -235,7 +244,8 @@ export class WorkoutsDB {
     }
 
     return (data ?? []).map((w: Record<string, unknown>) => {
-      const exercises = visibleExerciseEntries(w.workout_exercises, userId);
+      const selected = selectRecordedCompletion(w);
+      const exercises = selected.status === 'unsupported' ? [] : visibleExerciseEntries(w.workout_exercises, userId);
       return {
         id: w.id as string,
         title: w.title as string,
@@ -243,14 +253,17 @@ export class WorkoutsDB {
         started_at: w.started_at as string,
         completed_at: w.completed_at as string | null,
         duration_seconds: w.duration_seconds as number | null,
-        exerciseCount: exercises.length,
+        recordedStatus: selected.status,
+        exerciseCount: selected.status === 'unsupported' ? null : exercises.length,
         exerciseNames: exercises
           .map(
             (we) =>
-              recordedDefinition(w.native_completion, we.id)?.name.en ?? (we.exercise as { name: string } | null)?.name
+              recordedDefinition(selected, we.id)?.name.en ?? (we.exercise as { name: string } | null)?.name
           )
           .filter(Boolean) as string[],
-        totalVolume: finiteAggregate(exercises.reduce((sum: number, we) => {
+        totalVolume: selected.status === 'unsupported' ? null : finiteAggregate(exercises.reduce((sum: number, we) => {
+          const mode = recordedDefinition(selected, we.id)?.mode ?? (we.exercise as { exercise_type?: string } | null)?.exercise_type;
+          if (mode === 'assisted_bodyweight') return sum;
           const sets = (we.sets as Record<string, unknown>[]) ?? [];
           return (
             sum +
@@ -265,7 +278,7 @@ export class WorkoutsDB {
               )
           );
         }, 0)),
-        totalSets: exercises.reduce((sum: number, we) => {
+        totalSets: selected.status === 'unsupported' ? null : exercises.reduce((sum: number, we) => {
           const sets = (we.sets as Record<string, unknown>[]) ?? [];
           return (
             sum + sets.filter((s) => s.is_completed).length
@@ -288,9 +301,10 @@ export class WorkoutsDB {
       .from("workout_exercises")
       .select(
         `
-        workout_id,
-        sets:workout_sets (weight_kg, reps, duration_seconds, is_completed, set_type),
-        workout:workouts!inner (id, started_at, status, user_id)
+        id, workout_id,
+        exercise:exercises (user_id, exercise_type),
+        sets:workout_sets (id, weight_kg, reps, duration_seconds, is_completed, set_type),
+        workout:workouts!inner (id, user_id, started_at, completed_at, duration_seconds, status, native_completion, recorded_completion)
       `
       )
       .eq("exercise_id", exerciseId)
@@ -311,7 +325,9 @@ export class WorkoutsDB {
       throw error;
     }
 
-    return (data ?? []).map((row: Record<string, unknown>) => {
+    return visibleExerciseEntries(data, userId).flatMap((row: Record<string, unknown>) => {
+      const mode = historyMeasurementMode(row);
+      if (mode === null) return [];
       const workout = row.workout as { id: string; started_at: string };
       // Stryker disable next-line ArrayDeclaration: equivalent mutant — the
       // immediately-following filter rejects any non-object element, so
@@ -338,9 +354,9 @@ export class WorkoutsDB {
       return {
         started_at: workout.started_at,
         workout_id: workout.id,
-        best_set_weight_kg: weights.length > 0 ? Math.max(...weights) : null,
+        best_set_weight_kg: mode !== 'assisted_bodyweight' && weights.length > 0 ? Math.max(...weights) : null,
         best_set_reps: reps.length > 0 ? Math.max(...reps) : null,
-        total_volume: completedNormal.length > 0 ? finiteAggregate(volume) : null,
+        total_volume: mode !== 'assisted_bodyweight' && completedNormal.length > 0 ? finiteAggregate(volume) : null,
         total_sets: completedNormal.length,
       };
     });
@@ -355,14 +371,16 @@ export class WorkoutsDB {
     exerciseId: string,
     userId: string
   ): Promise<
-    Array<WorkoutSet & { workout_started_at: string }>
+    Array<WorkoutSet & { workout_started_at: string; measurement_mode?: string }>
   > {
     const { data, error } = await this.supabase
       .from("workout_exercises")
       .select(
         `
+        id,
+        exercise:exercises (user_id, exercise_type),
         sets:workout_sets (*),
-        workout:workouts!inner (started_at, status, user_id)
+        workout:workouts!inner (id, user_id, started_at, completed_at, duration_seconds, status, native_completion, recorded_completion)
       `
       )
       .eq("exercise_id", exerciseId)
@@ -374,11 +392,13 @@ export class WorkoutsDB {
       throw error;
     }
 
-    const result: Array<WorkoutSet & { workout_started_at: string }> = [];
+    const result: Array<WorkoutSet & { workout_started_at: string; measurement_mode?: string }> = [];
     // Stryker disable next-line ArrayDeclaration: equivalent mutant — a
     // string fallback yields characters whose `.workout` and `.sets` are
     // undefined, so the inner loop is empty and result stays [].
-    for (const row of data ?? []) {
+    for (const row of visibleExerciseEntries(data, userId)) {
+      const mode = historyMeasurementMode(row);
+      if (mode === null) continue;
       const workout = (row as Record<string, unknown>).workout as {
         started_at: string;
       };
@@ -388,7 +408,7 @@ export class WorkoutsDB {
       const sets = ((row as Record<string, unknown>).sets as WorkoutSet[]) ?? [];
       for (const set of sets) {
         if (set.is_completed && set.set_type === "normal") {
-          result.push({ ...set, workout_started_at: workout.started_at });
+          result.push({ ...set, workout_started_at: workout.started_at, ...(mode === 'legacy' ? {} : { measurement_mode: mode }) });
         }
       }
     }
