@@ -1,6 +1,6 @@
 import { finiteAggregate } from "@/lib/fitness/units";
 import { visibleExerciseEntries } from "@/lib/fitness/exercise-visibility";
-import { recordedDefinition, recordedExercise, selectRecordedCompletion, historyMeasurementMode, type RecordedStatus } from "@/lib/fitness/recorded-definition";
+import { recordedDefinition, recordedExercise, recordedName, comparableDefinition, selectRecordedCompletion, historyMeasurementMode, type RecordedStatus } from "@/lib/fitness/recorded-definition";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Workout,
@@ -258,10 +258,10 @@ export class WorkoutsDB {
         exerciseNames: exercises
           .map(
             (we) =>
-              recordedDefinition(selected, we.id)?.name.en ?? (we.exercise as { name: string } | null)?.name
+              (recordedDefinition(selected, we.id) ? recordedName(recordedDefinition(selected, we.id)!) : (we.exercise as { name: string } | null)?.name)
           )
           .filter(Boolean) as string[],
-        totalVolume: selected.status === 'unsupported' ? null : finiteAggregate(exercises.reduce((sum: number, we) => {
+        totalVolume: selected.status === 'unsupported' || exercises.some(we=>!comparableDefinition(recordedDefinition(selected,we.id))) ? null : finiteAggregate(exercises.reduce((sum: number, we) => {
           const mode = recordedDefinition(selected, we.id)?.mode ?? (we.exercise as { exercise_type?: string } | null)?.exercise_type;
           if (mode === 'assisted_bodyweight') return sum;
           const sets = (we.sets as Record<string, unknown>[]) ?? [];

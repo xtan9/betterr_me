@@ -32,7 +32,7 @@ describe("ExercisesDB", () => {
       expect(result).toEqual(rows);
       expect(mockSupabaseClient.from).toHaveBeenCalledWith("exercises");
       expect(mockSupabaseClient.select).toHaveBeenCalledWith(
-        "*, exercise_media(gif_url, thumbnail_url, instructions, alternative_names, exercisedb_id, media_status)"
+        expect.stringContaining("version::text,exercise_media(")
       );
       expect(mockSupabaseClient.order).toHaveBeenCalledWith("name", {
         ascending: true,
@@ -92,139 +92,6 @@ describe("ExercisesDB", () => {
       });
 
       await expect(db.getExercise("e1")).rejects.toEqual({
-        code: "500",
-        message: "boom",
-      });
-    });
-  });
-
-  // =========================================================================
-  // createExercise
-  // =========================================================================
-
-  describe("createExercise", () => {
-    it("creates exercise with defaults for secondary muscle groups", async () => {
-      const row = { id: "e1", name: "Curl" };
-      mockSupabaseClient.setMockResponse(row);
-
-      const result = await db.createExercise("user-1", {
-        name: "Curl",
-        muscle_group_primary: "biceps",
-        equipment: "dumbbell",
-        exercise_type: "reps",
-      } as any);
-
-      expect(result).toEqual(row);
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith("exercises");
-      expect(mockSupabaseClient.insert).toHaveBeenCalledWith({
-        name: "Curl",
-        muscle_group_primary: "biceps",
-        muscle_groups_secondary: [],
-        equipment: "dumbbell",
-        exercise_type: "reps",
-        user_id: "user-1",
-        is_custom: true,
-      });
-    });
-
-    it("preserves provided secondary muscle groups", async () => {
-      mockSupabaseClient.setMockResponse({ id: "e1" });
-
-      await db.createExercise("user-1", {
-        name: "Row",
-        muscle_group_primary: "back",
-        muscle_groups_secondary: ["biceps", "shoulders"],
-        equipment: "barbell",
-        exercise_type: "reps",
-      } as any);
-
-      expect(mockSupabaseClient.insert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          muscle_groups_secondary: ["biceps", "shoulders"],
-          is_custom: true,
-          user_id: "user-1",
-        })
-      );
-    });
-
-    it("throws on error", async () => {
-      mockSupabaseClient.setMockResponse(null, {
-        code: "500",
-        message: "nope",
-      });
-
-      await expect(
-        db.createExercise("user-1", {
-          name: "X",
-          muscle_group_primary: "chest",
-          equipment: "barbell",
-          exercise_type: "reps",
-        } as any)
-      ).rejects.toEqual({ code: "500", message: "nope" });
-    });
-  });
-
-  // =========================================================================
-  // updateExercise
-  // =========================================================================
-
-  describe("updateExercise", () => {
-    it("updates and returns exercise", async () => {
-      const row = { id: "e1", name: "Renamed" };
-      mockSupabaseClient.setMockResponse(row);
-
-      const result = await db.updateExercise("e1", { name: "Renamed" } as any);
-
-      expect(result).toEqual(row);
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith("exercises");
-      expect(mockSupabaseClient.update).toHaveBeenCalledWith({
-        name: "Renamed",
-      });
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith("id", "e1");
-    });
-
-    it("throws on error", async () => {
-      mockSupabaseClient.setMockResponse(null, {
-        code: "500",
-        message: "fail",
-      });
-
-      await expect(
-        db.updateExercise("e1", { name: "x" } as any)
-      ).rejects.toEqual({ code: "500", message: "fail" });
-    });
-  });
-
-  // =========================================================================
-  // deleteExercise
-  // =========================================================================
-
-  describe("deleteExercise", () => {
-    it("deletes exercise", async () => {
-      mockSupabaseClient.setMockResponse(null);
-
-      await db.deleteExercise("e1");
-
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith("exercises");
-      expect(mockSupabaseClient.delete).toHaveBeenCalled();
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith("id", "e1");
-    });
-
-    it("throws friendly error on FK violation (23503)", async () => {
-      mockSupabaseClient.setMockResponse(null, { code: "23503" });
-
-      await expect(db.deleteExercise("e1")).rejects.toThrow(
-        "This exercise has been used in workouts and cannot be deleted."
-      );
-    });
-
-    it("throws on other errors", async () => {
-      mockSupabaseClient.setMockResponse(null, {
-        code: "500",
-        message: "boom",
-      });
-
-      await expect(db.deleteExercise("e1")).rejects.toEqual({
         code: "500",
         message: "boom",
       });

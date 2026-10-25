@@ -6,6 +6,7 @@ import { WorkoutToRoutineConversion } from '@/lib/fitness/routine-workout-conver
 import { computePersonalRecords, isNewPR } from '@/lib/fitness/personal-records';
 import { WorkoutsDB } from '@/lib/db/workouts';
 import contract from '@/tests/fixtures/train-measurement-contract.json';
+import customContract from '@/tests/fixtures/train-custom-exercise-contract.json';
 import { mockSupabaseClient } from '../../setup';
 
 const completion = contract.completion;
@@ -31,6 +32,27 @@ describe('recorded workout readback', () => {
   beforeEach(() => { vi.clearAllMocks(); mockSupabaseClient.setMockResponse(null); });
   const db = () => new WorkoutsDB(mockSupabaseClient as unknown as SupabaseClient);
 
+  it('reads a v3 owned custom snapshot after rename/archive through Web and Assistant without changing its reference', async () => {
+    const saved = customContract.completion.completion;
+    const captured = saved.exercises[0];
+    const row = { ...recordedRow(), id:saved.id, user_id:saved.ownerId, started_at:saved.startedAt, completed_at:saved.completedAt,
+      duration_seconds:saved.durationSeconds, recorded_completion:saved,
+      workout_exercises:[{...recordedRow().workout_exercises[0], id:captured.id, workout_id:saved.id,
+        exercise_id:captured.definition.reference.exerciseId, exercise:{id:captured.definition.reference.exerciseId,user_id:saved.ownerId,
+          name:'Renamed and archived later',equipment:'kettlebell',exercise_type:'weight_reps',archived_at:'2026-10-26T10:00:00Z'},
+        sets:[{...recordedRow().workout_exercises[0].sets[0],id:captured.sets[0].id}]}] };
+    mockSupabaseClient.setMockResponse(row);
+    const result = await db().getWorkoutWithExercises(saved.id,saved.ownerId);
+    expect(result).toMatchObject({recordedStatus:'recorded',recorded_completion:saved,exercises:[{
+      exercise_id:captured.definition.reference.exerciseId,exercise:{name:'My kettlebell press'},live_exercise:{name:'Renamed and archived later'},
+      recorded_definition:captured.definition,sets:[{weight_kg:0.123,reps:5}]}]});
+    mockSupabaseClient.setMockResponse(row);
+    const answer = await workoutTools().find(item=>item.name==='getWorkoutDetails')!.execute({workoutId:saved.id},
+      {userId:saved.ownerId,supabase:mockSupabaseClient,date:saved.workoutDay,timezone:'UTC'} as unknown as ToolContext);
+    expect(JSON.stringify(answer)).toContain('My kettlebell press');
+    expect(answer).toMatchObject({exercises:[{exercise:{name:'My kettlebell press'},recorded_definition:captured.definition}]});
+  });
+
   it('opens all five captured meanings after their live definitions are renamed', async () => {
     mockSupabaseClient.setMockResponse(recordedRow());
     const result = await db().getWorkoutWithExercises(completion.id, completion.ownerId);
@@ -38,6 +60,26 @@ describe('recorded workout readback', () => {
     expect(result?.exercises.map(entry => entry.exercise.name)).toEqual(['Barbell Bench Press', 'Push-up', 'Weighted Pull-up', 'Machine-assisted Pull-up', 'Plank']);
     expect(result?.exercises[3]).toMatchObject({ recorded_definition: { convention: 'assistance' }, live_exercise: { name: 'Renamed 3' }, sets: [{ weight_kg: 0, reps: 5 }] });
     mockSupabaseClient.expectQuery({ method: 'eq', args: ['user_id', completion.ownerId] });
+  });
+
+  it('keeps v3 legacy unknown meaning readable without inventing comparison or previous-set authority', async () => {
+    const original = customContract.completion.completion;
+    const captured = original.exercises[0];
+    const saved = { ...original, exercises: [{ ...captured, definition: { ...captured.definition, name: '', convention: null } }] };
+    const entry = { ...recordedRow().workout_exercises[0], id: captured.id, workout_id: saved.id,
+      exercise_id: captured.definition.reference.exerciseId,
+      exercise: { id: captured.definition.reference.exerciseId, user_id: saved.ownerId, name: 'Live legacy name', equipment: 'kettlebell', exercise_type: 'weight_reps' },
+      sets: [{ ...recordedRow().workout_exercises[0].sets[0], id: captured.sets[0].id }] };
+    const row = { ...recordedRow(), id: saved.id, user_id: saved.ownerId, started_at: saved.startedAt, completed_at: saved.completedAt,
+      duration_seconds: saved.durationSeconds, recorded_completion: saved, workout_exercises: [entry] };
+    mockSupabaseClient.setMockResponse(row);
+    expect(await db().getWorkoutWithExercises(saved.id, saved.ownerId)).toMatchObject({ recordedStatus: 'recorded', exercises: [{ exercise: { name: '' }, sets: [{ weight_kg: 0.123 }] }] });
+    mockSupabaseClient.setMockResponse([row]);
+    expect((await db().getWorkoutsWithSummary(saved.ownerId))[0]).toMatchObject({ totalVolume: null, totalSets: 1 });
+    mockSupabaseClient.setMockResponse([{ ...entry, workout: row }]);
+    expect(await db().getPreviousSets(entry.exercise_id, saved.ownerId)).toEqual([]);
+    mockSupabaseClient.setMockResponse([{ ...entry, workout: row }]);
+    expect(await db().getExerciseSets(entry.exercise_id, saved.ownerId)).toEqual([]);
   });
 
   it('keeps positive assistance as a fact without reporting lifted load or volume progress', async () => {

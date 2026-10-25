@@ -4,6 +4,9 @@ import { GET as capabilities } from '@/app/api/mobile/train/exercises/capabiliti
 import { GET as list } from '@/app/api/mobile/train/exercises/route';
 import { GET as detail } from '@/app/api/mobile/train/exercises/[id]/route';
 import { POST as cookieCommand } from '@/app/api/exercises/commands/route';
+import { POST as cookieCreate } from '@/app/api/exercises/route';
+import { PATCH as cookieUpdate, DELETE as cookieArchive } from '@/app/api/exercises/[id]/route';
+import { NextRequest } from 'next/server';
 import contract from '@/tests/fixtures/train-custom-exercise-contract.json';
 
 const { rpc, getUser } = vi.hoisted(() => ({ rpc: vi.fn(), getUser: vi.fn() }));
@@ -23,7 +26,7 @@ const receipt={operationId,operation:'update-metadata',ownerId:owner,exerciseId:
 const envelope={protocolVersion:1,operationId,command:{kind:'update-metadata',exerciseId:id,expectedVersion:'9007199254740992',patch:{name:'Renamed'}}};
 const readiness=(ready:boolean)=>({protocolVersion:1,customExercises:{contractVersion:1,ready},completionVersions:ready?[1,2,3]:[1,2]});
 const request=(body:unknown,bearer=true)=>new Request('https://example.test/api/mobile/train/exercises/commands',{
-  method:'POST',headers:{'Content-Type':'application/json',...(bearer?{Authorization:'Bearer fixture-session'}:{})},body:JSON.stringify(body)});
+  method:'POST',headers:{'Content-Type':'application/json',...(bearer?{Authorization:'Bearer fixture-session'}:{'X-Train-Owner':owner})},body:JSON.stringify(body)});
 
 describe('custom exercise authenticated command and readiness contract',()=>{
   afterEach(()=>vi.unstubAllEnvs());
@@ -90,5 +93,22 @@ describe('custom exercise authenticated command and readiness contract',()=>{
     rpc.mockImplementation(async(name:string)=>({data:name==='train_custom_exercise_capabilities'?contract.capabilities.ready:{status:'accepted',receipt:contract.create.response.receipt},error:null}));
     expect(await (await POST(request(contract.create.request))).json()).toEqual(contract.create.response);
     expect(rpc).toHaveBeenLastCalledWith('execute_train_exercise_command',{p_request:contract.create.request});
+  });
+  it('adapts existing cookie route locations to commands and rejects unversioned or mismatched mutations',async()=>{
+    const cookie=(body:unknown,method='POST')=>new NextRequest('https://example.test/api/exercises',{method,headers:{'X-Train-Owner':owner},body:JSON.stringify(body)});
+    expect((await cookieUpdate(cookie(envelope,'PATCH'),{params:Promise.resolve({id})})).status).toBe(200);
+    expect((await cookieUpdate(cookie(envelope,'PATCH'),{params:Promise.resolve({id:operationId})})).status).toBe(400);
+    expect((await cookieUpdate(cookie({name:'Unversioned'},'PATCH'),{params:Promise.resolve({id})})).status).toBe(400);
+    expect((await cookieCreate(cookie({name:'Unversioned'}))).status).toBe(400);
+    const archive={...envelope,command:{kind:'archive',exerciseId:id,expectedVersion:'9007199254740992'}};
+    const archived={...receipt,operation:'archive',definition:{...definition,archivedAt:'2026-10-25T10:00:00Z'}};
+    rpc.mockResolvedValue({data:{status:'accepted',receipt:archived},error:null});
+    expect(await (await cookieArchive(cookie(archive,'DELETE'),{params:Promise.resolve({id})})).json()).toEqual({protocolVersion:1,receipt:archived});
+    expect(rpc).toHaveBeenLastCalledWith('execute_train_exercise_command',{p_request:archive});
+    rpc.mockClear();
+    const switched=new NextRequest('https://example.test/api/exercises',{method:'POST',headers:{'X-Train-Owner':id},body:JSON.stringify(envelope)});
+    expect((await cookieCommand(switched)).status).toBe(403);expect(rpc).not.toHaveBeenCalled();
+    getUser.mockResolvedValue({data:{user:null},error:null});
+    expect((await cookieArchive(cookie(archive,'DELETE'),{params:Promise.resolve({id})})).status).toBe(401);
   });
 });

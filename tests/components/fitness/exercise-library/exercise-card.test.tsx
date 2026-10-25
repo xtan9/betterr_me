@@ -115,7 +115,7 @@ describe("ExerciseCard", () => {
     expect(onEdit).toHaveBeenCalledWith(exercise);
   });
 
-  it("fires onDelete with exercise when delete menuitem is clicked", async () => {
+  it("fires onDelete with exercise when archive menuitem is clicked", async () => {
     const onDelete = vi.fn();
     const user = userEvent.setup();
     const exercise = makeExercise({ is_custom: true });
@@ -125,7 +125,7 @@ describe("ExerciseCard", () => {
     await user.click(screen.getByRole("button", { name: /actions/i }));
 
     const deleteItem = await screen.findByRole("menuitem", {
-      name: /deleteExercise/,
+      name: /archiveExercise/,
     });
     await user.click(deleteItem);
 

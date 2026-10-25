@@ -430,6 +430,10 @@ export interface ExerciseMedia {
 
 export interface Exercise {
   id: string;
+  /** SQL bigint projected as decimal text; never convert this token to Number. */
+  version?: string;
+  archived_at?: string | null;
+  measurement_convention?: string | null;
   /** Portable built-in identity; custom and older responses may omit it. */
   catalog_key?: string | null;
   user_id: string | null; // NULL for preset exercises

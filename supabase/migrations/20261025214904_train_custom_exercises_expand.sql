@@ -6,6 +6,17 @@ alter table public.exercises
   add column archived_at timestamptz,
   add column measurement_convention text;
 
+-- Keep standalone deletion of a referenced definition prohibited at commit,
+-- while allowing all nested profile-owned cascades to complete.
+-- RESTRICT checked before the sibling workout/routine cascades and blocked
+-- account erasure whenever a custom definition had a recorded reference.
+alter table public.workout_exercises drop constraint workout_exercises_exercise_id_fkey;
+alter table public.workout_exercises add constraint workout_exercises_exercise_id_fkey
+  foreign key(exercise_id) references public.exercises(id) on delete no action deferrable initially deferred;
+alter table public.routine_exercises drop constraint routine_exercises_exercise_id_fkey;
+alter table public.routine_exercises add constraint routine_exercises_exercise_id_fkey
+  foreign key(exercise_id) references public.exercises(id) on delete no action deferrable initially deferred;
+
 create table fitness_private.custom_exercise_rollout (
   singleton boolean primary key default true check (singleton),
   ready boolean not null default false
@@ -108,6 +119,13 @@ begin
    or jsonb_typeof(p_request->'command') is distinct from 'object' then return jsonb_build_object('status','invalid_request'); end if;
  if p_request->'protocolVersion' is distinct from '1'::jsonb then return jsonb_build_object('status','unsupported_version'); end if;
  command:=p_request->'command'; kind:=command->>'kind'; command_id:=(p_request->>'operationId')::uuid;
+ perform pg_advisory_xact_lock(hashtextextended(owner::text||':train:exercise:'||command_id::text,0));
+ select * into previous from public.train_exercise_command_outcomes o where o.owner_id=owner and o.operation_id=command_id;
+ if found then
+   if previous.request is distinct from p_request then return jsonb_build_object('status','operation_conflict'); end if;
+   return case when previous.receipt is not null then jsonb_build_object('status','accepted','receipt',previous.receipt)
+     else jsonb_build_object('status',previous.rejection->>'code','rejection',previous.rejection) end;
+ end if;
  if kind='create' then
    if not coalesce(fitness_private.exact_keys(command,array['kind','definition']),false)
      or not coalesce(fitness_private.exact_keys(command->'definition',array['name','equipment','mode','convention','primaryMuscle','secondaryMuscles']),false)
@@ -128,13 +146,6 @@ begin
    end if;
  else return jsonb_build_object('status','invalid_request'); end if;
 
- perform pg_advisory_xact_lock(hashtextextended(owner::text||':train:exercise:'||command_id::text,0));
- select * into previous from public.train_exercise_command_outcomes o where o.owner_id=owner and o.operation_id=command_id;
- if found then
-   if previous.request is distinct from p_request then return jsonb_build_object('status','operation_conflict'); end if;
-   return case when previous.receipt is not null then jsonb_build_object('status','accepted','receipt',previous.receipt)
-     else jsonb_build_object('status',previous.rejection->>'code','rejection',previous.rejection) end;
- end if;
  select ready into strict enabled from fitness_private.custom_exercise_rollout where singleton;
  if kind='create' then
    if not enabled then return jsonb_build_object('status','not_ready'); end if;
@@ -210,3 +221,226 @@ create function public.read_train_custom_exercises(p_id uuid default null,p_afte
 language sql stable security invoker set search_path=pg_catalog as $$select fitness_private.read_custom_exercises(p_id,p_after)$$;
 revoke all on function public.read_train_custom_exercises(uuid,uuid) from public,anon,service_role;
 grant execute on function public.read_train_custom_exercises(uuid,uuid) to authenticated;
+
+-- Prepare v3 readers/projectors in B, while A keeps all v3 writes closed.
+alter table public.workouts drop constraint workouts_recorded_authority_check;
+alter table public.workouts add constraint workouts_recorded_authority_check check (
+  (native_completion is null or recorded_completion is null)
+  and (native_completion is null and recorded_completion is null or status='completed')
+  and (native_completion is null or (jsonb_typeof(native_completion)='object' and native_completion->'version' is not distinct from '1'::jsonb))
+  and (recorded_completion is null or (jsonb_typeof(recorded_completion)='object' and recorded_completion->'version' in ('2'::jsonb,'3'::jsonb)))
+);
+
+-- Resolve identity/visibility/immutable meaning, never the captured name or
+-- maintenance version. An archived reference remains valid for queued work.
+create function fitness_private.completed_exercise_reference(definition jsonb, owner uuid) returns uuid
+language plpgsql set search_path=pg_catalog,public as $$
+declare result uuid;
+begin
+ if definition ? 'reference' then
+   select id into result from public.exercises
+   where id=(definition->'reference'->>'exerciseId')::uuid and user_id=owner and is_custom and catalog_key is null
+     and definition->'reference'->>'ownerId'=owner::text and definition->'reference'->>'kind'='custom'
+     and equipment=definition->>'equipment' and exercise_type=definition->>'mode'
+     and measurement_convention is not distinct from definition->>'convention' for share;
+ else
+   select id into result from public.exercises
+   where catalog_key=definition->>'catalogKey' and user_id is null and not is_custom
+     and equipment=definition->>'equipment' and exercise_type=definition->>'mode' for share;
+ end if;
+ return result;
+end $$;
+revoke all on function fitness_private.completed_exercise_reference(jsonb,uuid) from public,anon,authenticated,service_role;
+
+create or replace function fitness_private.valid_recorded_completion(doc jsonb) returns boolean
+language plpgsql stable set search_path=pg_catalog,public as $$
+declare entry jsonb; definition jsonb; item jsonb; performed jsonb; identifiers uuid[]:='{}'; identity uuid; started timestamptz; ended timestamptz;
+  instant_pattern constant text := '^[0-9]{4}-[0-9]{2}-[0-9]{2}T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]{1,6})?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$';
+begin
+ if doc->'version'='1'::jsonb then return fitness_private.valid_native_completion(doc); end if;
+ if doc->'version'='3'::jsonb and not (select ready from fitness_private.custom_exercise_rollout where singleton) then return false; end if;
+ if not fitness_private.exact_keys(doc,array['version','id','ownerId','sourceId','startedAt','completedAt','durationSeconds','timezone','workoutDay','planId','exercises'])
+   or doc->'version' not in ('2'::jsonb,'3'::jsonb)
+   or not coalesce(fitness_private.valid_uuid(doc->'id') and fitness_private.valid_uuid(doc->'ownerId') and fitness_private.valid_uuid(doc->'sourceId'),false)
+   or not fitness_private.valid_measure(doc->'durationSeconds',true,0)
+   or jsonb_typeof(doc->'startedAt') is distinct from 'string' or jsonb_typeof(doc->'completedAt') is distinct from 'string'
+   or jsonb_typeof(doc->'timezone') is distinct from 'string' or jsonb_typeof(doc->'workoutDay') is distinct from 'string'
+   or jsonb_typeof(doc->'planId') not in ('null','string')
+   or jsonb_typeof(doc->'exercises') is distinct from 'array' then return false; end if;
+ if jsonb_array_length(doc->'exercises')=0 then return false; end if;
+ -- PostgreSQL's permissive parser also accepts relative dates, leap seconds,
+ -- rolling 24:00 and POSIX zones. Those must not enter a native Date/Intl reader.
+ -- Retain the original strings, including IANA links and explicit UTC offsets.
+ if doc->>'startedAt' !~ instant_pattern or doc->>'completedAt' !~ instant_pattern
+   or doc->>'workoutDay' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+   or not exists(select 1 from pg_timezone_names where lower(name)=lower(doc->>'timezone')
+     and name !~ '^(posix|right)/' and name not in ('Factory','localtime','posixrules')) then return false; end if;
+ started:=(doc->>'startedAt')::timestamptz; ended:=(doc->>'completedAt')::timestamptz;
+ if not isfinite(started) or not isfinite(ended) or to_char(started at time zone (doc->>'timezone'),'FMYYYY-MM-DD') is distinct from doc->>'workoutDay' then return false; end if;
+ for entry in select value from jsonb_array_elements(doc->'exercises') loop
+   if not fitness_private.exact_keys(entry,array['id','definition','sets']) or not coalesce(fitness_private.valid_uuid(entry->'id'),false)
+     or jsonb_typeof(entry->'sets') is distinct from 'array' then return false; end if;
+   identity:=(entry->>'id')::uuid;
+   if identity=any(identifiers) or jsonb_array_length(entry->'sets')=0 then return false; end if;
+   identifiers:=array_append(identifiers,identity); definition:=entry->'definition';
+   if doc->'version'='3'::jsonb and definition ? 'reference' then
+     if not fitness_private.exact_keys(definition,array['reference','name','equipment','mode','convention'])
+       or not fitness_private.exact_keys(definition->'reference',array['kind','exerciseId','ownerId'])
+       or definition->'reference'->>'kind' is distinct from 'custom'
+       or not coalesce(fitness_private.valid_uuid(definition->'reference'->'exerciseId') and fitness_private.valid_uuid(definition->'reference'->'ownerId'),false)
+       or definition->'reference'->>'ownerId' is distinct from doc->>'ownerId'
+       or jsonb_typeof(definition->'name') is distinct from 'string'
+       or not coalesce(definition->>'equipment' in ('barbell','dumbbell','machine','bodyweight','kettlebell','band','cable','other','none'),false)
+       or not coalesce(definition->>'mode' in ('weight_reps','bodyweight_reps','weighted_bodyweight','assisted_bodyweight','duration'),false)
+       or not coalesce(definition->'convention'='null'::jsonb or (jsonb_typeof(definition->'convention')='string'
+         and definition->>'convention'=fitness_private.custom_exercise_convention(definition->>'equipment',definition->>'mode')),false)
+       then return false; end if;
+   else
+   if not fitness_private.exact_keys(definition,array['catalogKey','name','equipment','mode','convention'])
+     or jsonb_typeof(definition->'catalogKey') is distinct from 'string' or definition->>'catalogKey' !~ '^strength\.[a-z0-9-]+\.v[1-9][0-9]*$'
+     or not fitness_private.exact_keys(definition->'name',array['en','zh'])
+     or jsonb_typeof(definition->'name'->'en') is distinct from 'string' or length(definition->'name'->>'en')=0
+     or jsonb_typeof(definition->'name'->'zh') is distinct from 'string' or length(definition->'name'->>'zh')=0
+ then return false; end if;
+   if not coalesce(case definition->>'mode'
+     when 'weight_reps' then definition->>'equipment' in ('barbell','dumbbell','machine','cable')
+       and definition->>'convention'=case definition->>'equipment' when 'barbell' then 'barbell-total' when 'dumbbell' then 'per-dumbbell' else 'selected-load' end
+     when 'bodyweight_reps' then definition->>'equipment'='bodyweight' and definition->>'convention'='bodyweight-repetitions'
+     when 'weighted_bodyweight' then definition->>'equipment'='bodyweight' and definition->>'convention'='added-load'
+     when 'assisted_bodyweight' then definition->>'equipment'='machine' and definition->>'convention'='assistance'
+     when 'duration' then definition->>'equipment' in ('bodyweight','other') and definition->>'convention'='seconds'
+     else false end,false) then return false; end if;
+   end if;
+   for item in select value from jsonb_array_elements(entry->'sets') loop
+     if not fitness_private.exact_keys(item,array['id','performed']) or not coalesce(fitness_private.valid_uuid(item->'id'),false) then return false; end if;
+     identity:=(item->>'id')::uuid;
+     if identity=any(identifiers) then return false; end if;
+     identifiers:=array_append(identifiers,identity); performed:=item->'performed';
+     if performed->>'mode' is distinct from definition->>'mode'
+       or coalesce(performed->>'kind','') not in ('working','warmup') then return false; end if;
+     if not coalesce(case performed->>'mode'
+       when 'weight_reps' then fitness_private.exact_keys(performed,array['mode','weightKg','reps','kind'])
+         and fitness_private.valid_measure(performed->'weightKg',false,0) and fitness_private.valid_measure(performed->'reps',true,1)
+       when 'bodyweight_reps' then fitness_private.exact_keys(performed,array['mode','reps','kind']) and fitness_private.valid_measure(performed->'reps',true,1)
+       when 'weighted_bodyweight' then fitness_private.exact_keys(performed,array['mode','addedWeightKg','reps','kind'])
+         and fitness_private.valid_measure(performed->'addedWeightKg',false,0) and fitness_private.valid_measure(performed->'reps',true,1)
+       when 'assisted_bodyweight' then fitness_private.exact_keys(performed,array['mode','assistanceKg','reps','kind'])
+         and fitness_private.valid_measure(performed->'assistanceKg',false,0) and fitness_private.valid_measure(performed->'reps',true,1)
+       when 'duration' then fitness_private.exact_keys(performed,array['mode','durationSeconds','kind'])
+         and fitness_private.valid_measure(performed->'durationSeconds',true,1) and (performed->>'durationSeconds')::numeric<=86400
+       else false end,false) then return false; end if;
+   end loop;
+ end loop;
+ return true;
+exception when invalid_text_representation or invalid_parameter_value or datetime_field_overflow then return false;
+end $$;
+revoke all on function fitness_private.valid_recorded_completion(jsonb) from public,anon,authenticated;
+
+create or replace function fitness_private.upload_completed_workout(p_operation_id uuid,p_completion jsonb) returns jsonb
+language plpgsql security definer set search_path=pg_catalog,public as $$
+declare owner uuid:=auth.uid(); previous public.train_completion_receipts; entry jsonb; item jsonb;
+  entry_index integer:=0; set_index integer; accepted jsonb; reference_id uuid;
+begin
+ if owner is null then return jsonb_build_object('status','unauthenticated'); end if;
+ if p_completion->>'ownerId' is distinct from owner::text then return jsonb_build_object('status','owner_mismatch'); end if;
+ if p_operation_id is null or p_completion->>'id' is distinct from p_operation_id::text then return jsonb_build_object('status','invalid_completion'); end if;
+ perform pg_advisory_xact_lock(hashtextextended(owner::text||':train:create-completed:'||p_operation_id::text,0));
+ select * into previous from public.train_completion_receipts where owner_id=owner and operation_id=p_operation_id;
+ if found then
+   if previous.completion is distinct from p_completion then return jsonb_build_object('status','operation_conflict'); end if;
+   return jsonb_build_object('status','accepted','receipt',previous.receipt);
+ end if;
+ if not fitness_private.valid_recorded_completion(p_completion) then return jsonb_build_object('status','invalid_completion'); end if;
+ if exists(select 1 from public.workouts where id=p_operation_id) then return jsonb_build_object('status','identity_conflict'); end if;
+ for entry in select value from jsonb_array_elements(p_completion->'exercises') loop
+   reference_id:=fitness_private.completed_exercise_reference(entry->'definition',owner);
+   if reference_id is null then return jsonb_build_object('status','reference_unavailable'); end if;
+ end loop;
+ insert into public.workouts(id,user_id,title,status,started_at,completed_at,duration_seconds,notes,routine_id,native_completion,recorded_completion)
+ values(p_operation_id,owner,'Workout','completed',(p_completion->>'startedAt')::timestamptz,(p_completion->>'completedAt')::timestamptz,
+   (p_completion->>'durationSeconds')::bigint,null,null,
+   case when p_completion->'version'='1'::jsonb then p_completion end,
+   case when p_completion->'version' in ('2'::jsonb,'3'::jsonb) then p_completion end);
+ for entry in select value from jsonb_array_elements(p_completion->'exercises') loop
+   reference_id:=fitness_private.completed_exercise_reference(entry->'definition',owner);
+   insert into public.workout_exercises(id,workout_id,exercise_id,sort_order,notes,rest_timer_seconds)
+   values((entry->>'id')::uuid,p_operation_id,reference_id,entry_index,null,null);
+   entry_index:=entry_index+1; set_index:=0;
+   for item in select value from jsonb_array_elements(entry->'sets') loop
+     set_index:=set_index+1;
+     insert into public.workout_sets(id,workout_exercise_id,set_number,set_type,weight_kg,reps,duration_seconds,distance_meters,is_completed,rpe)
+     values((item->>'id')::uuid,(entry->>'id')::uuid,set_index,case item->'performed'->>'kind' when 'working' then 'normal' else 'warmup' end,
+       coalesce(item->'performed'->>'weightKg',item->'performed'->>'addedWeightKg',item->'performed'->>'assistanceKg')::numeric,
+       (item->'performed'->>'reps')::bigint,(item->'performed'->>'durationSeconds')::integer,null,true,null);
+   end loop;
+ end loop;
+ accepted:=jsonb_build_object('operation','create-completed','operationId',p_operation_id,'ownerId',owner,'workoutId',p_operation_id,
+   'sourceId',p_completion->>'sourceId','acceptedAt',clock_timestamp());
+ insert into public.train_completion_receipts values(owner,p_operation_id,p_completion,accepted);
+ return jsonb_build_object('status','accepted','receipt',accepted);
+exception when unique_violation then return jsonb_build_object('status','identity_conflict');
+end $$;
+create or replace function fitness_private.verify_completed_workout() returns trigger
+language plpgsql security definer set search_path=pg_catalog,public as $$
+declare saved public.workouts; expected jsonb; actual jsonb; document jsonb;
+begin
+ if tg_op='UPDATE' and old.status='completed' then return new; end if;
+ select * into saved from public.workouts where id=new.id;
+ if not found or saved.status<>'completed' then return new; end if;
+ if not exists(select 1 from public.workout_exercises e join public.workout_sets s on s.workout_exercise_id=e.id where e.workout_id=saved.id and s.is_completed) then
+   raise check_violation using message='A new completion requires a performed set';
+ end if;
+ document:=coalesce(saved.native_completion,saved.recorded_completion);
+ if document is null then return new; end if;
+ if not fitness_private.valid_recorded_completion(document)
+   or document->>'id' is distinct from saved.id::text or document->>'ownerId' is distinct from saved.user_id::text
+   or saved.started_at is distinct from (document->>'startedAt')::timestamptz
+   or saved.completed_at is distinct from (document->>'completedAt')::timestamptz
+   or saved.duration_seconds is distinct from (document->>'durationSeconds')::bigint
+   or saved.title<>'Workout' or saved.notes is not null or saved.routine_id is not null
+   or not exists(select 1 from public.train_completion_receipts where owner_id=saved.user_id and operation_id=saved.id and completion=document) then
+   raise check_violation using message='Native completion has no matching accepted receipt';
+ end if;
+ select jsonb_agg(jsonb_build_object('id',entry->>'id','exerciseId',fitness_private.completed_exercise_reference(entry->'definition',saved.user_id),'sortOrder',position-1,'notes',null,'rest',null,'sets',(
+   select jsonb_agg(jsonb_build_object('id',item->>'id','number',number,'kind',case item->'performed'->>'kind' when 'working' then 'normal' else 'warmup' end,
+     'weight',coalesce(item->'performed'->'weightKg',item->'performed'->'addedWeightKg',item->'performed'->'assistanceKg'),'reps',item->'performed'->'reps','duration',item->'performed'->'durationSeconds','distance',null,'rpe',null,'completed',true) order by number)
+   from jsonb_array_elements(entry->'sets') with ordinality as sets(item,number))) order by position)
+ into expected from jsonb_array_elements(document->'exercises') with ordinality as entries(entry,position);
+ select jsonb_agg(jsonb_build_object('id',e.id,'exerciseId',e.exercise_id,'sortOrder',e.sort_order,'notes',e.notes,'rest',e.rest_timer_seconds,'sets',(
+   select jsonb_agg(jsonb_build_object('id',s.id,'number',s.set_number,'kind',s.set_type,'weight',s.weight_kg,'reps',s.reps,
+     'duration',s.duration_seconds,'distance',s.distance_meters,'rpe',s.rpe,'completed',s.is_completed) order by s.set_number)
+   from public.workout_sets s where s.workout_exercise_id=e.id)) order by e.sort_order)
+ into actual from public.workout_exercises e join public.exercises d on d.id=e.exercise_id where e.workout_id=saved.id and (d.user_id is null and not d.is_custom or d.user_id=saved.user_id and d.is_custom and d.catalog_key is null);
+ if actual is distinct from expected then raise check_violation using message='Native projection differs from accepted completion'; end if;
+ return new;
+end $$;
+
+
+-- One content revision authority before and after contraction. Phase C changes
+-- the private gate and ordinary grants atomically; it does not replace writers.
+create or replace function fitness_private.version_custom_exercise() returns trigger
+language plpgsql security definer set search_path=pg_catalog,public as $$
+declare enabled boolean;
+begin
+ select ready into strict enabled from fitness_private.custom_exercise_rollout where singleton;
+ if not enabled then
+   if new.measurement_convention is not null then raise check_violation using message='Custom exercise recording is not ready'; end if;
+ else
+   if tg_op='UPDATE' and (old.is_custom or old.user_id is not null or new.is_custom or new.user_id is not null)
+     and row(old.id,old.user_id,old.is_custom,old.catalog_key,old.equipment,old.exercise_type,old.measurement_convention)
+       is distinct from row(new.id,new.user_id,new.is_custom,new.catalog_key,new.equipment,new.exercise_type,new.measurement_convention) then
+     raise check_violation using message='Custom exercise identity and recording meaning are immutable';
+   end if;
+   if new.is_custom and new.user_id is not null then
+     if new.catalog_key is not null or (new.measurement_convention is not null and
+       new.measurement_convention is distinct from fitness_private.custom_exercise_convention(new.equipment,new.exercise_type))
+       or (tg_op='INSERT' and new.measurement_convention is distinct from fitness_private.custom_exercise_convention(new.equipment,new.exercise_type)) then
+       raise check_violation using message='Custom exercise recording convention is invalid';
+     end if;
+   elsif new.measurement_convention is not null then
+     raise check_violation using message='Preset recording convention is captured separately';
+   end if;
+ end if;
+ if tg_op='INSERT' then new.version:=1; else new.version:=old.version+1; end if;
+ return new;
+end $$;
