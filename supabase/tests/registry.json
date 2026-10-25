@@ -388,5 +388,6 @@
     "domain": "app-limit-history",
     "role": "constrained",
     "cleanup": "transactional"
-  }
+  },
+  {"path":"fitness_catalog_keys.sql","domain":"workouts","role":"constrained","cleanup":"transactional"}
 ]
