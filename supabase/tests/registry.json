@@ -1,4 +1,5 @@
 [
+  {"path":"planned_training_occurrences.sql","domain":"mobile-planner","role":"constrained","cleanup":"transactional"},
   {"path":"app_limit_history.sql","domain":"app-limit-history","role":"constrained","cleanup":"transactional"},
   {"path":"focus_history.sql","domain":"focus-history","role":"constrained","cleanup":"transactional"},
   {"path":"routine_day_periods.sql","domain":"mobile-planner","role":"constrained","cleanup":"transactional"},
