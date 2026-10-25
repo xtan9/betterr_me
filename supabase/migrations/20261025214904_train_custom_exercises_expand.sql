@@ -93,9 +93,17 @@ revoke all on function fitness_private.custom_exercise_convention(text,text) fro
 create function fitness_private.valid_exercise_metadata(value jsonb) returns boolean
 language plpgsql immutable set search_path=pg_catalog as $$
 declare muscles constant text[]:=array['chest','back','shoulders','biceps','triceps','forearms','core','quadriceps','hamstrings','glutes','calves','traps','lats','full_body','cardio','other'];
+ authored_name text; utf16_length integer;
+ trim_characters constant text:=U&'\0009\000A\000B\000C\000D\0020\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000\FEFF';
 begin
- if value ? 'name' and (jsonb_typeof(value->'name') is distinct from 'string'
-   or length(value->>'name') not between 1 and 100 or value->>'name' ~ '^[[:space:]]|[[:space:]]$') then return false; end if;
+ if value ? 'name' then
+   if jsonb_typeof(value->'name') is distinct from 'string' then return false; end if;
+   authored_name:=value->>'name';
+   -- Match JS String.length and trim without rewriting any supplied bytes.
+   select coalesce(sum(case when ascii(character)>65535 then 2 else 1 end),0) into utf16_length
+     from regexp_split_to_table(authored_name,'') character where character<>'';
+   if utf16_length not between 1 and 100 or btrim(authored_name,trim_characters)<>authored_name then return false; end if;
+ end if;
  if value ? 'primaryMuscle' and not coalesce(value->>'primaryMuscle'=any(muscles),false) then return false; end if;
  if value ? 'secondaryMuscles' then
    if jsonb_typeof(value->'secondaryMuscles') is distinct from 'array' then return false; end if;
@@ -109,7 +117,7 @@ revoke all on function fitness_private.valid_exercise_metadata(jsonb) from publi
 create function fitness_private.execute_exercise_command(p_request jsonb) returns jsonb
 language plpgsql security definer set search_path=pg_catalog,public as $$
 declare owner uuid:=auth.uid(); command_id uuid; exercise_id uuid; kind text; command jsonb; patch jsonb;
- previous public.train_exercise_command_outcomes; saved public.exercises; result jsonb; rejection jsonb; receipt jsonb;
+ previous public.train_exercise_command_outcomes; saved public.exercises; rejection jsonb; receipt jsonb;
  code text; enabled boolean; expected bigint;
  canonical_uuid constant text:='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
 begin
@@ -254,7 +262,7 @@ revoke all on function fitness_private.completed_exercise_reference(jsonb,uuid) 
 
 create or replace function fitness_private.valid_recorded_completion(doc jsonb) returns boolean
 language plpgsql stable set search_path=pg_catalog,public as $$
-declare entry jsonb; definition jsonb; item jsonb; performed jsonb; identifiers uuid[]:='{}'; identity uuid; started timestamptz; ended timestamptz;
+declare entry jsonb; definition jsonb; item jsonb; performed jsonb; identifiers uuid[]:='{}'::uuid[]; identity uuid; started timestamptz; ended timestamptz;
   instant_pattern constant text := '^[0-9]{4}-[0-9]{2}-[0-9]{2}T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]{1,6})?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$';
 begin
  if doc->'version'='1'::jsonb then return fitness_private.valid_native_completion(doc); end if;

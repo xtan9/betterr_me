@@ -27,7 +27,7 @@ const WRITE_REQUEST_POLICY = {
  * GET /api/exercises
  * Get all exercises visible to the authenticated user (presets + custom).
  */
-export async function GET(request: Request = new Request("http://localhost")) {
+export async function GET(request: Request) {
   try {
     const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
     if (!auth.ok) {

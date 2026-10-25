@@ -3,8 +3,9 @@ import {
   exerciseReceiptSchema,
   exerciseRejectionSchema,
   exerciseReceiptMatchesRequest,
+  exerciseIdSchema,
 } from "@/lib/validations/train-exercises";
-import type { z } from "zod";
+import { z } from "zod";
 
 export type ExerciseCommandRequest = z.infer<
   typeof exerciseCommandEnvelopeSchema
@@ -19,6 +20,51 @@ export type ExerciseJournal = {
   rejection?: ExerciseCommandRejection;
   replacementOperationId?: string;
 };
+const journalSchema = z
+  .object({
+    ownerId: exerciseIdSchema,
+    request: exerciseCommandEnvelopeSchema,
+    state: z.enum([
+      "pending",
+      "accepted",
+      "rejected",
+      "resolved",
+      "superseded",
+    ]),
+    receipt: exerciseReceiptSchema.optional(),
+    rejection: exerciseRejectionSchema.optional(),
+    replacementOperationId: exerciseIdSchema.optional(),
+  })
+  .strict()
+  .refine((record) => {
+    if (record.state === "pending")
+      return (
+        record.receipt === undefined &&
+        record.rejection === undefined &&
+        record.replacementOperationId === undefined
+      );
+    const evidence =
+      record.state === "accepted" ? record.receipt : record.rejection;
+    if (
+      !evidence ||
+      evidence.ownerId !== record.ownerId ||
+      evidence.operationId !== record.request.operationId ||
+      evidence.operation !== record.request.command.kind ||
+      evidence.exerciseId !==
+        (record.request.command.kind === "create"
+          ? record.request.operationId
+          : record.request.command.exerciseId)
+    )
+      return false;
+    return record.state === "accepted"
+      ? record.rejection === undefined &&
+          record.replacementOperationId === undefined &&
+          exerciseReceiptMatchesRequest(record.receipt!, record.request)
+      : record.receipt === undefined &&
+          (record.state === "superseded"
+            ? record.replacementOperationId !== undefined
+            : record.replacementOperationId === undefined);
+  });
 const prefix = (owner: string) => `train:exercise-command:${owner}:`;
 const activeKey = (owner: string) => `train:exercise-command-active:${owner}`;
 const event = "train-exercise-command-changed";
@@ -34,7 +80,9 @@ export function currentExerciseCommand(owner: string): ExerciseJournal | null {
   if (!id) return null;
   const raw = localStorage.getItem(prefix(owner) + id);
   if (!raw) throw new Error("invalid_command_journal");
-  const record: ExerciseJournal = JSON.parse(raw);
+  const parsed = journalSchema.safeParse(JSON.parse(raw));
+  if (!parsed.success) throw new Error("invalid_command_journal");
+  const record = parsed.data;
   if (
     record.ownerId !== owner ||
     record.request.operationId !== id ||

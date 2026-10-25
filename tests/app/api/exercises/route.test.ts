@@ -43,7 +43,7 @@ describe("GET /api/exercises", () => {
     ];
     mockGetAllExercises.mockResolvedValue(exercises);
 
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/exercises"));
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -74,7 +74,7 @@ describe("GET /api/exercises", () => {
     ];
     mockGetAllExercises.mockResolvedValue(exercises);
 
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/exercises"));
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -91,7 +91,7 @@ describe("GET /api/exercises", () => {
   it("returns 401 for unauthenticated user", async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } });
 
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/exercises"));
     const data = await response.json();
 
     expect(response.status).toBe(401);
