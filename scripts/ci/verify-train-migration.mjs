@@ -262,11 +262,11 @@ try {
   const beforeHistory=templatePreservation();
   query(database, migration('20261026035606_train_history_current_authority_expand.sql'));
   if(query(database,'select ready from fitness_private.history_rollout')!=='f'||templatePreservation()!==beforeHistory)throw new Error('History A changed legacy rows or advertised readiness');
-  query(database,'select fitness_private.activate_history_contract();');
+  query(database,migration('20261026052945_train_history_enable_current_authority.sql'));
   if(templatePreservation()!==beforeHistory)throw new Error('History C rewrote legacy identity, measurements or unknowns');
   if(query(database,`select count(*) from public.workouts w left join fitness_private.history_current h on h.workout_id=w.id where w.status='completed' and (h.revision is distinct from 1 or h.projection is distinct from fitness_private.history_projection(w.id))`)!=='0')throw new Error('History C did not atomically capture each exact completed baseline');
   const baseline=query(database,`select md5(jsonb_agg(to_jsonb(h) order by workout_id)::text) from fitness_private.history_current h`);
-  query(database,'select fitness_private.activate_history_contract();');
+  query(database,migration('20261026052945_train_history_enable_current_authority.sql'));
   if(query(database,`select md5(jsonb_agg(to_jsonb(h) order by workout_id)::text) from fitness_private.history_current h`)!==baseline)throw new Error('Repeated history cutover changed baselines or revisions');
   if(query(database,`select count(*) from fitness_private.history_current h cross join lateral jsonb_each(h.definitions) d where d.value?'history_recorded_definition'`)!=='0')throw new Error('Cutover invented legacy recorded meaning');
   query(database,`begin; set local request.jwt.claims='{"sub":"${v1.ownerId}","role":"authenticated"}'; set local role authenticated;

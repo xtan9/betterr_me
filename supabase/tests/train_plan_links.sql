@@ -108,7 +108,21 @@ begin
  perform set_config('request.jwt.claims','{"sub":"64220000-0000-4000-8000-000000000001","role":"authenticated"}',true);
  -- A lost accepted association receipt cannot recreate a deleted workout/link.
  select request,jsonb_build_object('status','accepted','receipt',receipt) into intent,linked from public.train_plan_command_outcomes where operation_id='64220000-0000-4000-8000-000000000040';
- delete from public.workouts w where w.id='64220000-0000-4000-8000-000000000030';
+ if (public.train_history_capabilities()->>'historyReady')::boolean then
+  begin
+   delete from public.workouts w where w.id='64220000-0000-4000-8000-000000000030';
+   raise exception 'Unreviewed completed deletion bypassed current authority';
+  exception when check_violation then null; end;
+  if public.execute_train_history_command(jsonb_build_object('protocolVersion',1,'ownerId',auth.uid(),'operationId',gen_random_uuid(),
+    'command',jsonb_build_object('kind','delete-workout','workoutId','64220000-0000-4000-8000-000000000030'::uuid,'expectedRevision',public.read_train_history_record('64220000-0000-4000-8000-000000000030'::uuid)->'record'->>'revision')))->'receipt'->>'operation' is distinct from 'delete-workout' then
+   raise exception 'Reviewed completed deletion was not accepted';
+  end if;
+  if public.read_train_history_record('64220000-0000-4000-8000-000000000030'::uuid)->'record'->>'state' is distinct from 'deleted' then
+   raise exception 'Reviewed completed deletion did not retain its tombstone';
+  end if;
+ else
+  delete from public.workouts w where w.id='64220000-0000-4000-8000-000000000030';
+ end if;
  if public.execute_train_plan_command(intent) is distinct from linked or exists(select 1 from public.train_workout_plan_links where workout_id='64220000-0000-4000-8000-000000000030') then raise exception 'Retry resurrected association'; end if;
  if has_table_privilege('authenticated','public.train_workout_plan_links','INSERT') or has_table_privilege('authenticated','public.train_plan_command_outcomes','UPDATE')
   or has_table_privilege('service_role','public.train_workout_plan_links','INSERT') then raise exception 'Direct link/outcome write bypass'; end if;

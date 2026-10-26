@@ -1,3 +1,4 @@
+import { deleteFixtureWorkout } from './workout-cleanup.mjs';
 import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { createServer } from 'node:net';
@@ -298,7 +299,7 @@ try {
   }
   check((await request(`/api/workouts/${webFive.id}`, a, { status: 'completed' }, 200, true, 'PATCH')).workout.status === 'completed', 'Five-mode Web finish failed');
   console.log('PASS v2 five modes/exact numbers/exclusive authority; cookie/MCP captured rename readback; routine targets; Web performed validation; catalog restored exactly');
-  check(!(await a.client.from('workouts').delete().eq('id', frozen.operationId)).error, 'Authorized native history deletion failed');
+  await deleteFixtureWorkout(a.client, a.id, frozen.operationId);
   check(JSON.stringify(await request(endpoint, a, frozen)) === JSON.stringify(receipts[0]), 'Deletion changed retained receipt');
   check((await a.client.from('workouts').select('id').eq('id', frozen.operationId)).data.length === 0, 'Retry resurrected deleted history');
   console.log('PASS actual cookie save/restart, trusted MCP start/complete, read-only denial and retry-after-deletion');

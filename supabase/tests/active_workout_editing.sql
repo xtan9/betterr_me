@@ -5,22 +5,8 @@
 
 -- Remove residue from an interrupted concurrency run before creating the
 -- disposable identities again.
-set role authenticated;
-select set_config(
-  'request.jwt.claim.sub',
-  '64600000-0000-0000-0000-000000000001',
-  false
-);
-delete from public.workouts
-where user_id = '64600000-0000-0000-0000-000000000001';
-select set_config(
-  'request.jwt.claim.sub',
-  '64600000-0000-0000-0000-000000000002',
-  false
-);
-delete from public.workouts
-where user_id = '64600000-0000-0000-0000-000000000002';
-reset role;
+-- Account erasure is the verified cascade boundary, including completed
+-- history. Do not bypass revisioned deletion to clean disposable fixtures.
 
 do $$
 begin
@@ -681,22 +667,8 @@ end
 $$;
 
 reset role;
-set role authenticated;
-select set_config(
-  'request.jwt.claim.sub',
-  '64600000-0000-0000-0000-000000000001',
-  false
-);
-delete from public.workouts
-where user_id = '64600000-0000-0000-0000-000000000001';
-select set_config(
-  'request.jwt.claim.sub',
-  '64600000-0000-0000-0000-000000000002',
-  false
-);
-delete from public.workouts
-where user_id = '64600000-0000-0000-0000-000000000002';
-reset role;
+-- Account erasure is the verified cascade boundary, including completed
+-- history. Do not bypass revisioned deletion to clean disposable fixtures.
 select public.sql_fixture_delete_auth_user(
   '64600000-0000-0000-0000-000000000001'
 );

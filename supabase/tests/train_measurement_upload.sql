@@ -81,7 +81,21 @@ begin
        raise exception 'Invalid performed branch reached history: %',patch; end if;
  end loop;
  set constraints all immediate;
- delete from public.workouts where id=(document->>'id')::uuid;
+ if (public.train_history_capabilities()->>'historyReady')::boolean then
+  begin
+   delete from public.workouts where id=(document->>'id')::uuid;
+   raise exception 'Unreviewed completed deletion bypassed current authority';
+  exception when check_violation then null; end;
+  if public.execute_train_history_command(jsonb_build_object('protocolVersion',1,'ownerId',auth.uid(),'operationId',gen_random_uuid(),
+    'command',jsonb_build_object('kind','delete-workout','workoutId',(document->>'id')::uuid,'expectedRevision',public.read_train_history_record((document->>'id')::uuid)->'record'->>'revision')))->'receipt'->>'operation' is distinct from 'delete-workout' then
+   raise exception 'Reviewed completed deletion was not accepted';
+  end if;
+  if public.read_train_history_record((document->>'id')::uuid)->'record'->>'state' is distinct from 'deleted' then
+   raise exception 'Reviewed completed deletion did not retain its tombstone';
+  end if;
+ else
+  delete from public.workouts where id=(document->>'id')::uuid;
+ end if;
  if public.upload_completed_workout((document->>'id')::uuid,document) is distinct from accepted
    or exists(select 1 from public.workouts where id=(document->>'id')::uuid) then raise exception 'Retry recreated deleted v2 history'; end if;
  begin
