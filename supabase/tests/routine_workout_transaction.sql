@@ -21,7 +21,8 @@ insert into public.exercises (
   muscle_group_primary,
   equipment,
   exercise_type,
-  is_custom
+  is_custom,
+  measurement_convention
 )
 values
   (
@@ -31,7 +32,8 @@ values
     'chest',
     'barbell',
     'weight_reps',
-    true
+    true,
+    'barbell-total'
   ),
   (
     '48500000-0000-4000-8000-000000000003',
@@ -40,7 +42,8 @@ values
     'core',
     'none',
     'distance_duration',
-    true
+    true,
+    null
   );
 
 insert into public.routines (

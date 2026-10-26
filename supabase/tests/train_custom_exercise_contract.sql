@@ -1,6 +1,9 @@
 -- Admin fixture: rehearse the separate C gate/grants inside a rollback only.
 -- Production activation still requires the reviewed B alias/cookie proof.
 begin;
+-- Preserve the A→C boundary proof after the deployed database has reached C.
+update fitness_private.custom_exercise_rollout set ready=false where singleton;
+grant insert,update,delete on public.exercises to authenticated;
 select public.sql_fixture_create_auth_user('11111111-1111-4111-8111-111111111111','train-custom-contract@example.test');
 select public.sql_fixture_create_auth_user('88888888-8888-4888-8888-888888888888','train-custom-other@example.test');
 insert into public.exercises(id,user_id,name,is_custom,muscle_group_primary,muscle_groups_secondary,equipment,exercise_type,created_at,updated_at)
