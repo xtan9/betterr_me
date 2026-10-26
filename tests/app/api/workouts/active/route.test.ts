@@ -48,7 +48,7 @@ describe("GET /api/workouts/active", () => {
     mockGetActiveWorkout.mockResolvedValue(mockWorkout);
     mockGetPreviousSets.mockResolvedValue(mockPrevSets);
 
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/workouts/active"));
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -58,7 +58,7 @@ describe("GET /api/workouts/active", () => {
   it("returns { workout: null } when no active workout exists", async () => {
     mockGetActiveWorkout.mockResolvedValue(null);
 
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/workouts/active"));
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -77,7 +77,7 @@ describe("GET /api/workouts/active", () => {
     mockGetActiveWorkout.mockResolvedValue(mockWorkout);
     mockGetPreviousSets.mockRejectedValue(new Error("DB error"));
 
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/workouts/active"));
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -87,7 +87,7 @@ describe("GET /api/workouts/active", () => {
   it("returns 401 for unauthenticated user", async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } });
 
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/workouts/active"));
     const data = await response.json();
 
     expect(response.status).toBe(401);

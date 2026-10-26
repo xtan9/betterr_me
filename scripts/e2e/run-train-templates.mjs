@@ -14,8 +14,9 @@ import { issueAccessToken } from '../../lib/oauth/access-token.ts';
 // target or caller credentials, and never resets or repairs a database.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 function check(ok, message) { if (!ok) throw new Error(message); }
-check(process.argv.slice(2).every(arg => arg === '--hold'), 'Unknown runner argument');
+check(process.argv.slice(2).every(arg => arg === '--hold' || arg === '--browser'), 'Unknown runner argument');
 const hold = process.argv.includes('--hold');
+const runBrowser = process.argv.includes('--browser');
 const status = spawnSync(process.env.SUPABASE_CLI ?? 'supabase', ['status', '--output', 'json'], { cwd: root, encoding: 'utf8' });
 check(status.status === 0, 'Local Supabase is not ready');
 const local = JSON.parse(status.stdout);
@@ -33,6 +34,10 @@ const admin = createClient(local.API_URL, local.SERVICE_ROLE_KEY, { auth });
 const users = [];
 const receipt = { source: spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim(), cases: [], cleaned: false };
 const sourcePaths = ['lib/fitness/template-commands.ts','lib/fitness/template-read.ts','lib/fitness/recorded-definition.ts','lib/validations/workout-recording.ts','lib/validations/train-templates.ts','supabase/migrations/20261026001702_train_workout_templates_expand.sql'];
+if (runBrowser) sourcePaths.push('components/fitness/routines/template-library.tsx','components/fitness/routines/template-form.tsx',
+  'components/fitness/routines/template-entry-editor.tsx','components/fitness/routines/template-draft.ts',
+  'components/fitness/routines/use-template-library.ts','components/fitness/workout-logger/workout-finish-dialog.tsx',
+  'lib/fitness/template-command-client.ts');
 receipt.sourceHashes = Object.fromEntries(sourcePaths.map(path => [path, createHash('sha256').update(readFileSync(resolve(root, path))).digest('hex')]));
 const privilegeQuery = `select json_agg(json_build_object('table',t,'role',r,'privilege',p,'granted',has_table_privilege(r,'public.'||t,p)) order by t,r,p)
  from unnest(array['exercises','routines','routine_exercises']) t cross join unnest(array['anon','authenticated','service_role']) r
@@ -148,7 +153,7 @@ try {
   const preset=(await a.client.from('exercises').select('id').eq('catalog_key','strength.barbell-bench-press.v1').single()).data;
   check(preset?.id,'Verified preset missing');
   const legacy=(await request('/api/routines',a,{name:'A compatible routine'},201,true)).routine;
-  await request(`/api/routines/${legacy.id}/exercises`,a,{exercise_id:preset.id,target_sets:2,target_reps:5,target_weight_kg:0.123},201,true);
+  await request(`/api/routines/${legacy.id}/exercises`,a,{exercise_id:preset.id,target_sets:2,target_reps:runBrowser?0:5,target_weight_kg:0.123},201,true);
   let rootTemplateId;
   if (rootA) {
     rootTemplateId=(await request('/api/routines',rootA,{name:'Root legacy targets'},201,true)).routine.id;
@@ -208,6 +213,11 @@ try {
   check(!(await a.client.from('workouts').delete().eq('id',completedId)).error,'Owned history delete failed');
   check(isDeepStrictEqual(await request(uploadEndpoint,a,envelope),upload)&&!(await a.client.from('workouts').select('id').eq('id',completedId)).data.length,'Old create resurrected history');
   passed('V4 full-origin upload/read/conversion and no resurrection after owned history deletion');
+  if (runBrowser) {
+    const { verifyTemplateBrowser } = await import('./train-template-browser.mjs');
+    receipt.browser = await verifyTemplateBrowser({ origin, user:a, request, legacyTemplateId:legacy.id, artifactDirectory:resolve(root,'.artifacts') });
+    passed('Actual Chromium ordered targets, retained legacy facts, conflict review, archive/restore, unfinished Start and representative conversion');
+  }
   if(hold){
     const original=await request(`/api/mobile/train/templates/${rootTemplateId}`,rootA);
     const source=original.template.entries[0];

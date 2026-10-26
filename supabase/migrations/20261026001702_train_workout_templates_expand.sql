@@ -1065,6 +1065,9 @@ grant execute on function public.mcp_workout_command(uuid,text,jsonb) to service
 -- These auth.uid()-checked helpers are reachable by the fixed service bridge,
 -- never by a caller-selected generic function name.
 grant execute on function fitness_private.start_template_workout(uuid,uuid),public.start_train_template_workout(uuid,uuid) to service_role;
+-- The preserved invoker-based routine Start also reads the gate while the
+-- fixed MCP bridge temporarily carries its verified owner's auth.uid().
+grant execute on function fitness_private.template_capabilities(),public.train_template_capabilities() to service_role;
 grant execute on function fitness_private.read_templates(uuid,uuid) to service_role;
 create function public.mcp_read_train_templates(p_user_id uuid,p_after uuid default null) returns jsonb
 language plpgsql security invoker set search_path=pg_catalog,public as $$
