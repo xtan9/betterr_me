@@ -24,6 +24,19 @@ describe('authoritative template starts', () => {
     expect(mockSupabaseClient.rpc).toHaveBeenCalledExactlyOnceWith('start_train_template_workout', { p_user_id: owner, p_template_id: templateId });
     mockSupabaseClient.expectQuery({ table: 'routines', method: 'eq', args: ['user_id', owner] });
   });
+  it('propagates the exact authoritative start failure without attempting a legacy start', async () => {
+    const failure = { code: '57014', message: 'Template start was canceled' };
+    mockSupabaseClient.rpc.mockResolvedValue({ data: { status: 'not_ready' }, error: failure });
+
+    await expect(createWorkoutWrites(mockSupabaseClient as unknown as SupabaseClient).start({
+      userId: owner, source: { type: 'routine', routineId: templateId },
+    })).rejects.toBe(failure);
+
+    expect(mockSupabaseClient.rpc).toHaveBeenCalledExactlyOnceWith('start_train_template_workout', {
+      p_user_id: owner, p_template_id: templateId,
+    });
+    expect(mockSupabaseClient.insert).not.toHaveBeenCalled();
+  });
   it('reads current per-set template authority for a trusted read-only Assistant principal', async () => {
     const read = { ...fixture.read, template: { ...fixture.read.template, ownerId: owner } };
     mockSupabaseClient.rpc.mockResolvedValue({ data: { status: 'available', protocolVersion: 1, templates: [read], nextCursor: null }, error: null });
