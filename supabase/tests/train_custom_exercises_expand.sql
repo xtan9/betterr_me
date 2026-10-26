@@ -1,6 +1,9 @@
--- constrained-sql-fixture: true
 -- Phase A must remain compatible with the deployed legacy cookie writer.
+-- This historical phase is reconstructed only inside this rollback. Current
+-- C grants and readiness are verified separately by the contraction fixture.
 begin;
+update fitness_private.custom_exercise_rollout set ready=false where singleton;
+grant insert,update,delete on public.exercises to authenticated;
 select public.sql_fixture_create_auth_user('64180000-0000-4000-8000-000000000001','train-custom-owner@example.test');
 select set_config('request.jwt.claims','{"sub":"64180000-0000-4000-8000-000000000001","role":"authenticated"}',true);
 set local role authenticated;

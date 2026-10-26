@@ -134,28 +134,8 @@ values (
   '31000000-0000-0000-0000-000000000001'
 );
 
-insert into public.exercises (
-  id, user_id, name, muscle_group_primary, equipment, exercise_type, is_custom
-)
-values
-  (
-    '22000000-0000-0000-0000-000000000001',
-    '21000000-0000-0000-0000-000000000001',
-    'A deadlift',
-    'back',
-    'barbell',
-    'weight_reps',
-    true
-  ),
-  (
-    '22000000-0000-0000-0000-000000000003',
-    '21000000-0000-0000-0000-000000000001',
-    'A exercise to delete',
-    'quadriceps',
-    'bodyweight',
-    'bodyweight_reps',
-    true
-  );
+select public.execute_train_exercise_command('{"protocolVersion":1,"operationId":"22000000-0000-0000-0000-000000000001","command":{"kind":"create","definition":{"name":"A deadlift","primaryMuscle":"back","secondaryMuscles":[],"equipment":"barbell","mode":"weight_reps","convention":"barbell-total"}}}'::jsonb);
+select public.execute_train_exercise_command('{"protocolVersion":1,"operationId":"22000000-0000-0000-0000-000000000003","command":{"kind":"create","definition":{"name":"A exercise to delete","primaryMuscle":"quadriceps","secondaryMuscles":[],"equipment":"bodyweight","mode":"bodyweight_reps","convention":"bodyweight-repetitions"}}}'::jsonb);
 
 insert into public.routines (id, user_id, name, notes)
 values (
@@ -276,18 +256,7 @@ values (
   '31000000-0000-0000-0000-000000000002'
 );
 
-insert into public.exercises (
-  id, user_id, name, muscle_group_primary, equipment, exercise_type, is_custom
-)
-values (
-  '22000000-0000-0000-0000-000000000002',
-  '21000000-0000-0000-0000-000000000002',
-  'B squat',
-  'quadriceps',
-  'barbell',
-  'weight_reps',
-  true
-);
+select public.execute_train_exercise_command('{"protocolVersion":1,"operationId":"22000000-0000-0000-0000-000000000002","command":{"kind":"create","definition":{"name":"B squat","primaryMuscle":"quadriceps","secondaryMuscles":[],"equipment":"barbell","mode":"weight_reps","convention":"barbell-total"}}}'::jsonb);
 
 insert into public.routines (id, user_id, name, notes)
 values (
@@ -608,36 +577,28 @@ begin
     raise exception 'workout owner A visibility is incomplete';
   end if;
 
-  insert into public.exercises (
-    id, user_id, name, muscle_group_primary, equipment, exercise_type, is_custom
-  ) values (
-    '22000000-0000-0000-0000-000000000004',
-    '21000000-0000-0000-0000-000000000001',
-    'A inserted exercise',
-    'shoulders',
-    'dumbbell',
-    'weight_reps',
-    true
-  );
-  update public.exercises
-  set name = 'A inserted exercise updated'
-  where id = '22000000-0000-0000-0000-000000000004';
-  get diagnostics affected_rows = row_count;
-  if affected_rows <> 1 or not exists (
+  if public.execute_train_exercise_command('{"protocolVersion":1,"operationId":"22000000-0000-0000-0000-000000000004","command":{"kind":"create","definition":{"name":"A inserted exercise","primaryMuscle":"shoulders","secondaryMuscles":[],"equipment":"dumbbell","mode":"weight_reps","convention":"per-dumbbell"}}}')->>'status'<>'accepted' then
+    raise exception 'workout owner A exercise creation failed'; end if;
+  if public.execute_train_exercise_command('{"protocolVersion":1,"operationId":"22000000-0000-0000-0000-000000000005","command":{"kind":"update-metadata","exerciseId":"22000000-0000-0000-0000-000000000004","expectedVersion":"1","patch":{"name":"A inserted exercise updated"}}}')->>'status'<>'accepted' then
+    raise exception 'workout owner A exercise metadata command failed'; end if;
+  if not exists (
     select 1 from public.exercises
     where id = '22000000-0000-0000-0000-000000000004'
       and name = 'A inserted exercise updated'
   ) then
     raise exception 'workout owner A exercise update did not persist';
   end if;
-  delete from public.exercises
-  where id = '22000000-0000-0000-0000-000000000004';
-  get diagnostics affected_rows = row_count;
-  if affected_rows <> 1 or exists (
+  begin
+    delete from public.exercises where id='22000000-0000-0000-0000-000000000004';
+    raise exception 'ordinary exercise deletion bypassed commands';
+  exception when insufficient_privilege then null; end;
+  if public.execute_train_exercise_command('{"protocolVersion":1,"operationId":"22000000-0000-0000-0000-000000000006","command":{"kind":"archive","exerciseId":"22000000-0000-0000-0000-000000000004","expectedVersion":"2"}}')->>'status'<>'accepted' then
+    raise exception 'workout owner A cannot archive own exercise'; end if;
+  if not exists (
     select 1 from public.exercises
-    where id = '22000000-0000-0000-0000-000000000004'
+    where id = '22000000-0000-0000-0000-000000000004' and archived_at is not null
   ) then
-    raise exception 'workout owner A cannot delete own exercise';
+    raise exception 'archive lost the owned exercise identity';
   end if;
 
   insert into public.routines (id, user_id, name)
@@ -908,12 +869,14 @@ select pg_temp.expect_no_rows(
   $sql$delete from public.workouts where id = '27000000-0000-0000-0000-000000000002'$sql$,
   'workout owner A deleted owner B workout'
 );
-select pg_temp.expect_no_rows(
+select pg_temp.expect_sqlstate(
   $sql$update public.exercises set name = 'tampered' where id = '22000000-0000-0000-0000-000000000002'$sql$,
+  '42501',
   'workout owner A updated owner B exercise'
 );
-select pg_temp.expect_no_rows(
+select pg_temp.expect_sqlstate(
   $sql$delete from public.exercises where id = '22000000-0000-0000-0000-000000000002'$sql$,
+  '42501',
   'workout owner A deleted owner B exercise'
 );
 select pg_temp.expect_sqlstate(
@@ -1128,7 +1091,8 @@ select set_config(
 );
 do $$
 begin
-  if (select count(*) from public.exercises where user_id = '21000000-0000-0000-0000-000000000001') <> 2
+  if (select count(*) from public.exercises where user_id = '21000000-0000-0000-0000-000000000001') <> 3
+     or (select count(*) from public.exercises where user_id = '21000000-0000-0000-0000-000000000001' and archived_at is not null) <> 1
      or (select count(*) from public.routines) <> 1
      or (select count(*) from public.routine_exercises) <> 1
      or (select count(*) from public.workouts) <> 0
