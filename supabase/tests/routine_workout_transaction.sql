@@ -46,7 +46,17 @@ values
     null
   );
 
-insert into public.routines (
+set local role authenticated;
+-- Before C the invoker consumes a reviewed legacy conversion. After C the
+-- actual command creates authoritative per-set content; supplied Start arrays
+-- cannot override that source. Both rollout states retain transaction coverage.
+do $$ begin
+  if (public.train_template_capabilities()->'templates'->>'ready')::boolean then
+    if public.execute_train_template_command('{"protocolVersion":1,"operationId":"48500000-0000-4000-8000-000000000004","command":{"kind":"create","name":"Authoritative transaction routine","notes":null,"entries":[{"id":"48500000-0000-4000-8000-000000000020","exerciseId":"48500000-0000-4000-8000-000000000002","notes":"Pause at the bottom","restSeconds":120,"targets":[{"id":"48500000-0000-4000-8000-000000000021","kind":"working","measurements":{"weightKg":80,"reps":8,"durationSeconds":null,"distanceMeters":null}},{"id":"48500000-0000-4000-8000-000000000022","kind":"working","measurements":{"weightKg":80,"reps":8,"durationSeconds":null,"distanceMeters":null}}]},{"id":"48500000-0000-4000-8000-000000000030","exerciseId":"48500000-0000-4000-8000-000000000003","notes":"Hold steady","restSeconds":45,"targets":[{"id":"48500000-0000-4000-8000-000000000031","kind":"working","measurements":{"weightKg":null,"reps":null,"durationSeconds":60,"distanceMeters":null}}]}]}}'::jsonb)->>'status' is distinct from 'accepted' then
+      raise exception 'Current template setup failed';
+    end if;
+  else
+    insert into public.routines (
   id,
   user_id,
   name
@@ -56,8 +66,8 @@ values (
   '48500000-0000-4000-8000-000000000001',
   'Transaction routine'
 );
-
-set local role authenticated;
+  end if;
+end $$;
 
 -- The production RPC returns the complete nested mapping in source order.
 do $$
@@ -124,12 +134,12 @@ begin
     ]'::jsonb
   );
 
-  if outcome->>'title' <> 'Successful transaction workout'
+  if outcome->>'title' <> (case when (public.train_template_capabilities()->'templates'->>'ready')::boolean then 'Authoritative transaction routine' else 'Successful transaction workout' end)
     or outcome->>'routine_id' <> '48500000-0000-4000-8000-000000000004'
     or jsonb_array_length(outcome->'exercises') <> 2
     or outcome->'exercises'->0->>'exercise_id'
       <> '48500000-0000-4000-8000-000000000002'
-    or (outcome->'exercises'->0->>'sort_order')::double precision <> 10
+    or (outcome->'exercises'->0->>'sort_order')::double precision <> (case when (public.train_template_capabilities()->'templates'->>'ready')::boolean then 0 else 10 end)
     or outcome->'exercises'->0->>'notes' <> 'Pause at the bottom'
     or (outcome->'exercises'->0->>'rest_timer_seconds')::integer <> 120
     or jsonb_array_length(outcome->'exercises'->0->'sets') <> 2
@@ -139,7 +149,7 @@ begin
     or (outcome->'exercises'->0->'sets'->1->>'set_number')::integer <> 2
     or outcome->'exercises'->1->>'exercise_id'
       <> '48500000-0000-4000-8000-000000000003'
-    or (outcome->'exercises'->1->>'sort_order')::double precision <> 10
+    or (outcome->'exercises'->1->>'sort_order')::double precision <> (case when (public.train_template_capabilities()->'templates'->>'ready')::boolean then 1 else 10 end)
     or jsonb_array_length(outcome->'exercises'->1->'sets') <> 1
     or (outcome->'exercises'->1->'sets'->0->>'duration_seconds')::integer <> 60
   then
@@ -172,12 +182,23 @@ reset role;
 delete from public.workouts
 where user_id = '48500000-0000-4000-8000-000000000001';
 
+-- Model an already-stored unsafe second entry without granting ordinary
+-- callers content DML. Start must roll back its parent and first child.
+update public.routine_exercises set notes=repeat('x',2001)
+where id='48500000-0000-4000-8000-000000000030';
+
 set local role authenticated;
 
 -- The invalid set type fails only after the workout, both workout exercises,
 -- and the first exercise's set have been inserted by the function.
 do $$
 begin
+  if (public.train_template_capabilities()->'templates'->>'ready')::boolean then
+    if public.start_train_template_workout('48500000-0000-4000-8000-000000000001','48500000-0000-4000-8000-000000000004')->>'status' is distinct from 'invalid_source' then
+      raise exception 'Unsafe authoritative source unexpectedly started';
+    end if;
+    return;
+  end if;
   perform public.start_workout_from_routine(
     '48500000-0000-4000-8000-000000000001',
     '{
@@ -273,6 +294,30 @@ do $$
 declare
   outcome jsonb;
 begin
+  if (public.train_template_capabilities()->'templates'->>'ready')::boolean then
+    begin
+      perform public.save_workout_as_routine('48500000-0000-4000-8000-000000000001','{"name":"Unkeyed old save"}','[]');
+      raise exception 'C allowed the legacy content-write bypass';
+    exception when insufficient_privilege then null; end;
+    insert into public.workouts(id,user_id,title,status) values('48500000-0000-4000-8000-000000000050',auth.uid(),'Saved source','discarded');
+    insert into public.workout_exercises(id,workout_id,exercise_id,sort_order,notes,rest_timer_seconds) values
+      ('48500000-0000-4000-8000-000000000051','48500000-0000-4000-8000-000000000050','48500000-0000-4000-8000-000000000002',10,'Pause at the bottom',120),
+      ('48500000-0000-4000-8000-000000000052','48500000-0000-4000-8000-000000000050','48500000-0000-4000-8000-000000000003',20,null,45);
+    insert into public.workout_sets(workout_exercise_id,set_number,set_type,weight_kg,reps,duration_seconds,distance_meters,is_completed) values
+      ('48500000-0000-4000-8000-000000000051',1,'normal',85,5,null,null,false),
+      ('48500000-0000-4000-8000-000000000051',2,'normal',85,5,null,null,false),
+      ('48500000-0000-4000-8000-000000000052',1,'normal',null,null,60,100,false),
+      ('48500000-0000-4000-8000-000000000052',2,'normal',null,null,60,100,false);
+    outcome:=public.execute_train_template_command('{"protocolVersion":1,"operationId":"48500000-0000-4000-8000-000000000053","command":{"kind":"save-workout-as-template","workoutId":"48500000-0000-4000-8000-000000000050","name":"Saved transaction routine"}}');
+    if outcome->>'status' is distinct from 'accepted'
+      or jsonb_array_length(outcome->'receipt'->'template'->'entries')<>2
+      or outcome->'receipt'->'template'->'entries'->0->'targets'->'items'->0->'measurements' is distinct from '{"weightKg":"85","reps":"5","durationSeconds":null,"distanceMeters":null}'::jsonb
+      or jsonb_array_length(outcome->'receipt'->'template'->'entries'->0->'targets'->'items')<>2
+      or outcome->'receipt'->'template'->'entries'->1->'targets'->'items'->0->'measurements' is distinct from '{"weightKg":null,"reps":null,"durationSeconds":"60","distanceMeters":"100.00"}'::jsonb then
+      raise exception 'Current representative conversion changed source facts: %',outcome;
+    end if;
+    return;
+  end if;
   outcome := public.save_workout_as_routine(
     '48500000-0000-4000-8000-000000000001',
     '{"name": "Saved transaction routine", "notes": "Reusable"}'::jsonb,
@@ -328,6 +373,12 @@ $$;
 -- reference at the RLS check or foreign-key seam.
 do $$
 begin
+  if (public.train_template_capabilities()->'templates'->>'ready')::boolean then
+    if public.execute_train_template_command('{"protocolVersion":1,"operationId":"48500000-0000-4000-8000-000000000070","command":{"kind":"create","name":"Atomic saved routine","notes":null,"entries":[{"id":"48500000-0000-4000-8000-000000000071","exerciseId":"48500000-0000-4000-8000-000000000002","notes":"Pause at the bottom","restSeconds":120,"targets":[{"id":"48500000-0000-4000-8000-000000000073","kind":"working","measurements":{"weightKg":80,"reps":8,"durationSeconds":null,"distanceMeters":null}}]},{"id":"48500000-0000-4000-8000-000000000072","exerciseId":"48500000-0000-4000-8000-000000000099","notes":"Hold steady","restSeconds":45,"targets":[{"id":"48500000-0000-4000-8000-000000000074","kind":"working","measurements":{"weightKg":null,"reps":null,"durationSeconds":60,"distanceMeters":100}}]}]}}'::jsonb)->>'status' is distinct from 'invalid_template' then
+      raise exception 'Current conversion accepted a missing exercise reference';
+    end if;
+    return;
+  end if;
   perform public.save_workout_as_routine(
     '48500000-0000-4000-8000-000000000001',
     '{"name": "Atomic saved routine", "notes": null}'::jsonb,

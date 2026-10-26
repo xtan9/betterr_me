@@ -1,5 +1,6 @@
 -- Public authenticated template commands/readback; every fixture is rolled back.
 begin;
+select set_config('train.fixture.template_was_ready',(select ready::text from fitness_private.template_rollout where singleton),true);
 -- Exercise contract C is an upstream dependency; no ordinary exercise writes.
 revoke insert,update,delete,truncate,references,trigger on public.exercises from anon,authenticated;
 revoke truncate,trigger on public.exercises from service_role;
@@ -14,6 +15,21 @@ insert into public.routines(id,user_id,name) values('64190000-0000-4000-8000-000
 insert into public.routine_exercises(id,routine_id,exercise_id,sort_order,target_sets,target_reps,target_weight_kg,target_duration_seconds,target_distance_meters,rest_timer_seconds,notes)
 values('64190000-0000-4000-8000-000000000012','64190000-0000-4000-8000-000000000011','64190000-0000-4000-8000-000000000010',0.75,2,0,0.123,0,12.34,null,'Keep every legacy field'),
 ('64190000-0000-4000-8000-000000000013','64190000-0000-4000-8000-000000000011','64190000-0000-4000-8000-000000000010',-4,null,null,null,null,null,0,null);
+-- After C, construct only this fixture's two synthetic historical sidecars.
+-- The standalone migration rehearsal proves real A-to-C preservation; no live
+-- contract flag, existing template, or unrelated materialization is reset here.
+do $$ begin
+ if current_setting('train.fixture.template_was_ready')::boolean then
+  insert into fitness_private.template_entries(entry_id,position,targets_resolved,legacy_source)
+  select e.id,row_number() over(order by e.sort_order,e.id)-1,coalesce(e.target_sets between 1 and 20,false),
+   jsonb_build_object('targetSets',e.target_sets::text,'sortOrder',e.sort_order::text,
+    'measurements',jsonb_build_object('weightKg',e.target_weight_kg::text,'reps',e.target_reps::text,'durationSeconds',e.target_duration_seconds::text,'distanceMeters',e.target_distance_meters::text))
+  from public.routine_exercises e where e.routine_id='64190000-0000-4000-8000-000000000011';
+  insert into fitness_private.template_targets(id,entry_id,position,kind,weight_kg,reps,duration_seconds,distance_meters)
+  select gen_random_uuid(),e.id,i,'working',e.target_weight_kg,e.target_reps,e.target_duration_seconds,e.target_distance_meters
+  from public.routine_exercises e cross join generate_series(0,1) i where e.id='64190000-0000-4000-8000-000000000012';
+ end if;
+end $$;
 create temporary table original_legacy_entry as select id,to_jsonb(e) as value from public.routine_exercises e where routine_id='64190000-0000-4000-8000-000000000011';
 do $$ declare previous bigint; begin
  select version into previous from public.routines where id='64190000-0000-4000-8000-000000000011';
@@ -27,7 +43,11 @@ set local role authenticated;
 do $$
 declare request jsonb := '{"protocolVersion":1,"operationId":"64190000-0000-4000-8000-000000000002","command":{"kind":"create","name":"Empty session","notes":null,"entries":[]}}';
 begin
- if public.execute_train_template_command(request)->>'status' is distinct from 'not_ready' then raise exception 'Expansion enabled new commands'; end if;
+ if not current_setting('train.fixture.template_was_ready')::boolean then
+  if public.execute_train_template_command(request)->>'status' is distinct from 'not_ready' then raise exception 'Expansion enabled new commands'; end if;
+ elsif public.train_template_capabilities()->'templates'->'ready' is distinct from 'true'::jsonb then
+  raise exception 'C did not advertise ready template capability';
+ end if;
 end $$;
 reset role;
 -- The production C migration calls this only after exact B alias/cookie proof.

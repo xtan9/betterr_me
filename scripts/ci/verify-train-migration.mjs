@@ -189,14 +189,68 @@ try {
   query(database, migration('20261026001702_train_workout_templates_expand.sql'));
   if (templatePreservation(true) !== beforeTemplates) throw new Error('Template expansion changed existing fields or first receipts');
   if (query(database, 'select ready from fitness_private.template_rollout') !== 'f') throw new Error('Template expansion prematurely enabled commands');
-  query(database, 'select fitness_private.activate_template_contract();');
+  const expandedTemplates = templatePreservation();
+  const enableTemplates = migration('20261026010107_train_workout_templates_enable.sql');
+  query(database, enableTemplates);
+  for (const digits of [0, 3]) {
+    query(database, `set extra_float_digits=${digits}; do $$ begin
+      if fitness_private.template_value_reason('9007199254740991','reps') is not null
+        or fitness_private.template_value_reason('0.123','weightKg') is not null
+        or fitness_private.template_value_reason(null,'weightKg') is not null then
+        raise exception 'Valid target acceptance depends on caller float rendering';
+      end if;
+      if current_setting('extra_float_digits')<>'${digits}' then raise exception 'Successful target validation leaked its setting'; end if;
+      if fitness_private.template_value_reason('9007199254740993','reps') is distinct from 'target_value_unrepresentable'
+        or fitness_private.template_value_reason('1e309','weightKg') is distinct from 'target_value_unrepresentable'
+        or fitness_private.template_value_reason('1.5','reps') is distinct from 'target_value_unrepresentable'
+        or fitness_private.template_value_reason('-1','weightKg') is distinct from 'target_value_out_of_range'
+        or fitness_private.template_value_reason('86401','durationSeconds') is distinct from 'target_value_out_of_range' then
+        raise exception 'Target validation changed invalid-value semantics';
+      end if;
+      if current_setting('extra_float_digits')<>'${digits}' then raise exception 'Rejected target validation leaked its setting'; end if;
+    end $$;`);
+  }
+  if (query(database, `select coalesce(proconfig@>array['extra_float_digits=3'],false) from pg_proc
+    where oid='fitness_private.template_value_reason(text,text)'::regprocedure`) !== 't') throw new Error('Template numeric helper has no stable private rendering setting');
+  if (query(database, 'select ready from fitness_private.template_rollout') !== 't') throw new Error('Template C migration did not enable commands');
   if (templatePreservation(true) !== beforeTemplates) throw new Error('Template materialization changed original fields/timestamps or receipts');
+  if (templatePreservation() !== expandedTemplates) throw new Error('Template C changed expanded parent versions/archive state or existing records');
   if (query(database, 'select count(*) from fitness_private.template_entries') !== '8'
     || query(database, 'select count(*) from fitness_private.template_targets') !== '16') throw new Error('Legacy target materialization changed counts');
   if (query(database, `select count(*) from unnest(array['anon','authenticated','service_role']) r
     cross join unnest(array['INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p
     where has_table_privilege(r,'public.routines',p) or has_table_privilege(r,'public.routine_exercises',p)`) !== '0') throw new Error('Template cutover left an ordinary content writer');
-  console.log('PASS 419 expansion and materialization: all ten legacy/current record tables preserved, eight ordered entries/sixteen targets, commands gated until cutover, ordinary content DML closed');
+  if (query(database, `select count(*) from fitness_private.template_entries s join public.routine_exercises e on e.id=s.entry_id
+    where s.position<>(select count(*) from public.routine_exercises p where p.routine_id=e.routine_id and (p.sort_order,p.id)<(e.sort_order,e.id))
+      or s.targets_resolved is distinct from true
+      or s.legacy_source is distinct from jsonb_build_object('targetSets',e.target_sets::text,'sortOrder',e.sort_order::text,
+        'measurements',jsonb_build_object('weightKg',e.target_weight_kg::text,'reps',e.target_reps::text,'durationSeconds',e.target_duration_seconds::text,'distanceMeters',e.target_distance_meters::text))`) !== '0') throw new Error('Template C changed legacy order or raw provenance');
+  if (query(database, `select count(*) from fitness_private.template_targets t join public.routine_exercises e on e.id=t.entry_id
+    where t.kind<>'working' or t.position not between 0 and e.target_sets-1
+      or (t.weight_kg,t.reps,t.duration_seconds,t.distance_meters) is distinct from
+        (e.target_weight_kg,e.target_reps,e.target_duration_seconds,e.target_distance_meters)`) !== '0') throw new Error('Template C changed target values');
+  const materializedTemplates = () => query(database, `select md5(jsonb_build_object(
+    'entries',(select jsonb_agg(to_jsonb(t) order by entry_id) from fitness_private.template_entries t),
+    'targets',(select jsonb_agg(to_jsonb(t) order by id) from fitness_private.template_targets t),
+    'outcomes',(select jsonb_agg(to_jsonb(t) order by owner_id,operation_id) from public.train_template_command_outcomes t))::text)`);
+  const firstMaterialization = materializedTemplates();
+  query(database, enableTemplates);
+  if (materializedTemplates() !== firstMaterialization || templatePreservation() !== expandedTemplates) throw new Error('Repeated template C changed stable IDs or existing records');
+  if (query(database, `select count(*) from unnest(array['authenticated','service_role']) r
+    where not has_column_privilege(r,'public.routines','last_performed_at','UPDATE')
+      or has_column_privilege(r,'public.routines','name','UPDATE')
+      or has_function_privilege(r,'fitness_private.activate_template_contract()','EXECUTE')`) !== '0') throw new Error('Template C usage-only privilege contract changed');
+  query(database, `set request.jwt.claims='{"sub":"${v1.ownerId}","role":"authenticated"}'; set role authenticated;
+    do $$ declare previous bigint; begin
+      select version into previous from public.routines where id='64150000-0000-4000-8000-000000000002';
+      update public.routines set last_performed_at='2026-10-26T00:00:00Z' where id='64150000-0000-4000-8000-000000000002';
+      if not found or (select version from public.routines where id='64150000-0000-4000-8000-000000000002')<>previous then raise exception 'Usage write changed content revision or failed'; end if;
+      begin
+        update public.routines set name='Forbidden' where id='64150000-0000-4000-8000-000000000002';
+        raise exception 'Ordinary template content write succeeded';
+      exception when insufficient_privilege then null; end;
+    end $$;`);
+  console.log('PASS exact 419 A/C migrations: ten legacy/current tables and expanded parent versions preserved; eight ordered entries/sixteen exact targets; idempotent stable target IDs; commands gated until C; content DML closed and authenticated usage-only updates retained; safe-integer validation stable under caller float settings 0/3 without leakage');
 
 
 } finally {

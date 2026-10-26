@@ -104,10 +104,20 @@ resurrect it. Profile erasure removes linked workouts, templates and outcomes.
 
 `20261026001702_train_workout_templates_expand.sql` follows the released #418 C
 migration `20261025234112`. The isolated historical rehearsal applies exact
-#418 C before #419 A/materialization. All ten legacy/current record tables,
-original fields/timestamps and first receipts remain unchanged; eight legacy
-entries become sixteen ordered targets. No shared reset or migration-history
-repair is part of this verification.
+#418 C before #419 A and exact C migration
+`20261026010107_train_workout_templates_enable.sql`. All ten legacy/current
+record tables, original fields/timestamps, expanded parent versions and first
+receipts remain unchanged; eight legacy entries become sixteen exact ordered
+targets. Replaying C preserves the generated target identities. Ordinary content
+writes fail, while an authenticated usage-only update succeeds without changing
+the content revision. No shared reset or migration-history repair is part of
+this verification.
+
+The registered rollback fixture runs on either side of C. Before activation it
+checks the closed gate and historical materialization; after activation it
+constructs only its two owned synthetic historical entry sidecars, then runs the
+same authenticated command/read/Start assertions. It never resets the current
+template gate or rematerializes unrelated templates.
 
 The rollback SQL fixture covers per-set identity/order, raw NULL/zero/deferred
 facts, version/CAS outcomes, concurrent-safe first receipts, owned references,

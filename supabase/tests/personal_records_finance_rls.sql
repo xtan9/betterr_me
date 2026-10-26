@@ -53,6 +53,24 @@ begin
 end;
 $$;
 
+create function pg_temp.template_command(operation uuid, command jsonb) returns jsonb
+language plpgsql as $$ declare result jsonb; begin
+  result:=public.execute_train_template_command(jsonb_build_object('protocolVersion',1,'operationId',operation,'command',command));
+  if result->>'status' is distinct from 'accepted' then raise exception 'Owned template command failed: %',result; end if;
+  return result->'receipt'->'template';
+end $$;
+
+-- Before C these are RLS-filtered writes; after C the ordinary role has no
+-- content-write grant at all. Both outcomes leave the foreign record intact.
+create function pg_temp.expect_denied_template_write(statement text, failure_message text) returns void
+language plpgsql as $$ begin
+  if (public.train_template_capabilities()->'templates'->>'ready')::boolean then
+    perform pg_temp.expect_sqlstate(statement,'42501',failure_message);
+  else
+    perform pg_temp.expect_no_rows(statement,failure_message);
+  end if;
+end $$;
+
 select public.sql_fixture_create_auth_user(
   '21000000-0000-0000-0000-000000000001',
   'personal-records-a@example.test'
@@ -137,7 +155,11 @@ values (
 select public.execute_train_exercise_command('{"protocolVersion":1,"operationId":"22000000-0000-0000-0000-000000000001","command":{"kind":"create","definition":{"name":"A deadlift","primaryMuscle":"back","secondaryMuscles":[],"equipment":"barbell","mode":"weight_reps","convention":"barbell-total"}}}'::jsonb);
 select public.execute_train_exercise_command('{"protocolVersion":1,"operationId":"22000000-0000-0000-0000-000000000003","command":{"kind":"create","definition":{"name":"A exercise to delete","primaryMuscle":"quadriceps","secondaryMuscles":[],"equipment":"bodyweight","mode":"bodyweight_reps","convention":"bodyweight-repetitions"}}}'::jsonb);
 
-insert into public.routines (id, user_id, name, notes)
+do $$ begin
+  if (public.train_template_capabilities()->'templates'->>'ready')::boolean then
+    perform pg_temp.template_command('25000000-0000-0000-0000-000000000001','{"kind":"create","name":"A routine","notes":"A routine note","entries":[{"id":"26000000-0000-0000-0000-000000000001","exerciseId":"22000000-0000-0000-0000-000000000001","notes":"A routine exercise","restSeconds":120,"targets":[{"id":"26100000-0000-0000-0000-000000000100","kind":"working","measurements":{"weightKg":100,"reps":5,"durationSeconds":null,"distanceMeters":null}},{"id":"26100000-0000-0000-0000-000000000101","kind":"working","measurements":{"weightKg":100,"reps":5,"durationSeconds":null,"distanceMeters":null}},{"id":"26100000-0000-0000-0000-000000000102","kind":"working","measurements":{"weightKg":100,"reps":5,"durationSeconds":null,"distanceMeters":null}}]}]}'::jsonb);
+  else
+    insert into public.routines (id, user_id, name, notes)
 values (
   '25000000-0000-0000-0000-000000000001',
   '21000000-0000-0000-0000-000000000001',
@@ -160,6 +182,8 @@ values (
   120,
   'A routine exercise'
 );
+  end if;
+end $$;
 
 insert into public.workouts (
   id, user_id, title, status, started_at, completed_at, duration_seconds,
@@ -258,7 +282,11 @@ values (
 
 select public.execute_train_exercise_command('{"protocolVersion":1,"operationId":"22000000-0000-0000-0000-000000000002","command":{"kind":"create","definition":{"name":"B squat","primaryMuscle":"quadriceps","secondaryMuscles":[],"equipment":"barbell","mode":"weight_reps","convention":"barbell-total"}}}'::jsonb);
 
-insert into public.routines (id, user_id, name, notes)
+do $$ begin
+  if (public.train_template_capabilities()->'templates'->>'ready')::boolean then
+    perform pg_temp.template_command('25000000-0000-0000-0000-000000000002','{"kind":"create","name":"B routine","notes":null,"entries":[{"id":"26000000-0000-0000-0000-000000000002","exerciseId":"22000000-0000-0000-0000-000000000002","notes":null,"restSeconds":90,"targets":[{"id":"26100000-0000-0000-0000-000000000200","kind":"working","measurements":{"weightKg":80,"reps":6,"durationSeconds":null,"distanceMeters":null}},{"id":"26100000-0000-0000-0000-000000000201","kind":"working","measurements":{"weightKg":80,"reps":6,"durationSeconds":null,"distanceMeters":null}},{"id":"26100000-0000-0000-0000-000000000202","kind":"working","measurements":{"weightKg":80,"reps":6,"durationSeconds":null,"distanceMeters":null}},{"id":"26100000-0000-0000-0000-000000000203","kind":"working","measurements":{"weightKg":80,"reps":6,"durationSeconds":null,"distanceMeters":null}}]}]}'::jsonb);
+  else
+    insert into public.routines (id, user_id, name, notes)
 values (
   '25000000-0000-0000-0000-000000000002',
   '21000000-0000-0000-0000-000000000002',
@@ -280,6 +308,8 @@ values (
   80,
   90
 );
+  end if;
+end $$;
 
 insert into public.workouts (
   id, user_id, title, status, started_at, completed_at, duration_seconds
@@ -565,11 +595,12 @@ select set_config(
 do $$
 declare
   affected_rows integer;
+  current_template jsonb;
 begin
   if (select count(*) from public.exercises where user_id = '21000000-0000-0000-0000-000000000001') <> 2 then
     raise exception 'workout owner A exercise visibility is incorrect';
   end if;
-  if (select count(*) from public.routines) <> 1
+  if (select count(*) from public.routines where archived_at is null) <> 1
      or (select count(*) from public.routine_exercises) <> 1
      or (select count(*) from public.workouts) <> 2
      or (select count(*) from public.workout_exercises) <> 1
@@ -601,6 +632,26 @@ begin
     raise exception 'archive lost the owned exercise identity';
   end if;
 
+  if (public.train_template_capabilities()->'templates'->>'ready')::boolean then
+    current_template:=pg_temp.template_command('25000000-0000-0000-0000-000000000004','{"kind":"create","name":"A inserted routine","notes":null,"entries":[]}');
+    current_template:=pg_temp.template_command('25100000-0000-0000-0000-000000000001',jsonb_build_object('kind','edit','templateId',current_template->>'id','expectedVersion',current_template->>'version','changes','[{"kind":"patch-template","patch":{"name":"A inserted routine updated"}},{"kind":"add-entry","entry":{"id":"26000000-0000-0000-0000-000000000004","exerciseId":"22000000-0000-0000-0000-000000000001","notes":null,"restSeconds":null,"targets":[{"id":"26100000-0000-0000-0000-000000000401","kind":"working","measurements":{"weightKg":null,"reps":8,"durationSeconds":null,"distanceMeters":null}},{"id":"26100000-0000-0000-0000-000000000402","kind":"working","measurements":{"weightKg":null,"reps":8,"durationSeconds":null,"distanceMeters":null}}]}}]'::jsonb));
+    current_template:=pg_temp.template_command('25100000-0000-0000-0000-000000000002',jsonb_build_object('kind','edit','templateId',current_template->>'id','expectedVersion',current_template->>'version','changes','[{"kind":"patch-entry","entryId":"26000000-0000-0000-0000-000000000004","patch":{"notes":"A routine exercise updated"}},{"kind":"patch-target","entryId":"26000000-0000-0000-0000-000000000004","targetId":"26100000-0000-0000-0000-000000000401","patch":{"measurements":{"reps":9}}},{"kind":"patch-target","entryId":"26000000-0000-0000-0000-000000000004","targetId":"26100000-0000-0000-0000-000000000402","patch":{"measurements":{"reps":9}}}]'::jsonb));
+    if current_template->>'name'<>'A inserted routine updated'
+      or current_template->'entries'->0->>'notes'<>'A routine exercise updated'
+      or current_template->'entries'->0->'targets'->'items'->0->'measurements'->>'reps'<>'9'
+      or current_template->'entries'->0->'targets'->'items'->1->'measurements'->>'reps'<>'9' then
+      raise exception 'Owned current template edit lost target values';
+    end if;
+    perform pg_temp.expect_sqlstate('update public.routines set name=''bypass'' where id=''25000000-0000-0000-0000-000000000004''','42501','ordinary template content update bypass');
+    perform pg_temp.expect_sqlstate('delete from public.routines where id=''25000000-0000-0000-0000-000000000004''','42501','ordinary template deletion bypass');
+    perform pg_temp.expect_sqlstate('update public.routine_exercises set target_reps=100 where id=''26000000-0000-0000-0000-000000000004''','42501','ordinary target write bypass');
+    current_template:=pg_temp.template_command('25100000-0000-0000-0000-000000000003',jsonb_build_object('kind','edit','templateId',current_template->>'id','expectedVersion',current_template->>'version','changes','[{"kind":"remove-entry","entryId":"26000000-0000-0000-0000-000000000004"}]'::jsonb));
+    current_template:=pg_temp.template_command('25100000-0000-0000-0000-000000000004',jsonb_build_object('kind','archive','templateId',current_template->>'id','expectedVersion',current_template->>'version'));
+    if current_template->'entries'<>'[]'::jsonb or current_template->'archivedAt'='null'::jsonb
+      or not exists(select 1 from public.routines where id='25000000-0000-0000-0000-000000000004' and archived_at is not null) then
+      raise exception 'Archive did not preserve the owned template identity';
+    end if;
+  else
   insert into public.routines (id, user_id, name)
   values (
     '25000000-0000-0000-0000-000000000004',
@@ -659,6 +710,7 @@ begin
     where id = '25000000-0000-0000-0000-000000000004'
   ) then
     raise exception 'workout owner A cannot delete own routine';
+  end if;
   end if;
 
   insert into public.workout_exercises (
@@ -847,6 +899,16 @@ begin
 end
 $$;
 
+do $$ declare result jsonb; begin
+  if (public.train_template_capabilities()->'templates'->>'ready')::boolean then
+    if public.read_train_templates('25000000-0000-0000-0000-000000000002',null) is distinct from '{"status":"not_found"}'::jsonb then raise exception 'Current template reader leaked owner B'; end if;
+    result:=public.execute_train_template_command('{"protocolVersion":1,"operationId":"25100000-0000-0000-0000-000000000010","command":{"kind":"archive","templateId":"25000000-0000-0000-0000-000000000002","expectedVersion":"1"}}');
+    if result->>'status' is distinct from 'not_found' then raise exception 'Current template command accepted owner B'; end if;
+    result:=public.execute_train_template_command('{"protocolVersion":1,"operationId":"25100000-0000-0000-0000-000000000011","command":{"kind":"create","name":"Foreign reference","notes":null,"entries":[{"id":"26100000-0000-0000-0000-000000000500","exerciseId":"22000000-0000-0000-0000-000000000002","notes":null,"restSeconds":null,"targets":[{"id":"26100000-0000-0000-0000-000000000501","kind":"working","measurements":{"weightKg":null,"reps":null,"durationSeconds":null,"distanceMeters":null}}]}]}}');
+    if result->>'status' is distinct from 'invalid_template' or exists(select 1 from public.routines where id='25100000-0000-0000-0000-000000000011') then raise exception 'Current command attached owner B custom reference'; end if;
+  end if;
+end $$;
+
 -- A cannot see B's workout chain and denied writes leave B unchanged.
 do $$
 begin
@@ -889,11 +951,11 @@ select pg_temp.expect_sqlstate(
   '42501',
   'workout owner A inserted owner B routine'
 );
-select pg_temp.expect_no_rows(
+select pg_temp.expect_denied_template_write(
   $sql$update public.routines set name = 'tampered' where id = '25000000-0000-0000-0000-000000000002'$sql$,
   'workout owner A updated owner B routine'
 );
-select pg_temp.expect_no_rows(
+select pg_temp.expect_denied_template_write(
   $sql$delete from public.routines where id = '25000000-0000-0000-0000-000000000002'$sql$,
   'workout owner A deleted owner B routine'
 );
@@ -902,11 +964,11 @@ select pg_temp.expect_sqlstate(
   '42501',
   'workout owner A inserted owner B routine exercise'
 );
-select pg_temp.expect_no_rows(
+select pg_temp.expect_denied_template_write(
   $sql$update public.routine_exercises set target_reps = 99 where id = '26000000-0000-0000-0000-000000000002'$sql$,
   'workout owner A updated owner B routine exercise'
 );
-select pg_temp.expect_no_rows(
+select pg_temp.expect_denied_template_write(
   $sql$delete from public.routine_exercises where id = '26000000-0000-0000-0000-000000000002'$sql$,
   'workout owner A deleted owner B routine exercise'
 );
@@ -961,7 +1023,9 @@ begin
   end if;
   if (select name from public.exercises where id = '22000000-0000-0000-0000-000000000002') <> 'B squat'
      or (select name from public.routines where id = '25000000-0000-0000-0000-000000000002') <> 'B routine'
-     or (select target_reps from public.routine_exercises where id = '26000000-0000-0000-0000-000000000002') <> 6
+     or (case when (public.train_template_capabilities()->'templates'->>'ready')::boolean then
+       (public.read_train_templates('25000000-0000-0000-0000-000000000002',null)->'template'->'entries'->0->'targets'->'items'->0->'measurements'->>'reps')::bigint
+       else (select target_reps from public.routine_exercises where id = '26000000-0000-0000-0000-000000000002') end) <> 6
      or (select title from public.workouts where id = '27000000-0000-0000-0000-000000000002') <> 'B completed workout'
      or (select notes from public.workout_exercises where id = '28000000-0000-0000-0000-000000000002') is not null
      or (select weight_kg from public.workout_sets where id = '29000000-0000-0000-0000-000000000002') <> 110 then
@@ -1036,7 +1100,7 @@ select set_config(
 do $$
 begin
   if (select count(*) from public.exercises where user_id = '21000000-0000-0000-0000-000000000002') <> 1
-     or (select count(*) from public.routines) <> 1
+     or (select count(*) from public.routines where archived_at is null) <> 1
      or (select count(*) from public.routine_exercises) <> 1
      or (select count(*) from public.workouts) <> 1
      or (select count(*) from public.workout_exercises) <> 1
@@ -1093,7 +1157,7 @@ do $$
 begin
   if (select count(*) from public.exercises where user_id = '21000000-0000-0000-0000-000000000001') <> 3
      or (select count(*) from public.exercises where user_id = '21000000-0000-0000-0000-000000000001' and archived_at is not null) <> 1
-     or (select count(*) from public.routines) <> 1
+     or (select count(*) from public.routines where archived_at is null) <> 1
      or (select count(*) from public.routine_exercises) <> 1
      or (select count(*) from public.workouts) <> 0
      or (select count(*) from public.workout_exercises) <> 0
@@ -1112,7 +1176,7 @@ select set_config(
 do $$
 begin
   if (select count(*) from public.exercises where user_id = '21000000-0000-0000-0000-000000000002') <> 1
-     or (select count(*) from public.routines) <> 1
+     or (select count(*) from public.routines where archived_at is null) <> 1
      or (select count(*) from public.routine_exercises) <> 1
      or (select count(*) from public.workouts) <> 1
      or (select count(*) from public.workout_exercises) <> 1
