@@ -192,6 +192,26 @@ try {
   const expandedTemplates = templatePreservation();
   const enableTemplates = migration('20261026010107_train_workout_templates_enable.sql');
   query(database, enableTemplates);
+  for (const digits of [0, 3]) {
+    query(database, `set extra_float_digits=${digits}; do $$ begin
+      if fitness_private.template_value_reason('9007199254740991','reps') is not null
+        or fitness_private.template_value_reason('0.123','weightKg') is not null
+        or fitness_private.template_value_reason(null,'weightKg') is not null then
+        raise exception 'Valid target acceptance depends on caller float rendering';
+      end if;
+      if current_setting('extra_float_digits')<>'${digits}' then raise exception 'Successful target validation leaked its setting'; end if;
+      if fitness_private.template_value_reason('9007199254740993','reps') is distinct from 'target_value_unrepresentable'
+        or fitness_private.template_value_reason('1e309','weightKg') is distinct from 'target_value_unrepresentable'
+        or fitness_private.template_value_reason('1.5','reps') is distinct from 'target_value_unrepresentable'
+        or fitness_private.template_value_reason('-1','weightKg') is distinct from 'target_value_out_of_range'
+        or fitness_private.template_value_reason('86401','durationSeconds') is distinct from 'target_value_out_of_range' then
+        raise exception 'Target validation changed invalid-value semantics';
+      end if;
+      if current_setting('extra_float_digits')<>'${digits}' then raise exception 'Rejected target validation leaked its setting'; end if;
+    end $$;`);
+  }
+  if (query(database, `select coalesce(proconfig@>array['extra_float_digits=3'],false) from pg_proc
+    where oid='fitness_private.template_value_reason(text,text)'::regprocedure`) !== 't') throw new Error('Template numeric helper has no stable private rendering setting');
   if (query(database, 'select ready from fitness_private.template_rollout') !== 't') throw new Error('Template C migration did not enable commands');
   if (templatePreservation(true) !== beforeTemplates) throw new Error('Template materialization changed original fields/timestamps or receipts');
   if (templatePreservation() !== expandedTemplates) throw new Error('Template C changed expanded parent versions/archive state or existing records');
@@ -230,7 +250,7 @@ try {
         raise exception 'Ordinary template content write succeeded';
       exception when insufficient_privilege then null; end;
     end $$;`);
-  console.log('PASS exact 419 A/C migrations: ten legacy/current tables and expanded parent versions preserved; eight ordered entries/sixteen exact targets; idempotent stable target IDs; commands gated until C; content DML closed and authenticated usage-only updates retained');
+  console.log('PASS exact 419 A/C migrations: ten legacy/current tables and expanded parent versions preserved; eight ordered entries/sixteen exact targets; idempotent stable target IDs; commands gated until C; content DML closed and authenticated usage-only updates retained; safe-integer validation stable under caller float settings 0/3 without leakage');
 
 
 } finally {
