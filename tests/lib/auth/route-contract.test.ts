@@ -12,6 +12,11 @@ const apiRoot = join(process.cwd(), "app", "api");
  * Keep this list narrow and reviewed whenever a route is added.
  */
 const deliberateAuthExceptions: Record<string, string> = {
+  "mobile/train/plans/route.ts": "authenticateNativeRequest verifies bearer owner; owned training occurrence projection and coverage only",
+  "mobile/train/plans/[id]/route.ts": "authenticateNativeRequest verifies bearer owner; exact owned training occurrence including moved/retained references",
+  "mobile/train/plans/workouts/[id]/route.ts": "authenticateNativeRequest verifies bearer owner; explicit saved-workout association read",
+  "mobile/train/plans/commands/route.ts": "authenticateNativeRequest verifies bearer owner; immutable first outcomes, owner-checked link and existing versioned planner command",
+  "mobile/train/day/route.ts": "authenticateNativeRequest verifies bearer owner; persisted workout-day read with exact captured documents and owner-scoped links",
   "mobile/train/prior-results/route.ts": "authenticateNativeRequest verifies bearer owner; owner-filtered completed parent pages and compatible captured performed facts, no mutation",
   "mobile/train/templates/route.ts": "authenticateNativeRequest verifies bearer owner; gated versioned template content and scoped definitions",
   "mobile/train/templates/[id]/route.ts": "authenticateNativeRequest verifies bearer owner; explicit owned template read including archived references",

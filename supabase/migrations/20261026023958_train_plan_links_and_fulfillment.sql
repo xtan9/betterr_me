@@ -92,7 +92,7 @@ grant execute on function public.read_train_plans(date,uuid,uuid) to authenticat
 alter function planner_private.routine_command(jsonb) rename to routine_before_training_template_command;
 create function planner_private.routine_command(p_request jsonb) returns jsonb
 language plpgsql security definer set search_path=pg_catalog,public as $$
-declare owner uuid:=auth.uid(); operation uuid; template uuid; prior public.planner_command_receipts; result jsonb; source uuid;
+declare owner uuid:=auth.uid(); operation uuid; template uuid; prior public.planner_command_receipts; result jsonb; source uuid; before_selection jsonb;
 begin
  if not p_request ? 'trainingTemplateId' then return planner_private.routine_before_training_template_command(p_request); end if;
  if owner is null then return jsonb_build_object('status','not-found'); end if;
@@ -111,6 +111,11 @@ begin
  else
   if not exists(select 1 from public.planner_routine_schedules where series_id=(p_request->>'seriesId')::uuid and user_id=owner and activity_kind='training') then return jsonb_build_object('status','not-found'); end if;
  end if;
+ if p_request->>'operation'='edit' then
+  select jsonb_build_object('occurrenceId',p_request->>'occurrenceId','overridden',m.template_overridden,'templateId',m.template_id)
+   into before_selection from fitness_private.training_occurrence_metadata m where m.occurrence_id=(p_request->>'occurrenceId')::uuid;
+  before_selection:=coalesce(before_selection,jsonb_build_object('occurrenceId',p_request->>'occurrenceId','overridden',false,'templateId',null));
+ end if;
  result:=planner_private.routine_before_training_template_command(p_request-'trainingTemplateId');
  if result->>'status' not in ('complete','already-applied') then return result; end if;
  if p_request->>'operation'='create' then
@@ -120,7 +125,13 @@ begin
   insert into fitness_private.training_occurrence_metadata(occurrence_id,template_overridden,template_id)
    values((p_request->>'occurrenceId')::uuid,true,template)
    on conflict on constraint training_occurrence_metadata_pkey do update set template_overridden=true,template_id=excluded.template_id;
-  update public.recurring_task_occurrences set version=gen_random_uuid() where id=(p_request->>'occurrenceId')::uuid;
+  -- The existing edit already advances occurrence/task versions. Its returned
+  -- Steps Undo must include the sidecar without invalidating its own snapshot.
+  if result->>'changeId' is not null then
+   update public.planner_changes set before_state=before_state||jsonb_build_object('trainingTemplateSelection',before_selection),
+    after_state=after_state||jsonb_build_object('trainingTemplateSelection',jsonb_build_object('occurrenceId',p_request->>'occurrenceId','overridden',true,'templateId',template))
+    where id=(result->>'changeId')::uuid and user_id=owner;
+  end if;
  end if;
  update public.planner_command_receipts set request=p_request where user_id=owner and operation_id=operation;
  return result;
@@ -130,6 +141,39 @@ revoke all on function planner_private.routine_command(jsonb) from public,anon,s
 grant execute on function planner_private.routine_command(jsonb) to authenticated;
 create or replace function public.planner_routine_command(p_request jsonb) returns jsonb
 language sql security invoker set search_path=pg_catalog as $$select planner_private.routine_command(p_request)$$;
+
+-- Preserve the existing editor Undo contract, including an explicit defer.
+create function planner_private.training_template_planner_command(p_request jsonb) returns jsonb
+language plpgsql security definer set search_path=pg_catalog,public as $$
+declare owner uuid:=auth.uid(); change public.planner_changes; selection jsonb; result jsonb; occurrence uuid;
+begin
+ if owner is null or p_request->>'operation' is distinct from 'undo'
+  or exists(select 1 from public.planner_command_receipts where user_id=owner and operation_id=(p_request->>'operationId')::uuid) then
+  return planner_private.period_planner_command(p_request);
+ end if;
+ select * into change from public.planner_changes where id=(p_request->>'changeId')::uuid and user_id=owner;
+ if not found or not (change.before_state ? 'trainingTemplateSelection') then return planner_private.period_planner_command(p_request); end if;
+ occurrence:=(change.after_state->'trainingTemplateSelection'->>'occurrenceId')::uuid;
+ select jsonb_build_object('occurrenceId',occurrence,'overridden',m.template_overridden,'templateId',m.template_id)
+  into selection from fitness_private.training_occurrence_metadata m where m.occurrence_id=occurrence;
+ if selection is distinct from change.after_state->'trainingTemplateSelection' then return jsonb_build_object('status','conflict'); end if;
+ result:=planner_private.period_planner_command(p_request);
+ if result->>'status'='complete' then
+  -- The underlying command holds the normal series/occurrence/task locks first.
+  select jsonb_build_object('occurrenceId',occurrence,'overridden',m.template_overridden,'templateId',m.template_id)
+   into selection from fitness_private.training_occurrence_metadata m where m.occurrence_id=occurrence for update;
+  if selection is distinct from change.after_state->'trainingTemplateSelection' then raise exception using errcode='PT409',message='Training template selection changed'; end if;
+  update fitness_private.training_occurrence_metadata set template_overridden=(change.before_state->'trainingTemplateSelection'->>'overridden')::boolean,
+   template_id=(change.before_state->'trainingTemplateSelection'->>'templateId')::uuid where occurrence_id=occurrence;
+ end if;
+ return result;
+exception when invalid_text_representation then return jsonb_build_object('status','invalid');
+ when integrity_constraint_violation or sqlstate 'PT409' then return jsonb_build_object('status','conflict');
+end $$;
+revoke all on function planner_private.training_template_planner_command(jsonb) from public,anon,service_role;
+grant execute on function planner_private.training_template_planner_command(jsonb) to authenticated;
+create or replace function public.planner_command(p_request jsonb) returns jsonb
+language sql security invoker set search_path=pg_catalog as $$select planner_private.training_template_planner_command(p_request)$$;
 
 create table public.train_workout_plan_links(
  workout_id uuid primary key references public.workouts(id) on delete cascade,

@@ -113,4 +113,57 @@ begin
  if has_table_privilege('authenticated','public.train_workout_plan_links','INSERT') or has_table_privilege('authenticated','public.train_plan_command_outcomes','UPDATE')
   or has_table_privilege('service_role','public.train_workout_plan_links','INSERT') then raise exception 'Direct link/outcome write bypass'; end if;
 end $$;
+-- Missing, skipped and deleted plans are durable honest outcomes. A transaction
+-- that fails after planner completion leaves neither fulfillment nor a receipt.
+do $$ declare created jsonb; plan jsonb; intent jsonb; result jsonb; original jsonb; command jsonb; action text;
+begin
+ foreach action in array array['skip','delete','rollback'] loop
+  created:=public.planner_routine_command(jsonb_build_object('operation','create','operationId',gen_random_uuid(),'activityKind','training','repeatMode','once','title',action,
+   'date','2026-11-10','startTime','10:00','endTime','11:00','timezone','UTC','protected',false,'rule','{"frequency":"daily","interval":1}'::jsonb));
+  select p into plan from jsonb_array_elements(public.read_train_plans('2026-11-10',null,null)->'plans') p where p->>'seriesId'=created->>'seriesId';
+  intent:=jsonb_build_object('protocolVersion',1,'ownerId',auth.uid(),'operationId',gen_random_uuid(),'command',jsonb_build_object('kind','fulfill-plan','occurrenceId',plan->>'occurrenceId','expected',plan->'version'));
+  if action='skip' then
+   command:=jsonb_build_object('operation','skip','operationId',gen_random_uuid(),'seriesId',plan->>'seriesId','occurrenceId',plan->>'occurrenceId',
+    'expectedSeriesToken',plan->'version'->'seriesToken','expectedOccurrenceVersion',plan->'version'->>'occurrenceVersion','expectedTaskVersion',plan->'version'->>'taskVersion','expectedEventVersion',plan->'version'->>'eventVersion');
+   if public.planner_routine_command(command)->>'status'<>'complete' then raise exception 'Skip failed'; end if;
+  elsif action='delete' then
+   delete from public.tasks where id=(plan->>'taskId')::uuid;
+  else
+   begin
+    result:=public.execute_train_plan_command(intent);
+    if result->>'status'<>'accepted' then raise exception 'Atomicity setup failed'; end if;
+    raise exception using errcode='PT499',message='Injected enclosing transaction failure';
+   exception when sqlstate 'PT499' then null; end;
+   if exists(select 1 from public.train_plan_command_outcomes where operation_id=(intent->>'operationId')::uuid)
+    or public.read_train_plans(null,(plan->>'occurrenceId')::uuid,null)->'plan'->'completed'<>'false'::jsonb then raise exception 'Failed transaction retained planner effect/receipt'; end if;
+   continue;
+  end if;
+  result:=public.execute_train_plan_command(intent);
+  if result->>'status' not in ('unavailable_occurrence','not_found') or public.execute_train_plan_command(intent) is distinct from result then raise exception 'Unavailable plan outcome changed: %',result; end if;
+ end loop;
+ intent:=jsonb_set(intent,'{command,occurrenceId}',to_jsonb(gen_random_uuid()));intent:=jsonb_set(intent,'{operationId}',to_jsonb(gen_random_uuid()));
+ result:=public.execute_train_plan_command(intent);
+ if result->>'status'<>'not_found' or public.execute_train_plan_command(intent) is distinct from result then raise exception 'Missing occurrence was not stable'; end if;
+ original:=intent;
+ intent:=jsonb_set(jsonb_set(intent,'{operationId}',to_jsonb(gen_random_uuid())),'{command,expected,seriesToken}','null');
+ if public.execute_train_plan_command(intent)->>'status'<>'invalid_request' then raise exception 'Invalid version accepted'; end if;
+ perform set_config('request.jwt.claims','{}',true);
+ if public.execute_train_plan_command(original)->>'status'<>'unauthenticated' or public.read_train_plans('2026-11-10',null,null)->>'status'<>'unauthenticated' then raise exception 'Unauthenticated planner escaped boundary'; end if;
+end $$;
+select set_config('request.jwt.claims','{"sub":"64220000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+do $$ declare result jsonb; plan jsonb; request jsonb; undo jsonb; begin
+ result:=public.planner_routine_command('{"operation":"create","operationId":"64220000-0000-4000-8000-000000000070","activityKind":"training","repeatMode":"once","title":"Undo reference","date":"2026-11-12","startTime":"10:00","endTime":"11:00","timezone":"UTC","protected":false,"rule":{"frequency":"daily","interval":1},"trainingTemplateId":"64220000-0000-4000-8000-000000000010"}');
+ plan:=public.read_train_plans('2026-11-12',null,null)->'plans'->0;
+ request:=jsonb_build_object('operation','edit','operationId',gen_random_uuid(),'seriesId',plan->>'seriesId','occurrenceId',plan->>'occurrenceId',
+ 'expectedSeriesToken',plan->'version'->'seriesToken','expectedOccurrenceVersion',plan->'version'->>'occurrenceVersion','expectedTaskVersion',plan->'version'->>'taskVersion','expectedEventVersion',plan->'version'->>'eventVersion',
+ 'title','Defer and move','date','2026-11-13','startTime','12:00','endTime','13:00','steps','[]'::jsonb,'trainingTemplateId',null);
+ result:=public.planner_routine_command(request);
+ if result->>'changeId' is null then raise exception 'Editor save lost existing Undo'; end if;
+ undo:=jsonb_build_object('operation','undo','operationId',gen_random_uuid(),'changeId',result->>'changeId','expectedVersion',(select version from public.planner_changes where id=(result->>'changeId')::uuid));
+ result:=public.planner_command(undo);
+ if result->>'status'<>'complete' then raise exception 'Template editor broke existing Undo: %',result; end if;
+ plan:=public.read_train_plans(null,(plan->>'occurrenceId')::uuid,null)->'plan';
+ if plan->>'plannedDay'<>'2026-11-12' or plan->>'title'<>'Undo reference' or plan->>'templateId'<>'64220000-0000-4000-8000-000000000010' then raise exception 'Undo lost original placement/title/template: %',plan; end if;
+ if public.planner_command(undo)->>'status'<>'already-applied' then raise exception 'Undo retry not idempotent'; end if;
+end $$;
 rollback;
