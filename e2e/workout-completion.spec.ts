@@ -1,6 +1,7 @@
 import { deleteFixtureWorkout } from '../scripts/e2e/workout-cleanup.mjs';
 import { createClient } from '@supabase/supabase-js';
 import { expect, test } from '@playwright/test';
+import type { WorkoutWithExercises } from '../lib/db/types';
 import {
   E2E_READ_ONLY,
   RUN_CONTEXT,
@@ -220,6 +221,34 @@ test.describe('Workout completion journey', () => {
 
     await expect(page).toHaveURL(new RegExp(`/workouts/${workoutId}$`));
     await expect(page.getByRole('heading', { name: workoutTitle, exact: true })).toBeVisible();
-    await expect(page.getByText(/Completed on/)).toBeVisible();
+    const persistedResponse = await page.request.get(`/api/workouts/${workoutId}`);
+    expect(persistedResponse.status()).toBe(200);
+    const { workout: persisted } = await persistedResponse.json() as { workout: WorkoutWithExercises };
+    // This continuing Web writer records actual instants but no captured zone
+    // or civil day. Current history must keep that day explicitly unknown.
+    expect(persisted).toMatchObject({ id: workoutId, title: workoutTitle, status: 'completed', workoutDay: null, historyRevision: '1' });
+    expect(persisted.currentHistory).toMatchObject({ id: workoutId, state: 'alive', revision: '1', workoutDay: null });
+    expect(persisted.started_at).not.toBeNull();
+    expect(Number.isFinite(Date.parse(persisted.started_at!))).toBe(true);
+    expect(Number.isFinite(Date.parse(persisted.completed_at!))).toBe(true);
+    expect(Date.parse(persisted.completed_at!)).toBe(Date.parse(completed.workout.completed_at!));
+    expect(persisted.duration_seconds).toEqual(expect.any(Number));
+    expect(persisted.duration_seconds).toBeGreaterThanOrEqual(0);
+    expect(persisted.exercises).toHaveLength(1);
+    expect(persisted.exercises[0].id).toBe(exercise.id);
+    expect(persisted.exercises[0].sets).toHaveLength(1);
+    expect(persisted.exercises[0].sets[0]).toMatchObject({
+      id: set.id, workout_exercise_id: exercise.id, set_number: 1, set_type: 'normal',
+      weight_kg: 0.45359237, reps: 5, is_completed: true,
+    });
+    await expect(page.getByRole('main').locator('p').filter({ hasText: /^Workout day unknown$/ })).toBeVisible();
+    await expect(page.getByText(/Completed on/)).toHaveCount(0);
+    const detail = page.locator('[data-slot="card"]').filter({
+      has: page.locator('[data-slot="card-title"]', { hasText: /^Barbell Bench Press$/ }),
+    }).locator('[data-slot="card-content"]');
+    const rows = detail.locator(':scope > div.grid');
+    await expect(rows).toHaveCount(2);
+    await expect(rows.nth(0).locator(':scope > span')).toHaveText(['Set', 'LBS', 'Reps', '']);
+    await expect(rows.nth(1).locator(':scope > span')).toHaveText(['1', '1', '5']);
   });
 });
