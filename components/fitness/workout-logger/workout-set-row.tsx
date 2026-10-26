@@ -22,6 +22,8 @@ import type {
 import { EXERCISE_FIELD_MAP } from "@/lib/fitness/exercise-fields";
 import { formatWeight } from "@/lib/fitness/units";
 import { useWeightInput } from "@/components/fitness/use-weight-input";
+import type { PriorRead, PriorPerformed } from "@/lib/validations/train-prior-results";
+import { PriorResultsPicker } from "./prior-results-picker";
 import { parseWholeInput } from "@/lib/fitness/measurement-input";
 
 // ---------------------------------------------------------------------------
@@ -49,6 +51,7 @@ interface WorkoutSetRowProps {
   exerciseType: ExerciseType;
   weightUnit: WeightUnit;
   previousSet: WorkoutSet | null;
+  priorResults?: PriorRead | null;
   onUpdate: (updates: WorkoutSetUpdate) => Promise<void>;
   onDelete: () => Promise<void>;
   onComplete: () => Promise<void>;
@@ -59,6 +62,7 @@ export function WorkoutSetRow({
   exerciseType,
   weightUnit,
   previousSet,
+  priorResults,
   onUpdate,
   onDelete,
   onComplete,
@@ -185,6 +189,21 @@ export function WorkoutSetRow({
     })();
   };
 
+  const reuseMeasurements = async (performed: PriorPerformed) => {
+    if (set.is_completed || performed.mode !== exerciseType) throw new Error('Measurements cannot be reused');
+    const changes: WorkoutSetUpdate = performed.mode === 'duration' ? { duration_seconds: performed.durationSeconds }
+      : performed.mode === 'bodyweight_reps' ? { reps: performed.reps }
+      : { weight_kg: performed.mode === 'weight_reps' ? performed.weightKg
+        : performed.mode === 'weighted_bodyweight' ? performed.addedWeightKg : performed.assistanceKg, reps: performed.reps };
+    setCompleting(true);
+    try {
+      await update(changes);
+      if (changes.weight_kg !== undefined) weightInput.replaceWithCanonical(changes.weight_kg);
+      if (changes.reps !== undefined) setLocalReps(changes.reps === null ? '' : String(changes.reps));
+      if (changes.duration_seconds !== undefined) setLocalDuration(changes.duration_seconds === null ? '' : String(changes.duration_seconds));
+    } finally { setCompleting(false); }
+  };
+
   // ---------------------------------------------------------------------------
   // Previous values display
   // ---------------------------------------------------------------------------
@@ -239,9 +258,9 @@ export function WorkoutSetRow({
       </Popover>
 
       {/* Previous values */}
-      <span className="truncate text-caption text-muted-foreground">
-        {previousDisplay}
-      </span>
+      {priorResults ? <PriorResultsPicker key={JSON.stringify(priorResults.request)} read={priorResults}
+        weightUnit={weightUnit} disabled={set.is_completed || completing} onUse={reuseMeasurements} />
+        : <span className="truncate text-caption text-muted-foreground" title={t('prior.legacy')}>{previousDisplay}</span>}
 
       {/* Weight input */}
       {fields.showWeight && (

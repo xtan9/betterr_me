@@ -1,0 +1,166 @@
+{
+  "synthetic": true,
+  "request": {
+    "protocolVersion": 1,
+    "ownerId": "64200000-0000-4000-8000-000000000001",
+    "target": {
+      "identity": {
+        "kind": "catalog",
+        "catalogKey": "strength.barbell-bench-press.v1"
+      },
+      "mode": "weight_reps",
+      "equipment": "barbell",
+      "convention": "barbell-total"
+    },
+    "excludeWorkoutId": "64200000-0000-4000-8000-000000000002",
+    "before": null
+  },
+  "responses": {
+    "found": {
+      "protocolVersion": 1,
+      "ownerId": "64200000-0000-4000-8000-000000000001",
+      "status": "found",
+      "result": {
+        "workout": {
+          "id": "64200000-0000-4000-8000-000000000003",
+          "startedAt": "2026-10-25T06:55:00.123456+00:00",
+          "completedAt": "2026-10-25T07:05:00.123456+00:00",
+          "workoutDay": "2026-10-25",
+          "timezone": "UTC"
+        },
+        "groups": [
+          {
+            "exerciseEntryId": "64200000-0000-4000-8000-000000000004",
+            "definition": {
+              "catalogKey": "strength.barbell-bench-press.v1",
+              "name": {
+                "en": "Captured Bench Press",
+                "zh": "保存的卧推"
+              },
+              "mode": "weight_reps",
+              "equipment": "barbell",
+              "convention": "barbell-total"
+            },
+            "sets": [
+              {
+                "setId": "64200000-0000-4000-8000-000000000006",
+                "performed": {
+                  "mode": "weight_reps",
+                  "weightKg": 0.123,
+                  "reps": 5,
+                  "kind": "warmup"
+                }
+              }
+            ]
+          },
+          {
+            "exerciseEntryId": "64200000-0000-4000-8000-000000000005",
+            "definition": {
+              "catalogKey": "strength.barbell-bench-press.v1",
+              "name": {
+                "en": "Captured Bench Press",
+                "zh": "保存的卧推"
+              },
+              "mode": "weight_reps",
+              "equipment": "barbell",
+              "convention": "barbell-total"
+            },
+            "sets": [
+              {
+                "setId": "64200000-0000-4000-8000-000000000007",
+                "performed": {
+                  "mode": "weight_reps",
+                  "weightKg": 1.133980925,
+                  "reps": 7,
+                  "kind": "working"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "observedWorkoutIds": [
+        "64200000-0000-4000-8000-000000000003"
+      ]
+    },
+    "searching": {
+      "protocolVersion": 1,
+      "ownerId": "64200000-0000-4000-8000-000000000001",
+      "status": "searching",
+      "nextCursor": {
+        "startedAt": "2026-10-25T06:54:00.123455+00:00",
+        "id": "64200000-0000-4000-8000-000000000008"
+      },
+      "observedWorkoutIds": [
+        "64200000-0000-4000-8000-000000000900",
+        "64200000-0000-4000-8000-000000000899",
+        "64200000-0000-4000-8000-000000000898",
+        "64200000-0000-4000-8000-000000000897",
+        "64200000-0000-4000-8000-000000000896",
+        "64200000-0000-4000-8000-000000000895",
+        "64200000-0000-4000-8000-000000000894",
+        "64200000-0000-4000-8000-000000000893",
+        "64200000-0000-4000-8000-000000000892",
+        "64200000-0000-4000-8000-000000000891",
+        "64200000-0000-4000-8000-000000000890",
+        "64200000-0000-4000-8000-000000000889",
+        "64200000-0000-4000-8000-000000000888",
+        "64200000-0000-4000-8000-000000000887",
+        "64200000-0000-4000-8000-000000000886",
+        "64200000-0000-4000-8000-000000000885",
+        "64200000-0000-4000-8000-000000000884",
+        "64200000-0000-4000-8000-000000000883",
+        "64200000-0000-4000-8000-000000000882",
+        "64200000-0000-4000-8000-000000000008"
+      ]
+    },
+    "exhausted": {
+      "protocolVersion": 1,
+      "ownerId": "64200000-0000-4000-8000-000000000001",
+      "status": "exhausted",
+      "observedWorkoutIds": []
+    },
+    "unavailable": {
+      "protocolVersion": 1,
+      "ownerId": "64200000-0000-4000-8000-000000000001",
+      "status": "unavailable",
+      "reason": "meaning_unknown"
+    },
+    "serviceUnavailable": {
+      "protocolVersion": 1,
+      "ownerId": "64200000-0000-4000-8000-000000000001",
+      "status": "unavailable",
+      "reason": "service_unavailable"
+    }
+  },
+  "performedExamples": [
+    {
+      "mode": "weight_reps",
+      "weightKg": 0.123,
+      "reps": 5,
+      "kind": "warmup"
+    },
+    {
+      "mode": "bodyweight_reps",
+      "reps": 8,
+      "kind": "working"
+    },
+    {
+      "mode": "weighted_bodyweight",
+      "addedWeightKg": 0.45359237,
+      "reps": 6,
+      "kind": "working"
+    },
+    {
+      "mode": "assisted_bodyweight",
+      "assistanceKg": 0,
+      "reps": 7,
+      "kind": "warmup"
+    },
+    {
+      "mode": "duration",
+      "durationSeconds": 90,
+      "kind": "working"
+    }
+  ]
+}

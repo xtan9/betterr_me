@@ -9,6 +9,7 @@ import type { WorkoutSetUpdate } from "@/lib/db/types";
 import { composeCurrentProfileResponse } from "@/lib/current-profile";
 import { loadWorkoutFromStorage, STORAGE_KEY } from "@/lib/fitness/workout-session";
 import messages from "@/i18n/messages/en.json";
+import priorFixture from "@/tests/fixtures/train-prior-results.json";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
@@ -38,6 +39,53 @@ function activeWorkout(): ActiveWorkout {
 afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); localStorage.removeItem(STORAGE_KEY); });
 
 describe("WorkoutLogger measurement writes through the actual SWR hook", () => {
+  it.each(['success', 'retry'])('copies only selected prior measurements and preserves unfinished state through %s', async (outcome) => {
+    const stored = activeWorkout();
+    Object.assign(stored.exercises[0], { priorResults: { request: priorFixture.request, page: priorFixture.responses.found } });
+    const writes: WorkoutSetUpdate[] = [];
+    let failedWrite = false;
+    const profile = composeCurrentProfileResponse({ identityEmail: 'person@example.test', capabilities: { canAccessAdmin: false },
+      projection: { full_name: null, avatar_url: null, timezone: 'UTC', preference_revision: 0, preferences: { weight_unit: 'kg' } } });
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === '/api/current-profile') return Response.json(profile);
+      if (url === '/api/workouts/active') return Response.json({ workout: stored });
+      if (url === '/api/exercises') return Response.json({ exercises: [] });
+      if (url === '/api/exercises/exercise-1/records') return Response.json(null);
+      if (url === '/api/workouts/prior-results') return Response.json(priorFixture.responses.serviceUnavailable, { status: 503 });
+      if (url === '/api/workouts/workout-1/exercises/entry-1/sets/set-1' && init?.method === 'PATCH') {
+        const update: WorkoutSetUpdate = JSON.parse(String(init.body)); writes.push(update);
+        if (outcome === 'retry' && !failedWrite) { failedWrite = true; return Response.json({ error: 'Unavailable' }, { status: 503 }); }
+        Object.assign(stored.exercises[0].sets[0], update);
+        return Response.json({ set: stored.exercises[0].sets[0] });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    }));
+    render(<SWRConfig value={{ provider: () => new Map(), shouldRetryOnError: false }}>
+      <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC"><WorkoutLogger /></NextIntlClientProvider>
+    </SWRConfig>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Previous results' }));
+    expect(screen.getAllByText('Captured Bench Press')).toHaveLength(2);
+    expect(screen.getByText('Warm-up')).toBeVisible();
+    expect(writes).toEqual([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh reference' }));
+    await screen.findByRole('alert');
+    expect(screen.getAllByText('Captured Bench Press')).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Use these measurements' })[0]);
+    await waitFor(() => expect(writes).toEqual([{ weight_kg: 0.123, reps: 5 }]));
+    if (outcome === 'retry') {
+      await screen.findByRole('alert');
+      expect(stored.exercises[0].sets[0]).toMatchObject({ weight_kg: 10, set_type: 'normal', is_completed: false });
+      fireEvent.click(screen.getAllByRole('button', { name: 'Use these measurements' })[0]);
+      await waitFor(() => expect(writes).toEqual([{ weight_kg: 0.123, reps: 5 }, { weight_kg: 0.123, reps: 5 }]));
+    }
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByRole('textbox', { name: 'Weight (kg)' })).toHaveValue('0.123');
+    expect(screen.getByRole('checkbox', { name: 'Complete' })).not.toBeChecked();
+    expect(loadWorkoutFromStorage()?.exercises[0]).toMatchObject({ rest_timer_seconds: 0,
+      sets: [{ set_type: 'normal', weight_kg: 0.123, reps: 5, is_completed: false }] });
+    expect(stored.exercises).toHaveLength(1);
+    expect(stored.exercises[0].sets).toHaveLength(1);
+  });
   it.each(["measurement", "completion"])("blocks completion after a held %s failure, then retries the exact authored load", async (failure) => {
     const stored = activeWorkout();
     const acceptedCompletions: Array<number | null> = [];

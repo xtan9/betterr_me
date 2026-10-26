@@ -14,9 +14,10 @@ import { issueAccessToken } from '../../lib/oauth/access-token.ts';
 // target or caller credentials, and never resets or repairs a database.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 function check(ok, message) { if (!ok) throw new Error(message); }
-check(process.argv.slice(2).every(arg => arg === '--hold' || arg === '--browser'), 'Unknown runner argument');
+check(process.argv.slice(2).every(arg => ['--hold', '--browser', '--prior-results'].includes(arg)), 'Unknown runner argument');
 const hold = process.argv.includes('--hold');
 const runBrowser = process.argv.includes('--browser');
+const runPriorResults = process.argv.includes('--prior-results');
 const status = spawnSync(process.env.SUPABASE_CLI ?? 'supabase', ['status', '--output', 'json'], { cwd: root, encoding: 'utf8' });
 check(status.status === 0, 'Local Supabase is not ready');
 const local = JSON.parse(status.stdout);
@@ -38,6 +39,10 @@ if (runBrowser) sourcePaths.push('components/fitness/routines/template-library.t
   'components/fitness/routines/template-entry-editor.tsx','components/fitness/routines/template-draft.ts',
   'components/fitness/routines/use-template-library.ts','components/fitness/workout-logger/workout-finish-dialog.tsx',
   'lib/fitness/template-command-client.ts');
+if (runPriorResults) sourcePaths.push('lib/fitness/prior-results.ts','lib/fitness/prior-result-route.ts','lib/fitness/prior-result-target.ts',
+  'lib/validations/train-prior-results.ts','app/api/mobile/train/prior-results/route.ts','app/api/workouts/prior-results/route.ts',
+  'app/api/workouts/active/route.ts','components/fitness/workout-logger/prior-results-picker.tsx',
+  'components/fitness/workout-logger/workout-set-row.tsx','components/fitness/use-weight-input.ts');
 receipt.sourceHashes = Object.fromEntries(sourcePaths.map(path => [path, createHash('sha256').update(readFileSync(resolve(root, path))).digest('hex')]));
 const privilegeQuery = `select json_agg(json_build_object('table',t,'role',r,'privilege',p,'granted',has_table_privilege(r,'public.'||t,p)) order by t,r,p)
  from unnest(array['exercises','routines','routine_exercises']) t cross join unnest(array['anon','authenticated','service_role']) r
@@ -54,7 +59,7 @@ let child;
 let origin;
 const endpoint = '/api/mobile/train/templates/commands';
 const uploadEndpoint = '/api/mobile/train/completions';
-const artifact = resolve(root, '.artifacts/train-419-http-proof.json');
+const artifact = resolve(root, runPriorResults ? '.artifacts/train-420-http-proof.json' : '.artifacts/train-419-http-proof.json');
 function passed(name) { receipt.cases.push(name); writeFileSync(artifact, JSON.stringify(receipt, null, 2)); console.log(`PASS ${name}`); }
 const receiptFile = resolve(secretsDirectory, 'accounts.json');
 async function account() {
@@ -208,6 +213,11 @@ try {
   const web=(await request(`/api/workouts/${completedId}`,a,undefined,200,true)).workout;
   check(web.recordedStatus==='recorded'&&isDeepStrictEqual(web.recorded_completion,completion)&&web.routine_id===legacy.id,'V4 Web read lost complete origin');
   check(parsedTool(await mcp(a,'getWorkoutDetails',{workoutId:completedId})).recordedStatus==='recorded','MCP rejected V4');
+  if (runPriorResults) {
+    const { verifyPriorResults } = await import('./train-prior-results.mjs');
+    receipt.priorResults = await verifyPriorResults({ origin, a, b, request, sql, completion, presetId: preset.id, artifactDirectory: resolve(root,'.artifacts') });
+    passed('Actual native/cookie prior-result paging, captured custom identity, duplicate groups and explicit Chromium reuse');
+  }
   const converted=await request(endpoint,a,command('save-workout-as-template',{workoutId:completedId,name:'Converted result'}));
   check(converted.receipt.template.entries[0].targets.items[0].measurements.weightKg==='0.123','Conversion changed captured precision');
   check(!(await a.client.from('workouts').delete().eq('id',completedId)).error,'Owned history delete failed');
