@@ -105,7 +105,7 @@ export async function readTrainDay(request: Request, client: SupabaseClient, own
         if (item.record.user_id !== ownerId || item.link !== null && (item.link.ownerId !== ownerId || item.link.workoutId !== item.record.id))
             return trainPlanUnavailable('invalid_rpc_response');
         const selected = selectRecordedCompletion(item.record);
-        if (selected.status === 'recorded' && selected.completion.workoutDay === parsed.data.day)
+        if (selected.status === 'recorded' && selected.completion.version !== 5 && selected.completion.workoutDay === parsed.data.day)
             workouts.push({ workout: selected.completion, link: item.link });
     }
     return Response.json({ protocolVersion: 1, ownerId, day: parsed.data.day, workouts, nextCursor: page.data.nextCursor }, { headers: trainPlanHeaders });

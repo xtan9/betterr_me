@@ -326,6 +326,7 @@ export interface DashboardData {
     tasks_due_today: number;
     tasks_completed_today: number;
     last_workout_at: string | null;
+    last_workout?: {workoutDay:string|null;startedAt:string|null}|null;
     week_workout_count: number;
   };
   /** Structured non-fatal warnings about degraded data (omitted when empty) */
@@ -485,7 +486,10 @@ export interface Workout {
   id: string;
   user_id: string;
   title: string;
-  started_at: string;
+  started_at: string | null;
+  workoutDay?: string | null;
+  historyRevision?: string;
+  currentHistory?: import("@/lib/validations/train-history").HistoryRecord;
   completed_at: string | null;
   duration_seconds: number | null;
   status: WorkoutStatus;
@@ -641,6 +645,8 @@ export interface WorkoutWithExercises extends Workout {
 /** Personal record for a specific exercise */
 export interface PersonalRecord {
   exercise_id: string;
+  comparableGroups?: import("@/lib/fitness/history-progress").ComparableGroup[];
+  comparisonCoverage?: "current" | "unavailable";
   best_weight_kg: number | null;
   best_reps: number | null;
   best_volume: number | null; // weight * reps
@@ -650,7 +656,8 @@ export interface PersonalRecord {
 
 /** Exercise history entry for progression charts */
 export interface ExerciseHistoryEntry {
-  started_at: string; // raw ISO timestamp — client formats to local date
+  workoutDay?: string | null;
+  started_at: string | null; // raw ISO timestamp — client formats to local date
   workout_id: string;
   best_set_weight_kg: number | null;
   best_set_reps: number | null;

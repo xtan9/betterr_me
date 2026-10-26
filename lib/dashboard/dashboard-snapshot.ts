@@ -26,7 +26,7 @@ export interface DashboardSnapshotDependencies {
   habitLogs: Pick<HabitLogsDB, "getAllUserLogs">;
   milestones: Pick<HabitMilestonesDB, "getTodaysMilestones">;
   localization: Pick<LocalizationDB, "getWeekStartPreference">;
-  workouts: Pick<WorkoutsDB, "getLastCompletedAt" | "getWeekWorkoutCount">;
+  workouts: Pick<WorkoutsDB, "getLastCompletedAt" | "getWeekWorkoutCount"> & Partial<Pick<WorkoutsDB,"getLastWorkout">>;
 }
 
 export interface DashboardSnapshotInput {
@@ -295,6 +295,8 @@ export function createDashboardSnapshot(
       const logs = logsResult.value;
       const milestonesToday = milestonesResult.value;
       const lastWorkoutAt = lastWorkoutResult.value;
+      const latestFact=dependencies.workouts.getLastWorkout?await optional(dependencies.workouts.getLastWorkout(userId),undefined,'last_workout_unavailable',{userId,date}):{value:undefined};
+      if('warning'in latestFact && latestFact.warning)warnings.push(latestFact.warning);
       const weekWorkoutCount = weekWorkoutCountResult.value;
 
       const completedLogsByHabit = new Map<string, Set<string>>();
@@ -358,6 +360,7 @@ export function createDashboardSnapshot(
               (task) => task.is_completed,
             ).length,
             last_workout_at: lastWorkoutAt,
+            ...(latestFact.value!==undefined?{last_workout:latestFact.value}:{}),
             week_workout_count: weekWorkoutCount,
           },
       };

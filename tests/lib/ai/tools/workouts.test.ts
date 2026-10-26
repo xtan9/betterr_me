@@ -30,6 +30,15 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
+vi.mock("@/lib/db/workouts", () => ({
+  WorkoutsDB: class {
+    getWorkoutsWithSummary = mockGetWorkoutsWithSummary;
+    getActiveWorkout = mockGetActiveWorkout;
+    getWorkoutWithExercises = mockGetWorkoutWithExercises;
+    getExerciseHistory = mockGetExerciseHistory;
+  },
+}));
+
 vi.mock("@/lib/db/routines", () => ({
   RoutinesDB: class { getUserRoutines = mockGetUserRoutines; },
 }));
@@ -67,15 +76,17 @@ describe("workoutTools", () => {
   });
   beforeEach(() => vi.clearAllMocks());
 
-  it("returns 8 tool definitions", () => {
+  it("returns the read, active-write and reviewed-history tool definitions", () => {
     const tools = workoutTools();
-    expect(tools).toHaveLength(8);
+    expect(tools).toHaveLength(10);
     expect(tools.map((t) => t.name)).toEqual([
       "getRecentWorkouts",
       "getActiveWorkout",
       "startWorkout",
       "completeWorkout",
       "getWorkoutDetails",
+      "correctWorkoutHistory",
+      "deleteWorkoutHistory",
       "getExercises",
       "getRoutines",
       "getExerciseHistory",

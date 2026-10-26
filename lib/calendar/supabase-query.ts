@@ -1,3 +1,4 @@
+import { WorkoutsDB } from '@/lib/db/workouts';
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
@@ -38,7 +39,7 @@ export function createSupabaseCalendarQuery(
       },
     },
     workouts: {
-      read: (request) => readWorkouts(supabase, request),
+      read: (request) => readWorkouts(supabase, request,principal),
     },
   };
 
@@ -90,10 +91,18 @@ function readHabitCompletionLogs(
   );
 }
 
-function readWorkouts(
+async function readWorkouts(
   supabase: SupabaseClient,
   { userId, range, timezone }: WorkoutOverlayRequest,
+  principal:AuthenticatedRecurringTaskPrincipal,
 ): Promise<Workout[]> {
+  if(principal.type!=='user'||principal.userId!==userId)throw new Error('Workout owner mismatch');
+  const db=new WorkoutsDB(supabase,principal.credential==='mcp'?async(owner,id,limit,offset)=>{
+    if(owner!==userId)throw new Error('Workout owner mismatch');
+    return supabase.rpc('mcp_train_history',{p_owner:userId,p_operation:'compat',p_request:{id,limit,offset}});
+  }:undefined);
+  const current=await db.getCurrentWorkouts(userId);
+  if(current!==null)return current.filter(row=>typeof row.workoutDay==='string'&&row.workoutDay>=range.from&&row.workoutDay<=range.to);
   return readRows<Workout>(
     supabase
       .from("workouts")

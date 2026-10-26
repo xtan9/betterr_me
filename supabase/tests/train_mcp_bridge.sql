@@ -84,6 +84,15 @@ begin
   raise exception 'Trusted terminal command accepted existing foreign reference';
  exception when insufficient_privilege then null; end;
  if current_setting('request.jwt.claims')<>old_claims or current_setting('request.jwt.claim.sub')<>old_subject then raise exception 'Terminal bridge leaked principal'; end if;
+ -- Fixed history bridge retains the caller's principal on success and failure.
+ perform public.mcp_train_history(owner,'detail',jsonb_build_object('id',workout));
+ if current_setting('request.jwt.claims')<>old_claims or current_setting('request.jwt.claim.sub')<>old_subject then raise exception 'History read bridge leaked principal'; end if;
+ begin
+  perform public.mcp_train_history(owner,'detail','{"id":"invalid-uuid"}'::jsonb);
+  raise exception 'History bridge accepted invalid identity';
+ exception when invalid_text_representation then null; end;
+ if current_setting('request.jwt.claims')<>old_claims or current_setting('request.jwt.claim.sub')<>old_subject then raise exception 'Failed history bridge leaked principal'; end if;
+ if has_function_privilege('authenticated','public.mcp_train_history(uuid,text,jsonb)','EXECUTE') then raise exception 'Ordinary client can impersonate history owner'; end if;
  perform set_config('extra_float_digits',old_float_digits,true);
 end $$;
 set constraints all immediate;

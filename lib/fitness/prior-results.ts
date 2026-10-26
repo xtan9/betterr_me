@@ -9,7 +9,7 @@ const supportedModes = ['weight_reps', 'bodyweight_reps', 'weighted_bodyweight',
 
 function resultFromParent(row: Record<string, unknown>, request: PriorRequest, referenceId: string): PriorResult | null {
   const selected = selectRecordedCompletion(row);
-  if (selected.status !== 'recorded' || !Array.isArray(row.workout_exercises)) return null;
+  if (selected.status !== 'recorded' || selected.completion.version === 5 || !Array.isArray(row.workout_exercises)) return null;
   const captured = selected.completion;
   const groups: PriorResult['groups'] = [];
   for (const entry of captured.exercises) {

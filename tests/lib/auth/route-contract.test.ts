@@ -12,6 +12,12 @@ const apiRoot = join(process.cwd(), "app", "api");
  * Keep this list narrow and reviewed whenever a route is added.
  */
 const deliberateAuthExceptions: Record<string, string> = {
+  "mobile/train/history/route.ts": "authenticateNativeRequest verifies captured bearer owner; private current history, immutable outcomes and versioned correction/deletion",
+  "mobile/train/history/[id]/route.ts": "authenticateNativeRequest verifies captured bearer owner; private current history, immutable outcomes and versioned correction/deletion",
+  "mobile/train/history/capabilities/route.ts": "authenticateNativeRequest verifies captured bearer owner; private current history, immutable outcomes and versioned correction/deletion",
+  "mobile/train/history/commands/route.ts": "authenticateNativeRequest verifies captured bearer owner; private current history, immutable outcomes and versioned correction/deletion",
+  "mobile/train/history/progress/route.ts": "authenticateNativeRequest verifies captured bearer owner; private current history, immutable outcomes and versioned correction/deletion",
+
   "mobile/train/plans/route.ts": "authenticateNativeRequest verifies bearer owner; owned training occurrence projection and coverage only",
   "mobile/train/plans/[id]/route.ts": "authenticateNativeRequest verifies bearer owner; exact owned training occurrence including moved/retained references",
   "mobile/train/plans/workouts/[id]/route.ts": "authenticateNativeRequest verifies bearer owner; explicit saved-workout association read",
@@ -56,6 +62,11 @@ const sharedCookieTemplateRoutes = new Set([
   'routines/templates/commands/route.ts', 'routines/templates/definitions/route.ts',
 ]);
 
+const sharedCookieHistoryRoutes = new Set([
+  'workouts/history/route.ts', 'workouts/history/[id]/route.ts', 'workouts/history/capabilities/route.ts',
+  'workouts/history/commands/route.ts', 'workouts/history/progress/route.ts',
+]);
+
 function routeFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
@@ -92,6 +103,14 @@ describe("API authentication route contract", () => {
         expect(source).toContain("request.headers.get('X-Train-Owner') !== auth.principal.userId");
       }
 
+      if (sharedCookieHistoryRoutes.has(name)) {
+        expect(source).toContain('historyCookieRoute');
+        expect(source).toContain(name.endsWith('commands/route.ts') ? "'write'" : "'read'");
+        source = readFileSync(join(process.cwd(), 'lib/fitness/history-cookie-route.ts'), 'utf8');
+        expect(source).toContain("allowedCredentials: ['cookie']");
+        expect(source).toContain("request.headers.get('X-Train-Owner') !== auth.principal.userId");
+      }
+
       expect(source, `${name} should use the shared request context`).toContain(
         "authenticateRequest",
       );
@@ -116,7 +135,7 @@ describe("API authentication route contract", () => {
     for (const [name, reason] of Object.entries(deliberateAuthExceptions)) {
       expect(routes.has(name), `${name} (${reason}) should exist`).toBe(true);
     }
-    for (const name of sharedCookieTemplateRoutes) expect(routes.has(name)).toBe(true);
+    for (const name of [...sharedCookieTemplateRoutes, ...sharedCookieHistoryRoutes]) expect(routes.has(name)).toBe(true);
   });
 });
 

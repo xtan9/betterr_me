@@ -97,6 +97,18 @@
       "evidence": "Workout HTTP routes and lib/ai/tools/workouts.ts call createWorkoutWrites; no qualifying WorkoutsDB write call remains in delivery sources."
     },
     {
+      "id": "workouts-current-history",
+      "domain": "Workouts",
+      "operation": "Completed history correction and deletion",
+      "channels": ["HTTP", "AI"],
+      "invariants": ["Verified owner, expected revision, immutable first outcome and original receipt, exact measurements, unknown timing, tombstone identity"],
+      "atomicity": "execute_train_history_command locks the parent and current revision and publishes the projection, revision and first outcome in one transaction.",
+      "migrationStatus": "migrated",
+      "owningTicket": "xtan9/betterr_me_mobile#425 / #426 / #427 / #428",
+      "authority": "lib/fitness/train-history.ts and lib/fitness/assistant-history.ts",
+      "evidence": "Native and cookie history routes use the owner-checked command; verified MCP uses a fixed service-only adapter. Rollout remains disabled until the reviewed C activation."
+    },
+    {
       "id": "workouts-routine-conversion",
       "domain": "Workouts",
       "operation": "Routine-to-workout start and workout-to-routine save",

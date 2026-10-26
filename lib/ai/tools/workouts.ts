@@ -1,7 +1,9 @@
+import { assistantWorkouts,assistantHistoryCommand } from '@/lib/fitness/assistant-history';
+import { historyId,historyRevision,historyPatchSchema } from '@/lib/validations/train-history';
 import { assistantTemplates } from '@/lib/fitness/assistant-templates';
 import { assistantWorkoutWrites } from "@/lib/fitness/assistant-workouts";
 import { z } from "zod";
-import { WorkoutsDB, ExercisesDB } from "@/lib/db";
+import { ExercisesDB } from "@/lib/db";
 import {
   toWorkoutResponse,
   type WorkoutStartOutcome,
@@ -30,7 +32,7 @@ export function workoutTools(): ToolDefinition[] {
           .describe("Number of workouts to return (default 5)"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new WorkoutsDB(ctx.supabase);
+        const db = assistantWorkouts(ctx);
         return db.getWorkoutsWithSummary(ctx.userId, {
           limit: params.limit ?? 5,
         });
@@ -41,7 +43,7 @@ export function workoutTools(): ToolDefinition[] {
       description: "Get the user's currently active (in-progress) workout",
       parameters: z.object({}),
       execute: async (_params, ctx: ToolContext) => {
-        const db = new WorkoutsDB(ctx.supabase);
+        const db = assistantWorkouts(ctx);
         return db.getActiveWorkout(ctx.userId);
       },
     },
@@ -98,7 +100,7 @@ export function workoutTools(): ToolDefinition[] {
         workoutId: z.string().describe("The workout ID"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new WorkoutsDB(ctx.supabase);
+        const db = assistantWorkouts(ctx);
         const workout = await db.getWorkoutWithExercises(params.workoutId, ctx.userId);
         if (!workout) return { error: "Workout not found" };
         if (workout.recordedStatus === "unsupported") return {
@@ -107,6 +109,18 @@ export function workoutTools(): ToolDefinition[] {
         };
         return workout;
       },
+    },
+    {
+      name:'correctWorkoutHistory',
+      description:'Correct explicitly supplied completed measurements or timing only after user review. Supply the current revision and a stable operation ID; retain and show conflicts for review instead of silently retrying under a new revision.',
+      parameters:z.object({operationId:historyId,workoutId:historyId,expectedRevision:historyRevision,patch:historyPatchSchema}).strict(),
+      execute:async(params,ctx:ToolContext)=>assistantHistoryCommand(ctx,params.operationId,{kind:'correct-workout',workoutId:params.workoutId,expectedRevision:params.expectedRevision,patch:params.patch}),
+    },
+    {
+      name:'deleteWorkoutHistory',
+      description:'Delete a completed workout only after explicit user confirmation of the reviewed current revision. Reuse the stable operation ID on uncertain retry; a conflict requires new explicit review. This never reopens its plan.',
+      parameters:z.object({operationId:historyId,workoutId:historyId,expectedRevision:historyRevision}).strict(),
+      execute:async(params,ctx:ToolContext)=>assistantHistoryCommand(ctx,params.operationId,{kind:'delete-workout',workoutId:params.workoutId,expectedRevision:params.expectedRevision}),
     },
     {
       name: "getExercises",
@@ -133,7 +147,7 @@ export function workoutTools(): ToolDefinition[] {
         exerciseId: z.string().describe("The exercise ID"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new WorkoutsDB(ctx.supabase);
+        const db = assistantWorkouts(ctx);
         return db.getExerciseHistory(params.exerciseId, ctx.userId);
       },
     },

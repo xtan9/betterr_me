@@ -1,0 +1,38 @@
+# Current workout history (#425–428)
+
+Retrospective workouts store a chosen Gregorian day and an explicitly known or unknown duration. A date-only workout has no actual start, end, timezone, or timer-derived value. It does not occupy the live workout slot. Native completion versions 1–4 and their first upload receipts remain unchanged; new retrospective creates use version 5 with the existing protocol-1 upload envelope.
+
+## Current authority and reviewed changes
+
+`fitness_private.history_current` owns one revisioned completed projection. The immutable original create document stays in `train_completion_receipts`; `history_revisions` retains each accepted current projection. Every correction/deletion supplies the authenticated owner, a durable operation ID and the expected decimal-string revision. The transaction locks the workout then current authority, validates a narrow patch, and publishes the revision, normalized projection and first outcome atomically.
+
+Corrections preserve entry/set identities, definition meaning, template origin, plan provenance and unedited raw legacy fields. Supported performed measurement fields and working/warm-up classification can change; deferred legacy fields remain inspectable and unchanged. Known timing edits use explicit instants (up to six fractional digits) and a separately reviewed duration disposition. Elapsed duration is the floor of the exact endpoint difference and must match the submitted expected seconds. Unknown end/duration can be represented in a corrected live v5 document without inventing time or discarding its original template bindings.
+
+A stale revision returns the current record for review. A new reviewed proposal uses a new operation ID; no automatic rebase occurs. Exact retries return their first accepted or definitive rejected outcome, even after the current record advances. Transient errors have no success/rejection receipt. Deletion stores a tombstone and leaves the original create receipt intact, so delayed creates and edits cannot restore a deleted workout. It does not reopen a linked plan. Account/profile erasure removes all of that account's retained history and outcomes through the verified FK cascade.
+
+## Reads and comparisons
+
+The owner-checked history API is under `/api/mobile/train/history`; continuing cookie adapters are under `/api/workouts/history`. List pages use the exact `(day, instant, id)` descending cursor. A legacy UTC/first-seen fallback is ordering metadata only; its canonical workout day stays unknown. Current detail returns owned tombstones. Progress returns the complete requested cohort, resolved retained identities, exact known-duration sum as decimal text, and explicit known/unknown/undated coverage. Unsupported captures contribute unknown duration even when their normalized legacy header contains a number.
+
+Continuing Web, dashboard, calendar and Assistant readers use the same current authority. Legacy numeric text remains available in `currentHistory`; compatibility numeric fields are populated only when semantically representable. Repeated exercise entries produce one per-workout history row in canonical order. Captured names and meanings are preserved after live definition changes. Qualified progress includes only completed working sets with the same identity and known recording meaning: load at equal reps, reps at equal load, bodyweight reps, assisted reps at equal assistance, or duration. All tied sources remain inspectable. New live input does not establish a personal record before workout completion.
+
+Frozen timestamp-only readers cannot represent date-only records. The restrictive owner SELECT policy excludes those rows from their raw table reads; the new authenticated gateway reads them. Known-start rows remain compatible; an older recorded-format reader can isolate an unsupported version. Previously cached data in an offline old binary cannot be remotely erased. The frozen prior-results/day transport cannot encode date-only time, so it excludes v5; current clients use the history facade for current date-only results, corrections and tombstones.
+
+## Release order
+
+1. **A:** migration `20261026035606_train_history_current_authority_expand.sql` adds private authority and gated endpoints. It preserves existing rows, grants and current behavior; readiness is false.
+2. **B:** deploy the compatible cookie/Assistant/native handlers and verify the exact deployed alias and authenticated cookie reads before activation.
+3. **C:** a separate reviewed release calls the private `activate_history_contract()`. It locks the three workout tables, captures exact completed baselines at revision 1, permits genuine null-start v5 rows, installs the legacy SELECT restriction and enables current history atomically. Repeating activation does not change versions or baselines.
+
+C closes unsupported direct completed parent/child changes and deletion. Existing active writes remain available. It also revokes TRUNCATE/TRIGGER bypass privileges and rejects both raw insert and active-ID reassignment into a retained receipt/tombstone identity. The service-only MCP bridge exposes a fixed operation list and restores its trusted principal claims on both success and exception; ordinary clients cannot choose another owner. No caller-settable bypass or generic impersonation exists. Production activation is not included in this A+B change.
+
+## Validation
+
+- Actual SQL red→green: retrospective create; current correction/CAS; direct active-ID reassignment into a tombstone. The registered fixture exercises five modes, unknown/zero distinction, immutable outcomes, exact microseconds, ownership, guarded direct writes, deletion and coverage.
+- Historical DDL rehearsal: all ten prior tables and 10,032 legacy sets retain identities, nulls, zero and deferred fields through A/C; exact current baselines, idempotent cutover, old deleted-create receipts and profile erasure pass.
+- Actual local Auth/HTTP: native date-only upload/read, raw-reader exclusion, continuing cookie and scoped MCP reads/corrections, conflicts, immutable retries, owner isolation, tombstones and unknown-duration coverage pass. Disposable users/rows/credentials/server were removed; original flags, grants, usage ACL and materialization hashes were restored.
+- Parent-coordinated mobile proof: **five groups / 51 separate processes** passed using real SQLite and authenticated repositories. It covers lost create/correction/delete acknowledgments, explicit conflict review, owner fences, no resurrection, current progress and v4 template-origin → corrected v5 live with unknown end/duration. Separate source hashes are retained in the local proof receipt.
+- TypeScript and write-authority inventory pass. Local security advisors report only five existing warnings, none in this change. Exact ESLint passes after archived, ignored prior-ticket repro files were renamed to inert text with hashes retained (four existing product warnings remain).
+- The one full unit run reached **517 passing suites / 6,436 passing tests**, with seven failures in three stale pre-C mock contracts. Updating those explicit test boundaries and the new tool inventory produced **83/83 affected tests passing**; no runtime behavior was weakened. Hosted full CI remains the final merge gate.
+
+Native acceptance, independent review, hosted checks and the B/C production gate are coordinated separately. These backend checks do not claim device acceptance or production activation.

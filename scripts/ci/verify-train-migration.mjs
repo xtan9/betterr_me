@@ -252,6 +252,42 @@ try {
     end $$;`);
   console.log('PASS exact 419 A/C migrations: ten legacy/current tables and expanded parent versions preserved; eight ordered entries/sixteen exact targets; idempotent stable target IDs; commands gated until C; content DML closed and authenticated usage-only updates retained; safe-integer validation stable under caller float settings 0/3 without leakage');
 
+  // #425–428 expansion/cutover is rehearsed against actual historical DDL and
+  // retained values, never by resetting the shared Supabase database.
+  const removedOriginal=structuredClone(v1); removedOriginal.id=randomUUID(); removedOriginal.sourceId=randomUUID();
+  for(const entry of removedOriginal.exercises){entry.id=randomUUID();for(const set of entry.sets)set.id=randomUUID();}
+  query(database,`set request.jwt.claims='{"sub":"${v1.ownerId}","role":"authenticated"}';
+    do $$begin if public.upload_completed_workout('${removedOriginal.id}','${JSON.stringify(removedOriginal).replaceAll("'","''")}'::jsonb)->>'status'<>'accepted' then raise exception 'Pre-C deleted create control failed';end if;end$$;
+    delete from public.workouts where id='${removedOriginal.id}';`);
+  const beforeHistory=templatePreservation();
+  query(database, migration('20261026035606_train_history_current_authority_expand.sql'));
+  if(query(database,'select ready from fitness_private.history_rollout')!=='f'||templatePreservation()!==beforeHistory)throw new Error('History A changed legacy rows or advertised readiness');
+  query(database,'select fitness_private.activate_history_contract();');
+  if(templatePreservation()!==beforeHistory)throw new Error('History C rewrote legacy identity, measurements or unknowns');
+  if(query(database,`select count(*) from public.workouts w left join fitness_private.history_current h on h.workout_id=w.id where w.status='completed' and (h.revision is distinct from 1 or h.projection is distinct from fitness_private.history_projection(w.id))`)!=='0')throw new Error('History C did not atomically capture each exact completed baseline');
+  const baseline=query(database,`select md5(jsonb_agg(to_jsonb(h) order by workout_id)::text) from fitness_private.history_current h`);
+  query(database,'select fitness_private.activate_history_contract();');
+  if(query(database,`select md5(jsonb_agg(to_jsonb(h) order by workout_id)::text) from fitness_private.history_current h`)!==baseline)throw new Error('Repeated history cutover changed baselines or revisions');
+  if(query(database,`select count(*) from fitness_private.history_current h cross join lateral jsonb_each(h.definitions) d where d.value?'history_recorded_definition'`)!=='0')throw new Error('Cutover invented legacy recorded meaning');
+  query(database,`begin; set local request.jwt.claims='{"sub":"${v1.ownerId}","role":"authenticated"}'; set local role authenticated;
+    do $$begin
+      begin insert into public.workouts(id,user_id,status) values('${removedOriginal.id}','${v1.ownerId}','discarded');raise exception 'Deleted pre-C receipt identity was reused';exception when check_violation then null;end;
+      if has_table_privilege('authenticated','public.workouts','TRUNCATE') or has_table_privilege('anon','public.workout_sets','TRUNCATE') or has_table_privilege('authenticated','public.workout_exercises','TRIGGER') then raise exception 'C retained direct authority bypass';end if;
+      if public.upload_completed_workout('${removedOriginal.id}','${JSON.stringify(removedOriginal).replaceAll("'","''")}'::jsonb)->>'status'<>'accepted' or exists(select 1 from public.workouts where id='${removedOriginal.id}') then raise exception 'Deleted pre-C create retry resurrected data';end if;
+    end$$; rollback;`);
+  query(database,`begin; set local request.jwt.claims='{"sub":"${v1.ownerId}","role":"authenticated"}';
+    do $$declare before_report jsonb;after_report jsonb;begin
+      before_report:=public.train_history_progress('{"from":null,"through":null}','[]');
+      update fitness_private.history_current set projection=jsonb_set(jsonb_set(projection,'{workout,native_completion}','{"version":1}'::jsonb),'{workout,duration_seconds}','"999999999"') where workout_id='${v1.id}';
+      after_report:=public.train_history_progress('{"from":null,"through":null}','[]');
+      if (select value->'current'->>'kind' from jsonb_array_elements(after_report->'records') where value->>'id'='${v1.id}')<>'unsupported'
+        or (after_report->'coverage'->>'unknownDurationCount')::bigint<>(before_report->'coverage'->>'unknownDurationCount')::bigint+1
+        or (after_report->'coverage'->>'knownDurationSeconds')::numeric<>(before_report->'coverage'->>'knownDurationSeconds')::numeric-${v1.durationSeconds} then raise exception 'Unsupported capture poisoned current progress coverage';end if;
+    end$$;rollback;`);
+  query(database,`begin; delete from public.profiles where id='${v1.ownerId}';
+    do $$begin if exists(select 1 from fitness_private.history_current) or exists(select 1 from fitness_private.history_revisions) or exists(select 1 from fitness_private.history_outcomes) then raise exception 'Profile erasure retained history'; end if;end$$; rollback;`);
+  console.log('PASS 425–428 A/C: ten tables unchanged, exact completed baselines including zero/null/deferred fields, no invented legacy meaning, idempotent revisions and profile erasure');
+
 
 } finally {
   if (created) query('postgres', `drop database ${database};`);

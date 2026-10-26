@@ -2,9 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
 // --- Hoisted mocks ---
-const { mockGetUser, mockGetExerciseSets } = vi.hoisted(() => ({
+const { mockGetUser, mockGetExerciseSets, mockGetComparableProgress } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockGetExerciseSets: vi.fn(),
+  mockGetComparableProgress: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -16,6 +17,7 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/db/workouts", () => ({
   WorkoutsDB: class {
     getExerciseSets = mockGetExerciseSets;
+    getComparableProgress = mockGetComparableProgress;
   },
 }));
 
@@ -62,6 +64,7 @@ function callGET(exerciseId: string) {
 describe("GET /api/exercises/[id]/records", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetComparableProgress.mockResolvedValue(null);
     mockGetUser.mockResolvedValue({ data: { user: { id: "user-123" } } });
   });
 
