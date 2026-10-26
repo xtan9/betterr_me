@@ -18,6 +18,8 @@ Continuing Web, dashboard, calendar and Assistant readers use the same current a
 
 Frozen timestamp-only readers cannot represent date-only records. The restrictive owner SELECT policy excludes those rows from their raw table reads; the new authenticated gateway reads them. Known-start rows remain compatible; an older recorded-format reader can isolate an unsupported version. Previously cached data in an offline old binary cannot be remotely erased. The frozen prior-results/day transport cannot encode date-only time, so it excludes v5; current clients use the history facade for current date-only results, corrections and tombstones.
 
+The continuing Web active-workout/picker uses the current-history facade with a Web protocol-2 response and the exact canonical cursor. Its reference retains the current record/revision, including date-only and unknown-end facts; no ordering fallback becomes an actual instant. Refresh replaces corrected values and removes deleted references, and accepted active-workout reads reset cached picker state. Before C, explicit `not_ready` falls back to the original protocol-1 reader. Native prior-results protocol 1 remains unchanged.
+
 ## Release order
 
 1. **A:** migration `20261026035606_train_history_current_authority_expand.sql` adds private authority and gated endpoints. It preserves existing rows, grants and current behavior; readiness is false.
@@ -34,5 +36,6 @@ C closes unsupported direct completed parent/child changes and deletion. Existin
 - Parent-coordinated mobile proof: **five groups / 51 separate processes** passed using real SQLite and authenticated repositories. It covers lost create/correction/delete acknowledgments, explicit conflict review, owner fences, no resurrection, current progress and v4 template-origin → corrected v5 live with unknown end/duration. Separate source hashes are retained in the local proof receipt.
 - TypeScript and write-authority inventory pass. Local security advisors report only five existing warnings, none in this change. Exact ESLint passes after archived, ignored prior-ticket repro files were renamed to inert text with hashes retained (four existing product warnings remain).
 - The one full unit run reached **517 passing suites / 6,436 passing tests**, with seven failures in three stale pre-C mock contracts. Updating those explicit test boundaries and the new tool inventory produced **83/83 affected tests passing**; no runtime behavior was weakened. Hosted full CI remains the final merge gate.
+- Spec review follow-up: real cookie active/read routes and the picker reproduce the missing retrospective reference, then pass selection, unknown-end correction, deletion, canonical pagination and fail-closed owner/error behavior. Frozen native and pre-C cookie cases remain covered by the focused prior-result tests.
 
 Native acceptance, independent review, hosted checks and the B/C production gate are coordinated separately. These backend checks do not claim device acceptance or production activation.

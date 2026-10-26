@@ -3,7 +3,7 @@ import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authent
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { WorkoutsDB } from "@/lib/db/workouts";
 import { priorRequestForExercise } from "@/lib/fitness/prior-result-target";
-import { readPriorResults } from "@/lib/fitness/prior-results";
+import { readWebPriorResults } from "@/lib/fitness/web-prior-results";
 import { log } from "@/lib/logger";
 
 const READ_REQUEST_POLICY = {
@@ -47,7 +47,7 @@ export async function GET(request: Request) {
             return [];
           });
         const priorRequest = priorRequestForExercise(userId, workout.id, exercise.exercise);
-        const priorPage = priorRequest ? await readPriorResults(supabase, priorRequest).catch(() => {
+        const priorPage = priorRequest ? await readWebPriorResults(supabase, priorRequest).catch(() => {
           log.error('[train] Active prior reference unavailable', undefined, { classification: 'read_failure' });
           return { protocolVersion: 1 as const, ownerId: userId, status: 'unavailable' as const, reason: 'service_unavailable' as const };
         }) : null;

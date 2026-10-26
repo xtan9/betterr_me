@@ -22,7 +22,7 @@ import { useFitness } from "@/lib/hooks/use-fitness";
 // ---------------------------------------------------------------------------
 
 export interface WorkoutExerciseWithPrevious extends WorkoutExerciseWithDetails {
-  priorResults?: import("@/lib/validations/train-prior-results").PriorRead | null;
+  priorResults?: import("@/lib/validations/web-prior-results").WebPriorRead | null;
   previousSets: WorkoutSet[];
 }
 

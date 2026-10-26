@@ -11,7 +11,10 @@ vi.mock('@supabase/supabase-js', async original => ({
   createClient: () => ({ from: mockSupabaseClient.from, auth: { getUser } }),
 }));
 vi.mock('@/lib/logger', () => ({ log: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
-vi.mock('@/lib/supabase/server', () => ({ createClient: () => ({ from: mockSupabaseClient.from, auth: { getUser } }) }));
+vi.mock('@/lib/supabase/server', () => ({ createClient: () => ({ from: mockSupabaseClient.from, auth: { getUser },
+  // This frozen cookie-compatibility case runs before current history is enabled.
+  rpc: async () => ({ data: { status: 'not_ready' }, error: null }),
+}) }));
 const owner = fixture.request.ownerId;
 const exerciseId = '64200000-0000-4000-8000-000000000009';
 const result = fixture.responses.found.result;

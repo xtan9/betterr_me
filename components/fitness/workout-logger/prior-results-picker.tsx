@@ -5,29 +5,37 @@ import { useLocale, useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { weightInputText } from '@/lib/fitness/units';
-import { priorResponseMatchesRequest, priorResponseSchema, type PriorRead, type PriorResult, type PriorPerformed } from '@/lib/validations/train-prior-results';
+import type { PriorPerformed } from '@/lib/validations/train-prior-results';
+import { webPriorReference, webPriorResponseMatchesRequest, webPriorResponseSchema, type WebPriorRead } from '@/lib/validations/web-prior-results';
 import type { WeightUnit } from '@/lib/db/types';
 
-export function PriorResultsPicker({ read, weightUnit, disabled, onUse }: {
-  read: PriorRead; weightUnit: WeightUnit; disabled: boolean; onUse: (performed: PriorPerformed) => Promise<void>;
-}) {
+type PickerProps = {
+  read: WebPriorRead; weightUnit: WeightUnit; disabled: boolean; onUse: (performed: PriorPerformed) => Promise<void>;
+};
+export function PriorResultsPicker(props: PickerProps) {
+  // A new accepted active-workout read replaces cached references, including a
+  // correction, deletion or account/target change while the picker was open.
+  return <PriorResultsSession key={JSON.stringify(props.read)} {...props} />;
+}
+function PriorResultsSession({ read, weightUnit, disabled, onUse }: PickerProps) {
   const t = useTranslations('workouts.prior');
   const locale = useLocale();
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(read.page);
-  const [known, setKnown] = useState<PriorResult | null>(read.page.status === 'found' ? read.page.result : null);
+  const [known, setKnown] = useState(() => webPriorReference(read.page, read.request.target));
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const load = async (continueSearch: boolean) => {
     setBusy(true); setFailed(false);
     try {
       const response = await fetch('/api/workouts/prior-results', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...read.request, before: continueSearch && page.status === 'searching' ? page.nextCursor : null }) });
-      const parsed = priorResponseSchema.safeParse(await response.json());
-      if (response.status !== 200 || !parsed.success || !priorResponseMatchesRequest(parsed.data, read.request)) throw new Error('Prior read unavailable');
+        body: JSON.stringify({ ...read.request, protocolVersion: page.protocolVersion, before: continueSearch && page.status === 'searching' ? page.nextCursor : null }) });
+      const parsed = webPriorResponseSchema.safeParse(await response.json());
+      if (response.status !== 200 || !parsed.success || !webPriorResponseMatchesRequest(parsed.data, read.request)) throw new Error('Prior read unavailable');
       setPage(parsed.data);
-      if (parsed.data.status === 'found') setKnown(parsed.data.result);
-      else if (parsed.data.status === 'exhausted' || parsed.data.status === 'unavailable' && parsed.data.reason !== 'service_unavailable') setKnown(null);
+      if (parsed.data.status === 'found') setKnown(webPriorReference(parsed.data, read.request.target));
+      else if (parsed.data.protocolVersion === 2 && parsed.data.status === 'searching'
+        || parsed.data.status === 'exhausted' || parsed.data.status === 'unavailable' && parsed.data.reason !== 'service_unavailable') setKnown(null);
     } catch { setFailed(true); }
     finally { setBusy(false); }
   };
@@ -49,7 +57,7 @@ export function PriorResultsPicker({ read, weightUnit, disabled, onUse }: {
       <DialogHeader><DialogTitle>{t('title')}</DialogTitle><DialogDescription>{t('description')}</DialogDescription></DialogHeader>
       {failed && <p role="alert">{t('failed')}</p>}
       {known && <section aria-label={t('saved')} className="space-y-4">
-        <p>{t('saved')} · {known.workout.workoutDay}</p>
+        <p>{t('saved')} · {known.workoutDay}</p>
         {known.groups.map((group, index) => <section key={group.exerciseEntryId} className="space-y-2 rounded border p-3">
           <h3>{typeof group.definition.name === 'string' ? group.definition.name : locale.startsWith('zh') ? group.definition.name.zh : group.definition.name.en}</h3>
           <p>{t('occurrence', { value: index + 1 })}</p>
