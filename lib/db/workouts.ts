@@ -98,6 +98,7 @@ export class WorkoutsDB {
       .select(
         `
         *,
+        train_workout_plan_links (owner_id,workout_id,captured_occurrence_id,linked_at),
         workout_exercises (
           *,
           exercise:exercises (*),
@@ -121,8 +122,16 @@ export class WorkoutsDB {
 
     // Decode once; an unsupported recorded row never becomes live legacy facts.
     const selected = selectRecordedCompletion(data);
+    // Service-backed Assistant callers supply an explicit owner above. Never
+    // expose a joined reference that disagrees with the owned parent.
+    const { train_workout_plan_links: link, ...workout } = data;
+    const trainingPlanLink = link && link.owner_id === data.user_id && link.workout_id === data.id
+      && (!userId || link.owner_id === userId)
+      ? { ownerId: link.owner_id, workoutId: link.workout_id, occurrenceId: link.captured_occurrence_id, linkedAt: link.linked_at }
+      : null;
     return {
-      ...data,
+      ...workout,
+      trainingPlanLink,
       recordedStatus: selected.status,
       workout_exercises: selected.status === 'unsupported' ? [] : visibleExerciseEntries(data.workout_exercises, userId),
       exercises: selected.status === 'unsupported' ? [] : visibleExerciseEntries(data.workout_exercises, userId).map(

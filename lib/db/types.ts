@@ -631,6 +631,7 @@ export interface RoutineWithExercises extends Routine {
 
 /** Full workout with nested exercises and sets, used by workout detail view */
 export interface WorkoutWithExercises extends Workout {
+  trainingPlanLink?: { ownerId: string; workoutId: string; occurrenceId: string; linkedAt: string } | null;
   recordedStatus?: 'legacy' | 'recorded' | 'unsupported';
   native_completion?: unknown;
   recorded_completion?: unknown;
