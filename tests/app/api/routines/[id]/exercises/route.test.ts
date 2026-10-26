@@ -13,6 +13,7 @@ const { mockGetUser, mockGetRoutine, mockAddExerciseToRoutine } = vi.hoisted(
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(() => ({
     auth: { getUser: mockGetUser },
+    rpc: vi.fn().mockResolvedValue({ data: { protocolVersion: 1, templates: { contractVersion: 1, ready: false } }, error: null }),
   })),
 }));
 

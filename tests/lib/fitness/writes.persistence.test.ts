@@ -64,7 +64,7 @@ function makeSupabase(response: { data: unknown; error: unknown }) {
     queryLog.push({ method: "from", args });
     return query;
   });
-  return { from, query, queryLog };
+  return { from, query, queryLog, rpc: vi.fn().mockResolvedValue({ data: { status: 'not_ready' }, error: null }) };
 }
 
 describe("SupabaseWorkoutStartPersistence", () => {
@@ -137,7 +137,7 @@ describe("SupabaseWorkoutStartPersistence", () => {
     expect(mocks.getRoutine).toHaveBeenCalledWith("routine-1", "user-1");
   });
 
-  it("uses the accepted conversion and maps its active-workout conflict", async () => {
+  it("uses the legacy conversion before cutover and maps its active-workout conflict", async () => {
     const supabase = makeSupabase({ data: null, error: null });
     const persistence = new SupabaseWorkoutStartPersistence(supabase as never);
     const converted = { ...workout, routine_id: "routine-1", exercises: [] };

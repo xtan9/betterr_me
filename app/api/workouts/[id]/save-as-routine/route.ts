@@ -1,3 +1,4 @@
+import { legacyRoutineBoundary } from "@/lib/fitness/template-commands";
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest } from "@/lib/auth/authenticated-request";
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
@@ -28,6 +29,8 @@ export async function POST(
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
     const { principal: { userId }, client: supabase } = auth;
+    const boundary = await legacyRoutineBoundary(supabase);
+    if (boundary) return boundary;
 
     // Validate body
     const body = await request.json();

@@ -1,3 +1,4 @@
+import { legacyRoutineBoundary } from "@/lib/fitness/template-commands";
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
@@ -21,7 +22,7 @@ const WRITE_REQUEST_POLICY = {
  * GET /api/routines
  * List all routines for the authenticated user with nested exercises.
  */
-export async function GET(request: Request = new Request("http://localhost")) {
+export async function GET(request: Request) {
   try {
     const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
     if (!auth.ok) {
@@ -31,6 +32,8 @@ export async function GET(request: Request = new Request("http://localhost")) {
       );
     }
     const { principal: { userId }, client: supabase } = auth;
+    const boundary = await legacyRoutineBoundary(supabase);
+    if (boundary) return boundary;
 
     const routinesDB = new RoutinesDB(supabase);
     const routines = await routinesDB.getUserRoutines(userId);
@@ -59,6 +62,8 @@ export async function POST(request: NextRequest) {
       );
     }
     const { principal: { userId }, client: supabase } = auth;
+    const boundary = await legacyRoutineBoundary(supabase);
+    if (boundary) return boundary;
 
     const body = await request.json();
     const validation = validateRequestBody(body, routineCreateSchema);

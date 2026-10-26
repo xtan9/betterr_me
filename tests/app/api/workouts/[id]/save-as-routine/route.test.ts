@@ -8,7 +8,9 @@ const { mockAuthenticateRequest, mockSave } = vi.hoisted(
   }),
 );
 
-const mockSupabase = {};
+const mockSupabase = { rpc: vi.fn().mockResolvedValue({
+  data: { protocolVersion: 1, templates: { contractVersion: 1, ready: false } }, error: null,
+}) };
 
 vi.mock("@/lib/auth/authenticated-request", () => ({
   authenticateRequest: mockAuthenticateRequest,

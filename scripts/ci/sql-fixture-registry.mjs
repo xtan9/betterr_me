@@ -16,6 +16,7 @@ const ACCEPTANCE_FIELDS = new Set([
 ]);
 const SUPPORT_FIELDS = new Set(["path", "kind", "reason"]);
 const TRUSTED_ADMIN_FIXTURES = new Set([
+  "train_workout_templates.sql",
   "train_custom_exercises_expand.sql",
   "train_custom_exercise_contract.sql",
   "train_mcp_bridge.sql",

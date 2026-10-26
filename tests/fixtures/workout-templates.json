@@ -1,0 +1,651 @@
+{
+  "proposalOnly": true,
+  "identityNotice": "Every UUID in this fixture is synthetic, not a deployed catalog ID. No record or request was sent.",
+  "read": {
+    "protocolVersion": 1,
+    "template": {
+      "id": "00000000-0000-4000-8000-000000000010",
+      "ownerId": "00000000-0000-4000-8000-000000000001",
+      "version": "7",
+      "name": "Synthetic strength template",
+      "notes": null,
+      "archivedAt": null,
+      "entries": [
+        {
+          "id": "00000000-0000-4000-8000-000000000011",
+          "exerciseId": "00000000-0000-4000-8000-000000000020",
+          "notes": null,
+          "restSeconds": null,
+          "targets": {
+            "kind": "sets",
+            "items": [
+              {
+                "id": "00000000-0000-4000-8000-000000000012",
+                "kind": "warmup",
+                "measurements": {
+                  "weightKg": "0.123",
+                  "reps": "0",
+                  "durationSeconds": null,
+                  "distanceMeters": "1.25"
+                }
+              },
+              {
+                "id": "00000000-0000-4000-8000-000000000013",
+                "kind": "working",
+                "measurements": {
+                  "weightKg": null,
+                  "reps": null,
+                  "durationSeconds": null,
+                  "distanceMeters": "1.25"
+                }
+              }
+            ]
+          },
+          "legacySource": {
+            "targetSets": "2",
+            "measurements": {
+              "weightKg": "0.123",
+              "reps": "0",
+              "durationSeconds": null,
+              "distanceMeters": "1.25"
+            },
+            "sortOrder": "65536"
+          }
+        }
+      ]
+    },
+    "definitions": [
+      {
+        "kind": "keyed-preset",
+        "exerciseId": "00000000-0000-4000-8000-000000000020",
+        "version": "1",
+        "definition": {
+          "catalogKey": "strength.barbell-bench-press.v1",
+          "name": {
+            "en": "Barbell Bench Press",
+            "zh": "杠铃卧推"
+          },
+          "equipment": "barbell",
+          "mode": "weight_reps",
+          "convention": "barbell-total"
+        }
+      }
+    ],
+    "startability": {
+      "templateVersion": "7",
+      "ready": true,
+      "reasons": []
+    },
+    "usage": {
+      "lastPerformedAt": null
+    }
+  },
+  "editRequest": {
+    "protocolVersion": 1,
+    "operationId": "00000000-0000-4000-8000-000000000040",
+    "command": {
+      "kind": "edit",
+      "templateId": "00000000-0000-4000-8000-000000000010",
+      "expectedVersion": "7",
+      "changes": [
+        {
+          "kind": "patch-target",
+          "entryId": "00000000-0000-4000-8000-000000000011",
+          "targetId": "00000000-0000-4000-8000-000000000012",
+          "patch": {
+            "measurements": {
+              "reps": 5
+            }
+          }
+        }
+      ]
+    }
+  },
+  "accepted": {
+    "protocolVersion": 1,
+    "receipt": {
+      "operationId": "00000000-0000-4000-8000-000000000040",
+      "operation": "edit",
+      "ownerId": "00000000-0000-4000-8000-000000000001",
+      "templateId": "00000000-0000-4000-8000-000000000010",
+      "acceptedAt": "2026-10-25T12:06:00.000Z",
+      "template": {
+        "id": "00000000-0000-4000-8000-000000000010",
+        "ownerId": "00000000-0000-4000-8000-000000000001",
+        "version": "10",
+        "name": "Synthetic strength template",
+        "notes": null,
+        "archivedAt": null,
+        "entries": [
+          {
+            "id": "00000000-0000-4000-8000-000000000011",
+            "exerciseId": "00000000-0000-4000-8000-000000000020",
+            "notes": null,
+            "restSeconds": null,
+            "targets": {
+              "kind": "sets",
+              "items": [
+                {
+                  "id": "00000000-0000-4000-8000-000000000012",
+                  "kind": "warmup",
+                  "measurements": {
+                    "weightKg": "0.123",
+                    "reps": "5",
+                    "durationSeconds": null,
+                    "distanceMeters": "1.25"
+                  }
+                },
+                {
+                  "id": "00000000-0000-4000-8000-000000000013",
+                  "kind": "working",
+                  "measurements": {
+                    "weightKg": null,
+                    "reps": null,
+                    "durationSeconds": null,
+                    "distanceMeters": "1.25"
+                  }
+                }
+              ]
+            },
+            "legacySource": {
+              "targetSets": "2",
+              "measurements": {
+                "weightKg": "0.123",
+                "reps": "0",
+                "durationSeconds": null,
+                "distanceMeters": "1.25"
+              },
+              "sortOrder": "65536"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "rejected": {
+    "protocolVersion": 1,
+    "error": {
+      "code": "version_conflict"
+    },
+    "rejection": {
+      "operationId": "00000000-0000-4000-8000-000000000041",
+      "operation": "edit",
+      "ownerId": "00000000-0000-4000-8000-000000000001",
+      "templateId": "00000000-0000-4000-8000-000000000010",
+      "rejectedAt": "2026-10-25T12:07:00.000Z",
+      "code": "version_conflict",
+      "current": {
+        "id": "00000000-0000-4000-8000-000000000010",
+        "ownerId": "00000000-0000-4000-8000-000000000001",
+        "version": "10",
+        "name": "Synthetic strength template",
+        "notes": null,
+        "archivedAt": null,
+        "entries": [
+          {
+            "id": "00000000-0000-4000-8000-000000000011",
+            "exerciseId": "00000000-0000-4000-8000-000000000020",
+            "notes": null,
+            "restSeconds": null,
+            "targets": {
+              "kind": "sets",
+              "items": [
+                {
+                  "id": "00000000-0000-4000-8000-000000000012",
+                  "kind": "warmup",
+                  "measurements": {
+                    "weightKg": "0.123",
+                    "reps": "5",
+                    "durationSeconds": null,
+                    "distanceMeters": "1.25"
+                  }
+                },
+                {
+                  "id": "00000000-0000-4000-8000-000000000013",
+                  "kind": "working",
+                  "measurements": {
+                    "weightKg": null,
+                    "reps": null,
+                    "durationSeconds": null,
+                    "distanceMeters": "1.25"
+                  }
+                }
+              ]
+            },
+            "legacySource": {
+              "targetSets": "2",
+              "measurements": {
+                "weightKg": "0.123",
+                "reps": "0",
+                "durationSeconds": null,
+                "distanceMeters": "1.25"
+              },
+              "sortOrder": "65536"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "completionEnvelope": {
+    "protocolVersion": 1,
+    "operationId": "00000000-0000-4000-8000-000000000030",
+    "completion": {
+      "version": 4,
+      "id": "00000000-0000-4000-8000-000000000030",
+      "ownerId": "00000000-0000-4000-8000-000000000001",
+      "sourceId": "00000000-0000-4000-8000-000000000002",
+      "startedAt": "2026-10-25T12:00:00.000Z",
+      "completedAt": "2026-10-25T12:05:00.000Z",
+      "durationSeconds": 300,
+      "timezone": "UTC",
+      "workoutDay": "2026-10-25",
+      "planId": null,
+      "exercises": [
+        {
+          "id": "00000000-0000-4000-8000-000000000031",
+          "definition": {
+            "catalogKey": "strength.barbell-bench-press.v1",
+            "name": {
+              "en": "Barbell Bench Press",
+              "zh": "杠铃卧推"
+            },
+            "equipment": "barbell",
+            "mode": "weight_reps",
+            "convention": "barbell-total"
+          },
+          "sets": [
+            {
+              "id": "00000000-0000-4000-8000-000000000032",
+              "performed": {
+                "mode": "weight_reps",
+                "weightKg": 0.123,
+                "reps": 5,
+                "kind": "warmup"
+              }
+            }
+          ]
+        }
+      ],
+      "templateOrigin": {
+        "content": {
+          "id": "00000000-0000-4000-8000-000000000010",
+          "ownerId": "00000000-0000-4000-8000-000000000001",
+          "version": "7",
+          "name": "Synthetic strength template",
+          "notes": null,
+          "archivedAt": null,
+          "entries": [
+            {
+              "id": "00000000-0000-4000-8000-000000000011",
+              "exerciseId": "00000000-0000-4000-8000-000000000020",
+              "notes": null,
+              "restSeconds": null,
+              "targets": {
+                "kind": "sets",
+                "items": [
+                  {
+                    "id": "00000000-0000-4000-8000-000000000012",
+                    "kind": "warmup",
+                    "measurements": {
+                      "weightKg": "0.123",
+                      "reps": "0",
+                      "durationSeconds": null,
+                      "distanceMeters": "1.25"
+                    }
+                  },
+                  {
+                    "id": "00000000-0000-4000-8000-000000000013",
+                    "kind": "working",
+                    "measurements": {
+                      "weightKg": null,
+                      "reps": null,
+                      "durationSeconds": null,
+                      "distanceMeters": "1.25"
+                    }
+                  }
+                ]
+              },
+              "legacySource": {
+                "targetSets": "2",
+                "measurements": {
+                  "weightKg": "0.123",
+                  "reps": "0",
+                  "durationSeconds": null,
+                  "distanceMeters": "1.25"
+                },
+                "sortOrder": "65536"
+              }
+            }
+          ]
+        },
+        "definitions": [
+          {
+            "entryId": "00000000-0000-4000-8000-000000000011",
+            "definition": {
+              "catalogKey": "strength.barbell-bench-press.v1",
+              "name": {
+                "en": "Barbell Bench Press",
+                "zh": "杠铃卧推"
+              },
+              "equipment": "barbell",
+              "mode": "weight_reps",
+              "convention": "barbell-total"
+            }
+          }
+        ],
+        "bindings": [
+          {
+            "entryId": "00000000-0000-4000-8000-000000000011",
+            "workoutEntryId": "00000000-0000-4000-8000-000000000031",
+            "targets": [
+              {
+                "targetId": "00000000-0000-4000-8000-000000000012",
+                "workoutSetId": "00000000-0000-4000-8000-000000000032"
+              },
+              {
+                "targetId": "00000000-0000-4000-8000-000000000013",
+                "workoutSetId": "00000000-0000-4000-8000-000000000033"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "unkeyedPresetRead": {
+    "kind": "unkeyed-preset",
+    "exerciseId": "00000000-0000-4000-8000-000000000021",
+    "version": "2",
+    "name": "Synthetic unkeyed public hold",
+    "equipment": "bodyweight",
+    "mode": "duration",
+    "convention": null
+  },
+  "unkeyedPresetCapture": {
+    "reference": {
+      "kind": "preset",
+      "exerciseId": "00000000-0000-4000-8000-000000000021"
+    },
+    "name": "Synthetic unkeyed public hold",
+    "equipment": "bodyweight",
+    "mode": "duration",
+    "convention": null
+  },
+  "unavailableDefinition": {
+    "kind": "unavailable",
+    "exerciseId": "00000000-0000-4000-8000-000000000022"
+  },
+  "legacyUnresolvedEntry": {
+    "id": "00000000-0000-4000-8000-000000000014",
+    "exerciseId": "00000000-0000-4000-8000-000000000021",
+    "notes": null,
+    "restSeconds": 0,
+    "targets": {
+      "kind": "legacy-unresolved"
+    },
+    "legacySource": {
+      "targetSets": null,
+      "measurements": {
+        "weightKg": null,
+        "reps": null,
+        "durationSeconds": "0",
+        "distanceMeters": "12.50"
+      },
+      "sortOrder": "131072"
+    }
+  },
+  "interpretationCases": [
+    {
+      "mode": "weight_reps",
+      "measurements": {
+        "weightKg": "0.123",
+        "reps": "5",
+        "durationSeconds": null,
+        "distanceMeters": null
+      },
+      "expected": "ready",
+      "anchorKg": 0.123
+    },
+    {
+      "mode": "weighted_bodyweight",
+      "measurements": {
+        "weightKg": "0.45359237",
+        "reps": "5",
+        "durationSeconds": null,
+        "distanceMeters": null
+      },
+      "expected": "ready",
+      "addedWeightKg": 0.45359237
+    },
+    {
+      "mode": "assisted_bodyweight",
+      "measurements": {
+        "weightKg": "0",
+        "reps": "8",
+        "durationSeconds": null,
+        "distanceMeters": null
+      },
+      "expected": "ready",
+      "assistanceKg": 0
+    },
+    {
+      "mode": "bodyweight_reps",
+      "measurements": {
+        "weightKg": "9007199254740993",
+        "reps": "8",
+        "durationSeconds": null,
+        "distanceMeters": null
+      },
+      "expected": "ready; hidden weight retained raw only"
+    },
+    {
+      "mode": "bodyweight_reps",
+      "measurements": {
+        "weightKg": null,
+        "reps": "9007199254740993",
+        "durationSeconds": null,
+        "distanceMeters": null
+      },
+      "expected": "target_value_unrepresentable"
+    },
+    {
+      "mode": "duration",
+      "measurements": {
+        "weightKg": null,
+        "reps": null,
+        "durationSeconds": "90",
+        "distanceMeters": null
+      },
+      "expected": "ready",
+      "durationSeconds": 90
+    },
+    {
+      "mode": "duration",
+      "measurements": {
+        "weightKg": null,
+        "reps": null,
+        "durationSeconds": "0",
+        "distanceMeters": null
+      },
+      "expected": "ready; draft0 cannot Complete"
+    },
+    {
+      "mode": "weight_reps",
+      "measurements": {
+        "weightKg": null,
+        "reps": null,
+        "durationSeconds": null,
+        "distanceMeters": null
+      },
+      "expected": "ready; blank unfinished"
+    },
+    {
+      "mode": "weight_reps",
+      "measurements": {
+        "weightKg": "1e-999",
+        "reps": "1",
+        "durationSeconds": null,
+        "distanceMeters": null
+      },
+      "expected": "target_value_unrepresentable"
+    },
+    {
+      "mode": "weight_reps",
+      "measurements": {
+        "weightKg": "Infinity",
+        "reps": "1",
+        "durationSeconds": null,
+        "distanceMeters": null
+      },
+      "expected": "target_value_unrepresentable"
+    },
+    {
+      "mode": "weight_reps",
+      "measurements": {
+        "weightKg": "-1",
+        "reps": "1",
+        "durationSeconds": null,
+        "distanceMeters": null
+      },
+      "expected": "target_value_out_of_range"
+    },
+    {
+      "restSeconds": null,
+      "expected": "unknown; never default90"
+    },
+    {
+      "restSeconds": 0,
+      "expected": "off"
+    },
+    {
+      "restSeconds": 601,
+      "expected": "rest_out_of_range"
+    },
+    {
+      "legacyTargetSets": null,
+      "expected": "legacy_count_unresolved"
+    },
+    {
+      "legacyTargetSets": "21",
+      "expected": "legacy_count_unresolved"
+    }
+  ],
+  "saveRepresentativeRequest": {
+    "protocolVersion": 1,
+    "operationId": "00000000-0000-4000-8000-000000000050",
+    "command": {
+      "kind": "save-workout-as-template",
+      "workoutId": "00000000-0000-4000-8000-000000000060",
+      "name": "Synthetic converted template"
+    }
+  },
+  "saveRepresentativeNotice": "The source ID is synthetic and independent of the warmup-only completion example. Server-generated entry/target IDs become fixed in the first accepted receipt; no preview fingerprint is proposed.",
+  "representativeConversionCases": [
+    {
+      "mode": "weight_reps",
+      "sourceSets": [
+        {
+          "kind": "warmup",
+          "weightKg": 30,
+          "reps": 3,
+          "completed": true
+        },
+        {
+          "kind": "working",
+          "weightKg": 10,
+          "reps": 8,
+          "completed": true
+        },
+        {
+          "kind": "working",
+          "weightKg": 20,
+          "reps": 5,
+          "completed": true
+        },
+        {
+          "kind": "working",
+          "weightKg": 40,
+          "reps": 1,
+          "completed": false
+        }
+      ],
+      "expected": {
+        "targetCount": 2,
+        "kind": "working",
+        "repeatedMeasurements": {
+          "weightKg": "20",
+          "reps": "5",
+          "durationSeconds": null,
+          "distanceMeters": null
+        }
+      }
+    },
+    {
+      "mode": "weight_reps",
+      "sourceStatus": "in_progress",
+      "sourceSets": [
+        {
+          "kind": "working",
+          "weightKg": 0.123,
+          "reps": 0,
+          "completed": false
+        }
+      ],
+      "expected": {
+        "targetCount": 1,
+        "kind": "working",
+        "repeatedMeasurements": {
+          "weightKg": "0.123",
+          "reps": "0",
+          "durationSeconds": null,
+          "distanceMeters": null
+        },
+        "afterReadAndStart": {
+          "repsDraft": "0",
+          "performed": null,
+          "isCompleted": false,
+          "canComplete": false
+        }
+      }
+    },
+    {
+      "mode": "duration",
+      "sourceStatus": "discarded",
+      "sourceSets": [
+        {
+          "kind": "working",
+          "durationSeconds": 0,
+          "completed": false
+        }
+      ],
+      "expected": {
+        "targetCount": 1,
+        "kind": "working",
+        "repeatedMeasurements": {
+          "weightKg": null,
+          "reps": null,
+          "durationSeconds": "0",
+          "distanceMeters": null
+        },
+        "afterReadAndStart": {
+          "durationDraft": "0",
+          "performed": null,
+          "isCompleted": false,
+          "canComplete": false
+        }
+      }
+    }
+  ],
+  "serverDerivedZeroRule": {
+    "exception": "Only the server-owned representative conversion preserves source zero into new unfinished targets.",
+    "ordinaryAuthoredRepsOrDurationZero": "reject",
+    "unchangedStoredZeroMaintenance": "preserve",
+    "completeCopiedZero": "reject until corrected",
+    "callerBypassFlag": "none"
+  },
+  "mandatoryPlannedProofs": [
+    "Actual save→read→start preserves representative reps0/duration0 as unfinished; correction required before Complete.",
+    "Authorized isolated account/profile cascade with an owned template and linked v4 workout must succeed without immutability-guard failure/orphan or cross-owner effect; archive-only coverage is insufficient."
+  ]
+}

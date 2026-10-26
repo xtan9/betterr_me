@@ -7,6 +7,7 @@ import { computePersonalRecords, isNewPR } from '@/lib/fitness/personal-records'
 import { WorkoutsDB } from '@/lib/db/workouts';
 import contract from '@/tests/fixtures/train-measurement-contract.json';
 import customContract from '@/tests/fixtures/train-custom-exercise-contract.json';
+import templateContract from '@/tests/fixtures/workout-templates.json';
 import { mockSupabaseClient } from '../../setup';
 
 const completion = contract.completion;
@@ -51,6 +52,34 @@ describe('recorded workout readback', () => {
       {userId:saved.ownerId,supabase:mockSupabaseClient,date:saved.workoutDay,timezone:'UTC'} as unknown as ToolContext);
     expect(JSON.stringify(answer)).toContain('My kettlebell press');
     expect(answer).toMatchObject({exercises:[{exercise:{name:'My kettlebell press'},recorded_definition:captured.definition}]});
+  });
+
+  it('reads a partly performed template workout with its full original targets and source identity', async () => {
+    const saved = templateContract.completionEnvelope.completion;
+    const captured = saved.exercises[0];
+    const row = { ...recordedRow(), id: saved.id, user_id: saved.ownerId, started_at: saved.startedAt,
+      completed_at: saved.completedAt, duration_seconds: saved.durationSeconds,
+      routine_id: saved.templateOrigin.content.id, recorded_completion: saved,
+      workout_exercises: [{ ...recordedRow().workout_exercises[0], id: captured.id, workout_id: saved.id,
+        exercise_id: saved.templateOrigin.content.entries[0].exerciseId,
+        sets: [{ ...recordedRow().workout_exercises[0].sets[0], id: captured.sets[0].id, set_type: 'warmup' }] }] };
+    mockSupabaseClient.setMockResponse(row);
+    expect(await db().getWorkoutWithExercises(saved.id, saved.ownerId)).toMatchObject({
+      recordedStatus: 'recorded', routine_id: saved.templateOrigin.content.id, recorded_completion: saved,
+      exercises: [{ recorded_definition: captured.definition, exercise: { name: 'Barbell Bench Press' }, sets: [{ weight_kg: 0.123 }] }],
+    });
+    mockSupabaseClient.setMockResponse(row);
+    const answer = await workoutTools().find(item => item.name === 'getWorkoutDetails')!.execute({ workoutId: saved.id },
+      { userId: saved.ownerId, supabase: mockSupabaseClient, date: saved.workoutDay, timezone: 'UTC' } as unknown as ToolContext);
+    expect(answer).toMatchObject({ exercises: [{ recorded_definition: captured.definition }] });
+    for (const invalid of [
+      { ...row, routine_id: null },
+      { ...row, recorded_completion: { ...saved, exercises: [{ ...captured, definition: { ...captured.definition, name: { ...captured.definition.name, en: 'Changed binding' } } }] } },
+      { ...row, recorded_completion: { ...saved, templateOrigin: { ...saved.templateOrigin, bindings: [] } } },
+    ]) {
+      mockSupabaseClient.setMockResponse(invalid);
+      expect(await db().getWorkoutWithExercises(saved.id, saved.ownerId)).toMatchObject({ recordedStatus: 'unsupported', exercises: [] });
+    }
   });
 
   it('opens all five captured meanings after their live definitions are renamed', async () => {

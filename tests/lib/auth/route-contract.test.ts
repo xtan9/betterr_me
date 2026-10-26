@@ -12,6 +12,11 @@ const apiRoot = join(process.cwd(), "app", "api");
  * Keep this list narrow and reviewed whenever a route is added.
  */
 const deliberateAuthExceptions: Record<string, string> = {
+  "mobile/train/templates/route.ts": "authenticateNativeRequest verifies bearer owner; gated versioned template content and scoped definitions",
+  "mobile/train/templates/[id]/route.ts": "authenticateNativeRequest verifies bearer owner; explicit owned template read including archived references",
+  "mobile/train/templates/capabilities/route.ts": "authenticateNativeRequest verifies bearer session; private rollout state, no caller-controlled gate",
+  "mobile/train/templates/commands/route.ts": "authenticateNativeRequest verifies bearer owner; durable first outcomes and versioned owner-only SQL commands",
+  "mobile/train/templates/definitions/route.ts": "authenticateNativeRequest verifies bearer owner; only public presets or owned custom selection references",
   "mobile/train/exercises/route.ts": "authenticateNativeRequest verifies bearer owner; gated owner-only custom library with no cookie or service fallback",
   "mobile/train/exercises/[id]/route.ts": "authenticateNativeRequest verifies bearer owner; gated explicit owned definition read including archived references",
   "mobile/train/exercises/capabilities/route.ts": "authenticateNativeRequest verifies bearer session; private server rollout state only, no caller-controlled gate",
@@ -40,6 +45,10 @@ const deliberateAuthExceptions: Record<string, string> = {
   "mobile/assistant/history/route.ts": "verified native Supabase user JWT only through authenticateNativeRequest; read-only owner RLS history, no cookie/MCP/API-key fallback",
   "mobile/assistant/command/route.ts": "authenticateNativeRequest verifies native bearer; owner-filtered capture proposal, fresh external conflict read and owner RLS command",
 };
+const sharedCookieTemplateRoutes = new Set([
+  'routines/templates/route.ts', 'routines/templates/[id]/route.ts', 'routines/templates/capabilities/route.ts',
+  'routines/templates/commands/route.ts', 'routines/templates/definitions/route.ts',
+]);
 
 function routeFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -63,10 +72,18 @@ describe("API authentication route contract", () => {
 
     for (const route of routes) {
       const name = routeName(route);
-      const source = readFileSync(route, "utf8");
+      let source = readFileSync(route, "utf8");
 
       if (name in deliberateAuthExceptions) {
         continue;
+      }
+
+      if (sharedCookieTemplateRoutes.has(name)) {
+        expect(source).toContain('templateCookieRoute');
+        expect(source).toContain(name.endsWith('commands/route.ts') ? "'write'" : "'read'");
+        source = readFileSync(join(process.cwd(), 'lib/fitness/template-cookie-route.ts'), 'utf8');
+        expect(source).toContain("allowedCredentials: ['cookie']");
+        expect(source).toContain("request.headers.get('X-Train-Owner') !== auth.principal.userId");
       }
 
       expect(source, `${name} should use the shared request context`).toContain(
@@ -93,6 +110,7 @@ describe("API authentication route contract", () => {
     for (const [name, reason] of Object.entries(deliberateAuthExceptions)) {
       expect(routes.has(name), `${name} (${reason}) should exist`).toBe(true);
     }
+    for (const name of sharedCookieTemplateRoutes) expect(routes.has(name)).toBe(true);
   });
 });
 

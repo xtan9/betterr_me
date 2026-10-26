@@ -181,6 +181,24 @@ try {
   if (query(database, `select jsonb_build_array(has_table_privilege('service_role','public.exercises','INSERT'),
     has_table_privilege('service_role','public.exercises','UPDATE'),has_table_privilege('service_role','public.exercises','DELETE'));`) !== serviceDml) throw new Error('Contraction changed trusted preset maintenance');
   console.log('PASS exact 418 C migration: gate enabled, ordinary DML closed, trusted preset maintenance retained; all ten record/outcome tables unchanged');
+  const templateTables = ['exercises','exercise_media','exercise_name_mappings','workouts','workout_exercises',
+    'workout_sets','routines','routine_exercises','train_completion_receipts','train_exercise_command_outcomes'];
+  const templatePreservation = (expanded = false) => query(database, `select md5(jsonb_build_object(${templateTables.map(table =>
+    `'${table}',(select jsonb_agg(${expanded && table === 'routines' ? "to_jsonb(t)-array['version','archived_at']" : 'to_jsonb(t)'} order by to_jsonb(t)::text) from public.${table} t)`).join(',')})::text);`);
+  const beforeTemplates = templatePreservation();
+  query(database, migration('20261026001702_train_workout_templates_expand.sql'));
+  if (templatePreservation(true) !== beforeTemplates) throw new Error('Template expansion changed existing fields or first receipts');
+  if (query(database, 'select ready from fitness_private.template_rollout') !== 'f') throw new Error('Template expansion prematurely enabled commands');
+  query(database, 'select fitness_private.activate_template_contract();');
+  if (templatePreservation(true) !== beforeTemplates) throw new Error('Template materialization changed original fields/timestamps or receipts');
+  if (query(database, 'select count(*) from fitness_private.template_entries') !== '8'
+    || query(database, 'select count(*) from fitness_private.template_targets') !== '16') throw new Error('Legacy target materialization changed counts');
+  if (query(database, `select count(*) from unnest(array['anon','authenticated','service_role']) r
+    cross join unnest(array['INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p
+    where has_table_privilege(r,'public.routines',p) or has_table_privilege(r,'public.routine_exercises',p)`) !== '0') throw new Error('Template cutover left an ordinary content writer');
+  console.log('PASS 419 expansion and materialization: all ten legacy/current record tables preserved, eight ordered entries/sixteen targets, commands gated until cutover, ordinary content DML closed');
+
+
 } finally {
   if (created) query('postgres', `drop database ${database};`);
 }

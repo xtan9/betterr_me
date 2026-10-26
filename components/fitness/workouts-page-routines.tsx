@@ -11,12 +11,21 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useRoutines } from "@/lib/hooks/use-routines";
 import { RoutineCard } from "@/components/fitness/routines/routine-card";
 import type { RoutineWithExercises } from "@/lib/db/types";
+import { useTemplateAccess } from "./routines/use-template-library";
+import { TemplateRoutineLibrary } from "./routines/template-library";
 
 /**
  * Client component that renders the "My Routines" section on the workouts landing page.
  * Shows up to 3 routine cards with start buttons, or a prompt to create the first routine.
  */
 export function WorkoutsPageRoutines() {
+  const access = useTemplateAccess(), t = useTranslations("routines.templates");
+  if (access.loading) return <Skeleton className="h-32 w-full" />;
+  if (access.error || !access.ownerId || access.ready === undefined) return <p role="alert">{t("unavailable")}</p>;
+  return access.ready ? <TemplateRoutineLibrary key={access.ownerId} ownerId={access.ownerId} compact /> : <LegacyWorkoutsPageRoutines key={access.ownerId} />;
+}
+
+function LegacyWorkoutsPageRoutines() {
   const t = useTranslations("routines");
   const router = useRouter();
   const { routines, error, isLoading } = useRoutines();

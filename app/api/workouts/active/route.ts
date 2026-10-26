@@ -15,7 +15,7 @@ const READ_REQUEST_POLICY = {
  * and previous workout values for each exercise.
  * Returns { workout: null } if no active workout exists.
  */
-export async function GET(request: Request = new Request("http://localhost")) {
+export async function GET(request: Request) {
   try {
     const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
     if (!auth.ok) {
