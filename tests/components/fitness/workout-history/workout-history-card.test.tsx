@@ -4,6 +4,7 @@ import { WorkoutHistoryCard } from "@/components/fitness/workout-history/workout
 import type { WorkoutSummary } from "@/lib/db/workouts";
 
 vi.mock("next-intl", () => ({
+  useLocale: () => 'en-US',
   useTranslations: () => (key: string, values?: Record<string, number>) =>
     values ? `${key}:${Object.values(values).join(":")}` : key,
 }));
@@ -22,6 +23,15 @@ const workout = {
 } satisfies WorkoutSummary;
 
 describe("WorkoutHistoryCard Fitness Weight Unit presentation", () => {
+  it('keeps a chosen civil day stable and displays unknown duration distinctly from zero', () => {
+    const { rerender } = render(<WorkoutHistoryCard workout={{ ...workout, started_at: null, workoutDay: '2024-02-29', duration_seconds: null }} weightUnit="kg" />);
+    expect(screen.getByText('Feb 29, 2024')).toBeInTheDocument();
+    expect(screen.getByText('durationUnknown')).toBeInTheDocument();
+    expect(screen.queryByText('minuteShort:0')).not.toBeInTheDocument();
+    rerender(<WorkoutHistoryCard workout={{ ...workout, started_at: null, workoutDay: null, duration_seconds: 0 }} weightUnit="kg" />);
+    expect(screen.getByText('workoutDayUnknown')).toBeInTheDocument();
+    expect(screen.getByText('minuteShort:0')).toBeInTheDocument();
+  });
   it("keeps an unsupported record accessible without guessed exercise facts", () => {
     render(<WorkoutHistoryCard workout={{ ...workout, recordedStatus: 'unsupported', exerciseCount: null, totalSets: null, totalVolume: null, exerciseNames: [] }} weightUnit="kg" />);
     expect(screen.getByRole('link')).toHaveAttribute('href', '/workouts/workout-1');

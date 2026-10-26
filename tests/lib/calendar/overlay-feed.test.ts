@@ -128,6 +128,17 @@ function allCapabilities(
 }
 
 describe("queryCalendarOverlayFeed", () => {
+  it("keeps date-only workouts on the canonical day without inventing midnight or dating unknown history", async () => {
+    const result = await queryCalendarOverlayFeed({ ...request, layers: ["workouts"], timezone: "Pacific/Honolulu" },
+      allCapabilities({}, {}, { read: vi.fn().mockResolvedValue([
+        workout({ id: "date-only", workoutDay: "2026-04-02", started_at: null, completed_at: null, duration_seconds: null }),
+        workout({ id: "undated", workoutDay: null, started_at: "2026-04-02T06:30:00Z" }),
+      ]) }));
+    expect(result.status).toBe("complete");
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({ workoutId: "date-only", date: "2026-04-02", startTime: null, allDay: true });
+  });
+
   it("rejects an incomplete capability composition before starting acquisition", async () => {
     const coverage = vi.fn().mockResolvedValue({ status: "complete" });
     const complete = allCapabilities({ coverage: { ensureThrough: coverage } });

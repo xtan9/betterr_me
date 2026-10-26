@@ -15,9 +15,11 @@ import type { WorkoutWithExercises } from "@/lib/db/types";
 /**
  * Compute a human-readable elapsed time string from a start timestamp.
  */
-function computeElapsedDisplay(startedAt: string, now: number): string {
+function computeElapsedDisplay(startedAt: string | null, now: number): string {
+  if (!startedAt) return "";
   const startMs = new Date(startedAt).getTime();
-  const elapsedMinutes = Math.floor((now - startMs) / 60000);
+  if (!Number.isFinite(startMs)) return "";
+  const elapsedMinutes = Math.max(0, Math.floor((now - startMs) / 60000));
   if (elapsedMinutes >= 60) {
     return `${Math.floor(elapsedMinutes / 60)}h ${elapsedMinutes % 60}m`;
   }
@@ -97,7 +99,7 @@ export function WorkoutResumeBanner() {
         <div className="min-w-0 flex-1">
           <p className="text-body font-medium">{t("resumeBannerTitle")}</p>
           <p className="text-muted-foreground text-caption truncate">
-            {workout.title} &middot; {elapsedDisplay}
+            {workout.title} &middot; {elapsedDisplay || t("durationUnknown")}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">

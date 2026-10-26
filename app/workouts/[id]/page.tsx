@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
 import { WorkoutsDB } from "@/lib/db/workouts";
 import { FitnessDB } from "@/lib/db/fitness";
@@ -10,6 +10,7 @@ import { DEFAULT_WEIGHT_UNIT_PREFERENCE } from "@/lib/preferences/owners";
 import type { WeightUnitPreference } from "@/lib/preferences/types";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
+import { formatWorkoutDay } from "@/lib/fitness/history-presentation";
 
 interface WorkoutDetailPageProps {
   params: Promise<{ id: string }>;
@@ -59,10 +60,10 @@ export default async function WorkoutDetailPage({
     log.error("Failed to read Fitness Weight Unit Preference", error);
   }
 
-  const t = await getTranslations("workouts");
+  const [t, locale] = await Promise.all([getTranslations("workouts"), getLocale()]);
 
-  const formattedDate = new Date(workout.started_at).toLocaleDateString(
-    undefined,
+  const formattedDate = formatWorkoutDay(
+    workout, locale,
     {
       weekday: "long",
       year: "numeric",
@@ -84,7 +85,7 @@ export default async function WorkoutDetailPage({
 
       <PageHeader
         title={workout.title}
-        subtitle={t("completedOn", { date: formattedDate })}
+        subtitle={formattedDate === null ? t("workoutDayUnknown") : t("completedOn", { date: formattedDate })}
       />
 
       <WorkoutDetailView workout={workout} weightUnit={weightUnit} />

@@ -26,11 +26,13 @@ import type { UseRestTimerReturn } from "@/lib/fitness/rest-timer";
 // Stopwatch hook — timestamp-based elapsed timer
 // ---------------------------------------------------------------------------
 
-function useStopwatch(startedAt: string): string {
+function useStopwatch(startedAt: string | null): string {
   const [elapsed, setElapsed] = useState("");
 
   useEffect(() => {
+    if (!startedAt) return;
     const startTime = new Date(startedAt).getTime();
+    if (!Number.isFinite(startTime)) return;
 
     const update = () => {
       const diff = Math.max(0, Date.now() - startTime);
@@ -49,7 +51,7 @@ function useStopwatch(startedAt: string): string {
     return () => clearInterval(interval);
   }, [startedAt]);
 
-  return elapsed;
+  return startedAt && Number.isFinite(Date.parse(startedAt)) ? elapsed : "";
 }
 
 // ---------------------------------------------------------------------------
@@ -145,7 +147,7 @@ export function WorkoutHeader({
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <div className="flex items-center gap-1.5 text-body font-mono text-muted-foreground">
             <Timer className="h-4 w-4" />
-            <span>{elapsed}</span>
+            <span>{elapsed || t("durationUnknown")}</span>
           </div>
 
           {isEditingTitle ? (

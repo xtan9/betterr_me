@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import {
@@ -27,11 +27,8 @@ import {
 import { toast } from "sonner";
 import type { WorkoutSet, WorkoutSetUpdate, WeightUnit, ExerciseType } from "@/lib/db/types";
 import { EXERCISE_FIELD_MAP } from "@/lib/fitness/exercise-fields";
-import { isNewPR, type PRCheckResult } from "@/lib/fitness/personal-records";
-import { useExerciseRecords } from "@/lib/hooks/use-exercise-history";
 import type { WorkoutExerciseWithPrevious } from "@/lib/hooks/use-active-workout";
 import { ExerciseThumbnail } from "@/components/fitness/exercise-thumbnail";
-import { PRBanner } from "@/components/fitness/progress/pr-banner";
 import { WorkoutSetRow } from "./workout-set-row";
 
 interface WorkoutExerciseCardProps {
@@ -64,56 +61,8 @@ export function WorkoutExerciseCard({
   const [notesOpen, setNotesOpen] = useState(!!exercise.notes);
   const [notesValue, setNotesValue] = useState(exercise.notes ?? "");
   const [restTimerPopoverOpen, setRestTimerPopoverOpen] = useState(false);
-  const [prBanner, setPrBanner] = useState<{
-    prType: "weight" | "volume" | "reps" | "duration";
-    value: number;
-  } | null>(null);
-
   const exerciseInfo = exercise.exercise;
   const previousSets = exercise.previousSets ?? [];
-
-  // Fetch current PR for this exercise (for mid-workout PR detection)
-  // Skip PR detection when records fetch fails to avoid false-positive banners
-  const { records: currentPR, error: recordsError } = useExerciseRecords(exerciseInfo.id);
-
-  // Only the accepted completion can establish a record; typed edits may still be saving.
-  const handleCompleteSetWithPR = useCallback(
-    async (setId: string) => {
-      const setSnapshot = await onCompleteSet(setId);
-      if (!recordsError) {
-        const prResult: PRCheckResult = isNewPR(
-          setSnapshot,
-          exerciseInfo.exercise_type,
-          currentPR
-        );
-
-        // Determine the most significant PR to show
-        if (prResult.isWeightPR && setSnapshot.weight_kg != null) {
-          setPrBanner({ prType: "weight", value: setSnapshot.weight_kg });
-        } else if (
-          prResult.isVolumePR &&
-          setSnapshot.weight_kg != null &&
-          setSnapshot.reps != null
-        ) {
-          setPrBanner({
-            prType: "volume",
-            value: setSnapshot.weight_kg * setSnapshot.reps,
-          });
-        } else if (prResult.isRepsPR && setSnapshot.reps != null) {
-          setPrBanner({ prType: "reps", value: setSnapshot.reps });
-        } else if (
-          prResult.isDurationPR &&
-          setSnapshot.duration_seconds != null
-        ) {
-          setPrBanner({
-            prType: "duration",
-            value: setSnapshot.duration_seconds,
-          });
-        }
-      }
-    },
-    [exerciseInfo.exercise_type, currentPR, recordsError, onCompleteSet]
-  );
 
   const handleNotesBlur = () => {
     const trimmed = notesValue.trim();
@@ -235,17 +184,6 @@ export function WorkoutExerciseCard({
       </CardHeader>
 
       <CardContent className="space-y-1 pb-3">
-        {/* PR banner (shown inline when a new PR is detected) */}
-        {prBanner && (
-          <PRBanner
-            exerciseName={exerciseInfo.name}
-            prType={prBanner.prType}
-            value={prBanner.value}
-            weightUnit={weightUnit}
-            onDismiss={() => setPrBanner(null)}
-          />
-        )}
-
         {/* Column headers */}
         <SetColumnHeaders
           exerciseType={exerciseInfo.exercise_type}
@@ -263,7 +201,7 @@ export function WorkoutExerciseCard({
             priorResults={exercise.priorResults}
             onUpdate={(updates) => onUpdateSet(set.id, updates)}
             onDelete={() => onDeleteSet(set.id)}
-            onComplete={() => handleCompleteSetWithPR(set.id)}
+            onComplete={async () => { await onCompleteSet(set.id); }}
           />
         ))}
 
