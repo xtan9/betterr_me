@@ -24,7 +24,6 @@ begin
     'projects',
     'journal_entries',
     'journal_entry_links',
-    'exercises',
     'exercise_media',
     'routines',
     'routine_exercises',
@@ -44,6 +43,12 @@ $$;
 
 do $$
 begin
+  if to_regclass('public.exercises') is not null then
+    -- Respect the shipped command-only exercise boundary after Train C.
+    -- Do not let disposable setup conceal an accidental direct-write bypass.
+    revoke insert,update,delete,truncate,references,trigger on public.exercises from authenticated;
+    grant select on public.exercises to authenticated;
+  end if;
   if to_regclass('public.finance_cushions') is not null then
     revoke all on table public.finance_cushions from authenticated;
     grant select on table public.finance_cushions to authenticated;

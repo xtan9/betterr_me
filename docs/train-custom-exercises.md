@@ -1,10 +1,10 @@
 # Train custom exercise definitions
 
 Backend companion to [mobile #418](https://github.com/xtan9/betterr_me_mobile/issues/418).
-This first release contains expansion A and compatible server/Web adapters B.
-It deliberately leaves `customExercises.ready` false. The separate contraction C
-must follow verification of the exact deployed B production alias and cookie
-workflow. A merged backend PR alone does not deliver native custom exercises.
+The first release contains expansion A and compatible server/Web adapters B,
+with `customExercises.ready` false. The separate contraction C follows verified
+deployment of that exact B alias and its authenticated cookie workflow. A merged
+backend PR alone does not deliver native custom exercises.
 
 ## Identity, meaning and maintenance
 
@@ -136,3 +136,40 @@ passed its 10 journal/principal workflow tests. Hosted final gates remain requir
 
 Production contraction and native acceptance remain delivery gates; the passed
 coordinated mobile disk/old-reader proof and unit/build checks do not replace them.
+
+## Verified B release and C activation
+
+PR #1084 merged as `9e10e05c7e0c73fc743e14a7337eb57702d01395` after the full hosted
+CI and Chromium gates passed. Production migration `20261025214904` completed,
+and `www.betterr.me` resolved to READY deployment
+`dpl_DaXP2eHXApEnpoxR5c63E8z2weYa` at that exact commit. Readiness remained false.
+
+A generated disposable account then authenticated through Supabase and real
+production cookie requests. Library reads retained version strings and NULL
+legacy meaning. Rename, accepted retry, stale CAS, archive, restore and retained
+first rejection passed. Both cookie and bearer creation returned `not_ready`
+without an outcome; existing workout/routine reads succeeded. Account deletion
+and a scoped SQL audit found zero remaining users, sessions, profiles, definitions
+or command outcomes. Private runtime configuration was removed. Two earlier
+probe setup attempts exceeded Auth's password-length limit and created no user;
+they are retained as setup failures, not product regressions.
+
+Migration `20261025234112_train_custom_exercises_enable.sql` performs C atomically:
+it enables the private gate, revokes ordinary exercise write privileges and removes
+service-role TRUNCATE/TRIGGER while preserving trusted preset maintenance. It
+adds no new application writer. B must remain deployed when the gate is enabled.
+
+The isolated historical replay now applies that exact C migration and verifies
+all ten record/outcome tables remain unchanged, readiness becomes true and grants
+match the contraction. Twelve affected SQL fixture groups pass after C, including
+the original A compatibility assertions reconstructed inside an admin rollback,
+current authenticated command ownership, account cascade and continuing workout
+operations. Test bootstrap preserves the production exercise write restrictions;
+legacy fixture setup no longer silently restores ordinary DML. The shared local
+database's exact original flags and grants, including the parallel template gate,
+were restored after the bounded proof window.
+
+The local A→C HTTP runner above intentionally requires an isolated A database;
+its recorded proof remains pinned to its original source. Native simulator
+acceptance and the final deployed C capability/command proof are tracked with
+the companion mobile delivery.

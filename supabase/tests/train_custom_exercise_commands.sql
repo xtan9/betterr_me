@@ -3,9 +3,11 @@ begin;
 select public.sql_fixture_create_auth_user('64181000-0000-4000-8000-000000000001','train-command-owner@example.test');
 select public.sql_fixture_create_auth_user('64181000-0000-4000-8000-000000000002','train-command-foreign@example.test');
 select set_config('request.jwt.claims','{"sub":"64181000-0000-4000-8000-000000000001","role":"authenticated"}',true);
-set local role authenticated;
+-- Seed the retained deferred definition through the constrained setup identity.
+-- All command assertions below use the ordinary application role.
 insert into public.exercises(id,user_id,name,muscle_group_primary,muscle_groups_secondary,equipment,exercise_type,is_custom)
-values('64181000-0000-4000-8000-000000000010',auth.uid(),'Legacy name','other',array['legacy-muscle'],'band','duration_weight',true);
+values('64181000-0000-4000-8000-000000000010','64181000-0000-4000-8000-000000000001','Legacy name','other',array['legacy-muscle'],'band','duration_weight',true);
+set local role authenticated;
 do $$
 declare request jsonb:='{"protocolVersion":1,"operationId":"64181000-0000-4000-8000-000000000020","command":{"kind":"update-metadata","exerciseId":"64181000-0000-4000-8000-000000000010","expectedVersion":"1","patch":{"name":"Renamed"}}}';
  accepted jsonb; rejected jsonb; newer jsonb; current_row jsonb; invalid_name text;
@@ -23,7 +25,8 @@ begin
  rejected:=public.execute_train_exercise_command(newer);
  if rejected->>'status'<>'version_conflict' or rejected->'rejection'->'current'->>'version'<>'2'
    or rejected ? 'receipt' then raise exception 'Stale command did not retain a distinct rejection: %',rejected; end if;
- update public.exercises set name='Concurrent legacy rename' where id='64181000-0000-4000-8000-000000000010';
+ if public.execute_train_exercise_command('{"protocolVersion":1,"operationId":"64181000-0000-4000-8000-000000000025","command":{"kind":"update-metadata","exerciseId":"64181000-0000-4000-8000-000000000010","expectedVersion":"2","patch":{"name":"Concurrent legacy rename"}}}')->>'status'<>'accepted' then
+   raise exception 'Concurrent metadata command failed'; end if;
  if public.execute_train_exercise_command(newer) is distinct from rejected then raise exception 'Retry rewrote first rejection'; end if;
  if public.execute_train_exercise_command(request) is distinct from accepted then raise exception 'Newer state rewrote first receipt'; end if;
  select to_jsonb(e) into current_row from public.exercises e where id='64181000-0000-4000-8000-000000000010';

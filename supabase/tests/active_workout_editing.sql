@@ -63,7 +63,8 @@ insert into public.exercises (
   muscle_group_primary,
   equipment,
   exercise_type,
-  is_custom
+  is_custom,
+  measurement_convention
 )
 values
   (
@@ -73,7 +74,8 @@ values
     'chest',
     'barbell',
     'weight_reps',
-    true
+    true,
+    'barbell-total'
   ),
   (
     '64600000-0000-0000-0000-000000000102',
@@ -82,7 +84,8 @@ values
     'quadriceps',
     'barbell',
     'weight_reps',
-    true
+    true,
+    'barbell-total'
   ),
   (
     '64600000-0000-0000-0000-000000000103',
@@ -91,7 +94,8 @@ values
     'back',
     'barbell',
     'weight_reps',
-    true
+    true,
+    'barbell-total'
   ),
   (
     '64600000-0000-0000-0000-000000000104',
@@ -100,7 +104,8 @@ values
     'shoulders',
     'barbell',
     'weight_reps',
-    true
+    true,
+    'barbell-total'
   );
 
 insert into public.workouts (id, user_id, title, status, notes)
@@ -191,7 +196,8 @@ insert into public.exercises (
   muscle_group_primary,
   equipment,
   exercise_type,
-  is_custom
+  is_custom,
+  measurement_convention
 )
 values (
   '64600000-0000-0000-0000-000000000201',
@@ -200,7 +206,8 @@ values (
   'chest',
   'barbell',
   'weight_reps',
-  true
+  true,
+  'barbell-total'
 );
 
 insert into public.workouts (id, user_id, title, status, notes)

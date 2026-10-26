@@ -6,8 +6,8 @@ select public.sql_fixture_create_auth_user('64151000-0000-4000-8000-000000000002
 insert into public.routines(id,user_id,name) values
  ('64151000-0000-4000-8000-000000000003','64151000-0000-4000-8000-000000000001','Owned routine'),
  ('64151000-0000-4000-8000-000000000004','64151000-0000-4000-8000-000000000002','Foreign routine');
-insert into public.exercises(id,user_id,name,muscle_group_primary,equipment,is_custom)
- values('64151000-0000-4000-8000-000000000005','64151000-0000-4000-8000-000000000002','Private reference','other','other',true);
+insert into public.exercises(id,user_id,name,muscle_group_primary,equipment,is_custom,measurement_convention)
+ values('64151000-0000-4000-8000-000000000005','64151000-0000-4000-8000-000000000002','Private reference','other','other',true,'selected-load');
 select set_config('request.jwt.claims','{"role":"service_role","sub":"64151000-0000-4000-8000-000000000002"}',true);
 select set_config('request.jwt.claim.sub','64151000-0000-4000-8000-000000000002',true);
 set local role service_role;

@@ -163,6 +163,24 @@ try {
   }
   if (query(database, `select ready from fitness_private.custom_exercise_rollout`) !== 'f') throw new Error('Expansion prematurely activated the custom contract');
   console.log(`PASS historical DDL → 8 modes/custom/null/zero/deferred fields + 10,032 sets → 415 migration, ${elapsed} ms → 416 migration → 418 expansion; exact legacy rows/media and accepted v1/v2 captures/receipts unchanged; old invalid measures remain editable; custom readiness remains false`);
+  const tables = ['exercises', 'exercise_media', 'exercise_name_mappings', 'workouts', 'workout_exercises',
+    'workout_sets', 'routines', 'routine_exercises', 'train_completion_receipts', 'train_exercise_command_outcomes'];
+  const content = () => query(database, `select md5(jsonb_build_object(${tables.map(table =>
+    `'${table}',(select jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text) from public.${table} t)`).join(',')})::text);`);
+  const beforeContraction = content();
+  const serviceDml = query(database, `select jsonb_build_array(has_table_privilege('service_role','public.exercises','INSERT'),
+    has_table_privilege('service_role','public.exercises','UPDATE'),has_table_privilege('service_role','public.exercises','DELETE'));`);
+  query(database, migration('20261025234112_train_custom_exercises_enable.sql'));
+  if (content() !== beforeContraction) throw new Error('Contraction rewrote existing records or first outcomes');
+  if (query(database, `select ready from fitness_private.custom_exercise_rollout`) !== 't') throw new Error('Contraction did not enable commands');
+  if (query(database, `select count(*) from unnest(array['anon','authenticated']) as r(role_name) cross join
+    unnest(array['INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) as p(privilege_name)
+    where has_table_privilege(role_name,'public.exercises',privilege_name);`) !== '0') throw new Error('Contraction left an ordinary write bypass');
+  if (query(database, `select has_table_privilege('service_role','public.exercises','TRUNCATE') or
+    has_table_privilege('service_role','public.exercises','TRIGGER');`) !== 'f') throw new Error('Contraction left a service-role bypass');
+  if (query(database, `select jsonb_build_array(has_table_privilege('service_role','public.exercises','INSERT'),
+    has_table_privilege('service_role','public.exercises','UPDATE'),has_table_privilege('service_role','public.exercises','DELETE'));`) !== serviceDml) throw new Error('Contraction changed trusted preset maintenance');
+  console.log('PASS exact 418 C migration: gate enabled, ordinary DML closed, trusted preset maintenance retained; all ten record/outcome tables unchanged');
 } finally {
   if (created) query('postgres', `drop database ${database};`);
 }
