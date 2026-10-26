@@ -1,3 +1,4 @@
+import { deleteFixtureWorkout } from '../scripts/e2e/workout-cleanup.mjs';
 import { createClient } from '@supabase/supabase-js';
 import { expect, test } from '@playwright/test';
 import {
@@ -42,12 +43,7 @@ test.describe('Current Profile preference journey', () => {
       throw new Error(`Current Profile cleanup auth failed: ${authError?.message ?? 'no user returned'}`);
     }
 
-    const { error: deleteError } = await supabase
-      .from('workouts')
-      .delete()
-      .eq('id', workoutId)
-      .eq('user_id', authData.user.id);
-    if (deleteError) throw new Error(`Current Profile cleanup failed: ${deleteError.message}`);
+    await deleteFixtureWorkout(supabase, authData.user.id, workoutId);
 
     const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' });
     if (signOutError) throw new Error(`Current Profile cleanup sign-out failed: ${signOutError.message}`);

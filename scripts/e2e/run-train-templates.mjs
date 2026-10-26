@@ -1,3 +1,4 @@
+import { deleteFixtureWorkout } from './workout-cleanup.mjs';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomUUID, randomBytes } from 'node:crypto';
 import { createServer } from 'node:net';
@@ -288,7 +289,7 @@ try {
   }
   const converted=await request(endpoint,a,command('save-workout-as-template',{workoutId:completedId,name:'Converted result'}));
   check(converted.receipt.template.entries[0].targets.items[0].measurements.weightKg==='0.123','Conversion changed captured precision');
-  check(!(await a.client.from('workouts').delete().eq('id',completedId)).error,'Owned history delete failed');
+  await deleteFixtureWorkout(a.client, a.id, completedId);
   check(isDeepStrictEqual(await request(uploadEndpoint,a,envelope),upload)&&!(await a.client.from('workouts').select('id').eq('id',completedId)).data.length,'Old create resurrected history');
   passed('V4 full-origin upload/read/conversion and no resurrection after owned history deletion');
   if (runBrowser) {

@@ -77,7 +77,21 @@ begin
  identity:=gen_random_uuid(); invalid:=jsonb_set(document,'{id}',to_jsonb(identity));
  invalid:=jsonb_set(invalid,'{exercises,0,definition,reference,exerciseId}','"99999999-9999-4999-8999-999999999999"');
  if public.upload_completed_workout(identity,invalid)->>'status'<>'reference_unavailable' then raise exception 'Custom reference identity/meaning was not checked'; end if;
- delete from public.workouts where id=(document->>'id')::uuid;
+ if (public.train_history_capabilities()->>'historyReady')::boolean then
+  begin
+   delete from public.workouts where id=(document->>'id')::uuid;
+   raise exception 'Unreviewed completed deletion bypassed current authority';
+  exception when check_violation then null; end;
+  if public.execute_train_history_command(jsonb_build_object('protocolVersion',1,'ownerId',auth.uid(),'operationId',gen_random_uuid(),
+    'command',jsonb_build_object('kind','delete-workout','workoutId',(document->>'id')::uuid,'expectedRevision',public.read_train_history_record((document->>'id')::uuid)->'record'->>'revision')))->'receipt'->>'operation' is distinct from 'delete-workout' then
+   raise exception 'Reviewed completed deletion was not accepted';
+  end if;
+  if public.read_train_history_record((document->>'id')::uuid)->'record'->>'state' is distinct from 'deleted' then
+   raise exception 'Reviewed completed deletion did not retain its tombstone';
+  end if;
+ else
+  delete from public.workouts where id=(document->>'id')::uuid;
+ end if;
  if public.upload_completed_workout((document->>'id')::uuid,document) is distinct from first_receipt or exists(select 1 from public.workouts where id=(document->>'id')::uuid) then raise exception 'Delayed create resurrected deleted v3'; end if;
  perform set_config('request.jwt.claims','{"sub":"88888888-8888-4888-8888-888888888888","role":"authenticated"}',true);
  result:=public.read_train_custom_exercises('22222222-2222-4222-8222-222222222222',null);

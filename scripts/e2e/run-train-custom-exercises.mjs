@@ -1,3 +1,4 @@
+import { deleteFixtureWorkout } from './workout-cleanup.mjs';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomUUID, randomBytes } from 'node:crypto';
 import { createServer } from 'node:net';
@@ -214,7 +215,7 @@ try {
   check(!choices.some(row=>row.id===create.operationId),'Archived definition remained in new-selection list');
   await request(uploadEndpoint,b,frozen,403);
   check((await b.client.from('workouts').select('id').eq('id',frozen.operationId)).data.length===0,'Foreign raw history exposed V3');
-  check(!(await a.client.from('workouts').delete().eq('id',frozen.operationId)).error,'Authorized history deletion failed');
+  await deleteFixtureWorkout(a.client, a.id, frozen.operationId);
   check(isDeepStrictEqual(await request(uploadEndpoint,a,frozen),accepted) && !(await a.client.from('workouts').select('id').eq('id',frozen.operationId)).data.length,'V3 retry resurrected deleted history');
   passed('Archived captured v3 uploads/readbacks through bearer, cookie, MCP and routine conversion; foreign isolation; no resurrection');
 
