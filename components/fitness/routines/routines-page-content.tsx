@@ -23,8 +23,17 @@ import { useRoutines } from "@/lib/hooks/use-routines";
 import { RoutineCard } from "./routine-card";
 import { RoutineForm } from "./routine-form";
 import type { RoutineWithExercises } from "@/lib/db/types";
+import { useTemplateAccess } from "./use-template-library";
+import { TemplateRoutineLibrary } from "./template-library";
 
 export function RoutinesPageContent() {
+  const access = useTemplateAccess(), t = useTranslations("routines.templates");
+  if (access.loading) return <Skeleton className="h-32 w-full" />;
+  if (access.error || !access.ownerId || access.ready === undefined) return <p role="alert">{t("unavailable")}</p>;
+  return access.ready ? <TemplateRoutineLibrary key={access.ownerId} ownerId={access.ownerId} /> : <LegacyRoutinesPageContent key={access.ownerId} />;
+}
+
+function LegacyRoutinesPageContent() {
   const t = useTranslations("routines");
   const router = useRouter();
   const { routines, error, isLoading, mutate } = useRoutines();

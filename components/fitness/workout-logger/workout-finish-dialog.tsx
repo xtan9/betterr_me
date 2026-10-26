@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { LayoutTemplate, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -18,6 +19,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { WorkoutWithExercises, WeightUnit } from "@/lib/db/types";
 import { formatWeight } from "@/lib/fitness/units";
+import { currentTemplateCommand, prepareTemplateCommand, sendTemplateCommand } from "@/lib/fitness/template-command-client";
+import { useTemplateAccess, useTemplateJournal } from "../routines/use-template-library";
 
 interface WorkoutFinishDialogProps {
   open: boolean;
@@ -42,16 +45,27 @@ function formatDuration(seconds: number): string {
   return `${minutes}m`;
 }
 
-export function WorkoutFinishDialog({
+export function WorkoutFinishDialog(props: WorkoutFinishDialogProps) {
+  const access = useTemplateAccess();
+  return <WorkoutFinishContent key={`${access.ownerId}:${props.workout.id}`} {...props} access={access} />;
+}
+
+function WorkoutFinishContent({
   open,
   onOpenChange,
   workout,
   durationSeconds,
   weightUnit,
   onConfirm,
-}: WorkoutFinishDialogProps) {
+  access,
+}: WorkoutFinishDialogProps & { access: ReturnType<typeof useTemplateAccess> }) {
   const t = useTranslations("workouts");
   const tRoutines = useTranslations("routines");
+  const tt = useTranslations("routines.templates"), { journal, error: journalFailed } = useTemplateJournal(access.ownerId);
+  const alive = useRef(true), sending = useRef(false);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const matchingRequest = journal?.request.command.kind === "save-workout-as-template" && journal.request.command.workoutId === workout.id ? journal : null;
+  const pendingName = matchingRequest?.state === "pending" && typeof matchingRequest.request.command.name === "string" ? matchingRequest.request.command.name : null;
 
   // Save as routine state
   const [showSaveRoutine, setShowSaveRoutine] = useState(false);
@@ -85,34 +99,44 @@ export function WorkoutFinishDialog({
   const hasExercises = workout.exercises.length > 0;
 
   const handleSaveAsRoutine = async () => {
-    const name = routineName.trim();
-    if (!name) return;
+    const owner = access.ownerId, name = (pendingName ?? routineName).trim();
+    if (!name || sending.current || access.error || journalFailed || access.ready === undefined || !owner || owner !== workout.user_id) return;
 
+    sending.current = true;
     setSaving(true);
     try {
-      const res = await fetch(
+      const pending = currentTemplateCommand(owner);
+      if (access.ready) {
+        if (pending && (pending.state !== "pending" || pending.request.command.kind !== "save-workout-as-template" || pending.request.command.workoutId !== workout.id)) throw new Error("pending_command");
+        const request = pending?.request ?? prepareTemplateCommand(owner, { kind: "save-workout-as-template", workoutId: workout.id, name });
+        await sendTemplateCommand(owner, request);
+      } else {
+        if (pending) throw new Error("pending_command");
+        const res = await fetch(
         `/api/workouts/${workout.id}/save-as-routine`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name }),
         }
-      );
+        );
 
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.error ?? "Failed to save as routine");
+        if (!res.ok) {
+          const body = await res.json().catch(() => null);
+          throw new Error(body?.error ?? "Failed to save as routine");
+        }
       }
 
+      if (!alive.current) return;
       toast.success(tRoutines("saveAsRoutineSuccess"));
       setRoutineSaved(true);
       setShowSaveRoutine(false);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to save as routine";
-      toast.error(message);
+      void error;
+      if (alive.current) toast.error(tRoutines("saveAsRoutineError"));
     } finally {
-      setSaving(false);
+      sending.current = false;
+      if (alive.current) setSaving(false);
     }
   };
 
@@ -163,7 +187,7 @@ export function WorkoutFinishDialog({
         </div>
 
         {/* Save as Routine section */}
-        {hasExercises && !routineSaved && (
+        {hasExercises && !routineSaved && access.ownerId === workout.user_id && access.ready !== undefined && !access.error && (
           <div className="border-t pt-3">
             <Button
               variant="ghost"
@@ -187,33 +211,34 @@ export function WorkoutFinishDialog({
               )}
             </Button>
 
-            {showSaveRoutine && (
-              <div className="mt-2 flex gap-2">
+            {(showSaveRoutine || pendingName !== null) && <div className="mt-2 space-y-2"><p className="text-sm text-muted-foreground">{tt("saveAsDisclosure")}</p>
+              {(journalFailed || journal) && <p role="status">{tt(journalFailed ? "unavailable" : journal?.state === "pending" ? "pending" : "conflict")}</p>}
+              {journal && (journal.state !== "pending" || !matchingRequest) && <Link href="/workouts/routines" className="underline">{tRoutines("manageRoutines")}</Link>}
+              <div className="flex gap-2">
                 <Input
                   placeholder={tRoutines("saveAsRoutinePlaceholder")}
-                  value={routineName}
+                  value={pendingName ?? routineName}
                   onChange={(e) => setRoutineName(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && routineName.trim()) {
                       handleSaveAsRoutine();
                     }
                   }}
-                  disabled={saving}
+                  disabled={saving || !!journal || journalFailed}
                 />
                 <Button
                   size="sm"
-                  disabled={saving || !routineName.trim()}
+                  disabled={saving || !(pendingName ?? routineName).trim() || journalFailed || !!journal && (!matchingRequest || journal.state !== "pending" || !access.ready)}
                   onClick={handleSaveAsRoutine}
                   className="shrink-0"
                 >
                   {saving ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    tRoutines("save")
+                    pendingName !== null ? tt("retry") : tRoutines("save")
                   )}
                 </Button>
-              </div>
-            )}
+              </div></div>}
           </div>
         )}
 
