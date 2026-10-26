@@ -25,8 +25,6 @@ begin
     'journal_entries',
     'journal_entry_links',
     'exercise_media',
-    'routines',
-    'routine_exercises',
     'workouts',
     'workout_exercises',
     'workout_sets'
@@ -42,12 +40,26 @@ end
 $$;
 
 do $$
+declare template_ready boolean:=false;
 begin
   if to_regclass('public.exercises') is not null then
     -- Respect the shipped command-only exercise boundary after Train C.
     -- Do not let disposable setup conceal an accidental direct-write bypass.
     revoke insert,update,delete,truncate,references,trigger on public.exercises from authenticated;
     grant select on public.exercises to authenticated;
+  end if;
+  if to_regclass('public.routines') is not null then
+    if to_regclass('fitness_private.template_rollout') is not null then
+      execute 'select ready from fitness_private.template_rollout where singleton' into template_ready;
+    end if;
+    if template_ready then
+      -- C deliberately leaves only usage updates outside the content command.
+      revoke insert,update,delete,truncate,references,trigger on public.routines,public.routine_exercises from authenticated;
+      grant select on public.routines,public.routine_exercises to authenticated;
+      grant update(last_performed_at) on public.routines to authenticated;
+    else
+      grant select,insert,update,delete on public.routines,public.routine_exercises to authenticated;
+    end if;
   end if;
   if to_regclass('public.finance_cushions') is not null then
     revoke all on table public.finance_cushions from authenticated;
