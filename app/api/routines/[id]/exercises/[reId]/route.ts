@@ -1,3 +1,4 @@
+import { legacyRoutineBoundary } from "@/lib/fitness/template-commands";
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
@@ -29,6 +30,8 @@ export async function PATCH(
       );
     }
     const { principal: { userId }, client: supabase } = auth;
+    const boundary = await legacyRoutineBoundary(supabase);
+    if (boundary) return boundary;
 
     const body = await request.json();
     const validation = validateRequestBody(body, routineExerciseUpdateSchema);
@@ -97,6 +100,8 @@ export async function DELETE(
       );
     }
     const { principal: { userId }, client: supabase } = auth;
+    const boundary = await legacyRoutineBoundary(supabase);
+    if (boundary) return boundary;
 
     const outcome = await createRoutineWrites(supabase).removeExercise({
       userId,

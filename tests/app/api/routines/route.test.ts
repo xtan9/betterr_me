@@ -13,6 +13,7 @@ const { mockGetUser, mockGetUserRoutines, mockCreateRoutine } = vi.hoisted(
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(() => ({
     auth: { getUser: mockGetUser },
+    rpc: vi.fn().mockResolvedValue({ data: { protocolVersion: 1, templates: { contractVersion: 1, ready: false } }, error: null }),
   })),
 }));
 
@@ -57,7 +58,7 @@ describe("GET /api/routines", () => {
     ];
     mockGetUserRoutines.mockResolvedValue(routines);
 
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/routines"));
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -67,7 +68,7 @@ describe("GET /api/routines", () => {
   it("returns 401 for unauthenticated user", async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } });
 
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/routines"));
     const data = await response.json();
 
     expect(response.status).toBe(401);
@@ -77,7 +78,7 @@ describe("GET /api/routines", () => {
   it("returns 500 on unexpected error", async () => {
     mockGetUserRoutines.mockRejectedValue(new Error("DB error"));
 
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/routines"));
     const data = await response.json();
 
     expect(response.status).toBe(500);

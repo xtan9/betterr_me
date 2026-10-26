@@ -1,34 +1,11 @@
 import { z } from 'zod';
-import { EQUIPMENT } from '@/lib/constants/enums';
-import { exerciseConvention, exerciseConventionSchema, exerciseIdSchema } from '@/lib/validations/train-exercises';
+import { loadDefinition, presetWorkoutDefinitionSchema as definition, v3Definition, recordedExerciseDefinitionSchema } from './workout-definition';
+import { templateOriginSchema } from './train-templates';
 
 const uuid = z.string().uuid();
 const finiteLoad = z.number().finite().min(0);
 const reps = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 const kind = z.enum(['working', 'warmup']);
-const definitionBase = {
-  catalogKey: z.string().regex(/^strength\.[a-z0-9-]+\.v[1-9][0-9]*$/),
-  name: z.object({ en: z.string().min(1), zh: z.string().min(1) }).strict(),
-};
-const loadDefinition = z.object({ ...definitionBase, mode: z.literal('weight_reps'),
-  equipment: z.enum(['barbell', 'dumbbell', 'machine', 'cable']),
-  convention: z.enum(['barbell-total', 'per-dumbbell', 'selected-load']),
-}).strict().refine(value => value.convention === (value.equipment === 'barbell' ? 'barbell-total' : value.equipment === 'dumbbell' ? 'per-dumbbell' : 'selected-load'));
-const definition = z.union([
-  loadDefinition,
-  z.object({ ...definitionBase, mode: z.literal('bodyweight_reps'), equipment: z.literal('bodyweight'), convention: z.literal('bodyweight-repetitions') }).strict(),
-  z.object({ ...definitionBase, mode: z.literal('weighted_bodyweight'), equipment: z.literal('bodyweight'), convention: z.literal('added-load') }).strict(),
-  z.object({ ...definitionBase, mode: z.literal('assisted_bodyweight'), equipment: z.literal('machine'), convention: z.literal('assistance') }).strict(),
-  z.object({ ...definitionBase, mode: z.literal('duration'), equipment: z.enum(['bodyweight', 'other']), convention: z.literal('seconds') }).strict(),
-]);
-const customDefinition = z.object({
-  reference: z.object({ kind:z.literal('custom'), exerciseId:exerciseIdSchema, ownerId:exerciseIdSchema }).strict(),
-  // A historical name is one actual string, including unusual legacy values.
-  name:z.string(), equipment:z.enum(EQUIPMENT),
-  mode:z.enum(['weight_reps','bodyweight_reps','weighted_bodyweight','assisted_bodyweight','duration']),
-  convention:exerciseConventionSchema.nullable(),
-}).strict().refine(value=>value.convention===null||value.convention===exerciseConvention(value.equipment,value.mode));
-const v3Definition=z.union([definition,customDefinition]);
 const performed = z.discriminatedUnion('mode', [
   z.object({ mode: z.literal('weight_reps'), weightKg: finiteLoad, reps, kind }).strict(),
   z.object({ mode: z.literal('bodyweight_reps'), reps, kind }).strict(),
@@ -62,8 +39,27 @@ const v3 = z.object({ ...header, version: z.literal(3), exercises: z.array(z.obj
 }).strict().refine(entry=>entry.sets.every(set=>set.performed.mode===entry.definition.mode))).min(1) }).strict()
   .refine(value=>value.exercises.every(entry=>!('reference' in entry.definition)||entry.definition.reference.ownerId===value.ownerId));
 
+const v4 = z.object({ ...header, version: z.literal(4), templateOrigin: templateOriginSchema,
+  exercises: z.array(z.object({ id: uuid, definition: recordedExerciseDefinitionSchema,
+    sets: z.array(z.object({ id: uuid, performed }).strict()).min(1),
+  }).strict().refine(entry => entry.sets.every(set => set.performed.mode === entry.definition.mode))).min(1),
+}).strict().refine(value => value.templateOrigin.content.ownerId === value.ownerId
+  && value.exercises.every(entry => !('reference' in entry.definition) || entry.definition.reference.kind !== 'custom' || entry.definition.reference.ownerId === value.ownerId))
+  .refine(value => {
+    const origin = value.templateOrigin;
+    const ids = [origin.content.id, ...origin.content.entries.flatMap(entry => [entry.id, entry.exerciseId,
+      ...(entry.targets.kind === 'sets' ? entry.targets.items.map(target => target.id) : [])]),
+      ...origin.bindings.flatMap(binding => [binding.workoutEntryId, ...binding.targets.map(target => target.workoutSetId)])];
+    if (ids.includes(value.id)) return false;
+    return value.exercises.every(entry => {
+      const binding = origin.bindings.find(binding => binding.workoutEntryId === entry.id);
+      if (binding && JSON.stringify(entry.definition) !== JSON.stringify(origin.definitions.find(capture => capture.entryId === binding.entryId)!.definition)) return false;
+      return entry.sets.every(set => !origin.bindings.some(source => source.workoutEntryId !== entry.id && source.targets.some(target => target.workoutSetId === set.id)));
+    });
+  });
+
 /** Validation only. Readers retain the original document, never a parsed rewrite. */
-export const recordedWorkoutSchema = z.union([v1, v2, v3]).refine(value => {
+export const recordedWorkoutSchema = z.union([v1, v2, v3, v4]).refine(value => {
   try {
     const parts = new Intl.DateTimeFormat('en-CA', { timeZone: value.timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(value.startedAt));
     const part = (type: string) => parts.find(item => item.type === type)?.value;
@@ -73,4 +69,4 @@ export const recordedWorkoutSchema = z.union([v1, v2, v3]).refine(value => {
   } catch { return false; }
 });
 export type RecordedCompletion = z.infer<typeof recordedWorkoutSchema>;
-export type CapturedDefinition = z.infer<typeof v3Definition>;
+export type CapturedDefinition = z.infer<typeof recordedExerciseDefinitionSchema>;

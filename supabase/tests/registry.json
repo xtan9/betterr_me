@@ -396,5 +396,6 @@
   {"path":"train_custom_exercises_expand.sql","domain":"workouts","role":"admin","cleanup":"transactional","adminReason":"Reconstructs historical A readiness and legacy grants inside one rollback after C deploys; every compatibility assertion still executes as authenticated."},
   {"path":"train_custom_exercise_contract.sql","domain":"workouts","role":"admin","cleanup":"transactional","adminReason":"Rehearses the separate private rollout gate and ordinary privilege contraction inside one rollback, then verifies authenticated commands, custom upload ownership, immutable meaning and profile cascade."},
   {"path":"train_custom_exercise_commands.sql","domain":"workouts","role":"constrained","cleanup":"transactional"},
-  {"path":"train_measurement_writes.sql","domain":"workouts","role":"constrained","cleanup":"transactional"}
+  {"path":"train_measurement_writes.sql","domain":"workouts","role":"constrained","cleanup":"transactional"},
+  {"path":"train_workout_templates.sql","domain":"workouts","role":"admin","cleanup":"transactional","adminReason":"Rehearses private template materialization and final exercise/template grants in one rollback; ordinary bearer-equivalent and service MCP assertions use their actual database roles."}
 ]

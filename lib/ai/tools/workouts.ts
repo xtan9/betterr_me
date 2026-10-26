@@ -1,6 +1,7 @@
+import { assistantTemplates } from '@/lib/fitness/assistant-templates';
 import { assistantWorkoutWrites } from "@/lib/fitness/assistant-workouts";
 import { z } from "zod";
-import { WorkoutsDB, ExercisesDB, RoutinesDB } from "@/lib/db";
+import { WorkoutsDB, ExercisesDB } from "@/lib/db";
 import {
   toWorkoutResponse,
   type WorkoutStartOutcome,
@@ -121,8 +122,7 @@ export function workoutTools(): ToolDefinition[] {
       description: "List the user's workout routines with exercises",
       parameters: z.object({}),
       execute: async (_params, ctx: ToolContext) => {
-        const db = new RoutinesDB(ctx.supabase);
-        return db.getUserRoutines(ctx.userId);
+        return assistantTemplates(ctx);
       },
     },
     {

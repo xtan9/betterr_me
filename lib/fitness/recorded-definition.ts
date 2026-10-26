@@ -37,7 +37,7 @@ export function selectRecordedCompletion(
     !object(value) ||
     (old != null
       ? value.version !== 1
-      : value.version !== 2 && value.version !== 3) ||
+      : value.version !== 2 && value.version !== 3 && value.version !== 4) ||
     !recordedWorkoutSchema.safeParse(value).success
   )
     return { status: "unsupported" };
@@ -48,7 +48,8 @@ export function selectRecordedCompletion(
     row.status !== "completed" ||
     instant(row.started_at) !== instant(completion.startedAt) ||
     instant(row.completed_at) !== instant(completion.completedAt) ||
-    row.duration_seconds !== completion.durationSeconds
+    row.duration_seconds !== completion.durationSeconds ||
+    (completion.version === 4 && row.routine_id !== completion.templateOrigin.content.id)
   )
     return { status: "unsupported" };
   if (Array.isArray(row.workout_exercises)) {

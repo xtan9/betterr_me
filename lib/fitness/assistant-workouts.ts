@@ -8,7 +8,7 @@ export function assistantWorkoutWrites(context: ToolContext) {
     throw new Error('Write permission required');
   }
   return createWorkoutWrites(context.supabase, (name, args) => {
-    if (args.p_user_id !== context.userId || !['start_workout_from_routine', 'complete_workout_atomically'].includes(name)) {
+    if (args.p_user_id !== context.userId || !['start_workout_from_routine', 'start_train_template_workout', 'complete_workout_atomically'].includes(name)) {
       throw new Error('Unsupported MCP workout operation');
     }
     return context.supabase.rpc('mcp_workout_command', { p_user_id: context.userId, p_operation: name, p_request: args });

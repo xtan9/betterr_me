@@ -30,6 +30,10 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
+vi.mock("@/lib/db/routines", () => ({
+  RoutinesDB: class { getUserRoutines = mockGetUserRoutines; },
+}));
+
 vi.mock("@/lib/fitness/writes", () => ({
   createWorkoutWrites: vi.fn(() => ({
     start: mockStartWorkout,
@@ -42,7 +46,7 @@ vi.mock("@/lib/fitness/writes", () => ({
 function makeCtx(overrides?: Partial<ToolContext>): ToolContext {
   return {
     userId: "user-123",
-    supabase: {} as ToolContext["supabase"],
+    supabase: { rpc: vi.fn().mockResolvedValue({ data: { status: "not_ready" }, error: null }) } as unknown as ToolContext["supabase"],
     date: "2026-04-10",
     timezone: "America/Toronto",
     ...overrides,
@@ -229,7 +233,7 @@ describe("workoutTools", () => {
     expect(result).toEqual([{ id: "ex1", name: "Bench Press" }]);
   });
 
-  it("getRoutines calls RoutinesDB.getUserRoutines", async () => {
+  it("getRoutines retains the legacy reader while template readiness is false", async () => {
     const ctx = makeCtx();
     mockGetUserRoutines.mockResolvedValue([
       { id: "r1", name: "PPL - Push" },

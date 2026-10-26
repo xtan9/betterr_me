@@ -7,7 +7,7 @@ import type { Workout, RoutineWithExercises, WorkoutWithExercises } from "@/lib/
 
 import { RoutinesDB } from "@/lib/db/routines";
 
-import { RoutineToWorkoutConversion } from "@/lib/fitness/routine-workout-conversion";
+import { RoutineToWorkoutConversion, UnsupportedRoutineDataError } from "@/lib/fitness/routine-workout-conversion";
 
 import { SupabaseRoutineWorkoutStore } from "@/lib/fitness/supabase-routine-workout-store";
 
@@ -44,9 +44,11 @@ export class SupabaseWorkoutStartPersistence
 {
   private readonly routines: RoutinesDB;
   private readonly routineConversion: RoutineToWorkoutConversion;
+  private readonly rpc: WorkoutRpc;
 
   constructor(private readonly supabase: SupabaseClient, rpc?: WorkoutRpc) {
     this.routines = new RoutinesDB(supabase);
+    this.rpc = rpc ?? userWorkoutRpc(supabase);
     this.routineConversion = new RoutineToWorkoutConversion(
       new SupabaseRoutineWorkoutStore(supabase, rpc),
     );
@@ -89,6 +91,17 @@ export class SupabaseWorkoutStartPersistence
     routine: RoutineWithExercises,
   ): Promise<WorkoutStartPersistenceOutcome<WorkoutWithExercises>> {
     try {
+      const { data, error } = await this.rpc('start_train_template_workout', { p_user_id: userId, p_template_id: routine.id });
+      if (error) throw error;
+      if (isRecord(data) && data.status === 'started' && isRecord(data.workout)
+        && data.workout.user_id === userId && data.workout.status === 'in_progress' && Array.isArray(data.workout.exercises)) {
+        return { type: 'started', workout: data.workout as unknown as WorkoutWithExercises };
+      }
+      if (isRecord(data) && data.status === 'conflict') return { type: 'conflict' };
+      if (isRecord(data) && ['invalid_source', 'not_found'].includes(String(data.status))) {
+        throw new UnsupportedRoutineDataError('The template cannot be started. Refresh it and review its targets.');
+      }
+      if (!isRecord(data) || data.status !== 'not_ready') throw new Error('Invalid template start response');
       const workout = await this.routineConversion.start(userId, routine);
       return { type: "started", workout };
     } catch (error) {
