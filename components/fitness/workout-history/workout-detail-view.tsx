@@ -19,6 +19,7 @@ import { weightInputText, formatWeight } from "@/lib/fitness/units";
 import { EXERCISE_FIELD_MAP } from "@/lib/fitness/exercise-fields";
 import { useExerciseRecords } from "@/lib/hooks/use-exercise-history";
 import { ExerciseProgressChart } from "@/components/fitness/progress/exercise-progress-chart";
+import { knownWorkoutDuration } from "@/lib/fitness/history-presentation";
 
 interface WorkoutDetailViewProps {
   workout: WorkoutWithExercises;
@@ -65,7 +66,7 @@ function SummaryStats({
       <StatCard
         label={t("totalDuration")}
         value={
-          durationHours > 0
+          !knownWorkoutDuration(workout.duration_seconds) ? t("durationUnknown") : durationHours > 0
             ? t("hourMinuteShort", {
                 hours: durationHours,
                 minutes: remainingMinutes,
@@ -102,9 +103,13 @@ function StatCard({ label, value }: { label: string; value: string }) {
 // ---------------------------------------------------------------------------
 
 function ExerciseDetailCard({
+  workoutId,
+  revision,
   exerciseDetail,
   weightUnit,
 }: {
+  workoutId: string;
+  revision?: string;
   exerciseDetail: WorkoutExerciseWithDetails;
   weightUnit: WeightUnit;
 }) {
@@ -153,6 +158,8 @@ function ExerciseDetailCard({
           <SetRow
             key={set.id}
             set={set}
+            workoutId={workoutId}
+            revision={revision}
             exerciseType={exerciseInfo.exercise_type}
             weightUnit={weightUnit}
             records={records}
@@ -233,12 +240,16 @@ const SET_TYPE_COLORS: Record<string, string> = {
 };
 
 function SetRow({
+  workoutId,
+  revision,
   set,
   exerciseType,
   weightUnit,
   records,
   recordsLoading,
 }: {
+  workoutId: string;
+  revision?: string;
   set: WorkoutSet;
   exerciseType: ExerciseType;
   weightUnit: WeightUnit;
@@ -262,52 +273,14 @@ function SetRow({
         ? "grid-cols-[40px_1fr_1fr_auto]"
         : "grid-cols-[40px_1fr_1fr_1fr_auto]";
 
-  // Determine which PR badges to show
-  const prBadges: string[] = [];
-  if (!recordsLoading && records && set.is_completed && set.set_type === "normal") {
-    if (
-      exerciseType !== 'assisted_bodyweight' && fields.showWeight &&
-      set.weight_kg != null &&
-      set.weight_kg > 0 &&
-      records.best_weight_kg != null &&
-      set.weight_kg >= records.best_weight_kg
-    ) {
-      prBadges.push("weight");
-    }
-    if (
-      exerciseType !== 'assisted_bodyweight' && fields.showReps &&
-      set.reps != null &&
-      set.reps > 0 &&
-      records.best_reps != null &&
-      set.reps >= records.best_reps
-    ) {
-      prBadges.push("reps");
-    }
-    if (
-      fields.showDuration &&
-      set.duration_seconds != null &&
-      set.duration_seconds > 0 &&
-      records.best_duration_seconds != null &&
-      set.duration_seconds >= records.best_duration_seconds
-    ) {
-      prBadges.push("duration");
-    }
-    if (
-      exerciseType !== 'assisted_bodyweight' && fields.showWeight &&
-      fields.showReps &&
-      set.weight_kg != null &&
-      set.reps != null
-    ) {
-      const volume = set.weight_kg * set.reps;
-      if (
-        volume > 0 &&
-        records.best_volume != null &&
-        volume >= records.best_volume
-      ) {
-        prBadges.push("volume");
-      }
-    }
-  }
+  // A badge belongs to this exact current source, never a generic cached maximum.
+  const isRecord = !recordsLoading && records?.comparisonCoverage === "current"
+    && set.is_completed && set.set_type === "normal"
+    && (records.comparableGroups ?? []).some(group => group.records.some(record => record.sources.some(source =>
+      source.workoutId === workoutId && source.revision === revision
+      && source.entryId === set.workout_exercise_id && source.setId === set.id
+      && source.weightKg === set.weight_kg && source.reps === set.reps
+      && source.durationSeconds === set.duration_seconds)));
 
   return (
     <div
@@ -344,7 +317,7 @@ function SetRow({
             {t(set.set_type === "drop" ? "dropSet" : set.set_type)}
           </span>
         )}
-        {prBadges.length > 0 && (
+        {isRecord && (
           <span
             className="inline-flex items-center rounded-chip bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-caption font-medium px-1.5 py-0.5"
             title={t("prBadgeTooltip")}
@@ -376,6 +349,8 @@ export function WorkoutDetailView({
         <ExerciseDetailCard
           key={ex.id}
           exerciseDetail={ex}
+          workoutId={workout.id}
+          revision={workout.historyRevision}
           weightUnit={weightUnit}
         />
       ))}

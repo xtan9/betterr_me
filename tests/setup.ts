@@ -141,6 +141,9 @@ class MockQueryBuilder {
   rpc = vi.fn((...args: unknown[]) => {
     this.currentTable = null;
     this.record('rpc', args);
+    // Existing table-query tests model pre-C compatibility; authority tests supply
+    // an explicit RPC boundary and exercise the enabled current projection.
+    if (args[0] === 'read_train_history_compat') return Promise.resolve({ data: { status: 'not_ready' }, error: null });
     return Promise.resolve({ data: this.mockData, error: this.mockError });
   });
 

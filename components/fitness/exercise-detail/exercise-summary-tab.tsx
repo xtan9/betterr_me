@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ExerciseProgressChart } from "@/components/fitness/progress/exercise-progress-chart";
 import { useExerciseRecords } from "@/lib/hooks/use-exercise-history";
-import { formatWeight } from "@/lib/fitness/units";
+import { ComparableProgress } from "@/components/fitness/progress/comparable-progress";
 import type { Exercise, WeightUnit } from "@/lib/db/types";
 
 interface ExerciseSummaryTabProps {
@@ -20,6 +20,7 @@ export function ExerciseSummaryTab({
   weightUnit,
 }: ExerciseSummaryTabProps) {
   const t = useTranslations("exercises");
+  const tw = useTranslations("workouts");
   const { records, isLoading: recordsLoading } = useExerciseRecords(
     exercise.id
   );
@@ -87,49 +88,11 @@ export function ExerciseSummaryTab({
               <Skeleton className="h-16" />
               <Skeleton className="h-16" />
             </div>
-          ) : records ? (
-            <div className="grid grid-cols-3 gap-4">
-              {records.best_weight_kg != null && (
-                <div className="text-center space-y-1">
-                  <p className="text-stat">
-                    {formatWeight(records.best_weight_kg, weightUnit)}
-                  </p>
-                  <p className="text-caption text-muted-foreground">
-                    {t("exerciseDetail.bestWeight")}
-                  </p>
-                  {records.achieved_at && (
-                    <p className="text-caption text-muted-foreground">
-                      {t("exerciseDetail.achievedOn", {
-                        date: new Date(records.achieved_at).toLocaleDateString(),
-                      })}
-                    </p>
-                  )}
-                </div>
-              )}
-              {records.best_reps != null && (
-                <div className="text-center space-y-1">
-                  <p className="text-stat">{records.best_reps}</p>
-                  <p className="text-caption text-muted-foreground">
-                    {t("exerciseDetail.bestReps")}
-                  </p>
-                </div>
-              )}
-              {records.best_volume != null && (
-                <div className="text-center space-y-1">
-                  <p className="text-stat">
-                    {formatWeight(records.best_volume, weightUnit)}
-                  </p>
-                  <p className="text-caption text-muted-foreground">
-                    {t("exerciseDetail.bestVolume")}
-                  </p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-body text-muted-foreground text-center py-4">
-              {t("exerciseDetail.noRecordsYet")}
-            </p>
-          )}
+          ) : records?.comparisonCoverage === "current" ? (
+            records.comparableGroups?.length
+              ? <ComparableProgress groups={records.comparableGroups} weightUnit={weightUnit} mode="records" />
+              : <p>{tw("comparable.empty")}</p>
+          ) : <p role="status">{tw("comparable.unavailable")}</p>}
         </CardContent>
       </Card>
 

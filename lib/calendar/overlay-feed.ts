@@ -138,9 +138,9 @@ export interface WorkoutOverlayItem {
   workoutId: string;
   title: string;
   date: string;
-  startTime: string;
+  startTime: string | null;
   endTime: null;
-  allDay: false;
+  allDay: boolean;
   completed: boolean;
   action: WorkoutOverlayAction;
 }
@@ -274,9 +274,17 @@ function habitItems(
   return items;
 }
 
-function workoutDateTime(workout: Workout, timezone: string): { date: string; startTime: string } {
+function workoutDateTime(workout: Workout, timezone: string): { date: string; startTime: string | null } | null {
+  if (workout.workoutDay === null) return null;
+  if (!workout.started_at || !Number.isFinite(Date.parse(workout.started_at))) {
+    return workout.workoutDay ? { date: workout.workoutDay, startTime: null } : null;
+  }
+  const captured = workout.currentHistory?.current;
+  const document = captured?.kind === 'recorded' ? captured.document : null;
+  const capturedTimezone = document && ('timezone' in document ? document.timezone
+    : 'time' in document && document.time.kind === 'known-instants' ? document.time.timezone : null);
   const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: timezone,
+    timeZone: capturedTimezone || timezone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -286,14 +294,16 @@ function workoutDateTime(workout: Workout, timezone: string): { date: string; st
   }).formatToParts(new Date(workout.started_at));
   const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
   return {
-    date: `${values.year}-${values.month}-${values.day}`,
+    date: workout.workoutDay ?? `${values.year}-${values.month}-${values.day}`,
     startTime: `${values.hour}:${values.minute}`,
   };
 }
 
 function workoutItems(workouts: Workout[], range: LocalDateRange, timezone: string): WorkoutOverlayItem[] {
   return workouts.flatMap((workout) => {
-    const { date, startTime } = workoutDateTime(workout, timezone);
+    const dateTime = workoutDateTime(workout, timezone);
+    if (!dateTime) return [];
+    const { date, startTime } = dateTime;
     if (date < range.from || date > range.to) return [];
     return [{
       layer: "workouts" as const,
@@ -304,7 +314,7 @@ function workoutItems(workouts: Workout[], range: LocalDateRange, timezone: stri
       date,
       startTime,
       endTime: null,
-      allDay: false as const,
+      allDay: startTime === null,
       completed: workout.status === "completed",
       action: { type: "navigate_workout" as const, workoutId: workout.id },
     }];

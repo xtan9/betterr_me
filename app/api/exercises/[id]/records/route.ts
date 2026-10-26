@@ -31,6 +31,13 @@ export async function GET(
     const { principal: { userId }, client: supabase } = auth;
 
     const workoutsDB = new WorkoutsDB(supabase);
+    const groups=await workoutsDB.getComparableProgress(exerciseId,userId);
+    if(groups!==null){
+      const only=groups.length===1?groups[0]:null;
+      const reps=only?.definition.mode==='bodyweight_reps'?only.records.find(row=>row.metric==='reps'&&row.at===null):null;
+      const duration=only?.definition.mode==='duration'?only.records.find(row=>row.metric==='durationSeconds'&&row.at===null):null;
+      return NextResponse.json({exercise_id:exerciseId,best_weight_kg:null,best_reps:reps?.value??null,best_volume:null,best_duration_seconds:duration?.value??null,achieved_at:null,comparableGroups:groups,comparisonCoverage:'current'});
+    }
     const sets = await workoutsDB.getExerciseSets(exerciseId, userId);
     const records = computePersonalRecords(exerciseId, sets);
 

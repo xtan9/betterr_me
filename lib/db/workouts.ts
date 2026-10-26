@@ -1,3 +1,6 @@
+import { comparableHistory } from '@/lib/fitness/history-progress';
+import type { HistoryRecord } from '@/lib/validations/train-history';
+import { compatibilityWorkout, type HistoryCompatibilityReader } from '@/lib/fitness/history-compat';
 import { finiteAggregate } from "@/lib/fitness/units";
 import { visibleExerciseEntries } from "@/lib/fitness/exercise-visibility";
 import { recordedDefinition, recordedExercise, recordedName, comparableDefinition, selectRecordedCompletion, historyMeasurementMode, type RecordedStatus } from "@/lib/fitness/recorded-definition";
@@ -20,7 +23,9 @@ export interface WorkoutSummary {
   id: string;
   title: string;
   notes: string | null;
-  started_at: string;
+  started_at: string | null;
+  workoutDay?: string | null;
+  historyRevision?: string;
   completed_at: string | null;
   duration_seconds: number | null;
   recordedStatus?: RecordedStatus;
@@ -32,7 +37,38 @@ export interface WorkoutSummary {
 
 /** CRUD for workouts. RLS handles user scoping. */
 export class WorkoutsDB {
-  constructor(private supabase: SupabaseClient) {}
+  constructor(private supabase: SupabaseClient, private historyReader?: HistoryCompatibilityReader) {}
+
+  private async currentRows(owner?:string,id:string|null=null,limit:number|null=20,offset=0):Promise<Record<string,unknown>[]|null>{
+    const {data,error}=await (this.historyReader?this.historyReader(owner,id,limit,offset):this.supabase.rpc('read_train_history_compat',{p_id:id,p_limit:limit,p_offset:offset}));
+    if(error)throw error;
+    if(data && typeof data==='object' && 'status'in data && data.status==='not_ready')return null;
+    if(!data||typeof data!=='object'||!('status'in data)||data.status!=='available'||!('workouts'in data)||!Array.isArray(data.workouts))throw new Error('Current workout history unavailable');
+    return data.workouts.map((row:unknown)=>compatibilityWorkout(row,owner));
+  }
+
+
+  async getCurrentWorkouts(userId:string):Promise<Workout[]|null>{
+    const rows=await this.currentRows(userId,null,null);return rows===null?null:rows as unknown as Workout[];
+  }
+
+  private async currentExerciseRows(exerciseId:string,userId:string):Promise<Array<Record<string,unknown>&{workout:Record<string,unknown>}>|null>{
+    const rows=await this.currentRows(userId,null,null);
+    return rows===null?null:rows.flatMap(workout=>(workout.workout_exercises as Record<string,unknown>[]).filter(entry=>entry.exercise_id===exerciseId).map(entry=>({...entry,workout})));
+  }
+
+  async getComparableProgress(exerciseId:string,userId:string){
+    const rows=await this.currentRows(userId,null,null);
+    if(rows===null)return null;
+    const records=rows.flatMap(row=>{
+      const history=row.currentHistory as HistoryRecord;
+      const ids=(row.workout_exercises as Record<string,unknown>[]).filter(entry=>entry.exercise_id===exerciseId).map(entry=>entry.id);
+      if(history.current?.kind==='recorded')return [{...history,current:{...history.current,document:{...history.current.document,exercises:history.current.document.exercises.filter(entry=>ids.includes(entry.id))}}} as HistoryRecord];
+      if(history.current?.kind==='legacy')return [{...history,current:{...history.current,record:{...history.current.record,exercises:history.current.record.exercises.filter(entry=>ids.includes(entry.id))}}} as HistoryRecord];
+      return [];
+    });
+    return comparableHistory(records);
+  }
 
   /**
    * Get the user's active (in_progress) workout with nested exercises and sets.
@@ -81,7 +117,7 @@ export class WorkoutsDB {
           ),
         })
       ),
-    } as WorkoutWithExercises;
+    } as unknown as WorkoutWithExercises;
   }
 
   /**
@@ -93,6 +129,9 @@ export class WorkoutsDB {
     workoutId: string,
     userId?: string,
   ): Promise<WorkoutWithExercises | null> {
+    const current=await this.currentRows(userId,workoutId);
+    let data: Record<string,unknown> | null=current?.[0]??null;
+    if(!data){
     let query = this.supabase
       .from("workouts")
       .select(
@@ -108,23 +147,29 @@ export class WorkoutsDB {
       )
       .eq("id", workoutId);
     if (userId) query = query.eq("user_id", userId);
-    const { data, error } = await query.order("sort_order", {
+    if(current!==null)query=query.neq('status','completed');
+    const response = await query.order("sort_order", {
         referencedTable: "workout_exercises",
         ascending: true,
       })
       .single();
 
+    const {error}=response;
     if (error) {
       if (error.code === "PGRST116") return null;
       log.error("Failed to get workout with exercises", error);
       throw error;
     }
+    data=response.data;
+    }
+    if(!data)return null;
 
     // Decode once; an unsupported recorded row never becomes live legacy facts.
     const selected = selectRecordedCompletion(data);
     // Service-backed Assistant callers supply an explicit owner above. Never
     // expose a joined reference that disagrees with the owned parent.
-    const { train_workout_plan_links: link, ...workout } = data;
+    const { train_workout_plan_links: linkValue, ...workout } = data;
+    const link=linkValue && typeof linkValue==='object'?linkValue as Record<string,unknown>:null;
     const trainingPlanLink = link && link.owner_id === data.user_id && link.workout_id === data.id
       && (!userId || link.owner_id === userId)
       ? { ownerId: link.owner_id, workoutId: link.workout_id, occurrenceId: link.captured_occurrence_id, linkedAt: link.linked_at }
@@ -143,7 +188,7 @@ export class WorkoutsDB {
           ),
         })
       ),
-    } as WorkoutWithExercises;
+    } as unknown as WorkoutWithExercises;
   }
 
   /**
@@ -156,7 +201,10 @@ export class WorkoutsDB {
   ): Promise<Workout[]> {
     const limit = options?.limit ?? 20;
 
-    const { data, error } = await this.supabase
+    const current=await this.currentRows(userId,null,limit,0);
+    let data: Record<string,unknown>[] | null=current;
+    if(current===null){
+    const response = await this.supabase
       .from("workouts")
       .select("*")
       .eq("user_id", userId)
@@ -164,12 +212,15 @@ export class WorkoutsDB {
       .order("started_at", { ascending: false })
       .limit(limit);
 
+    const {error}=response;
     if (error) {
       log.error("Failed to get workouts", error);
       throw error;
     }
+    data=response.data;
+    }
 
-    return data ?? [];
+    return (data ?? []) as unknown as Workout[];
   }
 
   /**
@@ -178,6 +229,8 @@ export class WorkoutsDB {
    * Returns empty array if no previous workout found.
    */
   async getPreviousSets(exerciseId: string, userId: string): Promise<WorkoutSet[]> {
+    const current=await this.currentExerciseRows(exerciseId,userId);
+    if(current!==null){const entry=current.find(row=>historyMeasurementMode(row)!==null);return entry?(entry.sets as WorkoutSet[]).filter(set=>set.is_completed):[];}
     const { data, error } = await this.supabase
       .from("workout_exercises")
       .select(
@@ -230,7 +283,10 @@ export class WorkoutsDB {
     const limit = options?.limit ?? 20;
     const offset = options?.offset ?? 0;
 
-    const { data, error } = await this.supabase
+    const current=await this.currentRows(userId,null,limit,offset);
+    let data: Record<string,unknown>[] | null=current;
+    if(current===null){
+    const response = await this.supabase
       .from("workouts")
       .select(
         `
@@ -247,9 +303,12 @@ export class WorkoutsDB {
       .order("started_at", { ascending: false })
       .range(offset, offset + limit - 1);
 
+    const {error}=response;
     if (error) {
       log.error("Failed to get workouts with summary", error);
       throw error;
+    }
+    data=response.data;
     }
 
     return (data ?? []).map((w: Record<string, unknown>) => {
@@ -259,7 +318,8 @@ export class WorkoutsDB {
         id: w.id as string,
         title: w.title as string,
         notes: w.notes as string | null,
-        started_at: w.started_at as string,
+        started_at: w.started_at as string | null,
+        ...(Object.hasOwn(w,"workoutDay")?{workoutDay:w.workoutDay as string|null,historyRevision:w.historyRevision as string}:{}),
         completed_at: w.completed_at as string | null,
         duration_seconds: w.duration_seconds as number | null,
         recordedStatus: selected.status,
@@ -306,6 +366,18 @@ export class WorkoutsDB {
     userId: string,
     options?: { since?: string }
   ): Promise<ExerciseHistoryEntry[]> {
+    const current=await this.currentExerciseRows(exerciseId,userId);
+    if(current!==null){
+      const grouped=new Map<string,ExerciseHistoryEntry>();
+      for(const row of current){
+        if(options?.since&&!(typeof row.workout.workoutDay==='string'&&row.workout.workoutDay>=options.since.slice(0,10)))continue;
+        const id=row.workout.id as string;
+        const entry=grouped.get(id)??{started_at:row.workout.started_at as string|null,workoutDay:row.workout.workoutDay as string|null,workout_id:id,best_set_weight_kg:null,best_set_reps:null,total_volume:null,total_sets:0};
+        entry.total_sets+=(row.sets as WorkoutSet[]).filter(set=>set.is_completed&&set.set_type==='normal').length;
+        grouped.set(id,entry);
+      }
+      return [...grouped.values()];
+    }
     let query = this.supabase
       .from("workout_exercises")
       .select(
@@ -326,7 +398,7 @@ export class WorkoutsDB {
 
     const { data, error } = await query.order("started_at", {
       referencedTable: "workouts",
-      ascending: true,
+      ascending: false,
     });
 
     if (error) {
@@ -380,8 +452,14 @@ export class WorkoutsDB {
     exerciseId: string,
     userId: string
   ): Promise<
-    Array<WorkoutSet & { workout_started_at: string; measurement_mode?: string }>
+    Array<WorkoutSet & { workout_started_at: string | null; measurement_mode?: string }>
   > {
+    const current=await this.currentExerciseRows(exerciseId,userId);
+    if(current!==null)return current.flatMap(row=>{
+      const selected=selectRecordedCompletion(row.workout),mode=historyMeasurementMode(row);
+      if(mode===null||selected.status!=='recorded'||!comparableDefinition(recordedDefinition(selected,row.id)))return [];
+      return (row.sets as WorkoutSet[]).filter(set=>set.is_completed&&set.set_type==='normal').map(set=>({...set,workout_started_at:row.workout.started_at as string|null,measurement_mode:mode}));
+    });
     const { data, error } = await this.supabase
       .from("workout_exercises")
       .select(
@@ -401,7 +479,7 @@ export class WorkoutsDB {
       throw error;
     }
 
-    const result: Array<WorkoutSet & { workout_started_at: string; measurement_mode?: string }> = [];
+    const result: Array<WorkoutSet & { workout_started_at: string | null; measurement_mode?: string }> = [];
     // Stryker disable next-line ArrayDeclaration: equivalent mutant — a
     // string fallback yields characters whose `.workout` and `.sets` are
     // undefined, so the inner loop is empty and result stays [].
@@ -429,7 +507,15 @@ export class WorkoutsDB {
    * Get the most recent completed_at timestamp for a user's workouts.
    * Returns null if no completed workouts exist.
    */
+  async getLastWorkout(userId:string):Promise<{workoutDay:string|null;startedAt:string|null}|null|undefined>{
+    const rows=await this.currentRows(userId,null,1);
+    if(rows===null)return undefined;if(!rows.length)return null;
+    return {workoutDay:rows[0].workoutDay as string|null,startedAt:rows[0].started_at as string|null};
+  }
+
   async getLastCompletedAt(userId: string): Promise<string | null> {
+    const current=await this.currentRows(userId,null,null);
+    if(current!==null)return current.map(row=>row.completed_at).filter((value):value is string=>typeof value==='string'&&Number.isFinite(Date.parse(value))).sort((a,b)=>Date.parse(b)-Date.parse(a))[0]??null;
     const { data, error } = await this.supabase
       .from("workouts")
       .select("completed_at")
@@ -455,6 +541,8 @@ export class WorkoutsDB {
     userId: string,
     weekStartDate: string
   ): Promise<number> {
+    const current=await this.currentRows(userId,null,null);
+    if(current!==null)return current.filter(row=>typeof row.workoutDay==='string'&&row.workoutDay>=weekStartDate.slice(0,10)).length;
     // Append time component so Postgres doesn't cast the bare date to midnight UTC.
     // weekStartDate is already the client's local week start (e.g. "2026-02-23"),
     // so comparing as a timestamp avoids a ~timezone-offset-hours window of imprecision.

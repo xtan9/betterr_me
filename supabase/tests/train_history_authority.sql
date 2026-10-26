@@ -1,0 +1,68 @@
+-- constrained-sql-fixture: true
+begin;
+select public.sql_fixture_create_auth_user('64250000-0000-4000-8000-000000000001','train-history-owner@example.test');
+select public.sql_fixture_create_auth_user('64250000-0000-4000-8000-000000000002','train-history-other@example.test');
+select set_config('request.jwt.claims','{"sub":"64250000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+set local role authenticated;
+do $$
+declare document jsonb := '{"id":"44444444-4444-4444-8444-444444444444","ownerId":"64250000-0000-4000-8000-000000000001","sourceId":"33333333-3333-4333-8333-333333333333","planId":null,"exercises":[{"id":"20000000-0000-4000-8000-000000000001","definition":{"catalogKey":"strength.barbell-bench-press.v1","name":{"en":"Barbell Bench Press","zh":"\u6760\u94c3\u5367\u63a8"},"equipment":"barbell","mode":"weight_reps","convention":"barbell-total"},"sets":[{"id":"10000000-0000-4000-8000-000000000001","performed":{"mode":"weight_reps","weightKg":0.123,"reps":5,"kind":"working"}}]},{"id":"20000000-0000-4000-8000-000000000002","definition":{"catalogKey":"strength.push-up.v1","name":{"en":"Push-up","zh":"\u4fef\u5367\u6491"},"equipment":"bodyweight","mode":"bodyweight_reps","convention":"bodyweight-repetitions"},"sets":[{"id":"10000000-0000-4000-8000-000000000002","performed":{"mode":"bodyweight_reps","reps":8,"kind":"warmup"}}]},{"id":"20000000-0000-4000-8000-000000000003","definition":{"catalogKey":"strength.weighted-pull-up.v1","name":{"en":"Weighted Pull-up","zh":"\u8d1f\u91cd\u5f15\u4f53\u5411\u4e0a"},"equipment":"bodyweight","mode":"weighted_bodyweight","convention":"added-load"},"sets":[{"id":"10000000-0000-4000-8000-000000000003","performed":{"mode":"weighted_bodyweight","addedWeightKg":0.45359237,"reps":6,"kind":"working"}}]},{"id":"20000000-0000-4000-8000-000000000004","definition":{"catalogKey":"strength.machine-assisted-pull-up.v1","name":{"en":"Machine-assisted Pull-up","zh":"\u5668\u68b0\u8f85\u52a9\u5f15\u4f53\u5411\u4e0a"},"equipment":"machine","mode":"assisted_bodyweight","convention":"assistance"},"sets":[{"id":"10000000-0000-4000-8000-000000000004","performed":{"mode":"assisted_bodyweight","assistanceKg":0,"reps":5,"kind":"warmup"}}]},{"id":"20000000-0000-4000-8000-000000000005","definition":{"catalogKey":"strength.plank.v1","name":{"en":"Plank","zh":"\u5e73\u677f\u652f\u6491"},"equipment":"bodyweight","mode":"duration","convention":"seconds"},"sets":[{"id":"10000000-0000-4000-8000-000000000005","performed":{"mode":"duration","durationSeconds":90,"kind":"working"}}]}],"version":5,"origin":"retrospective","time":{"kind":"date-only","workoutDay":"2026-10-24","durationSeconds":null}}'; accepted jsonb; current_record jsonb; active_id uuid; request jsonb; corrected jsonb; rejected jsonb; deleted jsonb; report jsonb; legacy_id uuid; entry_id uuid; set_id uuid; reference_id uuid;
+begin
+ insert into public.workouts(user_id,title,status) values(auth.uid(),'Existing live workout','in_progress') returning id into active_id;
+ if public.train_history_capabilities()->'historyReady'='false'::jsonb then
+  if public.upload_completed_workout((document->>'id')::uuid,document)->>'status' is distinct from 'not_ready' then raise exception 'A prematurely accepted v5'; end if;
+  if public.list_train_history(null)->>'status' is distinct from 'not_ready' then raise exception 'A advertised current history'; end if;
+  return;
+ end if;
+ accepted:=public.upload_completed_workout((document->>'id')::uuid,document);
+ if accepted->>'status' is distinct from 'accepted' then raise exception 'Retrospective completion rejected: %',accepted; end if;
+ set constraints all immediate;
+ current_record:=public.read_train_history_record((document->>'id')::uuid);
+ if current_record->'record'->>'revision'<>'1' or current_record->'record'->'current'->'document' is distinct from document then raise exception 'Current retrospective identity or unknown facts changed: %',current_record; end if;
+ if exists(select 1 from public.workouts where id=(document->>'id')::uuid) then raise exception 'Date-only row leaked through frozen-reader SELECT'; end if;
+ if not exists(select 1 from public.workouts where id=active_id and status='in_progress') then raise exception 'Retrospective replaced live workout'; end if;
+ if public.upload_completed_workout((document->>'id')::uuid,document) is distinct from accepted then raise exception 'First receipt changed'; end if;
+ request:=jsonb_build_object('protocolVersion',1,'ownerId',auth.uid(),'operationId','64250000-0000-4000-8000-000000000011','command',jsonb_build_object('kind','correct-workout','workoutId',document->>'id','expectedRevision','1','patch',jsonb_build_object('sets',jsonb_build_array(jsonb_build_object('entryId','20000000-0000-4000-8000-000000000001','setId','10000000-0000-4000-8000-000000000001','changes',jsonb_build_object('weightKg',40,'reps',8))),'time',jsonb_build_object('kind','date-only','duration',jsonb_build_object('kind','set','seconds',90)))));
+ corrected:=public.execute_train_history_command(request);
+ if corrected->'receipt'->>'revision' is distinct from '2' or corrected->'receipt'->'current'->'current'->'document'->'exercises'->0->'sets'->0->'performed'->'weightKg' is distinct from '40'::jsonb then raise exception 'Correction did not publish revision2: %',corrected; end if;
+ if public.execute_train_history_command(request) is distinct from corrected then raise exception 'Correction retry changed'; end if;
+ if public.upload_completed_workout((document->>'id')::uuid,document) is distinct from accepted then raise exception 'Correction rewrote original receipt'; end if;
+ request:=jsonb_set(request,'{operationId}','"64250000-0000-4000-8000-000000000012"');
+ rejected:=public.execute_train_history_command(request);
+ if rejected->'rejection'->>'code' is distinct from 'version_conflict' or rejected->'rejection'->'current'->>'revision'<>'2' then raise exception 'Stale correction did not retain conflict: %',rejected; end if;
+ if public.execute_train_history_command(request) is distinct from rejected then raise exception 'Rejected outcome changed'; end if;
+ report:=public.train_history_progress('{"from":null,"through":null}',jsonb_build_array(document->>'id'));
+ if report->'coverage'->>'knownDurationSeconds'<>'90' or report->'coverage'->>'workoutCount'<>'1' or report->'records'->0->>'revision'<>'2' then raise exception 'Progress was not current or exact: %',report; end if;
+ if public.list_train_history(null)->'records'->0->>'id' is distinct from document->>'id' then raise exception 'Chosen day missing from current page'; end if;
+ set constraints all deferred;
+ select id into reference_id from public.exercises where catalog_key='strength.barbell-bench-press.v1';
+ insert into public.workouts(user_id,title,status,started_at,completed_at,duration_seconds) values(auth.uid(),'Continuing Web completed','completed','2026-10-24T10:00:00.123456Z','2026-10-24T10:10:00.123456Z',null) returning id into legacy_id;
+ insert into public.workout_exercises(workout_id,exercise_id,sort_order) values(legacy_id,reference_id,0) returning id into entry_id;
+ insert into public.workout_sets(workout_exercise_id,set_number,set_type,weight_kg,reps,is_completed) values(entry_id,1,'normal',0.123,5,true) returning id into set_id;
+ set constraints all immediate;
+ current_record:=public.read_train_history_record(legacy_id)->'record';
+ if current_record->>'revision'<>'1' or current_record->>'workoutDay' is not null or current_record->'current'->>'kind'<>'legacy' or current_record->'current'->'record'->'exercises'->0->'exercise'->'history_recorded_definition'->>'convention'<>'barbell-total' then raise exception 'New Web completion lacked current captured meaning: %',current_record; end if;
+ begin update public.workout_sets set reps=9 where id=set_id; raise exception 'Direct completed set bypassed revision'; exception when check_violation then null; end;
+ begin delete from public.workout_sets where id=set_id; raise exception 'Direct partial deletion bypassed revision'; exception when check_violation then null; end;
+ begin update public.workouts set title='Unreviewed edit' where id=legacy_id; raise exception 'Direct header edit bypassed revision'; exception when check_violation then null; end;
+ begin delete from public.workouts where id=legacy_id; raise exception 'Direct deletion bypassed revision'; exception when check_violation then null; end;
+ request:=jsonb_build_object('protocolVersion',1,'ownerId',auth.uid(),'operationId','64250000-0000-4000-8000-000000000014','command',jsonb_build_object('kind','correct-workout','workoutId',legacy_id,'expectedRevision','1','patch',jsonb_build_object('time',jsonb_build_object('kind','known-instants','completedAt','2026-10-24T10:01:00.123455Z','duration',jsonb_build_object('kind','elapsed','expectedSeconds',59)))));
+ corrected:=public.execute_train_history_command(request);
+ if corrected->'receipt'->'current'->'current'->'record'->'workout'->>'duration_seconds'<>'59' or corrected->'receipt'->'current'->>'workoutDay' is not null then raise exception 'Exact microseconds or historical unknown day changed: %',corrected; end if;
+ perform set_config('request.jwt.claims','{"sub":"64250000-0000-4000-8000-000000000002","role":"authenticated"}',true);
+ if public.read_train_history_record(legacy_id)->>'status'<>'not_found' or jsonb_array_length(public.list_train_history(null)->'records')<>0 then raise exception 'Foreign history leaked'; end if;
+ if public.execute_train_history_command(request)->>'status'<>'owner_mismatch' then raise exception 'Foreign command accepted'; end if;
+ perform set_config('request.jwt.claims','{"sub":"64250000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+ request:=jsonb_build_object('protocolVersion',1,'ownerId',auth.uid(),'operationId','64250000-0000-4000-8000-000000000013','command',jsonb_build_object('kind','delete-workout','workoutId',document->>'id','expectedRevision','2'));
+ deleted:=public.execute_train_history_command(request);
+ if deleted->'receipt'->>'revision' is distinct from '3' or deleted->'receipt'->'current'->>'state' is distinct from 'deleted' then raise exception 'Deletion not tombstoned: %',deleted; end if;
+ if public.execute_train_history_command(request) is distinct from deleted then raise exception 'Deletion retry changed'; end if;
+ if public.upload_completed_workout((document->>'id')::uuid,document) is distinct from accepted then raise exception 'Delayed create receipt changed'; end if;
+ if public.read_train_history_record((document->>'id')::uuid)->'record'->>'state'<>'deleted' then raise exception 'Delayed create revived tombstone'; end if;
+ begin insert into public.workouts(id,user_id,title,status) values((document->>'id')::uuid,auth.uid(),'Reinsert','discarded'); raise exception 'Raw insert reused deleted identity'; exception when check_violation then null; end;
+ begin update public.workouts set id=(document->>'id')::uuid where id=active_id; raise exception 'Active reassignment reused deleted identity'; exception when check_violation then null; end;
+ if has_table_privilege('authenticated','public.workouts','TRUNCATE') or has_table_privilege('anon','public.workout_sets','TRUNCATE') or has_table_privilege('authenticated','public.workout_exercises','TRIGGER') then raise exception 'Unsafe direct privilege bypasses history authority'; end if;
+
+ report:=public.train_history_progress('{"from":null,"through":null}',jsonb_build_array(document->>'id'));
+ if report->'coverage'->>'workoutCount'<>'1' or report->'coverage'->>'knownDurationSeconds'<>'59' or report->'coverage'->>'undatedWorkoutCount'<>'1' or report->'resolved'->0->'record'->>'state'<>'deleted' then raise exception 'Deletion remained in progress or lost tombstone: %',report; end if;
+end $$;
+rollback;

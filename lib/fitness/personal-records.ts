@@ -13,17 +13,17 @@ import { EXERCISE_FIELD_MAP } from "@/lib/fitness/exercise-fields";
  */
 export function computePersonalRecords(
   exerciseId: string,
-  allSets: Array<WorkoutSet & { workout_started_at: string; measurement_mode?: string }>
+  allSets: Array<WorkoutSet & { workout_started_at: string | null; measurement_mode?: string }>
 ): PersonalRecord {
   const completedNormal = allSets.filter(
     (s) => s.is_completed && s.set_type === "normal"
   );
 
-  let bestWeight: { value: number; date: string } | null = null;
+  let bestWeight: { value: number; date: string | null } | null = null;
   let volumeUnavailable = false;
-  let bestVolume: { value: number; date: string } | null = null;
-  let bestReps: { value: number; date: string } | null = null;
-  let bestDuration: { value: number; date: string } | null = null;
+  let bestVolume: { value: number; date: string | null } | null = null;
+  let bestReps: { value: number; date: string | null } | null = null;
+  let bestDuration: { value: number; date: string | null } | null = null;
 
   for (const set of completedNormal) {
     if (
@@ -114,6 +114,13 @@ export function isNewPR(
   };
 
   if (!set.is_completed || set.set_type !== 'normal') return result;
+  if(currentPR?.comparisonCoverage==='current'){
+    // Active Web entries do not carry a frozen recording convention. Avoid a
+    // badge that conflates a current catalog definition with historical meaning.
+    // Qualified records remain visible in the exercise history comparison UI.
+    return result;
+  }
+
 
   // Weight PR — only if the exercise tracks weight
   if (exerciseType !== 'assisted_bodyweight' && fields.showWeight && set.weight_kg != null && set.weight_kg > 0) {

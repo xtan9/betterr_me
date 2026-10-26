@@ -6,30 +6,26 @@ import { Card, CardContent } from "@/components/ui/card";
 
 interface WorkoutStatsWidgetProps {
   lastWorkoutAt: string | null;
+  lastWorkout?: { workoutDay: string | null; startedAt: string | null } | null;
   weekWorkoutCount: number;
 }
 
 /**
- * Compute a relative date string from an ISO timestamp.
+ * Compute a relative date from the recorded civil day without a timezone shift.
  * Returns "Today", "Yesterday", or "N days ago" based on the difference.
  */
 function getRelativeDate(
-  isoTimestamp: string,
+  fact: { workoutDay: string | null; startedAt: string | null },
   t: (key: string, values?: Record<string, number>) => string,
 ): string {
-  const workoutDate = new Date(isoTimestamp);
-  const now = new Date();
-
-  // Compare calendar dates (not timestamps) to handle timezone correctly
-  const workoutDay = new Date(
-    workoutDate.getFullYear(),
-    workoutDate.getMonth(),
-    workoutDate.getDate(),
-  );
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  const diffMs = today.getTime() - workoutDay.getTime();
-  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+  if (fact.workoutDay === null) return t("workoutDayUnknown");
+  const [year, month, day] = fact.workoutDay.split("-").map(Number);
+  const workoutDate = new Date(0);
+  workoutDate.setUTCFullYear(year, month - 1, day);
+  if (year < 1 || workoutDate.getUTCFullYear() !== year || workoutDate.getUTCMonth() !== month - 1 || workoutDate.getUTCDate() !== day) return t("workoutDayUnknown");
+  const now = new Date(), today = new Date(0);
+  today.setUTCFullYear(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.round((today.getTime() - workoutDate.getTime()) / 86400000);
 
   if (diffDays === 0) return t("today");
   if (diffDays === 1) return t("yesterday");
@@ -38,9 +34,16 @@ function getRelativeDate(
 
 export function WorkoutStatsWidget({
   lastWorkoutAt,
+  lastWorkout,
   weekWorkoutCount,
 }: WorkoutStatsWidgetProps) {
   const t = useTranslations("dashboard.workoutStats");
+  let fact = lastWorkout;
+  if (fact === undefined) {
+    const at = lastWorkoutAt ? new Date(lastWorkoutAt) : null;
+    fact = at ? { startedAt: lastWorkoutAt, workoutDay: Number.isFinite(at.getTime())
+      ? `${String(at.getFullYear()).padStart(4, "0")}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")}` : null } : null;
+  }
 
   return (
     <Card data-testid="workout-stats-widget" className="min-w-0 gap-0 py-0 shadow-sm">
@@ -58,8 +61,8 @@ export function WorkoutStatsWidget({
               <div>
                 <p className="text-body text-muted-foreground">{t("lastWorkout")}</p>
                 <p className="text-stat mt-0.5">
-                  {lastWorkoutAt
-                    ? getRelativeDate(lastWorkoutAt, t)
+                  {fact
+                    ? getRelativeDate(fact, t)
                     : t("noWorkoutsYet")}
                 </p>
               </div>

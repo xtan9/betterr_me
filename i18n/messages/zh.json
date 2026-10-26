@@ -237,7 +237,8 @@
       "today": "今天",
       "yesterday": "昨天",
       "daysAgo": "{count} 天前",
-      "noWorkoutsYet": "暂无训练记录"
+      "noWorkoutsYet": "暂无训练记录",
+      "workoutDayUnknown": "训练日期未知"
     }
   },
   "habits": {
@@ -1383,7 +1384,20 @@
     "inputUnitKept": "未完成的输入仍以 {unit} 为单位。",
     "addedLoad": "额外负重",
     "assistance": "辅助重量",
-    "recordedUnavailable": "此训练采用当前无法读取的记录格式。请更新应用以查看已记录的详情。"
+    "recordedUnavailable": "此训练采用当前无法读取的记录格式。请更新应用以查看已记录的详情。",
+    "workoutDayUnknown": "训练日期未知",
+    "durationUnknown": "时长未知",
+    "comparable": {
+      "eligible": "仅包含可比较的正式组。",
+      "duration": "{seconds} 秒",
+      "loadAtReps": "{reps} 次时的负重：{load}",
+      "bodyweightReps": "{reps} 次",
+      "repsAtAssistance": "辅助重量 {load} 时完成 {reps} 次",
+      "repsAtAddedLoad": "额外负重 {load} 时完成 {reps} 次",
+      "repsAtLoad": "负重 {load} 时完成 {reps} 次",
+      "unavailable": "可比较的进展暂不可用",
+      "empty": "暂无可比较的正式组"
+    }
   },
   "routines": {
     "templates": {

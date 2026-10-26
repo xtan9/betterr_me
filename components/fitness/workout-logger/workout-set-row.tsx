@@ -22,7 +22,8 @@ import type {
 import { EXERCISE_FIELD_MAP } from "@/lib/fitness/exercise-fields";
 import { formatWeight } from "@/lib/fitness/units";
 import { useWeightInput } from "@/components/fitness/use-weight-input";
-import type { PriorRead, PriorPerformed } from "@/lib/validations/train-prior-results";
+import type { PriorPerformed } from "@/lib/validations/train-prior-results";
+import type { WebPriorRead } from "@/lib/validations/web-prior-results";
 import { PriorResultsPicker } from "./prior-results-picker";
 import { parseWholeInput } from "@/lib/fitness/measurement-input";
 
@@ -51,7 +52,7 @@ interface WorkoutSetRowProps {
   exerciseType: ExerciseType;
   weightUnit: WeightUnit;
   previousSet: WorkoutSet | null;
-  priorResults?: PriorRead | null;
+  priorResults?: WebPriorRead | null;
   onUpdate: (updates: WorkoutSetUpdate) => Promise<void>;
   onDelete: () => Promise<void>;
   onComplete: () => Promise<void>;

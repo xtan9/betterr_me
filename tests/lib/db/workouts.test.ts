@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import contract from "@/tests/fixtures/train-measurement-contract.json";
+import historyContract from "@/tests/fixtures/train-history-contract.json";
 import { WorkoutsDB } from "@/lib/db/workouts";
 import { mockSupabaseClient } from "../../setup";
 import {
@@ -78,6 +79,76 @@ describe("WorkoutsDB", () => {
     mockSupabaseClient.setMockResponse([{ workout: { id: WORKOUT_ID, started_at: "2026-10-25" }, sets }]);
     const history = await workoutsDB.getExerciseHistory(EXERCISE_ID, USER_ID);
     expect(history[0]).toMatchObject({ best_set_weight_kg: Number.MAX_VALUE, best_set_reps: 2, total_volume: null });
+  });
+
+  it("propagates current authority errors without falling back to stale legacy rows", async () => {
+    const error=new Error('Current read failed');
+    const reader=vi.fn().mockResolvedValue({data:null,error});
+    const db=new WorkoutsDB(mockSupabaseClient as unknown as SupabaseClient,reader);
+    await expect(db.getExerciseHistory(EXERCISE_ID,historyContract.record.ownerId)).rejects.toBe(error);
+    expect(reader).toHaveBeenCalledExactlyOnceWith(historyContract.record.ownerId,null,null,0);
+    expect(mockSupabaseClient.queryLog).toEqual([]);
+  });
+
+  describe('current history readers', () => {
+    const owner = historyContract.record.ownerId;
+    const calls = [
+      { name: 'getCurrentWorkouts', limit: null, run: (db: WorkoutsDB) => db.getCurrentWorkouts(owner) },
+      { name: 'getComparableProgress', limit: null, run: (db: WorkoutsDB) => db.getComparableProgress(EXERCISE_ID, owner) },
+      { name: 'getLastWorkout', limit: 1, run: (db: WorkoutsDB) => db.getLastWorkout(owner) },
+    ];
+    it.each(calls)('$name propagates an authority error without raw-table fallback', async ({ run, limit }) => {
+      const error = new Error('Current authority failed');
+      const reader = vi.fn().mockResolvedValue({ data: null, error });
+      const db = new WorkoutsDB(mockSupabaseClient as unknown as SupabaseClient, reader);
+      await expect(run(db)).rejects.toBe(error);
+      expect(reader).toHaveBeenCalledExactlyOnceWith(owner, null, limit, 0);
+      expect(mockSupabaseClient.queryLog).toEqual([]);
+    });
+    it.each(calls)('$name distinguishes disabled authority from an empty current result', async ({ name, run, limit }) => {
+      const reader = vi.fn().mockResolvedValueOnce({ data: { status: 'not_ready' }, error: null })
+        .mockResolvedValueOnce({ data: { status: 'available', workouts: [] }, error: null });
+      const db = new WorkoutsDB(mockSupabaseClient as unknown as SupabaseClient, reader);
+      expect(await run(db)).toEqual(name === 'getLastWorkout' ? undefined : null);
+      expect(await run(db)).toEqual(name === 'getLastWorkout' ? null : []);
+      expect(reader.mock.calls).toEqual([[owner, null, limit, 0], [owner, null, limit, 0]]);
+      expect(mockSupabaseClient.queryLog).toEqual([]);
+    });
+    it('returns the current date-only row and only the requested exercise comparison', async () => {
+      const current = historyContract.record;
+      const row = { id: current.id, user_id: owner, started_at: null, duration_seconds: null,
+        workoutDay: current.workoutDay, currentHistory: current,
+        workout_exercises: current.current.document.exercises.map((entry, index) => ({
+          id: entry.id, workout_id: current.id, exercise_id: index === 0 ? EXERCISE_ID : `other-${index}`, sets: [],
+        })) };
+      const reader = vi.fn().mockResolvedValue({ data: { status: 'available', workouts: [row] }, error: null });
+      const db = new WorkoutsDB(mockSupabaseClient as unknown as SupabaseClient, reader);
+      expect(await db.getCurrentWorkouts(owner)).toMatchObject([{ id: current.id, started_at: null, duration_seconds: null, workoutDay: '2026-10-24', currentHistory: current }]);
+      expect(await db.getLastWorkout(owner)).toEqual({ workoutDay: '2026-10-24', startedAt: null });
+      const groups = await db.getComparableProgress(EXERCISE_ID, owner);
+      expect(groups).toHaveLength(1);
+      expect(groups![0].records).toMatchObject([
+        { metric: 'reps', at: { kind: 'loadKg', value: 0.123 }, value: 5,
+          sources: [{ workoutId: current.id, revision: '1', entryId: current.current.document.exercises[0].id }] },
+        { metric: 'loadKg', at: { kind: 'reps', value: 5 }, value: 0.123 },
+      ]);
+      expect(reader.mock.calls).toEqual([[owner, null, null, 0], [owner, null, 1, 0], [owner, null, null, 0]]);
+      expect(mockSupabaseClient.queryLog).toEqual([]);
+    });
+  });
+
+  it("groups repeated current entries into one workout in canonical newest-first order", async () => {
+    const current = historyContract.record;
+    const row = {id:current.id,user_id:current.ownerId,started_at:null,workoutDay:current.workoutDay,currentHistory:current,
+      workout_exercises:[1,2].map(index=>({id:`entry-${index}`,workout_id:current.id,exercise_id:EXERCISE_ID,
+        exercise:{id:EXERCISE_ID,user_id:null,exercise_type:'weight_reps'},
+        sets:[{id:`working-${index}`,workout_exercise_id:`entry-${index}`,is_completed:true,set_type:'normal'},
+          {id:`warmup-${index}`,workout_exercise_id:`entry-${index}`,is_completed:true,set_type:'warmup'},
+          {id:`unfinished-${index}`,workout_exercise_id:`entry-${index}`,is_completed:false,set_type:'normal'}]}))};
+    const reader=vi.fn().mockResolvedValue({data:{status:'available',workouts:[row]},error:null});
+    const result=await new WorkoutsDB(mockSupabaseClient as unknown as SupabaseClient,reader).getExerciseHistory(EXERCISE_ID,current.ownerId);
+    expect(result).toEqual([{started_at:null,workoutDay:'2026-10-24',workout_id:current.id,best_set_weight_kg:null,best_set_reps:null,total_volume:null,total_sets:2}]);
+    expect(reader).toHaveBeenCalledWith(current.ownerId,null,null,0);
   });
 
   // ===========================================================================
@@ -345,6 +416,7 @@ describe("WorkoutsDB", () => {
       expect(result).toEqual(rows);
 
       expect(mockSupabaseClient.queryLog).toEqual([
+        {table:null,method:'rpc',args:['read_train_history_compat',{p_id:null,p_limit:20,p_offset:0}]},
         { table: "workouts", method: "from", args: ["workouts"] },
         { table: "workouts", method: "select", args: ["*"] },
         { table: "workouts", method: "eq", args: ["user_id", USER_ID] },
@@ -422,6 +494,7 @@ describe("WorkoutsDB", () => {
 
       // Query chain
       expect(mockSupabaseClient.queryLog).toEqual([
+        {table:null,method:'rpc',args:['read_train_history_compat',{p_id:null,p_limit:null,p_offset:0}]},
         {
           table: "workout_exercises",
           method: "from",
@@ -988,7 +1061,7 @@ describe("WorkoutsDB", () => {
       expect(gteCalls).toHaveLength(0);
     });
 
-    it("asserts full base query chain (table, eqs, final order ascending)", async () => {
+    it("asserts full base query chain (table, eqs, final order descending)", async () => {
       queueThenResponses([{ data: [], error: null }]);
 
       await workoutsDB.getExerciseHistory(EXERCISE_ID, USER_ID);
@@ -1025,7 +1098,7 @@ describe("WorkoutsDB", () => {
         method: "order",
         args: [
           "started_at",
-          { referencedTable: "workouts", ascending: true },
+          { referencedTable: "workouts", ascending: false },
         ],
       });
     });
@@ -1216,6 +1289,7 @@ describe("WorkoutsDB", () => {
       await workoutsDB.getExerciseSets(EXERCISE_ID, USER_ID);
 
       expect(mockSupabaseClient.queryLog).toEqual([
+        {table:null,method:'rpc',args:['read_train_history_compat',{p_id:null,p_limit:null,p_offset:0}]},
         {
           table: "workout_exercises",
           method: "from",
@@ -1278,6 +1352,7 @@ describe("WorkoutsDB", () => {
       expect(result).toBe("2026-02-28T12:00:00Z");
 
       expect(mockSupabaseClient.queryLog).toEqual([
+        {table:null,method:'rpc',args:['read_train_history_compat',{p_id:null,p_limit:null,p_offset:0}]},
         { table: "workouts", method: "from", args: ["workouts"] },
         { table: "workouts", method: "select", args: ["completed_at"] },
         { table: "workouts", method: "eq", args: ["user_id", USER_ID] },
@@ -1327,6 +1402,7 @@ describe("WorkoutsDB", () => {
       expect(result).toBe(3);
 
       expect(mockSupabaseClient.queryLog).toEqual([
+        {table:null,method:'rpc',args:['read_train_history_compat',{p_id:null,p_limit:null,p_offset:0}]},
         { table: "workouts", method: "from", args: ["workouts"] },
         {
           table: "workouts",

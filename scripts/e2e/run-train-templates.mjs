@@ -8,15 +8,17 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
-import { issueAccessToken } from '../../lib/oauth/access-token.ts';
+import * as accessTokenModule from '../../lib/oauth/access-token.ts';
+const issueAccessToken = accessTokenModule.issueAccessToken ?? accessTokenModule.default?.issueAccessToken;
 
 // Actual Auth, PostgREST, cookie Web and MCP requests. Never accepts a remote
 // target or caller credentials, and never resets or repairs a database.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 function check(ok, message) { if (!ok) throw new Error(message); }
-check(process.argv.slice(2).every(arg => ['--hold', '--browser', '--prior-results', '--plans'].includes(arg)), 'Unknown runner argument');
+check(process.argv.slice(2).every(arg => ['--hold', '--browser', '--prior-results', '--plans', '--history'].includes(arg)), 'Unknown runner argument');
 const hold = process.argv.includes('--hold');
 const runBrowser = process.argv.includes('--browser');
+const runHistory = process.argv.includes('--history');
 const runPlans = process.argv.includes('--plans');
 const runPriorResults = process.argv.includes('--prior-results');
 const status = spawnSync(process.env.SUPABASE_CLI ?? 'supabase', ['status', '--output', 'json'], { cwd: root, encoding: 'utf8' });
@@ -45,9 +47,10 @@ if (runPriorResults) sourcePaths.push('lib/fitness/prior-results.ts','lib/fitnes
   'app/api/workouts/active/route.ts','components/fitness/workout-logger/prior-results-picker.tsx',
   'components/fitness/workout-logger/workout-set-row.tsx','components/fitness/use-weight-input.ts');
 if (runPlans) sourcePaths.push('lib/fitness/train-plans.ts','lib/validations/train-plans.ts','lib/db/workouts.ts','supabase/migrations/20261026023958_train_plan_links_and_fulfillment.sql');
+if (runHistory) sourcePaths.push('lib/fitness/train-history.ts','lib/fitness/history-compat.ts','lib/fitness/history-progress.ts','lib/fitness/assistant-history.ts','lib/validations/train-history.ts','lib/db/workouts.ts','lib/supabase/proxy.ts','supabase/migrations/20261026035606_train_history_current_authority_expand.sql');
 receipt.sourceHashes = Object.fromEntries(sourcePaths.map(path => [path, createHash('sha256').update(readFileSync(resolve(root, path))).digest('hex')]));
 const privilegeQuery = `select json_agg(json_build_object('table',t,'role',r,'privilege',p,'granted',has_table_privilege(r,'public.'||t,p)) order by t,r,p)
- from unnest(array['exercises','routines','routine_exercises']) t cross join unnest(array['anon','authenticated','service_role']) r
+ from unnest(array['exercises','routines','routine_exercises','workouts','workout_exercises','workout_sets']) t cross join unnest(array['anon','authenticated','service_role']) r
  cross join unnest(array['INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p`;
 const originalPrivileges = JSON.parse(sql(privilegeQuery));
 const originalColumn = sql("select coalesce(attacl::text,'') from pg_attribute where attrelid='public.routines'::regclass and attname='last_performed_at'");
@@ -55,13 +58,20 @@ check(originalColumn === '', 'Fixture requires an unmodified usage-column ACL');
 const originalEntries = JSON.parse(sql("select coalesce(json_agg(entry_id::text),'[]') from fitness_private.template_entries"));
 const originalFlags = JSON.parse(sql("select json_build_object('custom',(select ready from fitness_private.custom_exercise_rollout),'templates',(select ready from fitness_private.template_rollout))"));
 check(originalFlags.templates === false, 'Expected template expansion A before proof');
+const historySnapshot = runHistory ? JSON.parse(sql(`select json_build_object('ready',(select ready from fitness_private.history_rollout),
+ 'notNull',(select attnotnull from pg_attribute where attrelid='public.workouts'::regclass and attname='started_at'),
+ 'currentIds',(select coalesce(json_agg(workout_id::text),'[]') from fitness_private.history_current),
+ 'contents',(select md5(coalesce(jsonb_agg(to_jsonb(h) order by workout_id)::text,'')) from fitness_private.history_current h),
+ 'revisions',(select md5(coalesce(jsonb_agg(to_jsonb(h) order by workout_id,revision)::text,'')) from fitness_private.history_revisions h))`)) : null;
+if (runHistory) check(historySnapshot.ready === false && historySnapshot.notNull === true, 'Expected untouched history A before proof');
+let historyContracted = false;
 let contracted = false;
 const secretsDirectory = mkdtempSync(resolve(tmpdir(), 'train-419-'));
 let child;
 let origin;
 const endpoint = '/api/mobile/train/templates/commands';
 const uploadEndpoint = '/api/mobile/train/completions';
-const artifact = resolve(root, runPlans ? '.artifacts/train-422-424-http-proof.json' : runPriorResults ? '.artifacts/train-420-http-proof.json' : '.artifacts/train-419-http-proof.json');
+const artifact = resolve(root, runHistory ? '.artifacts/train-history-http-proof.json' : runPlans ? '.artifacts/train-422-424-http-proof.json' : runPriorResults ? '.artifacts/train-420-http-proof.json' : '.artifacts/train-419-http-proof.json');
 function passed(name) { receipt.cases.push(name); writeFileSync(artifact, JSON.stringify(receipt, null, 2)); console.log(`PASS ${name}`); }
 const receiptFile = resolve(secretsDirectory, 'accounts.json');
 async function account() {
@@ -123,6 +133,24 @@ async function cleanup() {
     const ids=users.map(user=>`'${user.id}'::uuid`).join(',');
     check(sql(`select (select count(*) from public.train_workout_plan_links where owner_id in (${ids}))+(select count(*) from public.train_plan_command_outcomes where owner_id in (${ids}))+(select count(*) from public.profiles where id in (${ids}))+(select count(*) from public.recurring_task_series where user_id in (${ids}))`) === '0','Train link/plan cleanup residue');
   }
+  if (historyContracted) {
+    const ids=users.map(user=>`'${user.id}'::uuid`).join(',');
+    check(sql(`select (select count(*) from fitness_private.history_current where owner_id in (${ids}))
+      +(select count(*) from fitness_private.history_revisions where owner_id in (${ids}))
+      +(select count(*) from fitness_private.history_outcomes where owner_id in (${ids}))
+      +(select count(*) from public.profiles where id in (${ids}));`) === '0','History account erasure residue');
+    const retained=historySnapshot.currentIds.length?`where workout_id not in (${historySnapshot.currentIds.map(id=>`'${id}'::uuid`).join(',')})`:'';
+    sql(`begin; update fitness_private.history_rollout set ready=false;
+      delete from fitness_private.history_current ${retained}; delete from fitness_private.history_revisions ${retained};
+      drop policy history_legacy_representable on public.workouts;
+      alter table public.workouts drop constraint workouts_known_start_check;
+      alter table public.workouts alter column started_at set not null; commit;`);
+    const restored=JSON.parse(sql(`select json_build_object('ready',(select ready from fitness_private.history_rollout),
+      'contents',(select md5(coalesce(jsonb_agg(to_jsonb(h) order by workout_id)::text,'')) from fitness_private.history_current h),
+      'revisions',(select md5(coalesce(jsonb_agg(to_jsonb(h) order by workout_id,revision)::text,'')) from fitness_private.history_revisions h))`));
+    check(restored.ready===historySnapshot.ready&&restored.contents===historySnapshot.contents&&restored.revisions===historySnapshot.revisions,'History baseline restoration failed');
+    receipt.historyRestored=true;
+  }
   if (contracted) {
     const grants = originalPrivileges.map(({table,role,privilege,granted}) => `${granted ? 'grant' : 'revoke'} ${privilege} on public.${table} ${granted ? 'to' : 'from'} ${role};`).join('\n');
     const retained = originalEntries.length ? `where entry_id not in (${originalEntries.map(id=>`'${id}'::uuid`).join(',')})` : '';
@@ -161,7 +189,24 @@ try {
   }
   check(ready,'Isolated server did not become ready');
   const a=await account(),b=await account(),rootA=hold?await account():null,rootB=hold?await account():null;
-  if (runPlans) {
+  if (runHistory) {
+    sql(`begin; revoke insert,update,delete,truncate,references,trigger on public.exercises from anon,authenticated;
+      revoke truncate,trigger on public.exercises from service_role; update fitness_private.custom_exercise_rollout set ready=true;
+      select fitness_private.activate_template_contract(); select fitness_private.activate_history_contract(); commit;`);
+    contracted=true; historyContracted=true;
+    const {verifyTrainHistory}=await import('./train-history.mjs');
+    const result=await verifyTrainHistory({a,b,rootA,request,mcp,parsedTool,artifactDirectory:resolve(root,'.artifacts')});
+    for(const name of result.cases)passed(name);
+    if(hold){
+      writeFileSync(receiptFile,JSON.stringify({apiOrigin:origin,supabaseUrl:local.API_URL,anonKey:local.ANON_KEY,
+        accounts:{a:{userId:rootA.id,accessToken:rootA.token},b:{userId:rootB.id,accessToken:rootB.token}},
+        ...result.root,backendSource:receipt.source,backendSourceHashes:receipt.sourceHashes}),{mode:0o600});
+      console.log(`READY origin=${origin} credentialFile=${receiptFile} releaseFile=${resolve(secretsDirectory,'release')}`);
+      const end=Date.now()+45*60_000;
+      while(!existsSync(resolve(secretsDirectory,'release'))&&Date.now()<end)await new Promise(done=>setTimeout(done,1000));
+      check(existsSync(resolve(secretsDirectory,'release')),'Root fixture window expired');
+    }
+  } else if (runPlans) {
     sql(`begin; revoke insert,update,delete,truncate,references,trigger on public.exercises from anon,authenticated;
       revoke truncate,trigger on public.exercises from service_role; update fitness_private.custom_exercise_rollout set ready=true;
       select fitness_private.activate_template_contract(); commit;`); contracted=true;

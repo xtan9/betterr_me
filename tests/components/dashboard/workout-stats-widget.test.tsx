@@ -67,6 +67,20 @@ describe("WorkoutStatsWidget", () => {
     ).toBeInTheDocument();
   });
 
+  it("uses the canonical civil day even without an instant", () => {
+    render(<WorkoutStatsWidget lastWorkoutAt={"2026-04-10T00:00:00Z"} lastWorkout={{ workoutDay: "2026-04-12", startedAt: null }} weekWorkoutCount={1} />);
+    expect(screen.getByText("today")).toBeInTheDocument();
+  });
+
+  it("distinguishes an undated workout from no workouts without reviving a stale timestamp", () => {
+    const { rerender } = render(<WorkoutStatsWidget lastWorkoutAt={"2026-04-12T12:00:00Z"} lastWorkout={{ workoutDay: null, startedAt: null }} weekWorkoutCount={0} />);
+    expect(screen.getByText("workoutDayUnknown")).toBeInTheDocument();
+    expect(screen.queryByText("noWorkoutsYet")).not.toBeInTheDocument();
+    rerender(<WorkoutStatsWidget lastWorkoutAt={"2026-04-12T12:00:00Z"} lastWorkout={null} weekWorkoutCount={0} />);
+    expect(screen.getByText("noWorkoutsYet")).toBeInTheDocument();
+    expect(screen.queryByText("today")).not.toBeInTheDocument();
+  });
+
   it("has no accessibility violations", async () => {
     vi.useRealTimers();
     const { container } = render(

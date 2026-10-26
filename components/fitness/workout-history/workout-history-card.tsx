@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Card, CardContent } from "@/components/ui/card";
 import type { WorkoutSummary } from "@/lib/db/workouts";
 import type { WeightUnit } from "@/lib/db/types";
 import { formatWeight } from "@/lib/fitness/units";
+import { formatWorkoutDay, knownWorkoutDuration } from "@/lib/fitness/history-presentation";
 
 interface WorkoutHistoryCardProps {
   workout: WorkoutSummary;
@@ -24,21 +25,12 @@ function formatDurationParts(seconds: number | null): {
   };
 }
 
-/** Format a date string into a localized short date. */
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
 export function WorkoutHistoryCard({
   workout,
   weightUnit,
 }: WorkoutHistoryCardProps) {
   const t = useTranslations("workouts");
+  const locale = useLocale();
 
   return (
     <Link href={`/workouts/${workout.id}`}>
@@ -48,13 +40,14 @@ export function WorkoutHistoryCard({
           <div className="flex items-start justify-between gap-2">
             <h3 className="font-semibold truncate">{workout.title}</h3>
             <span className="text-body text-muted-foreground whitespace-nowrap">
-              {formatDate(workout.started_at)}
+              {formatWorkoutDay(workout, locale) ?? t("workoutDayUnknown")}
             </span>
           </div>
 
           {/* Middle row: duration */}
           <p className="mt-1 text-body text-muted-foreground">
             {(() => {
+              if (!knownWorkoutDuration(workout.duration_seconds)) return t("durationUnknown");
               const { hours, minutes } = formatDurationParts(
                 workout.duration_seconds
               );

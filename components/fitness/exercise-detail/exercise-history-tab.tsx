@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
-import { useTranslations } from "next-intl";
+import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
+import { formatWorkoutDay } from "@/lib/fitness/history-presentation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useExerciseHistory } from "@/lib/hooks/use-exercise-history";
@@ -18,15 +19,10 @@ export function ExerciseHistoryTab({
   weightUnit,
 }: ExerciseHistoryTabProps) {
   const t = useTranslations("exercises");
-  const { history, isLoading } = useExerciseHistory(exercise.id);
+  const tw = useTranslations("workouts");
+  const locale = useLocale();
+  const { history, error, isLoading } = useExerciseHistory(exercise.id);
 
-  // Sort by date descending (most recent first)
-  const sortedHistory = useMemo(() => {
-    return [...history].sort(
-      (a, b) =>
-        new Date(b.started_at).getTime() - new Date(a.started_at).getTime()
-    );
-  }, [history]);
 
   if (isLoading) {
     return (
@@ -38,7 +34,9 @@ export function ExerciseHistoryTab({
     );
   }
 
-  if (sortedHistory.length === 0) {
+  if (error) return <p role="status">{tw("loadError")}</p>;
+
+  if (history.length === 0) {
     return (
       <div className="rounded-card border border-dashed p-8 text-center">
         <p className="text-body text-muted-foreground">
@@ -50,18 +48,13 @@ export function ExerciseHistoryTab({
 
   return (
     <div className="space-y-3">
-      {sortedHistory.map((entry) => (
+      {history.map((entry) => (
         <Card key={entry.workout_id}>
           <CardContent className="py-4">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-body font-medium">
-                {new Date(entry.started_at).toLocaleDateString(undefined, {
-                  weekday: "short",
-                  year: "numeric",
-                  month: "short",
-                  day: "numeric",
-                })}
-              </p>
+              <Link className="text-body font-medium underline" href={`/workouts/${entry.workout_id}`}>
+                {formatWorkoutDay(entry, locale, { weekday: "short", year: "numeric", month: "short", day: "numeric" }) ?? tw("workoutDayUnknown")}
+              </Link>
               <p className="text-caption text-muted-foreground">
                 {t("exerciseDetail.sets", { count: entry.total_sets })}
               </p>

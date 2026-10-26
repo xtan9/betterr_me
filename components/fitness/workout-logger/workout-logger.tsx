@@ -91,6 +91,10 @@ export function WorkoutLogger() {
         workout={workout}
         onUpdateWorkout={actions.updateWorkout}
         onFinish={async () => {
+          if (!workout.started_at || !Number.isFinite(Date.parse(workout.started_at))) {
+            toast.error(t("loadError"));
+            return;
+          }
           setFinishDuration(
             Math.floor(
               (Date.now() - new Date(workout.started_at).getTime()) / 1000

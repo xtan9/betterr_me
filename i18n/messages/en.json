@@ -237,7 +237,8 @@
       "today": "Today",
       "yesterday": "Yesterday",
       "daysAgo": "{count} days ago",
-      "noWorkoutsYet": "No workouts yet"
+      "noWorkoutsYet": "No workouts yet",
+      "workoutDayUnknown": "Workout day unknown"
     }
   },
   "habits": {
@@ -1383,7 +1384,20 @@
     "inputUnitKept": "Unfinished input stays in {unit}.",
     "addedLoad": "Added load",
     "assistance": "Assistance",
-    "recordedUnavailable": "This workout uses a recording format that cannot be read here. Update the app to view its recorded details."
+    "recordedUnavailable": "This workout uses a recording format that cannot be read here. Update the app to view its recorded details.",
+    "workoutDayUnknown": "Workout day unknown",
+    "durationUnknown": "Duration unknown",
+    "comparable": {
+      "eligible": "Only comparable working sets are included.",
+      "duration": "{seconds} seconds",
+      "loadAtReps": "{load} at {reps} reps",
+      "bodyweightReps": "{reps} reps",
+      "repsAtAssistance": "{reps} reps at {load} assistance",
+      "repsAtAddedLoad": "{reps} reps at {load} added load",
+      "repsAtLoad": "{reps} reps at {load}",
+      "unavailable": "Comparable progress unavailable",
+      "empty": "No comparable working sets yet"
+    }
   },
   "routines": {
     "templates": {

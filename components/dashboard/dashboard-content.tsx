@@ -441,6 +441,7 @@ export function DashboardContent({ initialData }: DashboardContentProps) {
       {(data.stats.last_workout_at !== null || data.stats.week_workout_count > 0) && (
         <WorkoutStatsWidget
           lastWorkoutAt={data.stats.last_workout_at}
+          lastWorkout={data.stats.last_workout}
           weekWorkoutCount={data.stats.week_workout_count}
         />
       )}

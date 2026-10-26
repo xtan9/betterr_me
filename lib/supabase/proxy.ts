@@ -19,6 +19,11 @@ export async function updateSession(request: NextRequest) {
     path === "/api/mobile/planning" ||
     path === "/api/mobile/planning/command" ||
     path === "/api/mobile/sleep" ||
+    path === "/api/mobile/train/history" ||
+    path === "/api/mobile/train/history/capabilities" ||
+    path === "/api/mobile/train/history/commands" ||
+    path === "/api/mobile/train/history/progress" ||
+    /^\/api\/mobile\/train\/history\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(path) ||
     path === "/api/mobile/train/plans" ||
     path === "/api/mobile/train/plans/commands" ||
     path === "/api/mobile/train/day" ||

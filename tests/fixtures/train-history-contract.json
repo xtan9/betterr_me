@@ -1,0 +1,313 @@
+{
+  "description": "Synthetic shared wire, not deployed fixture identity",
+  "completion": {
+    "id": "44444444-4444-4444-8444-444444444444",
+    "ownerId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "sourceId": "33333333-3333-4333-8333-333333333333",
+    "planId": null,
+    "exercises": [
+      {
+        "id": "20000000-0000-4000-8000-000000000001",
+        "definition": {
+          "catalogKey": "strength.barbell-bench-press.v1",
+          "name": {
+            "en": "Barbell Bench Press",
+            "zh": "\u6760\u94c3\u5367\u63a8"
+          },
+          "equipment": "barbell",
+          "mode": "weight_reps",
+          "convention": "barbell-total"
+        },
+        "sets": [
+          {
+            "id": "10000000-0000-4000-8000-000000000001",
+            "performed": {
+              "mode": "weight_reps",
+              "weightKg": 0.123,
+              "reps": 5,
+              "kind": "working"
+            }
+          }
+        ]
+      },
+      {
+        "id": "20000000-0000-4000-8000-000000000002",
+        "definition": {
+          "catalogKey": "strength.push-up.v1",
+          "name": {
+            "en": "Push-up",
+            "zh": "\u4fef\u5367\u6491"
+          },
+          "equipment": "bodyweight",
+          "mode": "bodyweight_reps",
+          "convention": "bodyweight-repetitions"
+        },
+        "sets": [
+          {
+            "id": "10000000-0000-4000-8000-000000000002",
+            "performed": {
+              "mode": "bodyweight_reps",
+              "reps": 8,
+              "kind": "warmup"
+            }
+          }
+        ]
+      },
+      {
+        "id": "20000000-0000-4000-8000-000000000003",
+        "definition": {
+          "catalogKey": "strength.weighted-pull-up.v1",
+          "name": {
+            "en": "Weighted Pull-up",
+            "zh": "\u8d1f\u91cd\u5f15\u4f53\u5411\u4e0a"
+          },
+          "equipment": "bodyweight",
+          "mode": "weighted_bodyweight",
+          "convention": "added-load"
+        },
+        "sets": [
+          {
+            "id": "10000000-0000-4000-8000-000000000003",
+            "performed": {
+              "mode": "weighted_bodyweight",
+              "addedWeightKg": 0.45359237,
+              "reps": 6,
+              "kind": "working"
+            }
+          }
+        ]
+      },
+      {
+        "id": "20000000-0000-4000-8000-000000000004",
+        "definition": {
+          "catalogKey": "strength.machine-assisted-pull-up.v1",
+          "name": {
+            "en": "Machine-assisted Pull-up",
+            "zh": "\u5668\u68b0\u8f85\u52a9\u5f15\u4f53\u5411\u4e0a"
+          },
+          "equipment": "machine",
+          "mode": "assisted_bodyweight",
+          "convention": "assistance"
+        },
+        "sets": [
+          {
+            "id": "10000000-0000-4000-8000-000000000004",
+            "performed": {
+              "mode": "assisted_bodyweight",
+              "assistanceKg": 0,
+              "reps": 5,
+              "kind": "warmup"
+            }
+          }
+        ]
+      },
+      {
+        "id": "20000000-0000-4000-8000-000000000005",
+        "definition": {
+          "catalogKey": "strength.plank.v1",
+          "name": {
+            "en": "Plank",
+            "zh": "\u5e73\u677f\u652f\u6491"
+          },
+          "equipment": "bodyweight",
+          "mode": "duration",
+          "convention": "seconds"
+        },
+        "sets": [
+          {
+            "id": "10000000-0000-4000-8000-000000000005",
+            "performed": {
+              "mode": "duration",
+              "durationSeconds": 90,
+              "kind": "working"
+            }
+          }
+        ]
+      }
+    ],
+    "version": 5,
+    "origin": "retrospective",
+    "time": {
+      "kind": "date-only",
+      "workoutDay": "2026-10-24",
+      "durationSeconds": null
+    }
+  },
+  "record": {
+    "id": "44444444-4444-4444-8444-444444444444",
+    "ownerId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "revision": "1",
+    "state": "alive",
+    "workoutDay": "2026-10-24",
+    "order": {
+      "day": "2026-10-24",
+      "instant": "2026-10-26T03:00:00.123456Z",
+      "id": "44444444-4444-4444-8444-444444444444"
+    },
+    "current": {
+      "kind": "recorded",
+      "document": {
+        "id": "44444444-4444-4444-8444-444444444444",
+        "ownerId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "sourceId": "33333333-3333-4333-8333-333333333333",
+        "planId": null,
+        "exercises": [
+          {
+            "id": "20000000-0000-4000-8000-000000000001",
+            "definition": {
+              "catalogKey": "strength.barbell-bench-press.v1",
+              "name": {
+                "en": "Barbell Bench Press",
+                "zh": "\u6760\u94c3\u5367\u63a8"
+              },
+              "equipment": "barbell",
+              "mode": "weight_reps",
+              "convention": "barbell-total"
+            },
+            "sets": [
+              {
+                "id": "10000000-0000-4000-8000-000000000001",
+                "performed": {
+                  "mode": "weight_reps",
+                  "weightKg": 0.123,
+                  "reps": 5,
+                  "kind": "working"
+                }
+              }
+            ]
+          },
+          {
+            "id": "20000000-0000-4000-8000-000000000002",
+            "definition": {
+              "catalogKey": "strength.push-up.v1",
+              "name": {
+                "en": "Push-up",
+                "zh": "\u4fef\u5367\u6491"
+              },
+              "equipment": "bodyweight",
+              "mode": "bodyweight_reps",
+              "convention": "bodyweight-repetitions"
+            },
+            "sets": [
+              {
+                "id": "10000000-0000-4000-8000-000000000002",
+                "performed": {
+                  "mode": "bodyweight_reps",
+                  "reps": 8,
+                  "kind": "warmup"
+                }
+              }
+            ]
+          },
+          {
+            "id": "20000000-0000-4000-8000-000000000003",
+            "definition": {
+              "catalogKey": "strength.weighted-pull-up.v1",
+              "name": {
+                "en": "Weighted Pull-up",
+                "zh": "\u8d1f\u91cd\u5f15\u4f53\u5411\u4e0a"
+              },
+              "equipment": "bodyweight",
+              "mode": "weighted_bodyweight",
+              "convention": "added-load"
+            },
+            "sets": [
+              {
+                "id": "10000000-0000-4000-8000-000000000003",
+                "performed": {
+                  "mode": "weighted_bodyweight",
+                  "addedWeightKg": 0.45359237,
+                  "reps": 6,
+                  "kind": "working"
+                }
+              }
+            ]
+          },
+          {
+            "id": "20000000-0000-4000-8000-000000000004",
+            "definition": {
+              "catalogKey": "strength.machine-assisted-pull-up.v1",
+              "name": {
+                "en": "Machine-assisted Pull-up",
+                "zh": "\u5668\u68b0\u8f85\u52a9\u5f15\u4f53\u5411\u4e0a"
+              },
+              "equipment": "machine",
+              "mode": "assisted_bodyweight",
+              "convention": "assistance"
+            },
+            "sets": [
+              {
+                "id": "10000000-0000-4000-8000-000000000004",
+                "performed": {
+                  "mode": "assisted_bodyweight",
+                  "assistanceKg": 0,
+                  "reps": 5,
+                  "kind": "warmup"
+                }
+              }
+            ]
+          },
+          {
+            "id": "20000000-0000-4000-8000-000000000005",
+            "definition": {
+              "catalogKey": "strength.plank.v1",
+              "name": {
+                "en": "Plank",
+                "zh": "\u5e73\u677f\u652f\u6491"
+              },
+              "equipment": "bodyweight",
+              "mode": "duration",
+              "convention": "seconds"
+            },
+            "sets": [
+              {
+                "id": "10000000-0000-4000-8000-000000000005",
+                "performed": {
+                  "mode": "duration",
+                  "durationSeconds": 90,
+                  "kind": "working"
+                }
+              }
+            ]
+          }
+        ],
+        "version": 5,
+        "origin": "retrospective",
+        "time": {
+          "kind": "date-only",
+          "workoutDay": "2026-10-24",
+          "durationSeconds": null
+        }
+      }
+    }
+  },
+  "correction": {
+    "protocolVersion": 1,
+    "ownerId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "operationId": "55555555-5555-4555-8555-555555555555",
+    "command": {
+      "kind": "correct-workout",
+      "workoutId": "44444444-4444-4444-8444-444444444444",
+      "expectedRevision": "1",
+      "patch": {
+        "sets": [
+          {
+            "entryId": "20000000-0000-4000-8000-000000000001",
+            "setId": "10000000-0000-4000-8000-000000000001",
+            "changes": {
+              "weightKg": 40,
+              "reps": 8
+            }
+          }
+        ],
+        "time": {
+          "kind": "date-only",
+          "duration": {
+            "kind": "set",
+            "seconds": 90
+          }
+        }
+      }
+    }
+  }
+}

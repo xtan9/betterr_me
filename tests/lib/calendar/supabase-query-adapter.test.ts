@@ -28,6 +28,7 @@ function queryBuilder(result: { data: unknown; error: unknown }) {
 
 function supabaseFor(builders: Record<string, ReturnType<typeof queryBuilder>>) {
   const client = {
+    rpc: vi.fn().mockResolvedValue({data:{status:"not_ready"},error:null}),
     from: vi.fn((table: string) => builders[table]),
   };
   return { client, supabase: client as unknown as SupabaseClient };
