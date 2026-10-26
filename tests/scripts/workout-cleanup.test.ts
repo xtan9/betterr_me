@@ -7,9 +7,18 @@ const workoutId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 function fixture(read: unknown, outcome?: unknown) {
   const rpc = vi.fn().mockResolvedValueOnce({ data: read, error: null }).mockImplementationOnce((_name, args) => Promise.resolve({ error: null, data: outcome ?? { protocolVersion: 1, receipt: { ownerId, workoutId, operationId: args.p_request.operationId, operation: 'delete-workout', revision: '8', current: { id: workoutId, ownerId, revision: '8', state: 'deleted' } } } }));
   const query = { delete: vi.fn(), eq: vi.fn(), neq: vi.fn(), then: (resolve: (value: unknown) => unknown) => Promise.resolve({ error: null }).then(resolve) };
-  query.delete.mockReturnValue(query); query.eq.mockReturnValue(query); query.neq.mockReturnValue(query);
-  const from = vi.fn(() => query);
-  return { client: { rpc, from } as unknown as SupabaseClient, rpc, from, query };
+  const queryLog: Array<{ table: string; method: string; args: unknown[] }> = [];
+  let table = '';
+  for (const method of ['delete', 'eq', 'neq'] as const) query[method].mockImplementation((...args: unknown[]) => {
+    queryLog.push({ table, method, args });
+    return query;
+  });
+  const from = vi.fn((name: string) => {
+    table = name;
+    queryLog.push({ table, method: 'from', args: [name] });
+    return query;
+  });
+  return { client: { rpc, from } as unknown as SupabaseClient, rpc, from, query, queryLog };
 }
 const current = { protocolVersion: 1, record: { id: workoutId, ownerId, revision: '7', state: 'alive' } };
 
@@ -58,10 +67,13 @@ describe('disposable workout cleanup', () => {
   it.each(['not_ready', 'not_found'])('retains owner-filtered draft cleanup when authority returns %s', async status => {
     const f = fixture({ status });
     await deleteFixtureWorkout(f.client, ownerId, workoutId);
-    expect(f.from).toHaveBeenCalledWith('workouts');
-    expect(f.query.eq.mock.calls).toEqual([['id', workoutId], ['user_id', ownerId]]);
-    if (status === 'not_found') expect(f.query.neq).toHaveBeenCalledWith('status', 'completed');
-    else expect(f.query.neq).not.toHaveBeenCalled();
+    expect(f.queryLog).toEqual([
+      { table: 'workouts', method: 'from', args: ['workouts'] },
+      { table: 'workouts', method: 'delete', args: [] },
+      { table: 'workouts', method: 'eq', args: ['id', workoutId] },
+      { table: 'workouts', method: 'eq', args: ['user_id', ownerId] },
+      ...(status === 'not_found' ? [{ table: 'workouts', method: 'neq', args: ['status', 'completed'] }] : []),
+    ]);
     expect(f.rpc).toHaveBeenCalledTimes(1);
   });
 });
