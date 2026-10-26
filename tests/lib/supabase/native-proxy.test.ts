@@ -13,14 +13,14 @@ describe('API routes through the cookie proxy',()=>{
   expect(response.headers.get('location')).toBeNull();expect(response.headers.get('x-middleware-next')).toBe('1');expect(mocks.create).not.toHaveBeenCalled();
  });
  it('keeps unrelated pages and lookalike history paths cookie-protected',async()=>{
-  for(const path of ['/tasks','/api/mobile/train/exercises-extra','/api/mobile/train/templates-extra','/api/mobile/train/templates/commands/export','/api/mobile/train/exercises/commands/export','/api/mobile/train/completions-extra','/api/mobile/assistant/history-export','/api/mobile/assistant/command-extra','/api/mobile/execution/export','/api/cron/assistant-reminders-export','/api/mobile/connections/export','/api/mobile/connections-extra','/api/mobile/planning/command-extra','/api/mobile/sleep-export','/api/mobile/focus/history-export','/api/focus/history-export']){
+  for(const path of ['/tasks','/api/mobile/train/exercises-extra','/api/mobile/train/templates-extra','/api/mobile/train/templates/commands/export','/api/mobile/train/exercises/commands/export','/api/mobile/train/prior-results-extra','/api/mobile/train/prior-results/export','/api/mobile/train/completions-extra','/api/mobile/assistant/history-export','/api/mobile/assistant/command-extra','/api/mobile/execution/export','/api/cron/assistant-reminders-export','/api/mobile/connections/export','/api/mobile/connections-extra','/api/mobile/planning/command-extra','/api/mobile/sleep-export','/api/mobile/focus/history-export','/api/focus/history-export']){
    const response=await updateSession(new NextRequest(`https://www.betterr.me${path}`));
    expect(response.headers.get('location')).toBe('https://www.betterr.me/auth/login');
   }
  });
  it.each([
   ['/api/mobile/train/templates','GET'],['/api/mobile/train/templates/commands','POST'],['/api/mobile/train/templates/capabilities','GET'],['/api/mobile/train/templates/definitions','GET'],['/api/mobile/train/templates/11111111-1111-4111-8111-111111111111','GET'],
-  ['/api/mobile/train/completions','POST'],['/api/mobile/train/completions','OPTIONS'],
+  ['/api/mobile/train/prior-results','POST'],['/api/mobile/train/prior-results','OPTIONS'],['/api/mobile/train/completions','POST'],['/api/mobile/train/completions','OPTIONS'],
   ['/api/mobile/train/exercises','GET'],['/api/mobile/train/exercises/commands','POST'],
   ['/api/mobile/train/exercises/capabilities','GET'],['/api/mobile/train/exercises/11111111-1111-4111-8111-111111111111','GET'],
   ['/api/mobile/execution','POST'],['/api/mobile/execution','OPTIONS'],

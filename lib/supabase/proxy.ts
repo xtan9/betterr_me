@@ -25,6 +25,7 @@ export async function updateSession(request: NextRequest) {
     path === "/api/mobile/train/templates/definitions" ||
     /^\/api\/mobile\/train\/templates\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(path) ||
     path === "/api/mobile/train/completions" ||
+    path === "/api/mobile/train/prior-results" ||
     path === "/api/mobile/train/exercises" ||
     path === "/api/mobile/train/exercises/commands" ||
     path === "/api/mobile/train/exercises/capabilities" ||

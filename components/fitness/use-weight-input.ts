@@ -38,6 +38,11 @@ export function useWeightInput(id: string, storedKg: number | null, preference: 
       const actualUnit = text === "" ? preference : unit;
       setState({ id, storedKg, preference, unit: actualUnit, draft: { text, unit: actualUnit, anchorKg: parseLoadInput(text, actualUnit), acknowledged: false } });
     },
+    replaceWithCanonical(anchorKg: number | null) {
+      setState({ id, storedKg, preference, unit: preference, draft: {
+        text: weightInputText(anchorKg, preference), unit: preference, anchorKg, acknowledged: true,
+      } });
+    },
     acknowledge() {
       if (!draft) return;
       setState(latest => {

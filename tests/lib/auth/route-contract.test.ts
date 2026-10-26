@@ -12,6 +12,7 @@ const apiRoot = join(process.cwd(), "app", "api");
  * Keep this list narrow and reviewed whenever a route is added.
  */
 const deliberateAuthExceptions: Record<string, string> = {
+  "mobile/train/prior-results/route.ts": "authenticateNativeRequest verifies bearer owner; owner-filtered completed parent pages and compatible captured performed facts, no mutation",
   "mobile/train/templates/route.ts": "authenticateNativeRequest verifies bearer owner; gated versioned template content and scoped definitions",
   "mobile/train/templates/[id]/route.ts": "authenticateNativeRequest verifies bearer owner; explicit owned template read including archived references",
   "mobile/train/templates/capabilities/route.ts": "authenticateNativeRequest verifies bearer session; private rollout state, no caller-controlled gate",

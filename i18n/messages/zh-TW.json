@@ -1245,6 +1245,27 @@
     }
   },
   "workouts": {
+    "prior": {
+      "title": "以往實際紀錄",
+      "description": "選擇實際測量值進行重用。目前組仍為未完成，並保留其類型。",
+      "saved": "最近儲存的參考紀錄",
+      "occurrence": "第 {value} 個動作紀錄",
+      "warmup": "熱身組",
+      "working": "正式組",
+      "use": "使用這些測量值",
+      "searching": "正在查找更早訓練中的相容紀錄。",
+      "continue": "繼續查找",
+      "none": "找不到相容的已完成組紀錄。",
+      "unavailable": "暫時無法提供相容的以往紀錄。",
+      "failed": "請求尚未確認。目前輸入和已儲存的參考紀錄均已保留。",
+      "refresh": "重新整理參考紀錄",
+      "repetitions": "{value} 次",
+      "seconds": "{value} 秒",
+      "load": "負重",
+      "addedLoad": "額外負重",
+      "assistance": "輔助重量",
+      "legacy": "有限的舊版參考，不表示重用或完成訓練組。"
+    },
     "title": "訓練",
     "exerciseLibrary": "動作庫",
     "exerciseLibraryDescription": "依肌群和器材瀏覽並管理你的訓練動作。",

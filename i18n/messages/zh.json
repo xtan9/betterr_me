@@ -1245,6 +1245,27 @@
     }
   },
   "workouts": {
+    "prior": {
+      "title": "以往实际记录",
+      "description": "选择实际测量值进行复用。当前组仍为未完成，并保留其类型。",
+      "saved": "最近保存的参考记录",
+      "occurrence": "第 {value} 个动作记录",
+      "warmup": "热身组",
+      "working": "正式组",
+      "use": "使用这些测量值",
+      "searching": "正在查找更早训练中的兼容记录。",
+      "continue": "继续查找",
+      "none": "未找到兼容的已完成组记录。",
+      "unavailable": "暂时无法提供兼容的以往记录。",
+      "failed": "请求尚未确认。当前输入和已保存的参考记录均已保留。",
+      "refresh": "刷新参考记录",
+      "repetitions": "{value} 次",
+      "seconds": "{value} 秒",
+      "load": "负重",
+      "addedLoad": "额外负重",
+      "assistance": "辅助重量",
+      "legacy": "有限的旧版参考，不表示复用或完成训练组。"
+    },
     "title": "训练",
     "exerciseLibrary": "动作库",
     "exerciseLibraryDescription": "按肌群和器械浏览和管理你的训练动作。",

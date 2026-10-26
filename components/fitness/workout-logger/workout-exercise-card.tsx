@@ -260,6 +260,7 @@ export function WorkoutExerciseCard({
             exerciseType={exerciseInfo.exercise_type}
             weightUnit={weightUnit}
             previousSet={previousSets[index] ?? null}
+            priorResults={exercise.priorResults}
             onUpdate={(updates) => onUpdateSet(set.id, updates)}
             onDelete={() => onDeleteSet(set.id)}
             onComplete={() => handleCompleteSetWithPR(set.id)}

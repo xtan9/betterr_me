@@ -14,7 +14,7 @@ const performed = z.discriminatedUnion('mode', [
   z.object({ mode: z.literal('duration'), durationSeconds: z.number().int().min(1).max(86400), kind }).strict(),
 ]);
 const instantPattern = /^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,6})?(?:Z|[+-]([01]\d|2[0-3]):[0-5]\d)$/;
-function explicitInstant(value: string) {
+export function explicitInstant(value: string) {
   if (!instantPattern.test(value) || !Number.isFinite(Date.parse(value))) return false;
   const [year, month, day] = value.slice(0, 10).split('-').map(Number);
   const calendar = new Date(0);
@@ -70,3 +70,5 @@ export const recordedWorkoutSchema = z.union([v1, v2, v3, v4]).refine(value => {
 });
 export type RecordedCompletion = z.infer<typeof recordedWorkoutSchema>;
 export type CapturedDefinition = z.infer<typeof recordedExerciseDefinitionSchema>;
+
+export { performed as recordedPerformedSchema };

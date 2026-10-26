@@ -1245,6 +1245,27 @@
     }
   },
   "workouts": {
+    "prior": {
+      "title": "Previous results",
+      "description": "Choose actual measurements to reuse. The current set remains unfinished and keeps its type.",
+      "saved": "Latest saved reference",
+      "occurrence": "Exercise occurrence {value}",
+      "warmup": "Warm-up",
+      "working": "Working",
+      "use": "Use these measurements",
+      "searching": "Searching older workouts for compatible results.",
+      "continue": "Continue search",
+      "none": "No compatible performed results found.",
+      "unavailable": "Compatible prior results are unavailable.",
+      "failed": "The request was not confirmed. Your current inputs and saved reference are kept.",
+      "refresh": "Refresh reference",
+      "repetitions": "{value} reps",
+      "seconds": "{value} seconds",
+      "load": "Load",
+      "addedLoad": "Added load",
+      "assistance": "Assistance",
+      "legacy": "Bounded legacy reference; not an instruction to reuse or complete a set."
+    },
     "title": "Workouts",
     "exerciseLibrary": "Exercise Library",
     "exerciseLibraryDescription": "Browse and manage your exercises by muscle group and equipment.",
