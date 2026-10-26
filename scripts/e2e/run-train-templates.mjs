@@ -14,9 +14,10 @@ import { issueAccessToken } from '../../lib/oauth/access-token.ts';
 // target or caller credentials, and never resets or repairs a database.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 function check(ok, message) { if (!ok) throw new Error(message); }
-check(process.argv.slice(2).every(arg => ['--hold', '--browser', '--prior-results'].includes(arg)), 'Unknown runner argument');
+check(process.argv.slice(2).every(arg => ['--hold', '--browser', '--prior-results', '--plans'].includes(arg)), 'Unknown runner argument');
 const hold = process.argv.includes('--hold');
 const runBrowser = process.argv.includes('--browser');
+const runPlans = process.argv.includes('--plans');
 const runPriorResults = process.argv.includes('--prior-results');
 const status = spawnSync(process.env.SUPABASE_CLI ?? 'supabase', ['status', '--output', 'json'], { cwd: root, encoding: 'utf8' });
 check(status.status === 0, 'Local Supabase is not ready');
@@ -43,6 +44,7 @@ if (runPriorResults) sourcePaths.push('lib/fitness/prior-results.ts','lib/fitnes
   'lib/validations/train-prior-results.ts','app/api/mobile/train/prior-results/route.ts','app/api/workouts/prior-results/route.ts',
   'app/api/workouts/active/route.ts','components/fitness/workout-logger/prior-results-picker.tsx',
   'components/fitness/workout-logger/workout-set-row.tsx','components/fitness/use-weight-input.ts');
+if (runPlans) sourcePaths.push('lib/fitness/train-plans.ts','lib/validations/train-plans.ts','lib/db/workouts.ts','supabase/migrations/20261026023958_train_plan_links_and_fulfillment.sql');
 receipt.sourceHashes = Object.fromEntries(sourcePaths.map(path => [path, createHash('sha256').update(readFileSync(resolve(root, path))).digest('hex')]));
 const privilegeQuery = `select json_agg(json_build_object('table',t,'role',r,'privilege',p,'granted',has_table_privilege(r,'public.'||t,p)) order by t,r,p)
  from unnest(array['exercises','routines','routine_exercises']) t cross join unnest(array['anon','authenticated','service_role']) r
@@ -59,7 +61,7 @@ let child;
 let origin;
 const endpoint = '/api/mobile/train/templates/commands';
 const uploadEndpoint = '/api/mobile/train/completions';
-const artifact = resolve(root, runPriorResults ? '.artifacts/train-420-http-proof.json' : '.artifacts/train-419-http-proof.json');
+const artifact = resolve(root, runPlans ? '.artifacts/train-422-424-http-proof.json' : runPriorResults ? '.artifacts/train-420-http-proof.json' : '.artifacts/train-419-http-proof.json');
 function passed(name) { receipt.cases.push(name); writeFileSync(artifact, JSON.stringify(receipt, null, 2)); console.log(`PASS ${name}`); }
 const receiptFile = resolve(secretsDirectory, 'accounts.json');
 async function account() {
@@ -117,6 +119,10 @@ async function cleanup() {
       +(select count(*) from public.routines where user_id in (${ids}))+(select count(*) from public.train_exercise_command_outcomes where owner_id in (${ids}))
       +(select count(*) from public.train_template_command_outcomes where owner_id in (${ids}))+(select count(*) from public.train_completion_receipts where owner_id in (${ids}));`) === '0', 'Disposable residue remained');
   }
+  if (runPlans && users.length) {
+    const ids=users.map(user=>`'${user.id}'::uuid`).join(',');
+    check(sql(`select (select count(*) from public.train_workout_plan_links where owner_id in (${ids}))+(select count(*) from public.train_plan_command_outcomes where owner_id in (${ids}))+(select count(*) from public.profiles where id in (${ids}))+(select count(*) from public.recurring_task_series where user_id in (${ids}))`) === '0','Train link/plan cleanup residue');
+  }
   if (contracted) {
     const grants = originalPrivileges.map(({table,role,privilege,granted}) => `${granted ? 'grant' : 'revoke'} ${privilege} on public.${table} ${granted ? 'to' : 'from'} ${role};`).join('\n');
     const retained = originalEntries.length ? `where entry_id not in (${originalEntries.map(id=>`'${id}'::uuid`).join(',')})` : '';
@@ -155,6 +161,23 @@ try {
   }
   check(ready,'Isolated server did not become ready');
   const a=await account(),b=await account(),rootA=hold?await account():null,rootB=hold?await account():null;
+  if (runPlans) {
+    sql(`begin; revoke insert,update,delete,truncate,references,trigger on public.exercises from anon,authenticated;
+      revoke truncate,trigger on public.exercises from service_role; update fitness_private.custom_exercise_rollout set ready=true;
+      select fitness_private.activate_template_contract(); commit;`); contracted=true;
+    const {verifyTrainPlans}=await import('./train-plan-links.mjs');
+    const result=await verifyTrainPlans({a,b,rootA,request,mcp,parsedTool,artifactDirectory:resolve(root,'.artifacts')});
+    for (const name of result.cases) passed(name);
+    if(hold){
+      writeFileSync(receiptFile,JSON.stringify({apiOrigin:origin,supabaseUrl:local.API_URL,anonKey:local.ANON_KEY,
+        accounts:{a:{userId:rootA.id,accessToken:rootA.token},b:{userId:rootB.id,accessToken:rootB.token}},
+        ...result.root,backendSource:receipt.source,backendSourceHashes:receipt.sourceHashes}),{mode:0o600});
+      console.log(`READY origin=${origin} credentialFile=${receiptFile} releaseFile=${resolve(secretsDirectory,'release')}`);
+      const end=Date.now()+45*60_000;
+      while(!existsSync(resolve(secretsDirectory,'release'))&&Date.now()<end)await new Promise(done=>setTimeout(done,1000));
+      check(existsSync(resolve(secretsDirectory,'release')),'Root fixture window expired');
+    }
+  } else {
   const preset=(await a.client.from('exercises').select('id').eq('catalog_key','strength.barbell-bench-press.v1').single()).data;
   check(preset?.id,'Verified preset missing');
   const legacy=(await request('/api/routines',a,{name:'A compatible routine'},201,true)).routine;
@@ -246,5 +269,6 @@ try {
     const end=Date.now()+45*60_000;
     while(!existsSync(resolve(secretsDirectory,'release'))&&Date.now()<end)await new Promise(done=>setTimeout(done,1000));
     check(existsSync(resolve(secretsDirectory,'release')),'Root fixture window expired');
+  }
   }
 } finally { await cleanup(); }

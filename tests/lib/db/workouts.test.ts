@@ -55,6 +55,17 @@ describe("WorkoutsDB", () => {
     expect(JSON.stringify(result)).not.toContain('Private definition');
   });
 
+  it("exposes only an owned explicit plan association to cookie and trusted Assistant detail reads", async () => {
+    const link = { owner_id: USER_ID, workout_id: WORKOUT_ID, captured_occurrence_id: '64220000-0000-4000-8000-000000000002', linked_at: '2026-10-26T10:00:00Z' };
+    mockSupabaseClient.setMockResponse({ id: WORKOUT_ID, user_id: USER_ID, status: 'completed', train_workout_plan_links: link, workout_exercises: [] });
+    const result = await workoutsDB.getWorkoutWithExercises(WORKOUT_ID, USER_ID);
+    expect(result?.trainingPlanLink).toEqual({ ownerId: USER_ID, workoutId: WORKOUT_ID, occurrenceId: link.captured_occurrence_id, linkedAt: link.linked_at });
+    mockSupabaseClient.expectQuery({ method: 'eq', args: ['user_id', USER_ID] });
+    expect(result).not.toHaveProperty('train_workout_plan_links');
+    mockSupabaseClient.setMockResponse({ id: WORKOUT_ID, user_id: USER_ID, status: 'completed', train_workout_plan_links: { ...link, owner_id: 'another-owner' }, workout_exercises: [] });
+    expect((await workoutsDB.getWorkoutWithExercises(WORKOUT_ID, USER_ID))?.trainingPlanLink).toBeNull();
+  });
+
   it("does not silently replace an unsupported recorded document with live catalog facts", async () => {
     mockSupabaseClient.setMockResponse({ id: WORKOUT_ID, native_completion: { version: 2 }, workout_exercises: [{ id: "entry", exercise: { name: "Current catalog" }, sets: [] }] });
     await expect(workoutsDB.getWorkoutWithExercises(WORKOUT_ID, USER_ID)).resolves.toMatchObject({ recordedStatus: 'unsupported', exercises: [] });
@@ -243,6 +254,7 @@ describe("WorkoutsDB", () => {
         args: [
           `
         *,
+        train_workout_plan_links (owner_id,workout_id,captured_occurrence_id,linked_at),
         workout_exercises (
           *,
           exercise:exercises (*),
