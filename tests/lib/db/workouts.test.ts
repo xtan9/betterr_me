@@ -90,6 +90,53 @@ describe("WorkoutsDB", () => {
     expect(mockSupabaseClient.queryLog).toEqual([]);
   });
 
+  describe('current history readers', () => {
+    const owner = historyContract.record.ownerId;
+    const calls = [
+      { name: 'getCurrentWorkouts', limit: null, run: (db: WorkoutsDB) => db.getCurrentWorkouts(owner) },
+      { name: 'getComparableProgress', limit: null, run: (db: WorkoutsDB) => db.getComparableProgress(EXERCISE_ID, owner) },
+      { name: 'getLastWorkout', limit: 1, run: (db: WorkoutsDB) => db.getLastWorkout(owner) },
+    ];
+    it.each(calls)('$name propagates an authority error without raw-table fallback', async ({ run, limit }) => {
+      const error = new Error('Current authority failed');
+      const reader = vi.fn().mockResolvedValue({ data: null, error });
+      const db = new WorkoutsDB(mockSupabaseClient as unknown as SupabaseClient, reader);
+      await expect(run(db)).rejects.toBe(error);
+      expect(reader).toHaveBeenCalledExactlyOnceWith(owner, null, limit, 0);
+      expect(mockSupabaseClient.queryLog).toEqual([]);
+    });
+    it.each(calls)('$name distinguishes disabled authority from an empty current result', async ({ name, run, limit }) => {
+      const reader = vi.fn().mockResolvedValueOnce({ data: { status: 'not_ready' }, error: null })
+        .mockResolvedValueOnce({ data: { status: 'available', workouts: [] }, error: null });
+      const db = new WorkoutsDB(mockSupabaseClient as unknown as SupabaseClient, reader);
+      expect(await run(db)).toEqual(name === 'getLastWorkout' ? undefined : null);
+      expect(await run(db)).toEqual(name === 'getLastWorkout' ? null : []);
+      expect(reader.mock.calls).toEqual([[owner, null, limit, 0], [owner, null, limit, 0]]);
+      expect(mockSupabaseClient.queryLog).toEqual([]);
+    });
+    it('returns the current date-only row and only the requested exercise comparison', async () => {
+      const current = historyContract.record;
+      const row = { id: current.id, user_id: owner, started_at: null, duration_seconds: null,
+        workoutDay: current.workoutDay, currentHistory: current,
+        workout_exercises: current.current.document.exercises.map((entry, index) => ({
+          id: entry.id, workout_id: current.id, exercise_id: index === 0 ? EXERCISE_ID : `other-${index}`, sets: [],
+        })) };
+      const reader = vi.fn().mockResolvedValue({ data: { status: 'available', workouts: [row] }, error: null });
+      const db = new WorkoutsDB(mockSupabaseClient as unknown as SupabaseClient, reader);
+      expect(await db.getCurrentWorkouts(owner)).toMatchObject([{ id: current.id, started_at: null, duration_seconds: null, workoutDay: '2026-10-24', currentHistory: current }]);
+      expect(await db.getLastWorkout(owner)).toEqual({ workoutDay: '2026-10-24', startedAt: null });
+      const groups = await db.getComparableProgress(EXERCISE_ID, owner);
+      expect(groups).toHaveLength(1);
+      expect(groups![0].records).toMatchObject([
+        { metric: 'reps', at: { kind: 'loadKg', value: 0.123 }, value: 5,
+          sources: [{ workoutId: current.id, revision: '1', entryId: current.current.document.exercises[0].id }] },
+        { metric: 'loadKg', at: { kind: 'reps', value: 5 }, value: 0.123 },
+      ]);
+      expect(reader.mock.calls).toEqual([[owner, null, null, 0], [owner, null, 1, 0], [owner, null, null, 0]]);
+      expect(mockSupabaseClient.queryLog).toEqual([]);
+    });
+  });
+
   it("groups repeated current entries into one workout in canonical newest-first order", async () => {
     const current = historyContract.record;
     const row = {id:current.id,user_id:current.ownerId,started_at:null,workoutDay:current.workoutDay,currentHistory:current,
