@@ -289,6 +289,30 @@ try {
   console.log('PASS 425–428 A/C: ten tables unchanged, exact completed baselines including zero/null/deferred fields, no invented legacy meaning, idempotent revisions and profile erasure');
 
 
+  // Exercise-library parity must work for live workouts without a template.
+  const preset = JSON.parse(query(database, `select jsonb_build_object('reference',jsonb_build_object('kind','preset','exerciseId',id),'name',name,'equipment',equipment,'mode',exercise_type,'convention',null) from public.exercises where user_id is null and not is_custom and catalog_key is null and exercise_type='weight_reps' order by id limit 1`));
+  const live = structuredClone(v1); live.version=3; live.id=randomUUID(); live.sourceId=randomUUID();
+  live.exercises=[{id:randomUUID(),definition:preset,sets:[{id:randomUUID(),performed:{mode:'weight_reps',weightKg:12.345,reps:8,kind:'working'}}]}];
+  const literal = value => `'${JSON.stringify(value).replaceAll("'","''")}'::jsonb`;
+  const upload = value => query(database, `set request.jwt.claims='{"sub":"${v1.ownerId}","role":"authenticated"}'; set role authenticated; select public.upload_completed_workout('${value.id}',${literal(value)});`);
+  if(JSON.parse(upload(live)).status!=='invalid_completion')throw new Error('Control no longer reproduces live preset rejection');
+  const beforeLive=templatePreservation();
+  query(database,migration('20261027215405_train_live_preset_recording.sql'));
+  if(templatePreservation()!==beforeLive)throw new Error('Live preset expansion changed existing data');
+  const acceptedLive=JSON.parse(upload(live));
+  if(acceptedLive.status!=='accepted')throw new Error('Full-catalog live completion rejected: '+JSON.stringify(acceptedLive));
+  if(query(database,`select recorded_completion=${literal(live)} and routine_id is null from public.workouts where id='${live.id}'`)!=='t')throw new Error('Live preset capture or template independence changed');
+  if(query(database,`select weight_kg=12.345 and reps=8 from public.workout_sets where id='${live.exercises[0].sets[0].id}'`)!=='t')throw new Error('Live preset projection changed exact values');
+  if(JSON.stringify(JSON.parse(upload(live)))!==JSON.stringify(acceptedLive))throw new Error('Live preset retry changed first receipt');
+  const mismatched=structuredClone(live); mismatched.id=randomUUID(); mismatched.exercises[0].definition.equipment=preset.equipment==='none'?'other':'none';
+  if(JSON.parse(upload(mismatched)).status!=='reference_unavailable')throw new Error('Preset authority accepted mismatched equipment');
+  const foreign=structuredClone(live); foreign.id=randomUUID(); foreign.exercises[0].definition.reference.exerciseId='64150000-0000-4000-8000-000000000001';
+  if(JSON.parse(upload(foreign)).status!=='reference_unavailable')throw new Error('Unowned or missing exercise accepted as a preset');
+  query(database,migration('20261027215405_train_live_preset_recording.sql'));
+  if(JSON.stringify(JSON.parse(upload(live)))!==JSON.stringify(acceptedLive))throw new Error('Repeated migration changed frozen receipt');
+  console.log('PASS full-catalog live recording: old rejection reproduced; v3 preset IDs accepted without template origin; exact capture, projection, history and first receipt retained; mismatched/missing references rejected; migration preserves existing data and repeats safely');
+
+
 } finally {
   if (created) query('postgres', `drop database ${database};`);
 }
