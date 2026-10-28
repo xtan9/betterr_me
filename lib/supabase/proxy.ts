@@ -19,6 +19,7 @@ export async function updateSession(request: NextRequest) {
     path === "/api/mobile/planning" ||
     path === "/api/mobile/planning/command" ||
     path === "/api/mobile/sleep" ||
+    path === "/api/mobile/train/imports/hevy" ||
     path === "/api/mobile/train/history" ||
     path === "/api/mobile/train/history/capabilities" ||
     path === "/api/mobile/train/history/commands" ||
