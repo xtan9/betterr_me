@@ -350,6 +350,16 @@ try {
     const skipped=hevyRpc('commit',String(field+1).repeat(64),edited);
     if(skipped.importedWorkouts!==0||skipped.changedWorkouts!==1)throw new Error('Edited source header duplicated current history');
   }
+  for (const anchor of ['start','title-end']) {
+    const first=structuredClone(hevyRows[0][0]);
+    first[0]=`Same-file ${anchor}`; first[1]=anchor==='start'?'01 Jan 2020, 12:00':'02 Jan 2020, 12:00'; first[2]=anchor==='start'?'01 Jan 2020, 13:00':'02 Jan 2020, 13:00';
+    const second=structuredClone(first);
+    if(anchor==='start'){second[0]+=' renamed';second[2]='01 Jan 2020, 13:30';}else second[1]='02 Jan 2020, 12:30';
+    const collision=[[first],[second]], hash=(anchor==='start'?'6':'7').repeat(64);
+    const preview=hevyRpc('preview',hash,collision), committed=hevyRpc('commit',hash,collision);
+    if(preview.newWorkouts!==1||preview.changedWorkouts!==1||committed.importedWorkouts!==preview.newWorkouts||committed.changedWorkouts!==preview.changedWorkouts)
+      throw new Error('Same-file candidate classification differed between review and commit: '+JSON.stringify({anchor,preview,committed}));
+  }
   const command = {protocolVersion:1,ownerId:v1.ownerId,operationId:randomUUID(),command:{kind:'correct-workout',workoutId:importedId,expectedRevision:'1',patch:{time:{kind:'date-only',workoutDay:'2026-03-13',duration:{kind:'set',seconds:123}}}}};
   const corrected=JSON.parse(query(database,`set request.jwt.claims='{"sub":"${v1.ownerId}","role":"authenticated"}';set role authenticated;select public.execute_train_history_command(${literal(command)});`));
   if(corrected.receipt?.current.workoutDay!=='2026-03-13')throw new Error('Imported date correction failed: '+JSON.stringify(corrected));

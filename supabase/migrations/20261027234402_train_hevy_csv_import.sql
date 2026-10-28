@@ -69,7 +69,7 @@ declare owner uuid:=auth.uid(); batch fitness_private.hevy_import_batches; prior
  document_hash text; entry_index integer; item_index integer; set_index integer; previous_index integer; previous_name text; previous_notes text; previous_superset text;
  weight numeric; repetitions numeric; distance numeric; seconds numeric; exertion numeric; mode text; target_day date;
  new_count integer:=0; duplicate_count integer:=0; changed_count integer:=0; set_count integer:=0; removed integer:=0;
- ids jsonb:='[]'; meta jsonb; result jsonb; current_record fitness_private.history_current;
+ ids jsonb:='[]'; accepted_sources jsonb:='[]'; accepted_rows jsonb; meta jsonb; result jsonb; current_record fitness_private.history_current;
 begin
  if owner is null then return jsonb_build_object('status','unauthenticated'); end if;
  if not (select ready from fitness_private.history_rollout where singleton) then return jsonb_build_object('status','not_ready'); end if;
@@ -125,13 +125,23 @@ begin
    if prior.source_rows=rows then duplicate_count:=duplicate_count+1; else changed_count:=changed_count+1; end if;
    continue;
   end if;
+  select candidate->'rows' into accepted_rows from jsonb_array_elements(accepted_sources) candidate where candidate->'identity'=identity;
+  if found then
+   if accepted_rows=rows then duplicate_count:=duplicate_count+1; else changed_count:=changed_count+1; end if;
+   continue;
+  end if;
   -- A rename or corrected ending retains its start; a corrected start may
   -- retain title+ending. These are possible changes, never automatic inserts.
   if exists(select 1 from fitness_private.hevy_import_workouts h where h.owner_id=owner and
-    (h.source_identity->>1=identity->>1 or h.source_identity->>0=identity->>0 and h.source_identity->>2=identity->>2)) then
+    (h.source_identity->>1=identity->>1 or h.source_identity->>0=identity->>0 and h.source_identity->>2=identity->>2))
+    or exists(select 1 from jsonb_array_elements(accepted_sources) candidate where
+      candidate->'identity'->>1=identity->>1 or candidate->'identity'->>0=identity->>0 and candidate->'identity'->>2=identity->>2) then
    changed_count:=changed_count+1; continue;
   end if;
   new_count:=new_count+1;
+  -- Preview and commit must classify later rows against the same accepted
+  -- candidates, including earlier workouts in this file.
+  accepted_sources:=accepted_sources||jsonb_build_array(jsonb_build_object('identity',identity,'rows',rows));
   if p_action='preview' then continue; end if;
   workout:=md5(owner::text||':hevy-workout:'||identity::text)::uuid;
   insert into fitness_private.hevy_import_workouts(workout_id,owner_id,batch_id,source_identity,source_rows,workout_day) values(workout,owner,batch_id,identity,rows,target_day);
