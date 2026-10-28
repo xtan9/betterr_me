@@ -1,5 +1,13 @@
 -- constrained-sql-fixture: true
 begin;
+do $$
+declare sequence_value bigint; sequence_called boolean;
+begin
+ -- Sequence increments survive rollback; preserve the isolated fixture state.
+ select last_value,is_called into sequence_value,sequence_called from public.assistant_messages_sequence_seq;
+ perform set_config('test.capture_confirmation_sequence',sequence_value::text,true);
+ perform set_config('test.capture_confirmation_sequence_called',sequence_called::text,true);
+end $$;
 select public.sql_fixture_create_auth_user('62800000-0000-0000-0000-000000000001','capture-confirmation@example.test');
 select public.sql_fixture_create_auth_user('62800000-0000-0000-0000-000000000002','capture-confirmation-other@example.test');
 select set_config('request.jwt.claims','{"sub":"62800000-0000-0000-0000-000000000001","role":"authenticated"}',true);
@@ -151,5 +159,9 @@ begin
  if public.planner_ai_proposal_command(command)->>'status'<>'conflict' or not exists(select 1 from public.tasks where id=(task->>'id')::uuid and title='Newer edit') then raise exception 'Revalidation overwrote a newer entity version';end if;
  if has_function_privilege('anon','public.planner_ai_revise_capture(jsonb)','EXECUTE') or has_function_privilege('authenticated','planner_private.capture_has_newly_past_start(jsonb,timestamptz)','EXECUTE') then raise exception 'Revision helper privileges are too broad';end if;
  reset role;
+end $$;
+do $$
+begin
+ perform setval('public.assistant_messages_sequence_seq',current_setting('test.capture_confirmation_sequence')::bigint,current_setting('test.capture_confirmation_sequence_called')::boolean);
 end $$;
 rollback;
