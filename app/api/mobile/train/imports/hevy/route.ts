@@ -5,7 +5,7 @@ import { HevyCsvError, parseHevyCsv } from '@/lib/fitness/hevy-csv';
 import { log } from '@/lib/logger';
 
 const headers = { 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
-const csv = z.string().min(1).max(5_000_000), fingerprint = z.string().regex(/^[0-9a-f]{64}$/);
+const csv = z.string().min(1).max(2_000_000), fingerprint = z.string().regex(/^[0-9a-f]{64}$/);
 const requestSchema = z.discriminatedUnion('action', [
   z.object({ protocolVersion: z.literal(1), action: z.literal('preview'), csv }).strict(),
   z.object({ protocolVersion: z.literal(1), action: z.literal('commit'), csv, fingerprint }).strict(),
@@ -24,9 +24,9 @@ export async function POST(request: Request) {
   try {
     const auth = await authenticateNativeRequest(request);
     if (!auth) return failure('unauthenticated', 401);
-    if (Number(request.headers.get('content-length')) > 15_000_000) return failure('too_large', 413);
+    if (Number(request.headers.get('content-length')) > 4_200_000) return failure('too_large', 413);
     const text = await request.text();
-    if (text.length > 15_000_000) return failure('too_large', 413);
+    if (Buffer.byteLength(text, 'utf8') > 4_200_000) return failure('too_large', 413);
     const input = requestSchema.safeParse(JSON.parse(text));
     if (!input.success) return failure('invalid_request', 400);
     const body = input.data;

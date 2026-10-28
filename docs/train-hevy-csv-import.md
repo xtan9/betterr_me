@@ -7,8 +7,9 @@ all checked-in CSV/JSON/native fixtures are synthetic.
 ## User behavior and acceptance
 
 Train → More training actions → Import from Hevy opens a native SwiftUI sheet.
-The system document picker selects an English Hevy workout CSV, with a 5 MB text
-limit. Selection/cancellation does not write history. Review shows dates, source
+The system document picker selects an English Hevy workout CSV, with a 2 MB UTF-8
+limit and a 4.2 MB encoded request budget, below the [host's 4.5 MB limit](https://vercel.com/docs/functions/limitations).
+Selection/cancellation does not write history. Review shows dates, source
 counts, original exercise names, new records, duplicates and changed matches.
 Only explicit confirmation imports; retry reuses the reviewed file fingerprint.
 Reopening the same export retrieves its previous import and undo outcome.
@@ -48,9 +49,10 @@ Private account-scoped batch/source ledgers retain original outcomes and source
 identities after deletion. Same-file retry returns its first receipt. Re-exported
 identical workouts are skipped across batches; the same source identity with
 different source facts is a changed match and is skipped without overwrite.
-Missing rows never imply deletion. Initial deduplication cannot identify an
-externally edited workout whose title and both source times have all changed;
-that remains a distinct source identity and requires user comparison.
+Possible changed matches are also skipped when a source start is retained, or
+when the title and ending are retained. Missing rows never imply deletion. Edits
+that change both matching anchors can remain a distinct identity; CSV exports
+have no durable workout ID, so those cases need manual comparison.
 
 Undo removes only records added by that batch whose current revision is still 1.
 Already deleted records count as removed; later corrections are preserved.

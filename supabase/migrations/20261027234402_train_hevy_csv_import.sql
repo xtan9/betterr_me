@@ -12,6 +12,8 @@ create table fitness_private.hevy_import_workouts(
  source_identity jsonb not null, source_rows jsonb not null, workout_day date not null,
  entry_meta jsonb not null default '{}', unique(owner_id,source_identity)
 );
+create index hevy_import_start_lookup on fitness_private.hevy_import_workouts(owner_id,(source_identity->>1));
+create index hevy_import_ending_lookup on fitness_private.hevy_import_workouts(owner_id,(source_identity->>0),(source_identity->>2));
 alter table fitness_private.hevy_import_batches enable row level security;
 alter table fitness_private.hevy_import_workouts enable row level security;
 revoke all on fitness_private.hevy_import_batches,fitness_private.hevy_import_workouts from public,anon,authenticated,service_role;
@@ -122,6 +124,12 @@ begin
   if found then
    if prior.source_rows=rows then duplicate_count:=duplicate_count+1; else changed_count:=changed_count+1; end if;
    continue;
+  end if;
+  -- A rename or corrected ending retains its start; a corrected start may
+  -- retain title+ending. These are possible changes, never automatic inserts.
+  if exists(select 1 from fitness_private.hevy_import_workouts h where h.owner_id=owner and
+    (h.source_identity->>1=identity->>1 or h.source_identity->>0=identity->>0 and h.source_identity->>2=identity->>2)) then
+   changed_count:=changed_count+1; continue;
   end if;
   new_count:=new_count+1;
   if p_action='preview' then continue; end if;

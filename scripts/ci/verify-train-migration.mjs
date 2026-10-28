@@ -342,6 +342,14 @@ try {
   if(hevyRpc('commit','a'.repeat(64),changed).status!=='operation_conflict')throw new Error('Hevy operation identity was reused');
   const changedPreview=hevyRpc('preview','b'.repeat(64),changed);
   if(changedPreview.changedWorkouts!==1||changedPreview.duplicateWorkouts!==1||changedPreview.newWorkouts!==0)throw new Error('Hevy changed match was not protected');
+  for (const field of [0,1,2]) {
+    const edited=structuredClone(hevyRows);
+    for (const row of edited[0]) row[field]=field===0?'Renamed import':field===1?'11 Mar 2026, 23:45':'12 Mar 2026, 00:25';
+    const candidate=hevyRpc('preview','e'.repeat(64),edited);
+    if(candidate.newWorkouts!==0||candidate.changedWorkouts!==1)throw new Error('An edited source header was treated as a new workout');
+    const skipped=hevyRpc('commit',String(field+1).repeat(64),edited);
+    if(skipped.importedWorkouts!==0||skipped.changedWorkouts!==1)throw new Error('Edited source header duplicated current history');
+  }
   const command = {protocolVersion:1,ownerId:v1.ownerId,operationId:randomUUID(),command:{kind:'correct-workout',workoutId:importedId,expectedRevision:'1',patch:{time:{kind:'date-only',workoutDay:'2026-03-13',duration:{kind:'set',seconds:123}}}}};
   const corrected=JSON.parse(query(database,`set request.jwt.claims='{"sub":"${v1.ownerId}","role":"authenticated"}';set role authenticated;select public.execute_train_history_command(${literal(command)});`));
   if(corrected.receipt?.current.workoutDay!=='2026-03-13')throw new Error('Imported date correction failed: '+JSON.stringify(corrected));
@@ -349,6 +357,8 @@ try {
   const undo=hevyRpc('undo',null,null,hevyReceipt.batchId);
   if(undo.removedWorkouts!==1||undo.changedWorkouts!==1)throw new Error('Hevy undo erased a later correction: '+JSON.stringify(undo));
   if(JSON.stringify(hevyRpc('undo',null,null,hevyReceipt.batchId))!==JSON.stringify(undo))throw new Error('Hevy undo retry changed outcome');
+  const recovered=hevyRpc('preview','a'.repeat(64));
+  if(JSON.stringify(recovered.previousImport?.receipt)!==JSON.stringify(hevyReceipt)||JSON.stringify(recovered.previousImport?.undo)!==JSON.stringify(undo))throw new Error('Previous import/undo outcome was not recovered');
   hevyRpc('commit','a'.repeat(64));
   if(query(database,`select state from fitness_private.history_current where workout_id='${timedId}'`)!=='deleted')throw new Error('Hevy retry resurrected deleted history');
   if(hevyRpc('undo',null,null,hevyReceipt.batchId,'64150000-0000-4000-8000-000000000099').status!=='not_found')throw new Error('Hevy batch leaked across accounts');

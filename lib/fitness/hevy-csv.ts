@@ -5,6 +5,12 @@ export type HevySet = { source: HevyRow; weightKg: number | null; reps: number |
 export type HevyExercise = { title: string; notes: string; supersetId: string; sets: HevySet[] };
 export type HevyWorkout = { sourceKey: string; contentKey: string; title: string; day: string; startTime: string; endTime: string; description: string; exercises: HevyExercise[] };
 export type HevyCsv = { workouts: HevyWorkout[]; sets: number; exerciseNames: string[]; from: string; through: string };
+export const hevyCsvByteLimit = 2_000_000;
+export function hevyUtf8Bytes(text: string): number {
+  let bytes = 0;
+  for (const character of text) { const point = character.codePointAt(0)!; bytes += point <= 127 ? 1 : point <= 2047 ? 2 : point <= 65535 ? 3 : 4; }
+  return bytes;
+}
 export class HevyCsvError extends Error {
   readonly code: 'too_large' | 'invalid_csv' | 'unsupported_header' | 'invalid_value' | 'ambiguous_workout' | 'empty';
   readonly row?: number;
@@ -13,13 +19,15 @@ export class HevyCsvError extends Error {
 
 /** RFC 4180 records, including quoted commas/newlines and escaped quotes. */
 function records(input: string): string[][] {
-  if (input.length > 5_000_000) throw new HevyCsvError('too_large');
+  if (input.length > hevyCsvByteLimit || hevyUtf8Bytes(input) > hevyCsvByteLimit) throw new HevyCsvError('too_large');
   const text = input.replace(/^\uFEFF/, ''), rows: string[][] = [];
   let row: string[] = [], field = '', quoted = false, closed = false;
   const push = () => { row.push(field); field = ''; closed = false; };
   const finish = () => { push(); if (row.some(value => value !== '')) rows.push(row); row = []; if (rows.length > 25_001) throw new HevyCsvError('too_large'); };
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
+    const code = text.charCodeAt(i);
+    if (code < 32 && ![9, 10, 13].includes(code)) throw new HevyCsvError('invalid_csv', rows.length + 1);
     if (quoted) {
       if (char === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else { quoted = false; closed = true; } }
       else field += char;
@@ -35,7 +43,7 @@ function records(input: string): string[][] {
 const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function civilTime(value: string, row: number) {
   const match = /^(\d{1,2}) ([A-Z][a-z]{2}) (\d{4}), ([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/.exec(value);
-  if (!match || !months.includes(match[2])) throw new HevyCsvError('invalid_value', row);
+  if (!match || Number(match[3]) < 1 || !months.includes(match[2])) throw new HevyCsvError('invalid_value', row);
   const day = `${match[3]}-${String(months.indexOf(match[2]) + 1).padStart(2, '0')}-${match[1].padStart(2, '0')}`;
   const date = new Date(`${day}T00:00:00Z`);
   if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== day) throw new HevyCsvError('invalid_value', row);
