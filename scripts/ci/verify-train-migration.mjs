@@ -326,6 +326,14 @@ try {
   const activeId=randomUUID();
   query(database,`set request.jwt.claims='{"sub":"${v1.ownerId}","role":"authenticated"}';set role authenticated;
     insert into public.workouts(id,user_id,title,status,started_at) values('${activeId}','${v1.ownerId}','Active sentinel','in_progress',now());`);
+  const ordinaryEntry=randomUUID(), ordinarySet=randomUUID();
+  query(database,`set request.jwt.claims='{"sub":"${v1.ownerId}","role":"authenticated"}';set role authenticated;
+    insert into public.workout_exercises(id,workout_id,exercise_id,sort_order) values('${ordinaryEntry}','${activeId}',
+      (select id from public.exercises where catalog_key='strength.barbell-bench-press.v1'),0);
+    insert into public.workout_sets(id,workout_exercise_id,set_number,set_type,distance_meters,rpe,is_completed)
+      values('${ordinarySet}','${ordinaryEntry}',1,'normal',100,6.4,false);`);
+  if(query(database,`select distance_meters::text='100.00' and rpe::text='6' from public.workout_sets where id='${ordinarySet}'`)!=='t')
+    throw new Error('Ordinary workout distance scale or integer effort changed');
   const activeBefore=query(database,`select to_jsonb(w)::text from public.workouts w where id='${activeId}'`);
   const hevyReceipt=hevyRpc('commit','a'.repeat(64));
   if(hevyReceipt.importedWorkouts!==2||hevyReceipt.importedSets!==3)throw new Error('Hevy commit failed: '+JSON.stringify(hevyReceipt));

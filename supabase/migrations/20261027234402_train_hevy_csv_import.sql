@@ -37,6 +37,24 @@ alter table public.workouts add constraint workouts_known_start_check check(star
 alter table public.workout_sets alter column rpe type numeric using rpe::numeric;
 alter table public.workout_sets alter column distance_meters type numeric using distance_meters::numeric;
 
+-- Keep ordinary writes identical to their former column types, including
+-- decimal scale and range. Only protected imported parents retain extra precision.
+create function fitness_private.guard_legacy_set_precision() returns trigger
+language plpgsql security definer set search_path=pg_catalog as $$
+begin
+ if not exists(select 1 from public.workout_exercises e join fitness_private.hevy_import_workouts h on h.workout_id=e.workout_id
+   where e.id=new.workout_exercise_id) then
+  new.distance_meters:=new.distance_meters::numeric(10,2);
+  new.rpe:=new.rpe::smallint;
+ end if;
+ return new;
+end $$;
+revoke all on function fitness_private.guard_legacy_set_precision() from public,anon,authenticated,service_role;
+-- This runs before guard_native_set / guard_performed_measurements, so their
+-- checks see the same ordinary values they saw before this migration.
+create trigger guard_legacy_set_precision before insert or update on public.workout_sets
+ for each row execute function fitness_private.guard_legacy_set_precision();
+
 create function fitness_private.hevy_number(value text,whole boolean default false,maximum numeric default 9007199254740991) returns numeric
 language plpgsql immutable set search_path=pg_catalog as $$
 declare result numeric;
