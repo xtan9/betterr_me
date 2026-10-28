@@ -22,6 +22,10 @@ describe('API routes through the cookie proxy',()=>{
   const response=await updateSession(new NextRequest(`https://www.betterr.me${path}`));
   expect(response.headers.get('location')).toBe('https://www.betterr.me/auth/login');
  });
+ it.each(['/api/mobile/assistant/revise-extra','/api/mobile/assistant/revise/export'])('keeps lookalike revision path %s cookie-protected',async path=>{
+  const response=await updateSession(new NextRequest(`https://www.betterr.me${path}`));
+  expect(response.headers.get('location')).toBe('https://www.betterr.me/auth/login');
+ });
  it.each([
   ['/api/mobile/train/imports/hevy','POST'],['/api/mobile/train/imports/hevy','OPTIONS'],
   ['/api/mobile/train/history','POST'],['/api/mobile/train/history','OPTIONS'],['/api/mobile/train/history/capabilities','GET'],['/api/mobile/train/history/progress','POST'],['/api/mobile/train/history/commands','POST'],['/api/mobile/train/history/11111111-1111-4111-8111-111111111111','GET'],
@@ -37,6 +41,7 @@ describe('API routes through the cookie proxy',()=>{
   ['/api/mobile/connections/callback','GET'],
   ['/api/mobile/planning/command','POST'],['/api/mobile/planning/command','OPTIONS'],
   ['/api/mobile/assistant/command','POST'],['/api/mobile/assistant/command','OPTIONS'],
+  ['/api/mobile/assistant/revise','POST'],['/api/mobile/assistant/revise','OPTIONS'],
   ['/api/mobile/sleep','GET'],['/api/mobile/sleep','POST'],['/api/mobile/sleep','OPTIONS'],
   ['/api/mobile/focus/history','GET'],['/api/mobile/focus/history','POST'],['/api/mobile/focus/history','OPTIONS'],
   ['/api/focus/history','GET'],
