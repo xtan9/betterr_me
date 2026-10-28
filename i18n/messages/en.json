@@ -1820,6 +1820,7 @@
       "resultTotal": "{count} exercises in catalog",
       "resultCreated": "{count} new exercises created",
       "resultUpdated": "{count} existing exercises updated",
+      "resultUnchanged": "Existing definitions kept: {count}",
       "resultGifsDownloaded": "{count} GIFs downloaded",
       "resultGifsFailed": "{count} GIF downloads failed",
       "success": "Sync completed successfully",

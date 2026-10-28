@@ -1,6 +1,7 @@
 import catalogData from "./exercise-catalog.json";
 
 export interface CatalogEntry {
+  preset_id: string;
   name: string;
   muscle_group_primary: string;
   muscle_groups_secondary: string[];

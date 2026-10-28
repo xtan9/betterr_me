@@ -1820,6 +1820,7 @@
       "resultTotal": "目錄中共 {count} 個運動",
       "resultCreated": "新增 {count} 個運動",
       "resultUpdated": "更新 {count} 個現有運動",
+      "resultUnchanged": "保留現有動作：{count}",
       "resultGifsDownloaded": "已下載 {count} 個 GIF",
       "resultGifsFailed": "{count} 個 GIF 下載失敗",
       "success": "同步成功",

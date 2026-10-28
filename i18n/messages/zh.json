@@ -1820,6 +1820,7 @@
       "resultTotal": "目录中共 {count} 个运动",
       "resultCreated": "新增 {count} 个运动",
       "resultUpdated": "更新 {count} 个现有运动",
+      "resultUnchanged": "保留现有动作：{count}",
       "resultGifsDownloaded": "已下载 {count} 个 GIF",
       "resultGifsFailed": "{count} 个 GIF 下载失败",
       "success": "同步成功",

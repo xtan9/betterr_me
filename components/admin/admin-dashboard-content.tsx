@@ -24,6 +24,7 @@ interface SyncResult {
   total: number;
   created: number;
   updated: number;
+  unchanged: number;
   gifsDownloaded: number;
   gifsFailed: number;
 }
@@ -61,6 +62,7 @@ export function AdminDashboardContent({
         total: data.total ?? 0,
         created: data.created ?? 0,
         updated: data.updated ?? 0,
+        unchanged: data.unchanged ?? 0,
         gifsDownloaded: data.gifsDownloaded ?? 0,
         gifsFailed: data.gifsFailed ?? 0,
       });
@@ -131,7 +133,7 @@ export function AdminDashboardContent({
               <p className="font-medium">{t("sync.success")}</p>
               <p>{t("sync.resultTotal", { count: result.total })}</p>
               <p>{t("sync.resultCreated", { count: result.created })}</p>
-              <p>{t("sync.resultUpdated", { count: result.updated })}</p>
+              <p>{t("sync.resultUnchanged", { count: result.unchanged })}</p>
               {result.gifsDownloaded > 0 && (
                 <p>{t("sync.resultGifsDownloaded", { count: result.gifsDownloaded })}</p>
               )}
