@@ -25,9 +25,11 @@ language sql stable security definer set search_path=pg_catalog as $$
    and (p_owner=auth.uid() or nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'role'='service_role'))
 $$;
 revoke all on function fitness_private.is_hevy_workout(uuid,uuid) from public,anon,authenticated,service_role;
--- CHECK expressions require function permission even for ordinary started rows.
--- This read-only predicate reveals membership only to its owner or service JWT.
-grant execute on function fitness_private.is_hevy_workout(uuid,uuid) to authenticated,service_role;
+-- CHECK expressions require function permission for every permitted table writer,
+-- including constrained maintenance roles, even for ordinary started rows.
+-- The private schema and ledgers stay closed; unauthenticated/foreign probes
+-- return false, and only an owner or service JWT can observe membership.
+grant execute on function fitness_private.is_hevy_workout(uuid,uuid) to public;
 alter table public.workouts drop constraint workouts_known_start_check;
 alter table public.workouts add constraint workouts_known_start_check check(started_at is not null or
  (status='completed' and (recorded_completion->'version'='5'::jsonb and recorded_completion->'time'->>'kind'='date-only'

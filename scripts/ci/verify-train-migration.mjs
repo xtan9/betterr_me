@@ -317,6 +317,13 @@ try {
   const beforeHevy = query(database, `select md5(coalesce(jsonb_agg(to_jsonb(h) order by workout_id)::text,'')) from fitness_private.history_current h`);
   query(database,migration('20261027234402_train_hevy_csv_import.sql'));
   if(query(database,`select md5(coalesce(jsonb_agg(to_jsonb(h) order by workout_id)::text,'')) from fitness_private.history_current h`)!==beforeHevy)throw new Error('Hevy migration changed existing current captures');
+  // CHECK permissions apply even when another branch already admits the row.
+  // Exercise a writer without authenticated/service membership, as constrained
+  // CI fixtures and maintenance roles do, without granting it any app table.
+  query(database,`create table public.hevy_constraint_probe(id uuid,owner_id uuid,started_at timestamptz,
+    check(started_at is not null or fitness_private.is_hevy_workout(id,owner_id)));
+    grant insert on public.hevy_constraint_probe to anon;
+    set role anon;insert into public.hevy_constraint_probe values('${randomUUID()}','${v1.ownerId}',now());`);
   const {parseHevyCsv: parseHevyFixture}=await import('../../lib/fitness/hevy-csv.ts');
   const hevyRows=parseHevyFixture(readFileSync(resolve(root,'tests/fixtures/hevy-import.csv'),'utf8')).workouts.map(workout=>JSON.parse(workout.contentKey));
   const hevyRpc = (action, hash, rows=hevyRows, batch=null, user=v1.ownerId) => JSON.parse(query(database, `set request.jwt.claims='{"sub":"${user}","role":"authenticated"}'; set role authenticated;
