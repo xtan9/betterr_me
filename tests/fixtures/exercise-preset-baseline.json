@@ -1,0 +1,1320 @@
+[
+  {
+    "id": "3c3ee9d0-4767-403d-a4d1-b50f8865ac43",
+    "name": "Ab Rollout",
+    "equipment": "other",
+    "exercise_type": "bodyweight_reps",
+    "muscle_group_primary": "core",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "82a3945a-09b2-4fce-904e-87c64c0e87b2",
+    "name": "Arnold Press",
+    "equipment": "dumbbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "shoulders",
+    "muscle_groups_secondary": [
+      "triceps"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "66101048-71e4-4ed6-971e-fd3cc4e3a154",
+    "name": "Barbell Bench Press",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "chest",
+    "muscle_groups_secondary": [
+      "triceps",
+      "shoulders"
+    ],
+    "catalog_key": "strength.barbell-bench-press.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "5ff63afa-0396-4747-b21b-4f1c1b17b3d9",
+    "name": "Barbell Curl",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "biceps",
+    "muscle_groups_secondary": [
+      "forearms"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "2719c34d-8a14-44bc-8ccf-5d0e099d62df",
+    "name": "Barbell Row",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "back",
+    "muscle_groups_secondary": [
+      "biceps",
+      "forearms"
+    ],
+    "catalog_key": "strength.barbell-row.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "3a4622f2-e1a9-4cd9-885e-183c676f8dcd",
+    "name": "Barbell Shrug",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "traps",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "d9056cda-4abb-4a2f-a9b3-764c9d752811",
+    "name": "Barbell Squat",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "quadriceps",
+    "muscle_groups_secondary": [
+      "glutes",
+      "hamstrings",
+      "core"
+    ],
+    "catalog_key": "strength.barbell-squat.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "c6318f8f-5d59-4b3e-a520-be8b67dad0d8",
+    "name": "Battle Ropes",
+    "equipment": "other",
+    "exercise_type": "duration",
+    "muscle_group_primary": "cardio",
+    "muscle_groups_secondary": [
+      "shoulders",
+      "core"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "97590ea0-c09e-495b-957d-ea5708a7e9c5",
+    "name": "Bodyweight Calf Raise",
+    "equipment": "bodyweight",
+    "exercise_type": "bodyweight_reps",
+    "muscle_group_primary": "calves",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "8a22d3d7-9a9c-4548-b08c-c90968b76f0f",
+    "name": "Bodyweight Squat",
+    "equipment": "bodyweight",
+    "exercise_type": "bodyweight_reps",
+    "muscle_group_primary": "quadriceps",
+    "muscle_groups_secondary": [
+      "glutes"
+    ],
+    "catalog_key": "strength.bodyweight-squat.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "6f1b51d2-a334-4c04-9491-3baafaeeff22",
+    "name": "Box Jump",
+    "equipment": "other",
+    "exercise_type": "bodyweight_reps",
+    "muscle_group_primary": "cardio",
+    "muscle_groups_secondary": [
+      "quadriceps",
+      "glutes"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "42a081ed-e3f5-4f6a-826e-86daa0fb1d6e",
+    "name": "Bulgarian Split Squat",
+    "equipment": "dumbbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "quadriceps",
+    "muscle_groups_secondary": [
+      "glutes"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "abb6fbeb-2146-45de-8ad0-2d47670f30cf",
+    "name": "Burpee",
+    "equipment": "bodyweight",
+    "exercise_type": "bodyweight_reps",
+    "muscle_group_primary": "full_body",
+    "muscle_groups_secondary": [
+      "chest",
+      "core",
+      "quadriceps"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "cb0740f8-d56f-4e4c-becf-0bd5e3cb5e63",
+    "name": "Cable Crossover",
+    "equipment": "cable",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "chest",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "23b7c809-3866-4bac-91b6-8d938e2b77df",
+    "name": "Cable Curl",
+    "equipment": "cable",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "biceps",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "dba98171-a180-4c65-ab79-2713fc09c728",
+    "name": "Cable Lateral Raise",
+    "equipment": "cable",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "shoulders",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "e71a66a4-74aa-4d8e-bdc3-f5aef1802158",
+    "name": "Cable Pull Through",
+    "equipment": "cable",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "glutes",
+    "muscle_groups_secondary": [
+      "hamstrings"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "97e72523-cc6d-401a-8909-9d64d3b3c074",
+    "name": "Cable Woodchop",
+    "equipment": "cable",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "core",
+    "muscle_groups_secondary": [
+      "shoulders"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "267c3fe5-3d60-4eb0-8f81-ee6973ada68c",
+    "name": "Chin-up",
+    "equipment": "bodyweight",
+    "exercise_type": "bodyweight_reps",
+    "muscle_group_primary": "back",
+    "muscle_groups_secondary": [
+      "biceps"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "13aed795-0194-4649-911d-b674eddf3236",
+    "name": "Clean and Press",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "full_body",
+    "muscle_groups_secondary": [
+      "shoulders",
+      "quadriceps",
+      "back"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "79fa14b8-e7e0-4888-bc94-111d2fa13e9a",
+    "name": "Close Grip Bench Press",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "triceps",
+    "muscle_groups_secondary": [
+      "chest"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "c0eee6e5-89f6-4653-a13c-2e80b9c79481",
+    "name": "Close Grip Lat Pulldown",
+    "equipment": "cable",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "lats",
+    "muscle_groups_secondary": [
+      "biceps"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "050c89a1-c72b-4046-86b7-8c618f02688e",
+    "name": "Crunch",
+    "equipment": "bodyweight",
+    "exercise_type": "bodyweight_reps",
+    "muscle_group_primary": "core",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "0f138580-a4a1-40e0-af0c-b4a6085cfab5",
+    "name": "Dead Bug",
+    "equipment": "bodyweight",
+    "exercise_type": "bodyweight_reps",
+    "muscle_group_primary": "core",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "21542d84-51f9-4367-88f7-b497add93ab0",
+    "name": "Deadlift",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "back",
+    "muscle_groups_secondary": [
+      "hamstrings",
+      "glutes",
+      "core",
+      "forearms"
+    ],
+    "catalog_key": "strength.deadlift.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "229bf8e5-4b1a-4dc9-ab5a-e0b84bd9b93c",
+    "name": "Decline Barbell Bench Press",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "chest",
+    "muscle_groups_secondary": [
+      "triceps"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "62b7438c-61b7-4abc-9164-ab0ec5cfaaf7",
+    "name": "Dip",
+    "equipment": "bodyweight",
+    "exercise_type": "bodyweight_reps",
+    "muscle_group_primary": "chest",
+    "muscle_groups_secondary": [
+      "triceps",
+      "shoulders"
+    ],
+    "catalog_key": "strength.dip.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "fdfd7264-ad0a-493f-9f14-0f53e45a88fb",
+    "name": "Donkey Calf Raise",
+    "equipment": "machine",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "calves",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "63d01306-f2c2-40c1-ae3b-3e2c763ad8fe",
+    "name": "Dumbbell Bench Press",
+    "equipment": "dumbbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "chest",
+    "muscle_groups_secondary": [
+      "triceps",
+      "shoulders"
+    ],
+    "catalog_key": "strength.dumbbell-bench-press.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "1c7b89f3-136a-433c-a29c-78d86c0a0183",
+    "name": "Dumbbell Curl",
+    "equipment": "dumbbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "biceps",
+    "muscle_groups_secondary": [
+      "forearms"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "34ff3027-70a1-465b-ab67-9e86b4d4ba75",
+    "name": "Dumbbell Fly",
+    "equipment": "dumbbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "chest",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "0b2339e4-ff60-4f80-b024-ed474583fd0d",
+    "name": "Dumbbell Row",
+    "equipment": "dumbbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "back",
+    "muscle_groups_secondary": [
+      "biceps",
+      "forearms"
+    ],
+    "catalog_key": "strength.dumbbell-row.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "cd345814-7b90-425a-a1bf-d04cef2d2d7e",
+    "name": "Dumbbell Shoulder Press",
+    "equipment": "dumbbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "shoulders",
+    "muscle_groups_secondary": [
+      "triceps"
+    ],
+    "catalog_key": "strength.dumbbell-shoulder-press.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "981e3cda-6afe-44e7-8eed-fed78909a7fe",
+    "name": "Dumbbell Shrug",
+    "equipment": "dumbbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "traps",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "7f770d8b-c7c3-4bd7-90c3-42b44ac04cf3",
+    "name": "Elliptical",
+    "equipment": "machine",
+    "exercise_type": "distance_duration",
+    "muscle_group_primary": "cardio",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "387f240e-9a4e-4797-a528-47bc82eab177",
+    "name": "Face Pull",
+    "equipment": "cable",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "back",
+    "muscle_groups_secondary": [
+      "shoulders"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "2ec234ba-6c20-4a78-97b8-855c320beeab",
+    "name": "Farmer's Walk",
+    "equipment": "dumbbell",
+    "exercise_type": "weight_distance",
+    "muscle_group_primary": "forearms",
+    "muscle_groups_secondary": [
+      "traps",
+      "core"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "e02e2af2-ac78-43f6-a7e5-2bf4e5ce87cc",
+    "name": "Front Raise",
+    "equipment": "dumbbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "shoulders",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "252f4850-b7b6-4f07-8bbb-20ae5bc10015",
+    "name": "Front Squat",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "quadriceps",
+    "muscle_groups_secondary": [
+      "core",
+      "glutes"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "01acebbf-8432-40a1-bb50-16eefb64626e",
+    "name": "Glute Bridge",
+    "equipment": "bodyweight",
+    "exercise_type": "bodyweight_reps",
+    "muscle_group_primary": "glutes",
+    "muscle_groups_secondary": [
+      "hamstrings"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "471bd0bc-be0c-4971-a6eb-8aedb83854ec",
+    "name": "Goblet Squat",
+    "equipment": "kettlebell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "quadriceps",
+    "muscle_groups_secondary": [
+      "glutes",
+      "core"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "99aedf16-21f2-407a-b65f-fe86a19ae0f8",
+    "name": "Hack Squat",
+    "equipment": "machine",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "quadriceps",
+    "muscle_groups_secondary": [
+      "glutes"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "657c2591-fd07-4ca1-9ef0-98f367c86212",
+    "name": "Hammer Curl",
+    "equipment": "dumbbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "biceps",
+    "muscle_groups_secondary": [
+      "forearms"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "bc25470d-00b0-4d08-ba7c-5e0bf66f2b75",
+    "name": "Hanging Leg Raise",
+    "equipment": "bodyweight",
+    "exercise_type": "bodyweight_reps",
+    "muscle_group_primary": "core",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "a1bda1fe-f718-4e40-89ba-cb52b575f224",
+    "name": "Hip Thrust",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "glutes",
+    "muscle_groups_secondary": [
+      "hamstrings"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "7571ae77-78ca-416e-9606-ab71b9986c88",
+    "name": "Incline Barbell Bench Press",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "chest",
+    "muscle_groups_secondary": [
+      "triceps",
+      "shoulders"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "5ca54e3a-3e9e-4e22-947f-3650072d7da1",
+    "name": "Incline Dumbbell Press",
+    "equipment": "dumbbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "chest",
+    "muscle_groups_secondary": [
+      "triceps",
+      "shoulders"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "7aa94ae1-870b-4185-bd7a-1c3dbbb6f188",
+    "name": "Jump Rope",
+    "equipment": "other",
+    "exercise_type": "duration",
+    "muscle_group_primary": "cardio",
+    "muscle_groups_secondary": [
+      "calves"
+    ],
+    "catalog_key": "strength.jump-rope.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "2c44adaa-af49-46bb-bccc-32f323f19b4f",
+    "name": "Jumping Jack",
+    "equipment": "bodyweight",
+    "exercise_type": "bodyweight_reps",
+    "muscle_group_primary": "cardio",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "610a0fdb-0313-4a6a-9ae7-011d371f4d61",
+    "name": "Kettlebell Swing",
+    "equipment": "kettlebell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "glutes",
+    "muscle_groups_secondary": [
+      "hamstrings",
+      "core"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "0d3066c9-a78e-4a00-8daf-ed74cef9dc69",
+    "name": "Lat Pulldown",
+    "equipment": "cable",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "lats",
+    "muscle_groups_secondary": [
+      "biceps"
+    ],
+    "catalog_key": "strength.lat-pulldown.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "aa5dd2b1-2fe4-47a0-b51b-7030b6438b30",
+    "name": "Lateral Raise",
+    "equipment": "dumbbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "shoulders",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "d50fc4f1-8e78-443b-bb36-55ba30bde90b",
+    "name": "Leg Extension",
+    "equipment": "machine",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "quadriceps",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "08b83fc5-6434-41e7-ae2b-2a5faeae243c",
+    "name": "Leg Press",
+    "equipment": "machine",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "quadriceps",
+    "muscle_groups_secondary": [
+      "glutes"
+    ],
+    "catalog_key": "strength.leg-press.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "e354bc45-dbef-4704-b73e-06f438554feb",
+    "name": "Lying Leg Curl",
+    "equipment": "machine",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "hamstrings",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "8afee248-4e0e-4dff-b0f2-688c407cd772",
+    "name": "Machine Chest Press",
+    "equipment": "machine",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "chest",
+    "muscle_groups_secondary": [
+      "triceps",
+      "shoulders"
+    ],
+    "catalog_key": "strength.machine-chest-press.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "c8daa512-1a73-42e8-b18d-73831d2d9053",
+    "name": "Machine Row",
+    "equipment": "machine",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "back",
+    "muscle_groups_secondary": [
+      "biceps"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "a9c5bb82-2973-4b7a-b941-cd389fc76f6b",
+    "name": "Machine Shoulder Press",
+    "equipment": "machine",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "shoulders",
+    "muscle_groups_secondary": [
+      "triceps"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "2cc5d418-c790-44c1-ab86-1669a52e6422",
+    "name": "Machine-assisted Dip",
+    "equipment": "machine",
+    "exercise_type": "assisted_bodyweight",
+    "muscle_group_primary": "chest",
+    "muscle_groups_secondary": [
+      "triceps",
+      "shoulders"
+    ],
+    "catalog_key": "strength.machine-assisted-dip.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "41f024e4-6553-423b-b51f-450af1d9402b",
+    "name": "Machine-assisted Pull-up",
+    "equipment": "machine",
+    "exercise_type": "assisted_bodyweight",
+    "muscle_group_primary": "back",
+    "muscle_groups_secondary": [
+      "biceps",
+      "forearms"
+    ],
+    "catalog_key": "strength.machine-assisted-pull-up.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "fc915192-b69b-4f7b-b0c1-9a9870c7673e",
+    "name": "Man Maker",
+    "equipment": "dumbbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "full_body",
+    "muscle_groups_secondary": [
+      "chest",
+      "shoulders",
+      "back"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "055213ec-062f-47e3-9d07-1ebbdaa119a6",
+    "name": "Mountain Climber",
+    "equipment": "bodyweight",
+    "exercise_type": "duration",
+    "muscle_group_primary": "cardio",
+    "muscle_groups_secondary": [
+      "core"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "48b65e2b-9c1d-464d-a87b-62134b8e238b",
+    "name": "Nordic Hamstring Curl",
+    "equipment": "bodyweight",
+    "exercise_type": "bodyweight_reps",
+    "muscle_group_primary": "hamstrings",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "35558e24-46e1-4d03-835b-6e6c9cd31ef3",
+    "name": "Overhead Press",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "shoulders",
+    "muscle_groups_secondary": [
+      "triceps"
+    ],
+    "catalog_key": "strength.overhead-press.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "84644ad8-7b51-45b0-9b0a-2f95b07b886b",
+    "name": "Overhead Tricep Extension",
+    "equipment": "dumbbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "triceps",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "f93c71ea-e652-44b8-a468-aa45d8ca2017",
+    "name": "Plank",
+    "equipment": "bodyweight",
+    "exercise_type": "duration",
+    "muscle_group_primary": "core",
+    "muscle_groups_secondary": [],
+    "catalog_key": "strength.plank.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "1ea17d95-88d3-4f77-b4ba-0ec1aff3ec4a",
+    "name": "Preacher Curl",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "biceps",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "699e5612-46d2-4750-b265-b0d45595f782",
+    "name": "Pull-up",
+    "equipment": "bodyweight",
+    "exercise_type": "bodyweight_reps",
+    "muscle_group_primary": "back",
+    "muscle_groups_secondary": [
+      "biceps",
+      "forearms"
+    ],
+    "catalog_key": "strength.pull-up.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "cbf80280-d84a-457b-984f-497565a5e444",
+    "name": "Push-up",
+    "equipment": "bodyweight",
+    "exercise_type": "bodyweight_reps",
+    "muscle_group_primary": "chest",
+    "muscle_groups_secondary": [
+      "triceps",
+      "shoulders",
+      "core"
+    ],
+    "catalog_key": "strength.push-up.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "2b3f1cea-5227-46fc-8376-3413135bc314",
+    "name": "Rack Pull",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "back",
+    "muscle_groups_secondary": [
+      "glutes",
+      "forearms"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "97422376-7761-491f-afba-b7e71636f297",
+    "name": "Reverse Fly",
+    "equipment": "dumbbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "shoulders",
+    "muscle_groups_secondary": [
+      "back"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "8499655d-a4a8-43bf-b2e8-f5397d48f72a",
+    "name": "Reverse Wrist Curl",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "forearms",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "0ccc5a4b-c52d-4072-a8f9-53a586ad8e06",
+    "name": "Romanian Deadlift",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "hamstrings",
+    "muscle_groups_secondary": [
+      "glutes",
+      "back"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "760b5f19-d1dd-4a52-89fd-8f83c5bd885d",
+    "name": "Rowing Machine",
+    "equipment": "machine",
+    "exercise_type": "distance_duration",
+    "muscle_group_primary": "cardio",
+    "muscle_groups_secondary": [
+      "back",
+      "core"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "b738d617-5ddf-49c1-99a1-3f386d06d293",
+    "name": "Russian Twist",
+    "equipment": "bodyweight",
+    "exercise_type": "bodyweight_reps",
+    "muscle_group_primary": "core",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "e9b8f0aa-111d-42cf-ac75-22e64a4e8aca",
+    "name": "Seated Cable Row",
+    "equipment": "cable",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "back",
+    "muscle_groups_secondary": [
+      "biceps"
+    ],
+    "catalog_key": "strength.seated-cable-row.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "58041240-83f7-48bf-884a-695e4dcfb66b",
+    "name": "Seated Calf Raise",
+    "equipment": "machine",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "calves",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "18fbcc15-62bc-4763-8b97-dbe16867cef6",
+    "name": "Seated Leg Curl",
+    "equipment": "machine",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "hamstrings",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "4e3506cb-3d92-4ad4-810c-490d8595bab0",
+    "name": "Side Plank",
+    "equipment": "bodyweight",
+    "exercise_type": "duration",
+    "muscle_group_primary": "core",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "e3cb307d-05c0-4a44-a683-7c9f4173ab88",
+    "name": "Single Arm Lat Pulldown",
+    "equipment": "cable",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "lats",
+    "muscle_groups_secondary": [
+      "biceps"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "682528e1-555e-4ac5-ae46-90948450de20",
+    "name": "Skull Crusher",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "triceps",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "15b1a705-8761-452f-854d-6b1d90e2c36d",
+    "name": "Stair Climber",
+    "equipment": "machine",
+    "exercise_type": "duration",
+    "muscle_group_primary": "cardio",
+    "muscle_groups_secondary": [
+      "quadriceps",
+      "glutes"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "9021341c-e8c8-43bf-bec3-2fcd792ead65",
+    "name": "Standing Calf Raise",
+    "equipment": "machine",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "calves",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "5fe5ce1d-b7ba-4f67-bec1-acef0c0cb663",
+    "name": "Stationary Bike",
+    "equipment": "machine",
+    "exercise_type": "distance_duration",
+    "muscle_group_primary": "cardio",
+    "muscle_groups_secondary": [
+      "quadriceps"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "f89f202d-7048-4aa6-96bf-5607c6c028fa",
+    "name": "Stiff-Leg Deadlift",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "hamstrings",
+    "muscle_groups_secondary": [
+      "glutes",
+      "back"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "d7dd8c30-498e-44b6-b431-d2aaaed83356",
+    "name": "Straight Arm Pulldown",
+    "equipment": "cable",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "lats",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "e64901c2-28c1-4c5d-8b7a-4f54d020ed44",
+    "name": "Sumo Deadlift",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "glutes",
+    "muscle_groups_secondary": [
+      "quadriceps",
+      "back"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "80fb9582-3e68-4ce8-b78f-9857b8bac811",
+    "name": "T-Bar Row",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "back",
+    "muscle_groups_secondary": [
+      "biceps"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "63546d98-60db-4f96-abe3-a1f110308f04",
+    "name": "Thruster",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "full_body",
+    "muscle_groups_secondary": [
+      "shoulders",
+      "quadriceps"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "cbdbf72a-5bfa-4f1f-8930-2fe6eaf735ab",
+    "name": "Treadmill Running",
+    "equipment": "machine",
+    "exercise_type": "distance_duration",
+    "muscle_group_primary": "cardio",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "8272fbb8-ae09-45b9-87a1-1a0dfd4becba",
+    "name": "Tricep Dip",
+    "equipment": "bodyweight",
+    "exercise_type": "bodyweight_reps",
+    "muscle_group_primary": "triceps",
+    "muscle_groups_secondary": [
+      "chest",
+      "shoulders"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "059554e9-6bf2-4d86-8629-152e45f96171",
+    "name": "Tricep Pushdown",
+    "equipment": "cable",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "triceps",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "8dd2dfe1-adf9-45ac-b6d3-de8c2906526d",
+    "name": "Upright Row",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "traps",
+    "muscle_groups_secondary": [
+      "shoulders"
+    ],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "828c31ab-27ee-4cb4-a5be-476381f8a2d1",
+    "name": "Weighted Dip",
+    "equipment": "bodyweight",
+    "exercise_type": "weighted_bodyweight",
+    "muscle_group_primary": "chest",
+    "muscle_groups_secondary": [
+      "triceps",
+      "shoulders"
+    ],
+    "catalog_key": "strength.weighted-dip.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "0f078d9b-29a1-46b7-b3cb-598f29ab7a0b",
+    "name": "Weighted Pull-up",
+    "equipment": "bodyweight",
+    "exercise_type": "weighted_bodyweight",
+    "muscle_group_primary": "back",
+    "muscle_groups_secondary": [
+      "biceps",
+      "forearms"
+    ],
+    "catalog_key": "strength.weighted-pull-up.v1",
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  },
+  {
+    "id": "2af585a1-1f3f-461e-b34f-92d2de684346",
+    "name": "Wrist Curl",
+    "equipment": "barbell",
+    "exercise_type": "weight_reps",
+    "muscle_group_primary": "forearms",
+    "muscle_groups_secondary": [],
+    "catalog_key": null,
+    "measurement_convention": null,
+    "version": "1",
+    "archived_at": null
+  }
+]

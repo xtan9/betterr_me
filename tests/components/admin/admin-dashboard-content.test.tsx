@@ -58,7 +58,8 @@ describe("AdminDashboardContent", () => {
         Promise.resolve({
           total: 100,
           created: 20,
-          updated: 80,
+          updated: 0,
+          unchanged: 80,
           gifsDownloaded: 0,
           gifsFailed: 0,
         }),
@@ -87,7 +88,7 @@ describe("AdminDashboardContent", () => {
         screen.getByText("sync.resultCreated count:20")
       ).toBeInTheDocument();
       expect(
-        screen.getByText("sync.resultUpdated count:80")
+        screen.getByText("sync.resultUnchanged count:80")
       ).toBeInTheDocument();
     });
   });
