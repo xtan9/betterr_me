@@ -54,6 +54,13 @@ it('applies the exact command after verifying the interval, and rejects without 
  expect(mocks.rpc).toHaveBeenCalledWith('planner_ai_proposal_command',{p_request:{...command,operation:'reject'}});
 });
 
+it('revalidates the same explicit decision without generating a new preview',async()=>{
+ const response=await POST(request({revalidate:true}));
+ expect(response.status).toBe(200);expect(await response.json()).toEqual({status:'complete'});
+ expect(mocks.rpc).toHaveBeenCalledWith('planner_ai_proposal_command',{p_request:{...command,revalidate:true}});
+ expect(mocks.external).toHaveBeenCalledWith('owner','2030-01-01','2030-01-01','America/Los_Angeles');
+});
+
 it('requires a verified owner, correct pending version and timed-preview capability before external reads or writes',async()=>{
  mocks.auth.mockResolvedValueOnce(null);expect((await POST(request())).status).toBe(401);
  expect((await POST(request({expectedVersion:'70000000-0000-0000-0000-000000000004'}))).status).toBe(409);

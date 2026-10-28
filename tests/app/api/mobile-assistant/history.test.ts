@@ -18,7 +18,7 @@ beforeEach(()=>{
 });
 it.each(['capture','planning','clarification'])('returns owner-scoped receipts and restores a %s workflow',async(intent)=>{
  rows.assistant_messages=[{role:'assistant',content:'Preview, not saved.',sequence:2,request_id:'capture'},{role:'user',content:'Create task',sequence:1,request_id:'user-only'}];
- accepted=[{id:'capture',state:'accepted',body:{items:[{kind:'task-create',changes:{title:'Walk dog'}}]}}];
+ accepted=[{id:'capture',state:'accepted',body:{items:[{id:'item',kind:'task-create',changes:{title:'Walk dog'}}]},outcome:{status:'complete',proposalId:'capture',results:[{itemId:'item',kind:'task-create',recordId:'saved-task-id'}]}}];
  rows.workflow={response:{intent,...(intent==='clarification'?{planning:{sessionId:'later-plan'}}:{})}};
  const response=await GET(new Request(`https://betterr.me/api/mobile/assistant/history?conversationId=${conversation}`));
  expect(response.status).toBe(200);const body=await response.json();
@@ -28,7 +28,7 @@ it.each(['capture','planning','clarification'])('returns owner-scoped receipts a
  expect(filters.planner_ai_proposals).toContainEqual(['user_id',owner]);
  expect(filters.assistant_turns).toContainEqual(['conversation_id',conversation]);
  expect(queries.find(query=>query.table==='planner_ai_proposals')?.calls).toEqual([
-  ['select','id,user_id,version,state,body,expires_at'],['eq','user_id',owner],['eq','state','accepted'],['in','id',['capture']],
+  ['select','id,user_id,version,state,body,expires_at,outcome'],['eq','user_id',owner],['eq','state','accepted'],['in','id',['capture']],
  ]);
  expect(queries.find(query=>query.table==='assistant_turns')?.calls).toEqual([
   ['select','response'],['eq','user_id',owner],['eq','conversation_id',conversation],['or','response->>intent.in.(capture,planning),response->planning->>sessionId.not.is.null'],['order','created_at',{ascending:false}],['limit',1],

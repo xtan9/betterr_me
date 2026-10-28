@@ -7,7 +7,7 @@ import {log} from '@/lib/logger';
 export const maxDuration=60;
 const headers={'Cache-Control':'no-store','Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS'};
 const reply=(body:unknown,status=200)=>Response.json(body,{status,headers});
-const commandSchema=z.object({operation:z.enum(['accept','reject']),operationId:z.string().uuid(),proposalId:z.string().uuid(),expectedVersion:z.string().uuid(),supportsTimedTasks:z.literal(true).optional()}).strict();
+const commandSchema=z.object({operation:z.enum(['accept','reject']),operationId:z.string().uuid(),proposalId:z.string().uuid(),expectedVersion:z.string().uuid(),supportsTimedTasks:z.literal(true).optional(),revalidate:z.literal(true).optional()}).strict().refine(command=>!command.revalidate||command.operation==='accept');
 const captureBody=z.object({items:z.array(z.object({kind:z.string(),schedule:timedTaskScheduleSchema.optional()}).passthrough()).max(10)}).passthrough();
 export function OPTIONS(){return new Response(null,{status:204,headers});}
 export async function POST(request:Request){
