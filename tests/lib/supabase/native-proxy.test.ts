@@ -18,7 +18,12 @@ describe('API routes through the cookie proxy',()=>{
    expect(response.headers.get('location')).toBe('https://www.betterr.me/auth/login');
   }
  });
+ it.each(['/api/mobile/train/imports/hevy-extra','/api/mobile/train/imports/hevy/export'])('keeps lookalike import path %s cookie-protected',async path=>{
+  const response=await updateSession(new NextRequest(`https://www.betterr.me${path}`));
+  expect(response.headers.get('location')).toBe('https://www.betterr.me/auth/login');
+ });
  it.each([
+  ['/api/mobile/train/imports/hevy','POST'],['/api/mobile/train/imports/hevy','OPTIONS'],
   ['/api/mobile/train/history','POST'],['/api/mobile/train/history','OPTIONS'],['/api/mobile/train/history/capabilities','GET'],['/api/mobile/train/history/progress','POST'],['/api/mobile/train/history/commands','POST'],['/api/mobile/train/history/11111111-1111-4111-8111-111111111111','GET'],
   ['/api/mobile/train/plans','GET'],['/api/mobile/train/plans/commands','POST'],['/api/mobile/train/plans/11111111-1111-4111-8111-111111111111','GET'],['/api/mobile/train/plans/workouts/11111111-1111-4111-8111-111111111111','GET'],['/api/mobile/train/day','POST'],['/api/mobile/train/day','OPTIONS'],
   ['/api/mobile/train/templates','GET'],['/api/mobile/train/templates/commands','POST'],['/api/mobile/train/templates/capabilities','GET'],['/api/mobile/train/templates/definitions','GET'],['/api/mobile/train/templates/11111111-1111-4111-8111-111111111111','GET'],
