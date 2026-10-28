@@ -12,6 +12,7 @@ const apiRoot = join(process.cwd(), "app", "api");
  * Keep this list narrow and reviewed whenever a route is added.
  */
 const deliberateAuthExceptions: Record<string, string> = {
+  "mobile/train/imports/hevy/route.ts": "authenticateNativeRequest verifies native bearer owner; private atomic CSV import, immutable receipts and revision-checked undo, no cookie or service fallback",
   "mobile/train/history/route.ts": "authenticateNativeRequest verifies captured bearer owner; private current history, immutable outcomes and versioned correction/deletion",
   "mobile/train/history/[id]/route.ts": "authenticateNativeRequest verifies captured bearer owner; private current history, immutable outcomes and versioned correction/deletion",
   "mobile/train/history/capabilities/route.ts": "authenticateNativeRequest verifies captured bearer owner; private current history, immutable outcomes and versioned correction/deletion",

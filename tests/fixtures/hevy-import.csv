@@ -1,0 +1,6 @@
+title,start_time,end_time,description,exercise_title,superset_id,exercise_notes,set_index,set_type,weight_lbs,reps,distance_miles,duration_seconds,rpe
+Import strength,"11 Mar 2026, 23:50","12 Mar 2026, 00:20","Notes, ""quoted""
+Second line",Imported press,1,Keep tempo,0,warmup,10,8,,,9.5
+Import strength,"11 Mar 2026, 23:50","12 Mar 2026, 00:20","Notes, ""quoted""
+Second line",Imported press,1,Keep tempo,1,failure,20,5,1,,
+Import timed,"12 Mar 2026, 09:00","12 Mar 2026, 09:15",,Imported hold,,,0,normal,,,,60,

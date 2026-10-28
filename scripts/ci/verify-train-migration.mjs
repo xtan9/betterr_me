@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -311,6 +311,106 @@ try {
   query(database,migration('20261027215405_train_live_preset_recording.sql'));
   if(JSON.stringify(JSON.parse(upload(live)))!==JSON.stringify(acceptedLive))throw new Error('Repeated migration changed frozen receipt');
   console.log('PASS full-catalog live recording: old rejection reproduced; v3 preset IDs accepted without template origin; exact capture, projection, history and first receipt retained; mismatched/missing references rejected; migration preserves existing data and repeats safely');
+
+
+  // A Hevy export remains date-only, lossless and independent of active recording.
+  const beforeHevy = query(database, `select md5(coalesce(jsonb_agg(to_jsonb(h) order by workout_id)::text,'')) from fitness_private.history_current h`);
+  query(database,migration('20261027234402_train_hevy_csv_import.sql'));
+  if(query(database,`select md5(coalesce(jsonb_agg(to_jsonb(h) order by workout_id)::text,'')) from fitness_private.history_current h`)!==beforeHevy)throw new Error('Hevy migration changed existing current captures');
+  // CHECK permissions apply even when another branch already admits the row.
+  // Exercise a writer without authenticated/service membership, as constrained
+  // CI fixtures and maintenance roles do, without granting it any app table.
+  query(database,`create table public.hevy_constraint_probe(id uuid,owner_id uuid,started_at timestamptz,
+    check(started_at is not null or fitness_private.is_hevy_workout(id,owner_id)));
+    grant insert on public.hevy_constraint_probe to anon;
+    set role anon;insert into public.hevy_constraint_probe values('${randomUUID()}','${v1.ownerId}',now());`);
+  const {parseHevyCsv: parseHevyFixture}=await import('../../lib/fitness/hevy-csv.ts');
+  const hevyRows=parseHevyFixture(readFileSync(resolve(root,'tests/fixtures/hevy-import.csv'),'utf8')).workouts.map(workout=>JSON.parse(workout.contentKey));
+  const hevyRpc = (action, hash, rows=hevyRows, batch=null, user=v1.ownerId) => JSON.parse(query(database, `set request.jwt.claims='{"sub":"${user}","role":"authenticated"}'; set role authenticated;
+    select public.import_hevy_workouts('${action}',${hash ? `'${hash}'` : 'null'},${literal(rows)},${batch ? `'${batch}'` : 'null'});`));
+  const firstPreview = hevyRpc('preview','a'.repeat(64));
+  if(firstPreview.newWorkouts!==2||firstPreview.sets!==3)throw new Error('Hevy preview totals wrong: '+JSON.stringify(firstPreview));
+  const activeId=randomUUID();
+  query(database,`set request.jwt.claims='{"sub":"${v1.ownerId}","role":"authenticated"}';set role authenticated;
+    insert into public.workouts(id,user_id,title,status,started_at) values('${activeId}','${v1.ownerId}','Active sentinel','in_progress',now());`);
+  const ordinaryEntry=randomUUID(), ordinarySet=randomUUID();
+  query(database,`set request.jwt.claims='{"sub":"${v1.ownerId}","role":"authenticated"}';set role authenticated;
+    insert into public.workout_exercises(id,workout_id,exercise_id,sort_order) values('${ordinaryEntry}','${activeId}',
+      (select id from public.exercises where catalog_key='strength.barbell-bench-press.v1'),0);
+    insert into public.workout_sets(id,workout_exercise_id,set_number,set_type,distance_meters,rpe,is_completed)
+      values('${ordinarySet}','${ordinaryEntry}',1,'normal',100,6.4,false);`);
+  if(query(database,`select distance_meters::text='100.00' and rpe::text='6' from public.workout_sets where id='${ordinarySet}'`)!=='t')
+    throw new Error('Ordinary workout distance scale or integer effort changed');
+  const activeBefore=query(database,`select to_jsonb(w)::text from public.workouts w where id='${activeId}'`);
+  const hevyReceipt=hevyRpc('commit','a'.repeat(64));
+  if(hevyReceipt.importedWorkouts!==2||hevyReceipt.importedSets!==3)throw new Error('Hevy commit failed: '+JSON.stringify(hevyReceipt));
+  if(JSON.stringify(hevyRpc('commit','a'.repeat(64)))!==JSON.stringify(hevyReceipt))throw new Error('Hevy retry changed its receipt');
+  if(query(database,`select to_jsonb(w)::text from public.workouts w where id='${activeId}'`)!==activeBefore)throw new Error('Hevy import touched active recording');
+  const importedId=hevyReceipt.workoutIds[0], timedId=hevyReceipt.workoutIds[1];
+  query(database,`set role anon;do $$begin
+    begin insert into public.hevy_constraint_probe values('${importedId}','${v1.ownerId}',null);
+      raise exception 'Unauthenticated constraint probe observed import membership';
+    exception when check_violation then null;end;
+  end$$;`);
+  if(query(database,`set request.jwt.claims='{"sub":"64150000-0000-4000-8000-000000000099","role":"authenticated"}';set role authenticated;
+    select fitness_private.is_hevy_workout('${importedId}','${v1.ownerId}');`)!=='f')throw new Error('Import constraint predicate revealed another account');
+  const imported = JSON.parse(query(database,`select fitness_private.history_record('${importedId}','${v1.ownerId}')`));
+  if(imported.workoutDay!=='2026-03-11'||imported.current.record.workout.started_at!==null||imported.current.record.workout.duration_seconds!==null)throw new Error('Hevy fabricated timing');
+  if(JSON.stringify(imported.current.record.workout.hevy_import.sourceRows)!==JSON.stringify(hevyRows[0]))throw new Error('Hevy raw fields changed');
+  if(process.env.HEVY_SYNTHETIC_FIXTURE_OUTPUT)writeFileSync(process.env.HEVY_SYNTHETIC_FIXTURE_OUTPUT,JSON.stringify(hevyReceipt.workoutIds.map(id=>JSON.parse(query(database,`select fitness_private.history_record('${id}','${v1.ownerId}')`))),null,2)+'\n');
+  const firstSet=imported.current.record.exercises[0].sets[0];
+  if(firstSet.weight_kg!=='4.53592370'||firstSet.rpe!=='9.5'||imported.current.record.exercises[0].sets[1].distance_meters!=='1609.344')throw new Error('Hevy decimal measurements lost precision: '+JSON.stringify(firstSet));
+  if(imported.current.record.exercises[0].exercise.history_recorded_definition?.convention!==null)throw new Error('Hevy inferred comparison meaning');
+  const changed=structuredClone(hevyRows); changed[0][0][9]='11';
+  if(hevyRpc('commit','a'.repeat(64),changed).status!=='operation_conflict')throw new Error('Hevy operation identity was reused');
+  const changedPreview=hevyRpc('preview','b'.repeat(64),changed);
+  if(changedPreview.changedWorkouts!==1||changedPreview.duplicateWorkouts!==1||changedPreview.newWorkouts!==0)throw new Error('Hevy changed match was not protected');
+  for (const field of [0,1,2]) {
+    const edited=structuredClone(hevyRows);
+    for (const row of edited[0]) row[field]=field===0?'Renamed import':field===1?'11 Mar 2026, 23:45':'12 Mar 2026, 00:25';
+    const candidate=hevyRpc('preview','e'.repeat(64),edited);
+    if(candidate.newWorkouts!==0||candidate.changedWorkouts!==1)throw new Error('An edited source header was treated as a new workout');
+    const skipped=hevyRpc('commit',String(field+1).repeat(64),edited);
+    if(skipped.importedWorkouts!==0||skipped.changedWorkouts!==1)throw new Error('Edited source header duplicated current history');
+  }
+  for (const anchor of ['start','title-end']) {
+    const first=structuredClone(hevyRows[0][0]);
+    first[0]=`Same-file ${anchor}`; first[1]=anchor==='start'?'01 Jan 2020, 12:00':'02 Jan 2020, 12:00'; first[2]=anchor==='start'?'01 Jan 2020, 13:00':'02 Jan 2020, 13:00';
+    const second=structuredClone(first);
+    if(anchor==='start'){second[0]+=' renamed';second[2]='01 Jan 2020, 13:30';}else second[1]='02 Jan 2020, 12:30';
+    const collision=[[first],[second]], hash=(anchor==='start'?'6':'7').repeat(64);
+    const preview=hevyRpc('preview',hash,collision), committed=hevyRpc('commit',hash,collision);
+    if(preview.newWorkouts!==1||preview.changedWorkouts!==1||committed.importedWorkouts!==preview.newWorkouts||committed.changedWorkouts!==preview.changedWorkouts)
+      throw new Error('Same-file candidate classification differed between review and commit: '+JSON.stringify({anchor,preview,committed}));
+  }
+  const command = {protocolVersion:1,ownerId:v1.ownerId,operationId:randomUUID(),command:{kind:'correct-workout',workoutId:importedId,expectedRevision:'1',patch:{time:{kind:'date-only',workoutDay:'2026-03-13',duration:{kind:'set',seconds:123}}}}};
+  const corrected=JSON.parse(query(database,`set request.jwt.claims='{"sub":"${v1.ownerId}","role":"authenticated"}';set role authenticated;select public.execute_train_history_command(${literal(command)});`));
+  if(corrected.receipt?.current.workoutDay!=='2026-03-13')throw new Error('Imported date correction failed: '+JSON.stringify(corrected));
+  if(query(database,`select fitness_private.history_record('${importedId}','${v1.ownerId}')->'current'->'record'->'workout'->>'duration_seconds'`)!=='123')throw new Error('Imported duration correction lost');
+  const undo=hevyRpc('undo',null,null,hevyReceipt.batchId);
+  if(undo.removedWorkouts!==1||undo.changedWorkouts!==1)throw new Error('Hevy undo erased a later correction: '+JSON.stringify(undo));
+  if(JSON.stringify(hevyRpc('undo',null,null,hevyReceipt.batchId))!==JSON.stringify(undo))throw new Error('Hevy undo retry changed outcome');
+  const recovered=hevyRpc('preview','a'.repeat(64));
+  if(JSON.stringify(recovered.previousImport?.receipt)!==JSON.stringify(hevyReceipt)||JSON.stringify(recovered.previousImport?.undo)!==JSON.stringify(undo))throw new Error('Previous import/undo outcome was not recovered');
+  hevyRpc('commit','a'.repeat(64));
+  if(query(database,`select state from fitness_private.history_current where workout_id='${timedId}'`)!=='deleted')throw new Error('Hevy retry resurrected deleted history');
+  if(hevyRpc('undo',null,null,hevyReceipt.batchId,'64150000-0000-4000-8000-000000000099').status!=='not_found')throw new Error('Hevy batch leaked across accounts');
+  const bad=structuredClone(hevyRows); bad[0][0][0]='New staged workout'; bad[0][1][0]='New staged workout'; bad[1][0][9]='NaN';
+  if(hevyRpc('commit','c'.repeat(64),bad).status!=='invalid_request')throw new Error('Hevy accepted invalid measurements');
+  if(query(database,`select count(*) from public.workouts where title='New staged workout'`)!=='0')throw new Error('Hevy partial failure leaked committed records');
+  query(database,`begin;set local request.jwt.claims='{"sub":"${v1.ownerId}","role":"authenticated"}';
+    select public.execute_train_history_command(${literal({protocolVersion:1,ownerId:v1.ownerId,operationId:randomUUID(),command:{kind:'correct-workout',workoutId:live.id,expectedRevision:'1',patch:{time:{kind:'known-instants',duration:{kind:'unknown'}}}}})});
+    select fitness_private.assert_history_projection('${live.id}');rollback;`);
+  if(process.env.HEVY_CSV_VERIFICATION_FILE){
+    const {parseHevyCsv}=await import('../../lib/fitness/hevy-csv.ts');
+    const actual=parseHevyCsv(readFileSync(process.env.HEVY_CSV_VERIFICATION_FILE,'utf8'));
+    const raw=actual.workouts.map(workout=>JSON.parse(workout.contentKey));
+    const accepted=hevyRpc('commit','d'.repeat(64),raw);
+    if(accepted.importedWorkouts!==actual.workouts.length||accepted.importedSets!==actual.sets)throw new Error('Actual export totals did not round-trip');
+    if(hevyRpc('preview','d'.repeat(64),raw).duplicateWorkouts!==actual.workouts.length)throw new Error('Actual export retry duplicates');
+    console.log(`PASS private export in disposable DB: ${actual.workouts.length} workouts / ${actual.sets} source sets / ${actual.exerciseNames.length} names; no production import`);
+  }
+  console.log('PASS Hevy import: raw facts and decimal units, date-only authority, original captures, owner isolation, retry/conflict/rollback, active recording, correction-aware undo and no resurrection');
 
 
 } finally {
