@@ -21,9 +21,13 @@ revoke all on fitness_private.hevy_import_batches,fitness_private.hevy_import_wo
 
 create function fitness_private.is_hevy_workout(p_id uuid,p_owner uuid) returns boolean
 language sql stable security definer set search_path=pg_catalog as $$
- select exists(select 1 from fitness_private.hevy_import_workouts where workout_id=p_id and owner_id=p_owner)
+ select exists(select 1 from fitness_private.hevy_import_workouts where workout_id=p_id and owner_id=p_owner
+   and (p_owner=auth.uid() or nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'role'='service_role'))
 $$;
 revoke all on function fitness_private.is_hevy_workout(uuid,uuid) from public,anon,authenticated,service_role;
+-- CHECK expressions require function permission even for ordinary started rows.
+-- This read-only predicate reveals membership only to its owner or service JWT.
+grant execute on function fitness_private.is_hevy_workout(uuid,uuid) to authenticated,service_role;
 alter table public.workouts drop constraint workouts_known_start_check;
 alter table public.workouts add constraint workouts_known_start_check check(started_at is not null or
  (status='completed' and (recorded_completion->'version'='5'::jsonb and recorded_completion->'time'->>'kind'='date-only'

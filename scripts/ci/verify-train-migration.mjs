@@ -324,13 +324,16 @@ try {
   const firstPreview = hevyRpc('preview','a'.repeat(64));
   if(firstPreview.newWorkouts!==2||firstPreview.sets!==3)throw new Error('Hevy preview totals wrong: '+JSON.stringify(firstPreview));
   const activeId=randomUUID();
-  query(database,`insert into public.workouts(id,user_id,title,status,started_at) values('${activeId}','${v1.ownerId}','Active sentinel','in_progress',now());`);
+  query(database,`set request.jwt.claims='{"sub":"${v1.ownerId}","role":"authenticated"}';set role authenticated;
+    insert into public.workouts(id,user_id,title,status,started_at) values('${activeId}','${v1.ownerId}','Active sentinel','in_progress',now());`);
   const activeBefore=query(database,`select to_jsonb(w)::text from public.workouts w where id='${activeId}'`);
   const hevyReceipt=hevyRpc('commit','a'.repeat(64));
   if(hevyReceipt.importedWorkouts!==2||hevyReceipt.importedSets!==3)throw new Error('Hevy commit failed: '+JSON.stringify(hevyReceipt));
   if(JSON.stringify(hevyRpc('commit','a'.repeat(64)))!==JSON.stringify(hevyReceipt))throw new Error('Hevy retry changed its receipt');
   if(query(database,`select to_jsonb(w)::text from public.workouts w where id='${activeId}'`)!==activeBefore)throw new Error('Hevy import touched active recording');
   const importedId=hevyReceipt.workoutIds[0], timedId=hevyReceipt.workoutIds[1];
+  if(query(database,`set request.jwt.claims='{"sub":"64150000-0000-4000-8000-000000000099","role":"authenticated"}';set role authenticated;
+    select fitness_private.is_hevy_workout('${importedId}','${v1.ownerId}');`)!=='f')throw new Error('Import constraint predicate revealed another account');
   const imported = JSON.parse(query(database,`select fitness_private.history_record('${importedId}','${v1.ownerId}')`));
   if(imported.workoutDay!=='2026-03-11'||imported.current.record.workout.started_at!==null||imported.current.record.workout.duration_seconds!==null)throw new Error('Hevy fabricated timing');
   if(JSON.stringify(imported.current.record.workout.hevy_import.sourceRows)!==JSON.stringify(hevyRows[0]))throw new Error('Hevy raw fields changed');
