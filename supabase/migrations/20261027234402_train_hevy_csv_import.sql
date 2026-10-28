@@ -14,6 +14,7 @@ create table fitness_private.hevy_import_workouts(
 );
 create index hevy_import_start_lookup on fitness_private.hevy_import_workouts(owner_id,(source_identity->>1));
 create index hevy_import_ending_lookup on fitness_private.hevy_import_workouts(owner_id,(source_identity->>0),(source_identity->>2));
+create index hevy_import_batch_lookup on fitness_private.hevy_import_workouts(batch_id,owner_id);
 alter table fitness_private.hevy_import_batches enable row level security;
 alter table fitness_private.hevy_import_workouts enable row level security;
 revoke all on fitness_private.hevy_import_batches,fitness_private.hevy_import_workouts from public,anon,authenticated,service_role;
