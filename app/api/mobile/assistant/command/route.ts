@@ -3,11 +3,12 @@ import {authenticateNativeRequest} from '@/lib/auth/native-request';
 import {googleDayRange} from '@/lib/google/planning';
 import {assertTaskSchedulesAvailable,CaptureScheduleError,timedTaskScheduleSchema} from '@/lib/ai/timed-capture';
 import {log} from '@/lib/logger';
+import {trainingCaptureChanges,trainingSchedule} from '@/lib/ai/training-capture';
 
 export const maxDuration=60;
 const headers={'Cache-Control':'no-store','Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS'};
 const reply=(body:unknown,status=200)=>Response.json(body,{status,headers});
-const commandSchema=z.object({operation:z.enum(['accept','reject']),operationId:z.string().uuid(),proposalId:z.string().uuid(),expectedVersion:z.string().uuid(),supportsTimedTasks:z.literal(true).optional(),revalidate:z.literal(true).optional()}).strict().refine(command=>!command.revalidate||command.operation==='accept');
+const commandSchema=z.object({operation:z.enum(['accept','reject']),operationId:z.string().uuid(),proposalId:z.string().uuid(),expectedVersion:z.string().uuid(),supportsTimedTasks:z.literal(true).optional(),supportsTrainingPlans:z.literal(true).optional(),revalidate:z.literal(true).optional()}).strict().refine(command=>!command.revalidate||command.operation==='accept');
 const captureBody=z.object({items:z.array(z.object({kind:z.string(),schedule:timedTaskScheduleSchema.optional()}).passthrough()).max(10)}).passthrough();
 export function OPTIONS(){return new Response(null,{status:204,headers});}
 export async function POST(request:Request){
@@ -26,9 +27,18 @@ export async function POST(request:Request){
    if(data.state==='pending'){
     const parsed=captureBody.safeParse(data.body);
     if(!parsed.success)return reply({error:'unavailable'},503);
-    const schedules=parsed.data.items.flatMap(item=>item.schedule?[item.schedule]:[]);
+    const training=parsed.data.items.filter(item=>item.kind==='training-create');
+    if(training.length&&!command.supportsTrainingPlans)return reply({error:'invalid'},400);
+    const trainingSchedules=[];
+    for(const item of training){
+     const changes=trainingCaptureChanges.safeParse(item.changes);
+     if(!changes.success)return reply({error:'unavailable'},503);
+     const schedule=trainingSchedule(changes.data,0);if(schedule)trainingSchedules.push(schedule);
+    }
+    const taskSchedules=parsed.data.items.flatMap(item=>item.schedule?[item.schedule]:[]);
+    if(taskSchedules.length&&!command.supportsTimedTasks)return reply({error:'invalid'},400);
+    const schedules=[...taskSchedules,...trainingSchedules];
     if(schedules.length){
-     if(!command.supportsTimedTasks)return reply({error:'invalid'},400);
      if(parsed.data.items.some(item=>item.schedule&&item.kind!=='task-create'))return reply({error:'unavailable'},503);
      const external=(await Promise.all([...new Set(schedules.map(schedule=>schedule.timezone))].map(timezone=>{
       const local=schedules.filter(schedule=>schedule.timezone===timezone);
