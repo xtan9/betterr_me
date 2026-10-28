@@ -57,6 +57,7 @@ const deliberateAuthExceptions: Record<string, string> = {
   "mobile/assistant/route.ts": "verified native Supabase user JWT only; public RLS client via authenticateNativeRequest, no cookie/MCP/API-key fallback",
   "mobile/assistant/history/route.ts": "verified native Supabase user JWT only through authenticateNativeRequest; read-only owner RLS history, no cookie/MCP/API-key fallback",
   "mobile/assistant/command/route.ts": "authenticateNativeRequest verifies native bearer; owner-filtered capture proposal, fresh external conflict read and owner RLS command",
+  "mobile/assistant/revise/route.ts": "authenticateNativeRequest verifies native bearer; owner-filtered single-task proposal, fresh external occupancy and atomic exact revision, no cookie or service fallback",
 };
 const sharedCookieTemplateRoutes = new Set([
   'routines/templates/route.ts', 'routines/templates/[id]/route.ts', 'routines/templates/capabilities/route.ts',

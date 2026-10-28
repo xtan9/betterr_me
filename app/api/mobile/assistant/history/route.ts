@@ -22,7 +22,7 @@ export async function GET(request:Request){
   if(messages.error)return respond({error:'unavailable'},503);
   const page=(messages.data??[]).slice(0,40).reverse();
   const captureIds=page.filter(message=>message.role==='assistant'&&message.request_id).map(message=>message.request_id);
-  const accepted=captureIds.length?await client.from('planner_ai_proposals').select('id,user_id,version,state,body,expires_at').eq('user_id',userId).eq('state','accepted').in('id',captureIds):{data:[],error:null};
+  const accepted=captureIds.length?await client.from('planner_ai_proposals').select('id,user_id,version,state,body,expires_at,outcome').eq('user_id',userId).eq('state','accepted').in('id',captureIds):{data:[],error:null};
   if(accepted.error)return respond({error:'unavailable'},503);
   // Ordinary conversation does not resurrect a previous planning workflow.
   const workflow=await client.from('assistant_turns').select('response').eq('user_id',userId).eq('conversation_id',conversation.data.id).or('response->>intent.in.(capture,planning),response->planning->>sessionId.not.is.null').order('created_at',{ascending:false}).limit(1).maybeSingle();

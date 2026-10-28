@@ -384,6 +384,7 @@
     "role": "constrained",
     "cleanup": "transactional"
   },
+  {"path":"assistant_capture_confirmation.sql","domain":"assistant","role":"constrained","cleanup":"transactional"},
   {
     "path": "app_limit_continuations.sql",
     "domain": "app-limit-history",

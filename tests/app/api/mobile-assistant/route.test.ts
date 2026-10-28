@@ -31,6 +31,16 @@ beforeEach(()=>{
 });
 afterEach(()=>vi.useRealTimers());
 
+it('keeps ordinary task capture concise and tells the model not to substitute a time block for a reminder',async()=>{
+ const response=await POST(request({messages:[{role:'user',content:'帮我建一个喝水任务'}]}));
+ expect(response.status).toBe(200);
+ const system=mocks.generate.mock.calls[0][0].system;
+ expect(system).toContain('For an ordinary task with no requested time, keep schedule absent and do not ask for a start, end, duration or calendar connection.');
+ expect(system).toContain('A notification/reminder request is not permission to reserve time.');
+ expect(system).toContain('Do not claim a notification was scheduled');
+ expect((await response.json()).proposal.body.items[0]).not.toHaveProperty('schedule');
+});
+
 it.each(['initial request','stream event'])('retains the provider failure through the real SDK %s without exposing private details or saving a reply',async boundary=>{
  const {streamText,Output,APICallError}=await vi.importActual<typeof import('ai')>('ai');
  const {MockLanguageModelV3}=await import('ai/test');
