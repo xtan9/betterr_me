@@ -1,5 +1,6 @@
 import {z} from 'zod';
 import {authenticateNativeRequest} from '@/lib/auth/native-request';
+import {hasTrainingCapture} from '@/lib/ai/training-capture';
 import {latestCaptureTurn} from '@/lib/ai/assistant-capture-context';
 const headers={'Cache-Control':'no-store','Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'GET, OPTIONS'};
 const respond=(body:unknown,status=200)=>Response.json(body,{status,headers});
@@ -7,7 +8,7 @@ export function OPTIONS(){return new Response(null,{status:204,headers});}
 export async function GET(request:Request){
  try{
   const params=new URL(request.url).searchParams;
-  const parsed=z.object({conversationId:z.string().uuid().optional(),before:z.coerce.number().int().positive().safe().optional()}).strict().safeParse(Object.fromEntries(params));
+  const parsed=z.object({conversationId:z.string().uuid().optional(),before:z.coerce.number().int().positive().safe().optional(),supportsTrainingPlans:z.literal('true').optional()}).strict().safeParse(Object.fromEntries(params));
   if(!parsed.success)return respond({error:'invalid'},400);
   const auth=await authenticateNativeRequest(request);if(!auth)return respond({error:'unauthorized'},401);
   const {client,userId}=auth;
@@ -41,6 +42,6 @@ export async function GET(request:Request){
   const current=session.data,planning=current&&['discovering','ready','drafted'].includes(current.status)?{sessionId:current.id,version:current.version,status:current.status,horizon:current.start_date?{startDate:current.start_date,endDate:current.end_date,timezone:current.timezone}:null,missing:Object.entries(current.readiness??{}).filter(([,state])=>state==='missing'||state==='partial').map(([key])=>key),assumptions:current.assumptions}:undefined;
   // Ownership remains useful after acceptance/cancellation: clients may still
   // have an undo or uncertain command for this session in their local cache.
-  return respond({conversationId:conversation.data.id,messages:page.map(({role,content,request_id})=>({role,content,...(request_id?{requestId:request_id}:{})})),before:(messages.data?.length??0)>40?page[0].sequence:null,ui:turn.data?.response?.ui,planning,planningSessionId:current?.id??null,cancelledPlanningSessionId:current?.status==='cancelled'?current.id:undefined,proposal:proposal?.data??null,acceptedProposals:accepted.data??[],activeWorkflow:workflow.data?.response?.planning?'planning':workflow.data?.response?.intent});
+  return respond({conversationId:conversation.data.id,messages:page.map(({role,content,request_id})=>({role,content,...(request_id?{requestId:request_id}:{})})),before:(messages.data?.length??0)>40?page[0].sequence:null,ui:turn.data?.response?.ui,planning,planningSessionId:current?.id??null,cancelledPlanningSessionId:current?.status==='cancelled'?current.id:undefined,proposal:parsed.data.supportsTrainingPlans||!hasTrainingCapture(proposal?.data)?proposal?.data??null:null,acceptedProposals:(accepted.data??[]).filter(value=>parsed.data.supportsTrainingPlans||!hasTrainingCapture(value)),activeWorkflow:workflow.data?.response?.planning?'planning':workflow.data?.response?.intent});
  }catch{return respond({error:'unavailable'},503);}
 }

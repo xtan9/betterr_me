@@ -67,3 +67,20 @@ it('keeps read, calendar and database failures uncertain without disclosing priv
  mocks.rpc.mockResolvedValueOnce({data:null,error:{message:'Private contents'}});
  expect((await POST(request())).status).toBe(503);expect(JSON.stringify(mocks.log.mock.calls)).not.toContain('Private contents');
 });
+it('revises a date-only training plan through its exact durable proposal without inventing task fields',async()=>{
+ const changes={title:'练腿',date:'2030-01-02',timezone:'America/Los_Angeles',trainingTemplateId:null};
+ mocks.single.mockResolvedValue({data:{body:{items:[{id:sourceId,kind:'training-create',changes}]},state:'pending',version,proposal_type:'capture'},error:null});
+ expect((await POST(request({changes}))).status).toBe(400);
+ const result=await POST(request({supportsTrainingPlans:true,changes}));expect(result.status).toBe(200);expect(await result.json()).toEqual(response);
+ expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith('planner_ai_revise_capture',{p_request:{...revision,supportsTrainingPlans:true,changes}});
+ expect(mocks.external).not.toHaveBeenCalled();
+});
+it('retains omitted training times and removes a reservation only when both times are explicitly cleared',async()=>{
+ const changes={title:'Leg day',date:'2030-01-02',timezone:'America/Los_Angeles',trainingTemplateId:null};
+ mocks.single.mockResolvedValue({data:{body:{items:[{kind:'training-create',changes:{...changes,startTime:'21:00',endTime:'22:00',protected:true}}]},state:'pending',version,proposal_type:'capture'},error:null});
+ expect((await POST(request({supportsTrainingPlans:true,changes}))).status).toBe(200);
+ expect(mocks.external).toHaveBeenCalledExactlyOnceWith('owner','2030-01-02','2030-01-02','America/Los_Angeles');mocks.external.mockClear();
+ expect((await POST(request({supportsTrainingPlans:true,changes:{...changes,startTime:null,endTime:null}}))).status).toBe(200);expect(mocks.external).not.toHaveBeenCalled();
+ expect((await POST(request({supportsTrainingPlans:true,changes:{...changes,startTime:null}}))).status).toBe(400);
+ expect((await POST(request({supportsTrainingPlans:true,changes:{...changes,startTime:'21:00',endTime:'21:00'}}))).status).toBe(400);
+});

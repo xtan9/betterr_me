@@ -82,3 +82,20 @@ it('fails closed for malformed persisted timing and database failures',async()=>
  const response=await POST(request());expect(response.status).toBe(503);expect(await response.json()).toEqual({error:'unavailable'});
  expect(JSON.stringify(mocks.log.mock.calls)).not.toContain('Private');
 });
+it('requires training capability and accepts the exact date-only plan without consulting calendar availability',async()=>{
+ const training={message:'Train legs today',items:[{id,kind:'training-create',changes:{title:'Leg day',date:'2030-01-01',timezone:'America/Los_Angeles',trainingTemplateId:null}}]};
+ mocks.single.mockResolvedValue({data:{body:training,state:'pending',version:id,proposal_type:'capture'},error:null});
+ expect((await POST(request())).status).toBe(400);expect(mocks.rpc).not.toHaveBeenCalled();
+ const result=await POST(request({supportsTrainingPlans:true}));expect(result.status).toBe(200);
+ expect(mocks.external).not.toHaveBeenCalled();
+ expect(mocks.rpc).toHaveBeenCalledWith('planner_ai_proposal_command',{p_request:{...command,supportsTrainingPlans:true}});
+});
+it('rechecks an explicit training interval and retains already-applied receipt replay during an outage',async()=>{
+ const training={message:'Training',items:[{id,kind:'training-create',changes:{title:'Leg day',date:'2030-01-01',timezone:'America/Los_Angeles',trainingTemplateId:null,startTime:'21:00',endTime:'22:00',protected:true}}]};
+ mocks.single.mockResolvedValue({data:{body:training,state:'pending',version:id,proposal_type:'capture'},error:null});
+ mocks.external.mockResolvedValue([{id:'busy',title:'Private event',start_date:'2030-01-02',end_date:'2030-01-02',start_time:'05:30',end_time:'06:00',timezone:'UTC',is_recurring:false}]);
+ expect((await POST(request({supportsTrainingPlans:true}))).status).toBe(409);expect(mocks.rpc).not.toHaveBeenCalled();
+ mocks.single.mockResolvedValue({data:{body:training,state:'accepted',version:id,proposal_type:'capture'},error:null});mocks.external.mockClear().mockRejectedValue(new Error('Unavailable'));
+ mocks.rpc.mockResolvedValue({data:{status:'already-applied',results:[{itemId:id,kind:'training-create',recordId:id,seriesId:id}]},error:null});
+ const replay=await POST(request({supportsTrainingPlans:true}));expect(replay.status).toBe(200);expect((await replay.json()).results[0]).toMatchObject({kind:'training-create',recordId:id});expect(mocks.external).not.toHaveBeenCalled();
+});

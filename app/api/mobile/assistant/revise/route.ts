@@ -4,15 +4,17 @@ import {googleDayRange} from '@/lib/google/planning';
 import {assertTaskSchedulesAvailable,CaptureScheduleError,timedTaskScheduleSchema} from '@/lib/ai/timed-capture';
 import {isValidLocalDate} from '@/lib/recurring-tasks/scheduling';
 import {log} from '@/lib/logger';
+import {TrainingCaptureError,trainingCaptureChanges,trainingRevisionChanges,trainingSchedule} from '@/lib/ai/training-capture';
 
 export const maxDuration=60;
 const headers={'Cache-Control':'no-store','Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS'};
 const reply=(body:unknown,status=200)=>Response.json(body,{status,headers});
 const revisionSchema=z.object({
  requestId:z.string().uuid(),conversationId:z.string().uuid(),proposalId:z.string().uuid(),expectedVersion:z.string().uuid(),locale:z.enum(['en','zh']),
- changes:z.object({title:z.string().trim().min(1).max(100),estimate_minutes:z.number().int().min(1).max(2147483647).nullable().optional(),due_date:z.string().refine(isValidLocalDate).nullable().optional()}).strict(),
+ supportsTrainingPlans:z.literal(true).optional(),
+ changes:z.union([z.object({title:z.string().trim().min(1).max(100),estimate_minutes:z.number().int().min(1).max(2147483647).nullable().optional(),due_date:z.string().refine(isValidLocalDate).nullable().optional()}).strict(),trainingRevisionChanges]),
  schedule:timedTaskScheduleSchema.nullable().optional(),
-}).strict().refine(value=>value.requestId!==value.proposalId);
+}).strict().refine(value=>value.requestId!==value.proposalId&&(!('date' in value.changes)||value.supportsTrainingPlans===true&&value.schedule===undefined));
 const captureBody=z.object({items:z.array(z.object({kind:z.string(),schedule:timedTaskScheduleSchema.optional()}).passthrough()).length(1)}).passthrough();
 export function OPTIONS(){return new Response(null,{status:204,headers});}
 
@@ -31,8 +33,18 @@ export async function POST(request:Request){
   // identity replay in SQL before depending on fresh external services.
   if(data?.state==='pending'&&data.version===revision.expectedVersion){
    const parsed=captureBody.safeParse(data.body);
-   if(data.proposal_type!=='capture'||!parsed.success||parsed.data.items[0].kind!=='task-create')return reply({error:'invalid'},400);
-   const schedule=revision.schedule===undefined?parsed.data.items[0].schedule:revision.schedule;
+   if(data.proposal_type!=='capture'||!parsed.success)return reply({error:'invalid'},400);
+   const item=parsed.data.items[0];
+   let schedule;
+   if(item.kind==='training-create'){
+    if(!revision.supportsTrainingPlans||!('date' in revision.changes))return reply({error:'invalid'},400);
+    const current=trainingCaptureChanges.safeParse(item.changes);
+    if(!current.success)return reply({error:'unavailable'},503);
+    schedule=trainingSchedule({...current.data,...revision.changes},0);
+   }else{
+    if(item.kind!=='task-create'||'date' in revision.changes)return reply({error:'invalid'},400);
+    schedule=revision.schedule===undefined?item.schedule:revision.schedule;
+   }
    if(schedule){
     const events=await googleDayRange(auth.userId,schedule.startDate,schedule.endDate,schedule.timezone);
     assertTaskSchedulesAvailable([schedule],events);
@@ -47,7 +59,7 @@ export async function POST(request:Request){
   return reply({error:'unavailable'},503);
  }catch(error){
   if(error instanceof CaptureScheduleError&&error.reason==='overlap')return reply({error:'conflict'},409);
-  const invalid=error instanceof z.ZodError||error instanceof SyntaxError;
+  const invalid=error instanceof z.ZodError||error instanceof SyntaxError||error instanceof TrainingCaptureError;
   if(!invalid)log.error('[mobile-assistant-revise] Revision failed',undefined,{reason:'unavailable'});
   return reply({error:invalid?'invalid':'unavailable'},invalid?400:503);
  }

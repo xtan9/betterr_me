@@ -74,3 +74,11 @@ it.each(['drafted','applied','cancelled'])('restores current owner-private %s se
  expect(body.planningSessionId).toBe('session');
  expect(filters.planning_sessions).toContainEqual(['user_id',owner]);expect(filters.planning_sessions).toContainEqual(['conversation_id',conversation]);
 });
+it('restores training cards only for clients that can review their action and occurrence receipt',async()=>{
+ const training={id:'training',state:'accepted',body:{items:[{id:'item',kind:'training-create',changes:{title:'Leg day',date:'2030-01-01',timezone:'UTC',trainingTemplateId:null}}]},outcome:{status:'complete',results:[{itemId:'item',kind:'training-create',recordId:'occurrence-id',seriesId:'series-id'}]}};
+ rows.planner_ai_proposals=training;accepted=[training];rows.assistant_messages=[{role:'assistant',content:'Training plan saved.',sequence:1,request_id:'training'}];
+ const legacy=await (await GET(new Request(`https://backend.test/api/mobile/assistant/history?conversationId=${conversation}`))).json();
+ expect(legacy.messages[0].content).toBe('Training plan saved.');expect(legacy.proposal).toBeNull();expect(legacy.acceptedProposals).toEqual([]);
+ const current=await GET(new Request(`https://backend.test/api/mobile/assistant/history?conversationId=${conversation}&supportsTrainingPlans=true`));expect(current.status).toBe(200);
+ const body=await current.json();expect(body.proposal).toEqual(training);expect(body.acceptedProposals).toEqual([training]);
+});
