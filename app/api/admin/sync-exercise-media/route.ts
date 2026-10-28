@@ -13,11 +13,10 @@ const ADMIN_REQUEST_POLICY = {
 } as const satisfies AuthenticatedRequestPolicy;
 
 type ExistingPreset = { id: string; name: string; equipment: string; exercise_type: string };
-const sameDefinition = (existing: ExistingPreset, entry: CatalogEntry) =>
-  existing.name.toLowerCase().trim() === entry.name.toLowerCase().trim()
-  && existing.equipment === entry.equipment && existing.exercise_type === entry.exercise_type;
 const definitionKey = (entry: Pick<CatalogEntry, "name" | "equipment" | "exercise_type">) =>
   JSON.stringify([entry.name.toLowerCase().trim(), entry.equipment, entry.exercise_type]);
+const sameDefinition = (existing: ExistingPreset, entry: CatalogEntry) =>
+  definitionKey(existing) === definitionKey(entry);
 
 /**
  * POST /api/admin/sync-exercise-media

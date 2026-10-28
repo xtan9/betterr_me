@@ -23,7 +23,6 @@ interface AdminDashboardContentProps {
 interface SyncResult {
   total: number;
   created: number;
-  updated: number;
   unchanged: number;
   gifsDownloaded: number;
   gifsFailed: number;
@@ -61,7 +60,6 @@ export function AdminDashboardContent({
       setResult({
         total: data.total ?? 0,
         created: data.created ?? 0,
-        updated: data.updated ?? 0,
         unchanged: data.unchanged ?? 0,
         gifsDownloaded: data.gifsDownloaded ?? 0,
         gifsFailed: data.gifsFailed ?? 0,
