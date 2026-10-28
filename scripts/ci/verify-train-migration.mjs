@@ -347,6 +347,11 @@ try {
   if(JSON.stringify(hevyRpc('commit','a'.repeat(64)))!==JSON.stringify(hevyReceipt))throw new Error('Hevy retry changed its receipt');
   if(query(database,`select to_jsonb(w)::text from public.workouts w where id='${activeId}'`)!==activeBefore)throw new Error('Hevy import touched active recording');
   const importedId=hevyReceipt.workoutIds[0], timedId=hevyReceipt.workoutIds[1];
+  query(database,`set role anon;do $$begin
+    begin insert into public.hevy_constraint_probe values('${importedId}','${v1.ownerId}',null);
+      raise exception 'Unauthenticated constraint probe observed import membership';
+    exception when check_violation then null;end;
+  end$$;`);
   if(query(database,`set request.jwt.claims='{"sub":"64150000-0000-4000-8000-000000000099","role":"authenticated"}';set role authenticated;
     select fitness_private.is_hevy_workout('${importedId}','${v1.ownerId}');`)!=='f')throw new Error('Import constraint predicate revealed another account');
   const imported = JSON.parse(query(database,`select fitness_private.history_record('${importedId}','${v1.ownerId}')`));
