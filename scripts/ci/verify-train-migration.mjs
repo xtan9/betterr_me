@@ -376,8 +376,8 @@ try {
   if(!durationCommand(deletedDurationId,'1',null,'delete-workout').receipt)throw new Error('Deletion control failed');
   const initialCaptures=query(database,`select md5(jsonb_agg(to_jsonb(r) order by workout_id)::text) from fitness_private.history_revisions r where revision=1`);
   const initialReceipts=query(database,`select md5(jsonb_agg(to_jsonb(b) order by batch_id)::text) from fitness_private.hevy_import_batches b`);
-  const durationMigration = '20261029133842_train_hevy_workout_duration.sql';
-  query(database,migration(durationMigration));
+  const durationMigrations = ['20261029133842_train_hevy_workout_duration.sql','20261029134720_train_hevy_duration_recovery.sql'];
+  for(const name of durationMigrations) query(database,migration(name));
   const durationRecord = JSON.parse(query(database,`select fitness_private.history_record('${recoveredDurationId}','${v1.ownerId}')`));
   if(durationRecord.current.record.workout.duration_seconds!=='1800'||durationRecord.revision!=='2') throw new Error('Hevy duration regression: midnight interval must recover 1800 seconds in revision 2');
   if(durationRecord.current.record.workout.started_at!==null||durationRecord.current.record.workout.completed_at!==null)throw new Error('Recovery fabricated absolute instants');
@@ -390,7 +390,7 @@ try {
   if(JSON.stringify(hevyRpc('commit','f'.repeat(64),legacyDurationRows))!==JSON.stringify(legacyDurationReceipt))throw new Error('Recovery changed retry receipt');
   if(durationCommand(recoveredDurationId,'1',{time:{kind:'date-only',duration:{kind:'set',seconds:12}}}).rejection?.code!=='version_conflict')throw new Error('Stale edits must review the recovered duration');
   const recoveredBeforeRepeat=query(database,`select md5(jsonb_agg(to_jsonb(c) order by workout_id)::text) from fitness_private.history_current c`);
-  query(database,migration(durationMigration));
+  for(const name of durationMigrations) query(database,migration(name));
   if(query(database,`select md5(jsonb_agg(to_jsonb(c) order by workout_id)::text) from fitness_private.history_current c`)!==recoveredBeforeRepeat)throw new Error('Repeated recovery changed current records');
   const legacyUndo=hevyRpc('undo',null,null,legacyDurationReceipt.batchId);
   if(legacyUndo.removedWorkouts!==2||legacyUndo.changedWorkouts!==2)throw new Error('Recovery broke correction-aware Undo: '+JSON.stringify(legacyUndo));
@@ -410,7 +410,7 @@ try {
   if(progressWithDuration.coverage.knownDurationSeconds!=='2161'||progressWithDuration.coverage.knownDurationCount!==3||progressWithDuration.coverage.unknownDurationCount!==1)throw new Error('Server progress omitted recovered import duration: '+JSON.stringify(progressWithDuration));
   const coreId=futureReceipt.workoutIds[0];
   if(!durationCommand(coreId,'1',{time:{kind:'date-only',duration:{kind:'unknown'}}}).receipt)throw new Error('Explicit unknown after import failed');
-  query(database,migration(durationMigration));
+  for(const name of durationMigrations) query(database,migration(name));
   if(query(database,`select duration_seconds is null from public.workouts where id='${coreId}'`)!=='t')throw new Error('Recovery reintroduced duration after explicit unknown');
   console.log('PASS Hevy duration: retained clock intervals, midnight/leap/seconds/zero, invalid/reversed unknown, future imports, exact progress, revisioned cache refresh, preserved corrections/deletions/captures/receipts, idempotent repair and Undo');
   if(process.env.HEVY_SYNTHETIC_FIXTURE_OUTPUT)writeFileSync(process.env.HEVY_SYNTHETIC_FIXTURE_OUTPUT,JSON.stringify(hevyReceipt.workoutIds.map(id=>JSON.parse(query(database,`select fitness_private.history_record('${id}','${v1.ownerId}')`))),null,2)+'\n');
