@@ -3,7 +3,7 @@
   "livePreserved": 96,
   "legacyAdditional": 75,
   "researchedAdditional": 229,
-  "total": 400,
+  "total": 410,
   "countsByCategory": {
     "resistance-band": 32,
     "kettlebell": 19,
@@ -6065,5 +6065,77 @@
       "pose_distinction": "Hands rotate a horizontal roller to wind a hanging weighted cord.",
       "provenance_note": "Project-curated canonical name, coarse muscle buckets and recording mode; not an exported Hevy app definition."
     }
-  ]
+  ],
+  "hevyCoverageAdditional": {
+    "count": 10,
+    "reviewedOn": "2026-10-28",
+    "sourcePolicy": "Names and movement distinctions from an authorized Hevy import coverage audit; no personal workouts, identifiers or source rows are checked in. Mobile artwork and search aliases remain presentation metadata. The existing 400 definitions remain unchanged.",
+    "clarifications": {
+      "Garhammer Raise": "Lying on a bench or floor, confirmed by the user.",
+      "Incline Sliding Bench Pull-up": "Incline sliding-bench pull-up machine, confirmed by the user; bodyweight reps do not model incline setting.",
+      "Warm Up": "General timed warm-up entry accepted by the user; no particular historical warm-up movement is inferred."
+    },
+    "entries": [
+      {
+        "preset_id": "53a884ac-259c-462c-b56a-071f2672f395",
+        "name": "Weighted Back Extension",
+        "equipment": "bodyweight",
+        "exercise_type": "weighted_bodyweight"
+      },
+      {
+        "preset_id": "d7f33842-e1ef-4804-98a1-68e4d8ba3d5c",
+        "name": "Chest Supported Dumbbell Y Raise",
+        "equipment": "dumbbell",
+        "exercise_type": "weight_reps"
+      },
+      {
+        "preset_id": "8a24e447-2a48-4e5c-9d06-616645407df3",
+        "name": "Weighted Decline Crunch",
+        "equipment": "bodyweight",
+        "exercise_type": "weighted_bodyweight"
+      },
+      {
+        "preset_id": "0e73656b-29e4-46f2-8c5e-5426305bfde4",
+        "name": "Incline Sliding Bench Pull-up",
+        "equipment": "machine",
+        "exercise_type": "bodyweight_reps"
+      },
+      {
+        "preset_id": "0b98b75e-5413-4f84-ac79-9e6735aad0e0",
+        "name": "Garhammer Raise",
+        "equipment": "bodyweight",
+        "exercise_type": "bodyweight_reps"
+      },
+      {
+        "preset_id": "277ba916-c381-484a-aaa8-3b27f6a69b59",
+        "name": "Reverse Grip Triceps Pushdown",
+        "equipment": "cable",
+        "exercise_type": "weight_reps"
+      },
+      {
+        "preset_id": "d736861f-b9b5-4469-bf2a-f690131ca860",
+        "name": "Dumbbell Seal Row",
+        "equipment": "dumbbell",
+        "exercise_type": "weight_reps"
+      },
+      {
+        "preset_id": "0a22576d-65b6-44ee-820a-61d15d84f106",
+        "name": "Single Leg Dumbbell Calf Raise",
+        "equipment": "dumbbell",
+        "exercise_type": "weight_reps"
+      },
+      {
+        "preset_id": "ba9b5c2f-43a7-494c-a3e2-276494772fcd",
+        "name": "Seated Machine Triceps Extension",
+        "equipment": "machine",
+        "exercise_type": "weight_reps"
+      },
+      {
+        "preset_id": "ec7ed041-3058-4a9a-8a8d-5bf04574730d",
+        "name": "Warm Up",
+        "equipment": "bodyweight",
+        "exercise_type": "duration"
+      }
+    ]
+  }
 }
