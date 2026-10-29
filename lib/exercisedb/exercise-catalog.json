@@ -5155,5 +5155,126 @@
     "exercisedb_id": null,
     "exercisedb_name": null,
     "gif_url": null
+  },
+  {
+    "preset_id": "53a884ac-259c-462c-b56a-071f2672f395",
+    "name": "Weighted Back Extension",
+    "muscle_group_primary": "back",
+    "muscle_groups_secondary": [
+      "glutes",
+      "hamstrings"
+    ],
+    "equipment": "bodyweight",
+    "exercise_type": "weighted_bodyweight",
+    "exercisedb_id": null,
+    "exercisedb_name": null,
+    "gif_url": null
+  },
+  {
+    "preset_id": "d7f33842-e1ef-4804-98a1-68e4d8ba3d5c",
+    "name": "Chest Supported Dumbbell Y Raise",
+    "muscle_group_primary": "traps",
+    "muscle_groups_secondary": [
+      "shoulders"
+    ],
+    "equipment": "dumbbell",
+    "exercise_type": "weight_reps",
+    "exercisedb_id": null,
+    "exercisedb_name": null,
+    "gif_url": null
+  },
+  {
+    "preset_id": "8a24e447-2a48-4e5c-9d06-616645407df3",
+    "name": "Weighted Decline Crunch",
+    "muscle_group_primary": "core",
+    "muscle_groups_secondary": [],
+    "equipment": "bodyweight",
+    "exercise_type": "weighted_bodyweight",
+    "exercisedb_id": null,
+    "exercisedb_name": null,
+    "gif_url": null
+  },
+  {
+    "preset_id": "0e73656b-29e4-46f2-8c5e-5426305bfde4",
+    "name": "Incline Sliding Bench Pull-up",
+    "muscle_group_primary": "back",
+    "muscle_groups_secondary": [
+      "lats",
+      "biceps"
+    ],
+    "equipment": "machine",
+    "exercise_type": "bodyweight_reps",
+    "exercisedb_id": null,
+    "exercisedb_name": null,
+    "gif_url": null
+  },
+  {
+    "preset_id": "0b98b75e-5413-4f84-ac79-9e6735aad0e0",
+    "name": "Garhammer Raise",
+    "muscle_group_primary": "core",
+    "muscle_groups_secondary": [],
+    "equipment": "bodyweight",
+    "exercise_type": "bodyweight_reps",
+    "exercisedb_id": null,
+    "exercisedb_name": null,
+    "gif_url": null
+  },
+  {
+    "preset_id": "277ba916-c381-484a-aaa8-3b27f6a69b59",
+    "name": "Reverse Grip Triceps Pushdown",
+    "muscle_group_primary": "triceps",
+    "muscle_groups_secondary": [],
+    "equipment": "cable",
+    "exercise_type": "weight_reps",
+    "exercisedb_id": null,
+    "exercisedb_name": null,
+    "gif_url": null
+  },
+  {
+    "preset_id": "d736861f-b9b5-4469-bf2a-f690131ca860",
+    "name": "Dumbbell Seal Row",
+    "muscle_group_primary": "back",
+    "muscle_groups_secondary": [
+      "lats",
+      "biceps"
+    ],
+    "equipment": "dumbbell",
+    "exercise_type": "weight_reps",
+    "exercisedb_id": null,
+    "exercisedb_name": null,
+    "gif_url": null
+  },
+  {
+    "preset_id": "0a22576d-65b6-44ee-820a-61d15d84f106",
+    "name": "Single Leg Dumbbell Calf Raise",
+    "muscle_group_primary": "calves",
+    "muscle_groups_secondary": [],
+    "equipment": "dumbbell",
+    "exercise_type": "weight_reps",
+    "exercisedb_id": null,
+    "exercisedb_name": null,
+    "gif_url": null
+  },
+  {
+    "preset_id": "ba9b5c2f-43a7-494c-a3e2-276494772fcd",
+    "name": "Seated Machine Triceps Extension",
+    "muscle_group_primary": "triceps",
+    "muscle_groups_secondary": [],
+    "equipment": "machine",
+    "exercise_type": "weight_reps",
+    "exercisedb_id": null,
+    "exercisedb_name": null,
+    "gif_url": null
+  },
+  {
+    "preset_id": "ec7ed041-3058-4a9a-8a8d-5bf04574730d",
+    "name": "Warm Up",
+    "muscle_group_primary": "full_body",
+    "muscle_groups_secondary": [],
+    "equipment": "bodyweight",
+    "exercise_type": "duration",
+    "exercisedb_id": null,
+    "exercisedb_name": null,
+    "gif_url": null
   }
 ]
