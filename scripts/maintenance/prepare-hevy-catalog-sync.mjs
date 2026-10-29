@@ -13,11 +13,11 @@ if (process.argv.length > 3 || ![undefined, '--preflight', '--apply'].includes(p
   throw new Error('Usage: node scripts/maintenance/prepare-hevy-catalog-sync.mjs [--preflight|--apply]');
 }
 const jsonLiteral = value => `'${JSON.stringify(value).replaceAll("'", "''")}'::jsonb`;
-const record = '(preset_id uuid,name text,equipment text,exercise_type text)';
+const record = '(preset_id uuid,name text,equipment text,exercise_type text,muscle_group_primary text,muscle_groups_secondary text[])';
 const baselineJson = jsonLiteral(baseline.map(({ preset_id, name, equipment, exercise_type }) => ({ preset_id, name, equipment, exercise_type })));
 const additionsJson = jsonLiteral(additions);
 const baselineConflict = `select 1 from jsonb_to_recordset(baseline) as b${record} left join public.exercises e on e.id=b.preset_id where e.id is null or row(e.name,e.equipment,e.exercise_type,e.user_id,e.is_custom) is distinct from row(b.name,b.equipment,b.exercise_type,null::uuid,false)`;
-const identityConflict = `select 1 from jsonb_to_recordset(additions) as a${record} join public.exercises e on e.id=a.preset_id where row(e.name,e.equipment,e.exercise_type,e.user_id,e.is_custom,e.archived_at,e.catalog_key,e.measurement_convention) is distinct from row(a.name,a.equipment,a.exercise_type,null::uuid,false,null::timestamptz,null::text,null::text)`;
+const identityConflict = `select 1 from jsonb_to_recordset(additions) as a${record} join public.exercises e on e.id=a.preset_id where row(e.name,e.equipment,e.exercise_type,e.muscle_group_primary,e.muscle_groups_secondary,e.user_id,e.is_custom,e.archived_at,e.catalog_key,e.measurement_convention) is distinct from row(a.name,a.equipment,a.exercise_type,a.muscle_group_primary,a.muscle_groups_secondary,null::uuid,false,null::timestamptz,null::text,null::text)`;
 const definitionConflict = `select 1 from jsonb_to_recordset(additions) as a${record} join public.exercises e on lower(trim(e.name))=lower(trim(a.name)) and e.equipment=a.equipment and e.exercise_type=a.exercise_type and e.user_id is null and not e.is_custom where e.id<>a.preset_id`;
 const conflictsIn = (query, name) => query.replaceAll('jsonb_to_recordset(baseline)', 'jsonb_to_recordset(manifest.baseline)').replaceAll('jsonb_to_recordset(additions)', 'jsonb_to_recordset(manifest.additions)').replace('select 1', 'select count(*)') + `) as ${name}`;
 if (process.argv[2] !== '--apply') {
@@ -58,7 +58,7 @@ ${hashes('before_related')}
  if after_exercises is distinct from before_exercises or (select count(*) from public.exercises)<>before_count+inserted_count then raise exception 'Existing exercise data was altered'; end if;
 ${hashes('after_related')}
  if after_related is distinct from before_related then raise exception 'Workout, template or import history was altered'; end if;
- if (select count(*) from jsonb_to_recordset(additions) as a${record} join public.exercises e on e.id=a.preset_id where row(e.name,e.equipment,e.exercise_type,e.user_id,e.is_custom) is not distinct from row(a.name,a.equipment,a.exercise_type,null::uuid,false))<>10 then raise exception 'Incomplete addition'; end if;
+ if (select count(*) from jsonb_to_recordset(additions) as a${record} join public.exercises e on e.id=a.preset_id where row(e.name,e.equipment,e.exercise_type,e.muscle_group_primary,e.muscle_groups_secondary,e.user_id,e.is_custom,e.archived_at,e.catalog_key,e.measurement_convention) is not distinct from row(a.name,a.equipment,a.exercise_type,a.muscle_group_primary,a.muscle_groups_secondary,null::uuid,false,null::timestamptz,null::text,null::text))<>10 then raise exception 'Incomplete addition'; end if;
  perform set_config('betterrme.hevy_catalog_inserted',inserted_count::text,true);
 end $sync$;
 select jsonb_build_object('inserted',current_setting('betterrme.hevy_catalog_inserted')::integer,'presets',(select count(*) from public.exercises where user_id is null and not is_custom),'existing_rows_unchanged',true,'history_unchanged',true) as result;
