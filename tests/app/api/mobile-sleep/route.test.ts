@@ -4,6 +4,7 @@ const m = vi.hoisted(() => ({ auth: vi.fn(), external: vi.fn(), rpc: vi.fn(), ad
 vi.mock('@/lib/auth/native-request', () => ({ authenticateNativeRequest: m.auth }));
 vi.mock('@/lib/google/planning', () => ({ googleDayRange: m.external }));
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ rpc: m.admin }) }));
+import { GoogleConnectionError } from '@/lib/google/contracts';
 import { GET, POST } from '@/app/api/mobile/sleep/route';
 
 const id = '73000000-0000-4000-8000-000000000001';
@@ -56,4 +57,27 @@ it('replays an exact committed request without needing another external read', a
   expect(await (await POST(request(command))).json()).toEqual({ status: 'already-applied', scheduleId: id });
   expect(m.external).not.toHaveBeenCalled(); expect(m.admin).not.toHaveBeenCalled();
   expect(await (await POST(request({ ...command, change: { ...change, startTime: '22:00' } }))).json()).toEqual({ status: 'conflict' });
+});
+
+it.each(['reconnect', 'select-calendars'] as const)('resolves the revision date when Google Calendar requires %s, then checks conflicts at save', async reason => {
+  const revision = { operation: 'revise', expectedVersion: id, startTime: '21:30', endTime: '06:30' };
+  m.external.mockRejectedValue(new GoogleConnectionError(reason));
+  const date = await POST(request({ action: 'effective-date', change: revision }));
+  expect(date.status).toBe(200);
+  expect(await date.json()).toEqual({ status: 'complete', effectiveDate: core.effectiveDate });
+  expect(m.rpc).not.toHaveBeenCalled();
+  expect(m.events).not.toHaveBeenCalled();
+  expect(m.external).not.toHaveBeenCalled();
+
+  const dated = { ...revision, effectiveDate: core.effectiveDate };
+  const blocked = await POST(request({ action: 'preview', change: dated }));
+  expect(await blocked.json()).toEqual({ error: reason });
+  const save = await POST(request({ action: 'save', change: dated, operationId: id, previewToken: 'a'.repeat(64) }));
+  expect(await save.json()).toEqual({ error: reason });
+  expect(m.admin.mock.calls.some(([name]) => name === 'planner_sleep_commit')).toBe(false);
+
+  m.external.mockResolvedValue([]);
+  const preview = await (await POST(request({ action: 'preview', change: dated }))).json();
+  const recovered = await POST(request({ action: 'save', change: dated, operationId: id, previewToken: preview.token }));
+  expect(await recovered.json()).toEqual({ status: 'complete' });
 });

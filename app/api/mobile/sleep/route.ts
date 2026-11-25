@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { authenticateNativeRequest } from '@/lib/auth/native-request';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { GoogleConnectionError } from '@/lib/google/contracts';
 import { googleDayRange } from '@/lib/google/planning';
 import { sleepConflictPreview, type PreparedSleep } from '@/lib/calendar/sleep-preview';
 import type { PlannerEvent } from '@/lib/calendar/planner-intervals';
@@ -13,6 +14,9 @@ const day = z.string().refine(isValidLocalDate), clock = z.string().regex(/^([01
 const changeSchema = z.object({ operation: z.enum(['setup', 'revise', 'night']), expectedVersion: z.string().uuid().nullable(),
   startTime: clock, endTime: clock, timezone: z.string().max(100).optional(), effectiveDate: day.optional(), nightDate: day.optional(), startDate: day.optional(), eventId: z.string().uuid().optional(), expectedEventVersion: z.string().uuid().optional() }).strict();
 const requestSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('effective-date'), change: z.object({
+    operation: z.literal('revise'), expectedVersion: z.string().uuid(), startTime: clock, endTime: clock,
+  }).strict() }).strict(),
   z.object({ action: z.literal('preview'), change: changeSchema }).strict(),
   z.object({ action: z.literal('save'), change: changeSchema, operationId: z.string().uuid(), previewToken: z.string().length(64) }).strict(),
 ]);
@@ -44,6 +48,7 @@ export async function POST(request: Request) {
     let prepared = await admin.rpc('planner_sleep_prepare', { p_owner: auth.userId, p_change: input.change });
     if (prepared.error) throw new Error('Prepare unavailable');
     if (prepared.data.status !== 'complete') return reply(prepared.data);
+    if (input.action === 'effective-date') return reply({ status: 'complete', effectiveDate: prepared.data.effectiveDate });
     // Each routine snapshot covers the requested date; extend the actual preview range.
     const coverage = await auth.client.rpc('planner_sleep_routine_coverage', { p_start: addLocalDays(prepared.data.rangeStart, -1), p_end: prepared.data.rangeEnd });
     if (coverage.error) throw new Error('Routine coverage unavailable');
@@ -65,6 +70,9 @@ export async function POST(request: Request) {
     if (saved.error) throw new Error('Save unavailable');
     return reply(saved.data);
   } catch (error) {
+    if (error instanceof GoogleConnectionError && (error.reason === 'reconnect' || error.reason === 'select-calendars')) {
+      return reply({ error: error.reason }, 409);
+    }
     const invalid = error instanceof z.ZodError || error instanceof SyntaxError;
     return reply({ error: invalid ? 'invalid' : 'unavailable' }, invalid ? 400 : 503);
   }
