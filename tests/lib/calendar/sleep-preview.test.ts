@@ -30,3 +30,13 @@ describe('sleep conflict confirmation', () => {
     expect(sleepConflictPreview(prepared, [meeting, exception]).conflicts).toEqual([]);
   });
 });
+
+it('returns the Google title separately from the legacy preview text in both preview and save', () => {
+  const google = { ...meeting, is_recurring: false, start_date: '2026-10-17', end_date: '2026-10-17', id: 'google:test:event', title: 'Google Calendar: (Untitled)' };
+  const legacy = sleepConflictPreview(prepared, [google]);
+  for (const googleTitle of [null, '(Untitled)']) {
+    const preview = sleepConflictPreview(prepared, [{ ...google, googleTitle }]);
+    expect(preview.conflicts[0]).toMatchObject({ title: google.title, googleTitle });
+    expect(preview.token).toBe(legacy.token);
+  }
+});

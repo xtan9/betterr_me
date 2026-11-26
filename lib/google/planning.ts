@@ -17,7 +17,7 @@ export async function googlePlanningEvents(userId: string, start: number, end: n
     // Keep date-only identity; the planner uses inclusive all-day end dates.
     const a = event.allDay ? event.start : new Date(event.start).toISOString();
     const b = event.allDay ? addLocalDays(event.end, -1) : new Date(event.end).toISOString();
-    return { id: event.id, title: `Google Calendar: ${event.title}`, start_date: a.slice(0, 10), end_date: b.slice(0, 10),
+    return { id: event.id, title: `Google Calendar: ${event.title}`, googleTitle: event.titleMissing ? null : event.title, start_date: a.slice(0, 10), end_date: b.slice(0, 10),
       start_time: event.allDay ? null : a.slice(11, 19), end_time: event.allDay ? null : b.slice(11, 19), timezone: event.allDay ? timezone : 'UTC',
       app_owned: false, is_protected: true, is_recurring: false, is_exception: false, recurrence_rule: null };
   });
