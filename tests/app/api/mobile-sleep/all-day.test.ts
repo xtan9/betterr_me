@@ -57,7 +57,7 @@ it('rechecks a date-only event changed to a timed commitment before saving', asy
   expect(await (await POST(request({ action: 'save', change, operationId: owner, previewToken: preview.token }))).json()).toEqual({ status: 'conflict' });
   expect(m.admin.mock.calls.some(([name]) => name === 'planner_sleep_commit')).toBe(false);
   const refreshed = await (await POST(request({ action: 'preview', change }))).json();
-  expect(refreshed.conflicts).toEqual([{ id: 'google:school:day', title: 'Google Calendar: School calendar day', nightDate: '2026-11-11', start: '2026-11-12T06:00:00.000Z', end: '2026-11-12T07:00:00.000Z' }]);
+  expect(refreshed.conflicts).toEqual([{ id: 'google:school:day', title: 'Google Calendar: School calendar day', googleTitle: 'School calendar day', nightDate: '2026-11-11', start: '2026-11-12T06:00:00.000Z', end: '2026-11-12T07:00:00.000Z' }]);
 });
 
 it('keeps a genuinely timed midnight-to-midnight event in sleep conflict confirmation', async () => {
