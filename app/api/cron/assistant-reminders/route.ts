@@ -38,7 +38,7 @@ export async function GET(request:Request){
      if(!facts.selected)continue;
      const claim=await client.rpc('assistant_claim_reminder',{p_user_id:row.user_id,p_version:row.version});
      if(claim.error||claim.data!==true)continue;
-     const payload=devices.data.map((device:{token:string})=>({to:device.token,title:row.locale==='zh'?'想推进一件小事吗？':'Ready for one small step?',body:row.locale==='zh'?'打开 Assistant，看看接下来适合做什么。':'Open Assistant to choose a useful next step.',data:{kind:'assistant-next-action',ownerId:row.user_id},ttl:300,sound:'default',channelId:'assistant'}));
+     const payload=devices.data.map((device:{token:string})=>({to:device.token,title:row.locale==='zh'?'想推进一件小事吗？':'Ready for one small step?',body:row.locale==='zh'?'打开 AI 助手，看看接下来适合做什么。':'Open Assistant to choose a useful next step.',data:{kind:'assistant-next-action',ownerId:row.user_id},ttl:300,sound:'default',channelId:'assistant'}));
      const response=await fetch('https://exp.host/--/api/v2/push/send',{method:'POST',headers:{'Content-Type':'application/json',...(process.env.EXPO_ACCESS_TOKEN?{Authorization:`Bearer ${process.env.EXPO_ACCESS_TOKEN}`}:{})},body:JSON.stringify(payload),signal:AbortSignal.timeout(8000)});
      if(!response.ok)continue;
      const result=await response.json();
