@@ -66,10 +66,13 @@ describe('Google read-only connections', () => {
     const send = vi.fn().mockResolvedValueOnce(json({ ...tokens, scope: 'openid email https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/calendar.calendarlist.readonly' })).mockResolvedValueOnce(json({ sub: 'google-a', email: 'a@example.com', email_verified: true }));
     const service = new GoogleConnections(db, config, send), reads = new GoogleReads(service), start = await service.start(owner, 'calendar');
     expect((await service.finish(owner, start.state, 'code')).status).toBe('select-calendars');
-    send.mockImplementation(async (url: string) => url.endsWith('/token') ? json({ access_token: 'refreshed' }) : url.includes('/calendarList') ? json({ items: [{ id: 'chosen', summary: 'Family', accessRole: 'owner' }, { id: 'ignored', accessRole: 'reader' }] }) : json({ items: [{ id: 'all-day', summary: 'Holiday', start: { date: '2026-09-25' }, end: { date: '2026-09-26' } }, { id: 'cancelled', status: 'cancelled' }] }));
+    send.mockImplementation(async (url: string) => url.endsWith('/token') ? json({ access_token: 'refreshed' }) : url.includes('/calendarList') ? json({ items: [{ id: 'chosen', summary: 'Family', accessRole: 'owner' }, { id: 'ignored', accessRole: 'reader' }] }) : json({ items: [{ id: 'all-day', summary: 'Holiday', start: { date: '2026-09-25' }, end: { date: '2026-09-26' } }, { id: 'no-title', start: { date: '2026-09-25' }, end: { date: '2026-09-26' } }, { id: 'named', summary: '(Untitled)', start: { date: '2026-09-25' }, end: { date: '2026-09-26' } }, { id: 'cancelled', status: 'cancelled' }] }));
     await reads.selectCalendars(owner, ['chosen']);
     const events = await reads.events(owner, '2026-09-25T00:00:00Z', '2026-09-26T00:00:00Z');
-    expect(events).toHaveLength(1); expect(events[0]).toMatchObject({ calendarTitle: 'Family', start: '2026-09-25', end: '2026-09-26', allDay: true, busy: true });
+    expect(events).toHaveLength(3);
+    expect(events.find(event => event.id.endsWith(':no-title'))).toMatchObject({ title: '(Untitled)', titleMissing: true });
+    expect(events.find(event => event.id.endsWith(':named'))).not.toHaveProperty('titleMissing');
+    expect(events[0]).toMatchObject({ calendarTitle: 'Family', start: '2026-09-25', end: '2026-09-26', allDay: true, busy: true });
     const queries = send.mock.calls.filter(([url]) => String(url).includes('/events'));
     expect(queries).toHaveLength(1); expect(String(queries[0][0])).toContain('/chosen/events');
     expect(new URL(String(queries[0][0])).searchParams.get('singleEvents')).toBe('true');

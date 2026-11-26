@@ -9,10 +9,12 @@ export type PreparedSleep = { status: string; token: string; effectiveDate: stri
 export function sleepConflictPreview(prepared: PreparedSleep, events: PlannerEvent[]) {
   const occupied = occupiedIntervals(events, wallInstant(prepared.rangeStart, '00:00', prepared.timezone),
     wallInstant(addLocalDays(prepared.rangeEnd, 1), '00:00', prepared.timezone), prepared.timezone, { timedOnly: true });
+  const googleTitles = new Map(events.filter(event => event.googleTitle !== undefined).map(event => [event.id, event.googleTitle]));
   const conflicts = prepared.intervals.flatMap(sleep => occupied.filter(event => event.start < Date.parse(sleep.end) && Date.parse(sleep.start) < event.end)
     .map(event => ({ ...event, start: new Date(event.start).toISOString(), end: new Date(event.end).toISOString(), nightDate: sleep.nightDate })))
     .sort((a, b) => a.nightDate.localeCompare(b.nightDate) || a.id.localeCompare(b.id));
   // Sorting makes equivalent readback stable; a title/date/occupancy change invalidates confirmation.
   const token = createHash('sha256').update(JSON.stringify({ core: prepared.token, conflicts })).digest('hex');
-  return { ...prepared, token, conflicts };
+  return { ...prepared, token, conflicts: conflicts.map(conflict => googleTitles.has(conflict.id)
+    ? { ...conflict, googleTitle: googleTitles.get(conflict.id) } : conflict) };
 }

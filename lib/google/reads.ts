@@ -64,7 +64,7 @@ export class GoogleReads {
           if (event.status === 'cancelled' || event.attendees?.some(a => a.self && a.responseStatus === 'declined')) continue;
           const eventStart = event.start?.dateTime ?? event.start?.date, eventEnd = event.end?.dateTime ?? event.end?.date;
           if (!eventStart || !eventEnd || !Number.isFinite(Date.parse(eventStart)) || !Number.isFinite(Date.parse(eventEnd)) || Date.parse(eventEnd) <= Date.parse(eventStart)) throw new GoogleConnectionError('unavailable');
-          events.push({ id: `google:${encodeURIComponent(id)}:${event.id}`, calendarId: id, calendarTitle: calendar.summary || id, title: event.summary || '(Untitled)', start: eventStart, end: eventEnd, allDay: !!event.start?.date, url: sourceLink(event.htmlLink, 'calendar.google.com'), busy: event.transparency !== 'transparent' });
+          events.push({ id: `google:${encodeURIComponent(id)}:${event.id}`, calendarId: id, calendarTitle: calendar.summary || id, title: event.summary || '(Untitled)', ...(!event.summary && { titleMissing: true as const }), start: eventStart, end: eventEnd, allDay: !!event.start?.date, url: sourceLink(event.htmlLink, 'calendar.google.com'), busy: event.transparency !== 'transparent' });
         }
       }
       return { events: events.sort((a, b) => a.start.localeCompare(b.start) || a.id.localeCompare(b.id)),

@@ -16,7 +16,7 @@ export type ConnectionAttempt = {
 };
 export type GoogleCalendar = { id: string; title: string; primary: boolean };
 export type GoogleEvent = {
-  id: string; calendarId: string; calendarTitle: string; title: string;
+  id: string; calendarId: string; calendarTitle: string; title: string; titleMissing?: true;
   start: string; end: string; allDay: boolean; url: string | null;
   busy: boolean;
 };
